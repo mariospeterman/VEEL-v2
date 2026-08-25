@@ -2,9 +2,9 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 const publicSurfaces = [
-  { name: "landing", path: "/", heading: "Create without asking the algorithm for permission." },
+  { name: "landing", path: "/", heading: "Stop building on rented ground." },
   { name: "login", path: "/?mode=login", heading: "Continue to WeVid." },
-  { name: "onboarding", path: "/?mode=onboarding", heading: "Set up your account." },
+  { name: "onboarding", path: "/?mode=onboarding", heading: "Continue to WeVid." },
   { name: "offline", path: "/offline", heading: "WeVid is offline" }
 ] as const;
 

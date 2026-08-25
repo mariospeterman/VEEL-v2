@@ -60,7 +60,7 @@ test("renders the public landing with the current WeVid visual contract", async 
   await page.goto("/");
 
   await expect(page.getByRole("link", { name: "WeVid home" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Create without asking the algorithm for permission." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Stop building on rented ground." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue to WeVid" }).first()).toBeVisible();
   await expect(page.getByText("Public legal copy here is a product placeholder")).toHaveCount(0);
 });
@@ -75,13 +75,12 @@ test("renders inline login and onboarding entry surfaces", async ({ page }) => {
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
-  await expect(page.getByRole("heading", { name: "Set up your account." })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "Continue to WeVid." })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText(/powered by|google, email|passkey|solana wallet adapter/i)).toHaveCount(0);
 
   await page.getByRole("button", { name: "Use an external wallet" }).click();
   await expect(page.getByRole("dialog", { name: /wallet.*Solana|need a wallet/i })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Set up your account." })).toBeVisible();
-  await expect(page.locator(".landing-progress-topic")).toHaveText("Onboarding");
+  await expect(page.getByRole("heading", { name: "Continue to WeVid." })).toBeVisible();
 });
 
 test("renders a deep-linked onboarding step without an entrance-animation delay", async ({ page }) => {
@@ -90,7 +89,7 @@ test("renders a deep-linked onboarding step without an entrance-animation delay"
     timeout: 20_000
   });
 
-  await expect(page.getByRole("heading", { name: "Set up your account." })).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByRole("heading", { name: "Continue to WeVid." })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByLabel("Handle")).toBeVisible();
   await expect(page.locator(".landing-auth-inline")).toHaveCSS("opacity", "1");
   await expect(page.locator(".landing-auth-inline")).toHaveCSS("visibility", "visible");

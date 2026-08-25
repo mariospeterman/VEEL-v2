@@ -200,7 +200,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await page.locator("summary").filter({ hasText: "Account menu" }).click();
   await page.getByRole("button", { name: "Log out" }).click();
   await page.waitForURL(/\/$/, { timeout: 15_000 });
-  await expect(page.getByRole("heading", { name: "Create without asking the algorithm for permission." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Stop building on rented ground." })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(false);
 });
 

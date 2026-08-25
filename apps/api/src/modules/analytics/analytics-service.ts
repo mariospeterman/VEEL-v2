@@ -253,7 +253,9 @@ export function scopeKey(scope: AnalyticsScope): string {
 }
 
 const onboardingEvents = new Set([
-  "landing_viewed", "login_opened", "onboarding_opened", "auth_method_selected",
+  "landing_viewed", "landing_cta_clicked", "landing_nav_clicked", "landing_section_viewed",
+  "landing_money_example_viewed", "landing_comparison_viewed", "landing_faq_opened",
+  "login_opened", "onboarding_opened", "auth_method_selected",
   "wallet_runtime_ready", "wallet_authentication_completed", "wallet_ownership_verified",
   "profile_step_viewed", "profile_step_completed", "age_step_started", "age_step_completed",
   "age_step_failed", "protected_app_entered", "onboarding_abandoned",

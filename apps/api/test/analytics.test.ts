@@ -31,8 +31,8 @@ describe("Analytics Core", () => {
     const journeyId = "00000000-0000-4000-8000-000000000010";
     const payload = {
       journeyId,
-      eventKey: "login_opened",
-      idempotencyKey: "login-opened",
+      eventKey: "landing_cta_clicked",
+      idempotencyKey: "landing-cta-clicked",
       occurredAt: new Date().toISOString()
     };
     const response = await app.inject({
@@ -42,7 +42,7 @@ describe("Analytics Core", () => {
       payload
     });
     expect(response.statusCode).toBe(202);
-    expect(recorded).toMatchObject([{ journeyId, eventKey: "login_opened", idempotencyKey: "login-opened" }]);
+    expect(recorded).toMatchObject([{ journeyId, eventKey: "landing_cta_clicked", idempotencyKey: "landing-cta-clicked" }]);
 
     const unknown = await app.inject({
       method: "POST",

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 
 test("serves the immutable public product without a mock runtime", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { name: "Create without asking the algorithm for permission." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Stop building on rented ground." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue to WeVid" }).first()).toBeVisible();
   await expect(page.locator("body")).not.toContainText(/mock api|e2e auth|fixture token/i);
 

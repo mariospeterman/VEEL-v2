@@ -30,7 +30,6 @@
     "@veel/contracts": "workspace:*",
     "@veel/ui": "workspace:*",
     "fastestsmallesttextencoderdecoder": "1.0.22",
-    "gsap": "^3.13.0",
     "lucide-react": "^1.18.0",
     "next": "16.3.1",
     "player.js": "0.1.0",

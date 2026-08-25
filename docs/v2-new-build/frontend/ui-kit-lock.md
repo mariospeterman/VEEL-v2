@@ -13,8 +13,8 @@ card style, media tile, empty state, error state, navigation model, or provider 
 
 ## Approved Shells
 
-- Public landing: `/`, no app providers, no wallet providers, landing-only GSAP allowed by `landing-page-gsap.md`.
-- Auth/onboarding: owned by `/` as landing story frames; login and onboarding stay on the landing surface.
+- Public landing: `/`, semantic poster-first product story, no app providers and no animation framework; see `landing-page.md`.
+- Auth/onboarding: owned by `/` as one modal entry over the landing surface; login authenticates first and unknown identities explicitly transition to onboarding.
 - Wallet setup handoff: `/app/wallet` after authenticated app access/remediation; landing wallet controls stay compile-light until provider config is verified.
 - Authenticated app: `/app/*`, one `AppShell`, one desktop rail, one top bar, one mobile bottom nav.
 - Admin/ops: `/admin`, dense operational layout using the same primitives unless a documented admin primitive is added.

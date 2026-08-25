@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "9fc0fa582c2f383828c310ba4b0da5ba5189b5b4",
-  "latestMergedSlice": "Convergence 09B — Moments and creator workspaces",
+  "latestMergedBaseline": "17f95f221de1d8c8354b958263a28cc534431924",
+  "latestMergedSlice": "Convergence 09C — Firefox admin smoke stabilization",
   "latestMergedMigration": "packages/database/migrations/0117_moments_and_scheduled_publication.sql",
   "nextPlannedSlice": "Convergence 09 — Release convergence pass",
-  "nextPlannedBranch": "codex/release-convergence-firefox-smoke",
+  "nextPlannedBranch": "codex/release-landing-final-convergence",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",

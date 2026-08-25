@@ -62,7 +62,7 @@ Frontend
   Tailwind v4 tokens
   TanStack Query for server state
   Zustand/local state for UI state
-  GSAP for landing-page frame animation only
+  CSS and browser-native progressive motion for the public landing only
   official wallet / provider clients where safe
 
 Backend

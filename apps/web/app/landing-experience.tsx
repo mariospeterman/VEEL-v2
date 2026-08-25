@@ -1,390 +1,386 @@
 "use client";
 
-import { Expand, ExternalLink, LogIn, MoreVertical, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  ArrowDown,
+  ArrowRight,
+  BadgeCheck,
+  BarChart3,
+  CalendarCheck2,
+  Check,
+  ChevronDown,
+  CircleDollarSign,
+  HeartHandshake,
+  Menu,
+  Play,
+  QrCode,
+  ShieldCheck,
+  ShoppingBag,
+  UsersRound,
+  X
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { recordOnboardingEvent } from "@/analytics/onboarding-analytics";
 import { LandingAuthSurface } from "./landing-auth-surface";
-import { landingFrames, storyNavFrames } from "./landing-content";
-import type { LandingEntryState } from "./landing-entry";
-import { legalDocLabels, legalDocSlugs, legalDocs, type LegalDocSlug } from "./legal-docs";
+import { landingContent } from "./landing-content";
+import type { LandingEntryMode, LandingEntryState } from "./landing-entry";
+import { legalDocLabels, legalDocSlugs } from "./legal-docs";
+
+const productIcons = {
+  media: Play,
+  mutuals: HeartHandshake,
+  events: QrCode,
+  commerce: ShoppingBag
+} as const;
 
 export function LandingExperience({
   initialAuthError,
   initialMode,
   initialOnboardingStep
 }: LandingEntryState) {
-  const initialAuthIndex = initialMode
-    ? landingFrames.findIndex((frame) => "auth" in frame && frame.auth === initialMode)
-    : -1;
-  const initialProgress = initialAuthIndex >= 0
-    ? initialAuthIndex / Math.max(1, landingFrames.length - 1)
-    : 0;
-  const shellRef = useRef<HTMLElement | null>(null);
-  const copyRef = useRef<HTMLElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const authFrameLockRef = useRef<number | null>(initialAuthIndex >= 0 ? initialAuthIndex : null);
-  const [legalDoc, setLegalDoc] = useState<LegalDocSlug | null>(null);
-  const [legalExpanded, setLegalExpanded] = useState(false);
+  const [authMode, setAuthMode] = useState<Exclude<LandingEntryMode, null> | null>(initialMode);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(initialAuthIndex >= 0 ? initialAuthIndex : 0);
-  const [progress, setProgress] = useState(initialProgress);
-  const activeFrame = landingFrames[activeIndex] ?? landingFrames[0];
-  const activeAuth = "auth" in activeFrame ? activeFrame.auth : undefined;
   const publicAuthState = useMemo<WebAuthState>(
     () => ({ authenticated: false, configured: true, email: null }),
     []
   );
 
-  const scrollToFrame = (index: number, behavior: ScrollBehavior = "smooth") => {
-    const shell = shellRef.current;
-    if (!shell) return;
-
-    const boundedIndex = Math.min(landingFrames.length - 1, Math.max(0, index));
-    authFrameLockRef.current = "auth" in landingFrames[boundedIndex]! ? boundedIndex : null;
-    const target = storyMaxScroll(shell) * (boundedIndex / (landingFrames.length - 1));
-    shell.scrollTo({ behavior, top: target });
-  };
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = "dark";
-    recordOnboardingEvent("landing_viewed");
-
-    const targetIndex = initialAuthIndex;
-
-    if (targetIndex >= 0) {
-      authFrameLockRef.current = targetIndex;
-      const syncTargetFrame = () => {
-        setActiveIndex(targetIndex);
-        setProgress(targetIndex / Math.max(1, landingFrames.length - 1));
-        scrollToFrame(targetIndex, "auto");
-      };
-
-      syncTargetFrame();
-      window.requestAnimationFrame(syncTargetFrame);
-      window.setTimeout(syncTargetFrame, 160);
-      return;
-    }
-
-    window.requestAnimationFrame(() => {
-      shellRef.current?.scrollTo({ top: 0 });
-    });
-  }, [initialAuthIndex]);
-
-  useEffect(() => {
-    if (activeAuth === "login") recordOnboardingEvent("login_opened");
-    if (activeAuth === "onboard") recordOnboardingEvent("onboarding_opened");
-  }, [activeAuth]);
-
-  useEffect(() => {
-    const shell = shellRef.current;
-
-    if (!shell) {
-      return;
-    }
-
-    let animationFrame = 0;
-    const update = () => {
-      animationFrame = 0;
-      const maxScroll = storyMaxScroll(shell);
-      const lockedIndex = authFrameLockRef.current;
-
-      if (lockedIndex !== null) {
-        const lockedProgress = lockedIndex / Math.max(1, landingFrames.length - 1);
-        const lockedTop = maxScroll * lockedProgress;
-        if (Math.abs(shell.scrollTop - lockedTop) > 1) {
-          shell.scrollTo({ top: lockedTop });
-        }
-        setProgress(lockedProgress);
-        setActiveIndex(lockedIndex);
-        return;
-      }
-
-      const nextProgress = Math.min(1, Math.max(0, shell.scrollTop / maxScroll));
-      const nextIndex = Math.min(
-        landingFrames.length - 1,
-        Math.max(0, Math.round(nextProgress * (landingFrames.length - 1)))
-      );
-      setProgress(nextProgress);
-      setActiveIndex(nextIndex);
-
-      const video = videoRef.current;
-      if (video && Number.isFinite(video.duration) && video.duration > 0) {
-        video.currentTime = Math.max(0, video.duration - 0.05) * nextProgress;
-      }
-    };
-
-    const requestUpdate = () => {
-      if (animationFrame) {
-        return;
-      }
-
-      animationFrame = window.requestAnimationFrame(update);
-    };
-
-    update();
-    shell.addEventListener("scroll", requestUpdate, { passive: true });
-
-    return () => {
-      shell.removeEventListener("scroll", requestUpdate);
-      if (animationFrame) window.cancelAnimationFrame(animationFrame);
-    };
+  const openContinue = useCallback((source: string) => {
+    recordOnboardingEvent("landing_cta_clicked", source);
+    setMobileMenuOpen(false);
+    setAuthMode("login");
   }, []);
 
   useEffect(() => {
-    if (!legalDoc) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setLegalDoc(null);
-        setLegalExpanded(false);
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [legalDoc]);
+    recordOnboardingEvent("landing_viewed");
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    let animation: { kill(): void } | undefined;
+    if (!authMode) return;
+    recordOnboardingEvent(authMode === "login" ? "login_opened" : "onboarding_opened");
+    const priorOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
-    async function animateCopy() {
-      if (activeAuth || activeIndex === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        return;
-      }
-
-      const target = copyRef.current;
-      if (!target) {
-        return;
-      }
-
-      const { gsap } = await import("gsap");
-      if (cancelled) {
-        return;
-      }
-
-      animation = gsap.fromTo(
-        target.querySelectorAll("[data-story-part]"),
-        {
-          autoAlpha: 0,
-          clipPath: "inset(0 0 34% 0)",
-          y: 16
-        },
-        {
-          autoAlpha: 1,
-          clearProps: "opacity,visibility,clipPath,transform",
-          clipPath: "inset(0 0 0% 0)",
-          duration: 0.86,
-          ease: "expo.out",
-          stagger: 0.085,
-          y: 0
-        }
-      );
-    }
-
-    void animateCopy();
-    return () => {
-      cancelled = true;
-      animation?.kill();
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && initialMode === null) setAuthMode(null);
     };
-  }, [activeAuth, activeIndex]);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = priorOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [authMode, initialMode]);
 
-  const cssVars = useMemo(
-    () =>
-      ({
-        "--landing-progress": `${progress * 100}%`,
-        "--landing-frame": activeIndex
-      }) as CSSProperties,
-    [activeIndex, progress]
-  );
+  useEffect(() => {
+    const observed = [...document.querySelectorAll<HTMLElement>("[data-landing-section]")];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const section = (entry.target as HTMLElement).dataset.landingSection ?? "unknown";
+            recordOnboardingEvent("landing_section_viewed", section);
+            if (section === "money") recordOnboardingEvent("landing_money_example_viewed");
+            if (section === "comparison") recordOnboardingEvent("landing_comparison_viewed");
+          }
+        });
+      },
+      { threshold: 0.45 }
+    );
+    observed.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <main className="landing-shell" data-auth-active={activeAuth ? "true" : undefined} ref={shellRef} style={cssVars}>
-      <div className="landing-scroll-space" data-gsap-scope="landing-story-scroll">
-        <section className="landing-viewport" aria-label="WeVid public landing">
-          <video
-            aria-hidden="true"
-            className="landing-video"
-            muted
-            playsInline
-            preload="metadata"
-            ref={videoRef}
-            src="/video/Veel.mp4"
-          />
-          <div className="landing-film-layer" data-visual={activeFrame.visual} aria-hidden="true" />
-
-          <header className="landing-header">
-            <a className="landing-logo-link" href="/" aria-label="WeVid home">
-              <img alt="" className="landing-logo-image landing-logo-image-dark" src="/Logo-Light-Transparent.png" />
-              <img alt="" className="landing-logo-image landing-logo-image-light" src="/Logo-Dark-Transparent.png" />
-              <span>
-                <strong>WeVid</strong>
-                <small>FRAME YOUR WAY</small>
-              </span>
-            </a>
-
-            <div className="landing-header-actions">
-              <button
-                aria-label="Continue to WeVid"
-                className="landing-icon-button"
-                onClick={(event) => {
-                  event.preventDefault();
-                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"), "auto");
-                }}
-                type="button"
-              >
-                <LogIn aria-hidden="true" size={18} />
-              </button>
-            </div>
-            <button
-              aria-expanded={mobileMenuOpen}
-              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-              className="landing-mobile-menu-button"
-              onClick={() => setMobileMenuOpen((value) => !value)}
-              type="button"
+    <main className="landing-shell">
+      <a className="landing-skip-link" href="#landing-main">Skip to main content</a>
+      <header className="landing-header">
+        <a className="landing-logo-link" href="/" aria-label="WeVid home">
+          <img alt="" height="40" src="/Logo-Light-Transparent.png" width="40" />
+          <span><strong>WeVid</strong><small>FRAME YOUR WAY</small></span>
+        </a>
+        <nav aria-label="Landing navigation" className="landing-desktop-nav">
+          {landingContent.navigation.map((item) => (
+            <a
+              href={item.href}
+              key={item.href}
+              onClick={() => recordOnboardingEvent("landing_nav_clicked", item.href.slice(1))}
             >
-              {mobileMenuOpen ? <X aria-hidden="true" size={18} /> : <MoreVertical aria-hidden="true" size={20} />}
-            </button>
-          </header>
+              {item.label}
+            </a>
+          ))}
+        </nav>
+        <button className="landing-header-cta" onClick={() => openContinue("header")} type="button">
+          Continue <ArrowRight aria-hidden="true" size={16} />
+        </button>
+        <button
+          aria-expanded={mobileMenuOpen}
+          aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
+          className="landing-menu-button"
+          onClick={() => setMobileMenuOpen((open) => !open)}
+          type="button"
+        >
+          {mobileMenuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+        </button>
+        <div className="landing-mobile-menu" data-open={mobileMenuOpen ? "true" : undefined}>
+          {landingContent.navigation.map((item) => (
+            <a
+              href={item.href}
+              key={item.href}
+              onClick={() => {
+                recordOnboardingEvent("landing_nav_clicked", item.href.slice(1));
+                setMobileMenuOpen(false);
+              }}
+            >
+              {item.label}<ArrowRight aria-hidden="true" size={16} />
+            </a>
+          ))}
+          <button onClick={() => openContinue("mobile-menu")} type="button">Continue to WeVid</button>
+        </div>
+      </header>
 
-          <div className="landing-mobile-menu" data-open={mobileMenuOpen ? "true" : undefined}>
-            <div className="landing-mobile-action-row" aria-label="Quick actions">
-              <button
-                aria-label="Continue to WeVid"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"), "auto");
-                }}
-                type="button"
-              >
-                <LogIn aria-hidden="true" size={15} />
-              </button>
-            </div>
-            <div className="landing-mobile-nav-group" aria-label="Path navigation">
-              <span>Path</span>
-              {storyNavFrames.map((frame) => (
-                <button
-                  key={frame.id}
-                  data-active={activeFrame.id === frame.id ? "true" : undefined}
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    scrollToFrame(landingFrames.findIndex((item) => item.id === frame.id));
-                  }}
-                  type="button"
-                >
-                  {frame.label}
-                </button>
-              ))}
-            </div>
-            <div className="landing-mobile-legal">
-              <span>© 2026 WeVid</span>
-              {legalDocSlugs.map((doc) => (
-                <button
-                  key={doc}
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    setLegalDoc(doc);
-                  }}
-                  type="button"
-                >
-                  {legalDocLabels[doc]}
-                </button>
-              ))}
-            </div>
+      <div id="landing-main">
+        <section className="landing-hero" data-landing-section="hero">
+          <div className="landing-hero-media" aria-hidden="true">
+            <img alt="" height="941" src="/images/wevid-landing-hero-v2.jpg" width="1672" />
           </div>
-
-          <section
-            aria-labelledby={`${activeFrame.id}-title`}
-            className={`landing-story ${activeAuth ? "landing-story-auth" : ""}`}
-            id={activeFrame.id}
-            key={activeFrame.id}
-            ref={copyRef}
-            tabIndex={activeAuth ? 0 : undefined}
-          >
-            <p className="landing-eyebrow" data-story-part>{activeFrame.kicker}</p>
-            <h1 data-story-part id={`${activeFrame.id}-title`}>{activeFrame.title}</h1>
-            <p className="landing-copy" data-story-part>{activeFrame.copy}</p>
-            {initialAuthError && activeAuth ? (
-              <p className="landing-auth-error" data-story-part>{initialAuthError}</p>
-            ) : null}
-            {!activeAuth ? (
-              <div className="landing-cta-row" data-story-part>
-                <button
-                  className="landing-button"
-                  data-tone="primary"
-                  onClick={() => scrollToFrame(landingFrames.findIndex((frame) => frame.id === "login"), "auto")}
-                  type="button"
-                >
-                  {activeFrame.primary}
-                </button>
-              </div>
-            ) : null}
-            {activeAuth ? <LandingAuthSurface authState={publicAuthState} initialOnboardingStep={initialOnboardingStep} mode={activeAuth} /> : null}
-          </section>
-
-          <nav className="landing-progress-rail" aria-label="Landing story sections">
-            <span className="landing-progress-percent">{Math.round(progress * 100).toString().padStart(2, "0")}%</span>
-            <div className="landing-progress-track" aria-hidden="true">
-              <i />
-            </div>
-            <span className="landing-progress-topic">{activeFrame.label}</span>
-          </nav>
-
-          <footer className="landing-legal-footer">
-            <span>© 2026 WeVid</span>
-            {legalDocSlugs.map((doc) => (
-              <button key={doc} onClick={() => setLegalDoc(doc)} type="button">
-                {legalDocLabels[doc]}
+          <div className="landing-hero-scrim" aria-hidden="true" />
+          <div className="landing-hero-content">
+            <p className="landing-eyebrow">{landingContent.hero.eyebrow}</p>
+            <h1>{landingContent.hero.title}</h1>
+            <p className="landing-hero-copy">{landingContent.hero.copy}</p>
+            <div className="landing-hero-actions">
+              <button className="landing-primary-button" onClick={() => openContinue("hero")} type="button">
+                {landingContent.hero.primary}<ArrowRight aria-hidden="true" size={18} />
               </button>
-            ))}
-          </footer>
-
-          {legalDoc ? (
-            <div className="landing-modal-backdrop" role="presentation">
-              <section
-                aria-labelledby="landing-legal-title"
-                aria-modal="true"
-                className="landing-legal-modal"
-                data-expanded={legalExpanded ? "true" : undefined}
-                role="dialog"
-              >
-                <header>
-                  <div>
-                    <p>WeVid legal</p>
-                    <h2 id="landing-legal-title">{legalDocLabels[legalDoc]}</h2>
-                  </div>
-                  <div className="landing-modal-actions">
-                    <button aria-label={legalExpanded ? "Collapse legal modal" : "Expand legal modal"} onClick={() => setLegalExpanded((value) => !value)} type="button">
-                      <Expand aria-hidden="true" size={18} />
-                    </button>
-                    <a aria-label={`Open ${legalDocLabels[legalDoc]} in new tab`} href={`/legal/${legalDoc}`} rel="noreferrer" target="_blank">
-                      <ExternalLink aria-hidden="true" size={18} />
-                    </a>
-                    <button
-                      aria-label="Close legal modal"
-                      onClick={() => {
-                        setLegalDoc(null);
-                        setLegalExpanded(false);
-                      }}
-                      type="button"
-                    >
-                      <X aria-hidden="true" size={18} />
-                    </button>
-                  </div>
-                </header>
-                <p>{legalDocs[legalDoc]}</p>
-              </section>
+              <a className="landing-secondary-button" href="#why">
+                {landingContent.hero.secondary}<ArrowDown aria-hidden="true" size={18} />
+              </a>
             </div>
-          ) : null}
+            <p className="landing-hero-note"><ShieldCheck aria-hidden="true" size={16} />{landingContent.hero.note}</p>
+          </div>
+          <p className="landing-scroll-cue"><span>WHY FIRST</span><ArrowDown aria-hidden="true" size={14} /></p>
+        </section>
+
+        <section aria-label="Verified WeVid product facts" className="landing-proof" data-landing-section="proof">
+          {landingContent.proof.map((fact) => (
+            <div key={fact.claim.id} title={fact.claim.qualification}>
+              <strong>{fact.value}</strong>
+              <span>{fact.label}</span>
+            </div>
+          ))}
+        </section>
+
+        <section className="landing-problem landing-section" data-landing-section="why" id="why">
+          <div className="landing-section-heading">
+            <p className="landing-eyebrow">{landingContent.problem.eyebrow}</p>
+            <h2>{landingContent.problem.title}</h2>
+            <p>{landingContent.problem.intro}</p>
+          </div>
+          <div className="landing-pain-lines" aria-label="Common creator pain points">
+            {landingContent.problem.pains.map(([lead, rest], index) => (
+              <p key={lead}><span>0{index + 1}</span><strong>{lead}</strong><em>{rest}</em></p>
+            ))}
+          </div>
+        </section>
+
+        <section className="landing-product landing-section" data-landing-section="product" id="product">
+          <div className="landing-section-heading landing-section-heading-wide">
+            <p className="landing-eyebrow">{landingContent.product.eyebrow}</p>
+            <h2>{landingContent.product.title}</h2>
+            <p>{landingContent.product.copy}</p>
+          </div>
+          <div className="landing-loop" aria-label="WeVid creator loop">
+            {["Create", "Discover", "Connect", "Unlock / Support", "Settle", "Learn"].map((item, index, all) => (
+              <span key={item}>{item}{index < all.length - 1 ? <ArrowRight aria-hidden="true" size={14} /> : null}</span>
+            ))}
+          </div>
+          <div className="landing-feature-list">
+            {landingContent.product.features.map((feature) => {
+              const Icon = productIcons[feature.id];
+              return (
+                <article className="landing-feature" data-feature={feature.id} key={feature.id}>
+                  <div className="landing-feature-copy">
+                    <span>{feature.index} / {feature.label}</span>
+                    <h3>{feature.title}</h3>
+                    <p>{feature.copy}</p>
+                  </div>
+                  <FeatureVisual id={feature.id} icon={Icon} />
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="landing-money landing-section" data-landing-section="money" id="money">
+          <div className="landing-money-copy">
+            <p className="landing-eyebrow">{landingContent.money.eyebrow}</p>
+            <h2>{landingContent.money.title}</h2>
+            <p>{landingContent.money.copy}</p>
+            <ul>
+              <li><Check aria-hidden="true" />User-controlled wallet approval</li>
+              <li><Check aria-hidden="true" />Backend-owned quote and verification</li>
+              <li><Check aria-hidden="true" />Entitlement and receipt after confirmation</li>
+            </ul>
+          </div>
+          <div className="landing-split" aria-label="Illustrative one USDC settlement split">
+            <div className="landing-split-total"><span>Buyer approves</span><strong>1.00 <small>USDC</small></strong></div>
+            <ArrowDown aria-hidden="true" />
+            <div className="landing-split-recipients">
+              <div><span>Creator recipient</span><strong>0.90</strong></div>
+              <div><span>WeVid recipient</span><strong>0.10</strong></div>
+            </div>
+            <p>{landingContent.money.disclosure}</p>
+          </div>
+        </section>
+
+        <section className="landing-plans landing-section" data-landing-section="studio" id="studio">
+          <div className="landing-section-heading landing-section-heading-wide">
+            <p className="landing-eyebrow">{landingContent.plans.eyebrow}</p>
+            <h2>{landingContent.plans.title}</h2>
+            <p>{landingContent.plans.copy}</p>
+          </div>
+          <div className="landing-plan-track">
+            {landingContent.plans.items.map((plan) => (
+              <article id={plan.name === "Enterprise" ? "enterprise" : undefined} key={plan.name}>
+                <span>{plan.name === "Studio" ? <BarChart3 aria-hidden="true" /> : plan.name === "Enterprise" ? <UsersRound aria-hidden="true" /> : <BadgeCheck aria-hidden="true" />}</span>
+                <h3>{plan.name}</h3>
+                <p>{plan.copy}</p>
+              </article>
+            ))}
+          </div>
+          <p className="landing-plan-boundary"><ShieldCheck aria-hidden="true" />{landingContent.plans.boundary.wording}. {landingContent.plans.boundary.qualification}</p>
+        </section>
+
+        <section className="landing-comparison landing-section" data-landing-section="comparison">
+          <div className="landing-section-heading">
+            <p className="landing-eyebrow">{landingContent.comparison.eyebrow}</p>
+            <h2>{landingContent.comparison.title}</h2>
+            <p>{landingContent.comparison.qualification}</p>
+          </div>
+          <div className="landing-comparison-table" role="table" aria-label="Common old platform patterns compared with the WeVid model">
+            <div className="landing-comparison-head" role="row"><span role="columnheader">Common category pattern</span><span role="columnheader">WeVid model</span></div>
+            {landingContent.comparison.rows.map(([oldModel, wevidModel]) => (
+              <div key={oldModel} role="row"><span role="cell">{oldModel}</span><strong role="cell"><ArrowRight aria-hidden="true" />{wevidModel}</strong></div>
+            ))}
+          </div>
+        </section>
+
+        <section className="landing-trust landing-section" data-landing-section="trust" id="trust">
+          <div className="landing-trust-mark" aria-hidden="true"><ShieldCheck /></div>
+          <div>
+            <p className="landing-eyebrow">{landingContent.trust.eyebrow}</p>
+            <h2>{landingContent.trust.title}</h2>
+            <p>{landingContent.trust.copy}</p>
+            <ul>{landingContent.trust.points.map((point) => <li key={point}><Check aria-hidden="true" />{point}</li>)}</ul>
+          </div>
+        </section>
+
+        <section className="landing-faq landing-section" data-landing-section="faq">
+          <div className="landing-section-heading">
+            <p className="landing-eyebrow">STRAIGHT ANSWERS</p>
+            <h2>Know what you are joining.</h2>
+          </div>
+          <div className="landing-faq-list">
+            {landingContent.faq.map(([question, answer], index) => (
+              <details
+                key={question}
+                onToggle={(event) => {
+                  if (event.currentTarget.open) recordOnboardingEvent("landing_faq_opened", `faq-${index + 1}`);
+                }}
+              >
+                <summary>{question}<ChevronDown aria-hidden="true" /></summary>
+                <p>{answer}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+
+        <section className="landing-final-cta" data-landing-section="final-cta">
+          <p className="landing-eyebrow">YOUR NEXT MOVE</p>
+          <h2>Build where the relationship can compound.</h2>
+          <button className="landing-primary-button" onClick={() => openContinue("final")} type="button">
+            Continue to WeVid<ArrowRight aria-hidden="true" />
+          </button>
+          <p>One entry. Existing accounts continue. New people choose onboarding first.</p>
         </section>
       </div>
+
+      <footer className="landing-footer">
+        <a className="landing-logo-link" href="/" aria-label="WeVid home">
+          <img alt="" height="36" src="/Logo-Light-Transparent.png" width="36" />
+          <span><strong>WeVid</strong><small>FRAME YOUR WAY</small></span>
+        </a>
+        <p>Creator-first social, access and business tools. 18+.</p>
+        <nav aria-label="Legal links">
+          {legalDocSlugs.map((slug) => <a href={`/legal/${slug}`} key={slug}>{legalDocLabels[slug]}</a>)}
+        </nav>
+        <span>© 2026 WeVid</span>
+      </footer>
+
+      {authMode ? (
+        <div
+          className="landing-auth-backdrop"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target && initialMode === null) setAuthMode(null);
+          }}
+          role="presentation"
+        >
+          <section aria-labelledby="landing-auth-title" aria-modal="true" className="landing-auth-modal" role="dialog">
+            <header>
+              <a className="landing-logo-link" href="/" aria-label="WeVid home">
+                <img alt="" height="38" src="/Logo-Light-Transparent.png" width="38" />
+                <span><strong>WeVid</strong><small>FRAME YOUR WAY</small></span>
+              </a>
+              {initialMode === null ? (
+                <button aria-label="Close" onClick={() => setAuthMode(null)} type="button"><X aria-hidden="true" /></button>
+              ) : null}
+            </header>
+            <div className="landing-auth-heading">
+              <p>ONE CLEAN ENTRY</p>
+              <h2 id="landing-auth-title">Continue to WeVid.</h2>
+              <span>We authenticate first. If your identity is new, you choose whether to start onboarding before anything is created.</span>
+            </div>
+            {initialAuthError ? <p className="landing-auth-error">{initialAuthError}</p> : null}
+            <LandingAuthSurface authState={publicAuthState} initialOnboardingStep={initialOnboardingStep} mode={authMode} />
+            <p className="landing-auth-footnote"><ShieldCheck aria-hidden="true" />Wallet ownership is identity proof—not payment proof.</p>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
 
-function storyMaxScroll(shell: HTMLElement) {
-  return Math.max(1, shell.clientHeight * (landingFrames.length - 1));
+function FeatureVisual({ id, icon: Icon }: { id: keyof typeof productIcons; icon: typeof Play }) {
+  if (id === "media") {
+    return (
+      <div aria-hidden="true" className="landing-product-visual landing-media-visual">
+        <div className="landing-media-frame"><span>WEVID / MEDIA</span><Play fill="currentColor" /><small>Creator · 00:18</small></div>
+        <div className="landing-action-rail"><HeartHandshake /><CircleDollarSign /><BadgeCheck /></div>
+      </div>
+    );
+  }
+  if (id === "mutuals") {
+    return (
+      <div aria-hidden="true" className="landing-product-visual landing-mutuals-visual">
+        <div className="landing-person landing-person-a">YOU</div>
+        <HeartHandshake />
+        <div className="landing-person landing-person-b">THEM</div>
+        <p><BadgeCheck />Both connect <span>Conversation opens</span></p>
+      </div>
+    );
+  }
+  if (id === "events") {
+    return (
+      <div aria-hidden="true" className="landing-product-visual landing-event-visual">
+        <div><span>EVENT ACCESS</span><strong>Night Session</strong><small><CalendarCheck2 />Pass verified</small></div>
+        <QrCode />
+      </div>
+    );
+  }
+  return (
+    <div aria-hidden="true" className="landing-product-visual landing-commerce-visual">
+      <div className="landing-product-shape"><Icon /></div>
+      <div><span>ATTACHED TO MEDIA</span><strong>Product Offer</strong><small>Planned · approval gated</small></div>
+    </div>
+  );
 }
