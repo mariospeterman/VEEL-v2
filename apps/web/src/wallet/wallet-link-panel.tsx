@@ -153,6 +153,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
           purpose: authPurpose,
           signMessage: (message) => signMessage(new TextEncoder().encode(message))
         });
+        const appSession = await getCurrentSession();
 
         setLinkedAddress(address);
         setState("linked");
@@ -160,7 +161,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
         setMessage(authPurpose === "login" ? "Welcome back." : "Wallet verified. Continue with your profile.");
         onLinked?.(address);
         if (reloadOnSession) {
-          await redirectAfterWalletSession();
+          redirectAfterWalletSession(appSession);
         }
         return;
       }
@@ -324,30 +325,25 @@ function shortWalletAddress(address: string) {
   return address.length > 10 ? `${address.slice(0, 4)}...${address.slice(-4)}` : address;
 }
 
-async function redirectAfterWalletSession() {
-  try {
-    const session = await getCurrentSession();
-    const reason = session.appAccessState.reason;
+function redirectAfterWalletSession(session: Awaited<ReturnType<typeof getCurrentSession>>) {
+  const reason = session.appAccessState.reason;
 
-    if (session.appAccessState.allowed) {
-      window.location.assign("/app/home");
-      return;
-    }
-
-    if (reason === "age_required" || reason === "age_pending") {
-      window.location.assign("/?mode=onboarding&step=age&next=%2Fapp%2Fhome");
-      return;
-    }
-
-    if (reason === "identity_required" || reason === "wallet_required") {
-      window.location.assign("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome");
-      return;
-    }
-
-    window.location.assign("/?mode=login&next=%2Fapp%2Fhome");
-  } catch {
-    window.location.assign("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome");
+  if (session.appAccessState.allowed) {
+    window.location.assign("/app/home");
+    return;
   }
+
+  if (reason === "age_required" || reason === "age_pending") {
+    window.location.assign("/?mode=onboarding&step=age&next=%2Fapp%2Fhome");
+    return;
+  }
+
+  if (reason === "identity_required" || reason === "wallet_required") {
+    window.location.assign("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome");
+    return;
+  }
+
+  window.location.assign("/?mode=login&next=%2Fapp%2Fhome");
 }
 
 function walletNameIncludes(wallet: Wallet, value: string) {

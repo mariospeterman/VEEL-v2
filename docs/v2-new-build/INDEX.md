@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: canonical architecture, current implementation truth, and production completion plan
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 Source of truth: yes
 
 Owns:
@@ -22,7 +22,7 @@ Non-goals:
 
 This folder is the canonical WeVid engineering pack. Technical `veel` identifiers remain where compatibility requires them; public product language is WeVid.
 
-Next planned production slice: **Convergence 09 — Release convergence pass**. Stable merged status
+Next planned production slice: **Convergence 09E — Cloud and provider acceptance**. Stable merged status
 is in `current-implementation-status.md` and `production-status.json`; transient branch and
 pull-request truth comes from GitHub's single `wevid-active-slice` label.
 

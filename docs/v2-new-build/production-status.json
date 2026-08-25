@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "17f95f221de1d8c8354b958263a28cc534431924",
-  "latestMergedSlice": "Convergence 09C — Firefox admin smoke stabilization",
-  "latestMergedMigration": "packages/database/migrations/0117_moments_and_scheduled_publication.sql",
-  "nextPlannedSlice": "Convergence 09 — Release convergence pass",
-  "nextPlannedBranch": "codex/release-landing-final-convergence",
+  "latestMergedBaseline": "829db67bc58c3d19c550b521250da9c45de5aa59",
+  "latestMergedSlice": "Convergence 09D — Landing final convergence",
+  "latestMergedMigration": "packages/database/migrations/0118_landing_convergence_analytics.sql",
+  "nextPlannedSlice": "Convergence 09E — Cloud and provider acceptance",
+  "nextPlannedBranch": "codex/converge-09e-cloud-provider-acceptance",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",

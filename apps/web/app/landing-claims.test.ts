@@ -21,6 +21,7 @@ describe("landing claims authority", () => {
     for (const banned of ["guaranteed", "risk-free", "instant cash", "zero fees", "uncensorable", "100% private"]) {
       expect(copy).not.toContain(banned);
     }
+    expect(copy).not.toContain("600ms");
     expect(copy).toContain("product offers · planned rollout");
   });
 

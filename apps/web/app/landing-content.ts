@@ -72,6 +72,22 @@ export const landingContent = {
     eyebrow: "NONCUSTODIAL BY DESIGN",
     title: "One approval. One verified split. No WeVid balance.",
     copy: "The buyer approves a server-composed transaction. The network confirms it. WeVid verifies settlement before access changes and records the receipt.",
+    flow: [
+      { index: "01", label: "QR or link", copy: "Commerce Kit formats the Solana Pay handoff." },
+      { index: "02", label: "You approve", copy: "Your wallet shows the transaction before signing." },
+      { index: "03", label: "Network confirms", copy: "Backend verification—not the approval—proves payment." },
+      { index: "04", label: "Access opens", copy: "Entitlement and receipt follow confirmed settlement." }
+    ],
+    boundaries: [
+      "Direct to the quoted recipient wallets",
+      "No card-style chargeback rail; refund, dispute and legal duties still apply",
+      "Commerce Kit formats QR and links—it never becomes payment truth"
+    ],
+    allocationRules: [
+      ["Default", "90% creator · 10% WeVid"],
+      ["Referral", "Comes from WeVid’s fee"],
+      ["Enterprise", "Agreed share of the creator-side pool"]
+    ],
     example: {
       ...landingMoneyExample,
       claim: approvedLandingClaim("one-usdc-example")
@@ -83,10 +99,10 @@ export const landingContent = {
     title: "Plans extend your workspace—not your rank.",
     copy: "Free, Plus and Ultra shape viewing and convenience. Studio adds professional tools to an individual creator account. Enterprise adds a permissioned organization workspace.",
     items: [
-      { name: "Plus", copy: "More viewing, collections, notification and profile controls." },
-      { name: "Ultra", copy: "Higher allowances and advanced playback convenience." },
-      { name: "Studio", copy: "Individual creator analytics, scheduling, pricing and live-conversion tools." },
-      { name: "Enterprise", copy: "Organization RBAC, managed-creator consent, consolidated reporting and operations." }
+      { name: "Plus", scope: "Personal", copy: "More viewing, collections, notification and profile controls.", capabilities: ["Viewing", "Collections", "Profile controls"] },
+      { name: "Ultra", scope: "Personal", copy: "Higher allowances and advanced playback convenience.", capabilities: ["Higher limits", "Playback", "Convenience"] },
+      { name: "Studio", scope: "1 creator workspace", copy: "Individual creator analytics, scheduling, pricing and live-conversion tools.", capabilities: ["7 performance metrics", "7 commerce metrics", "Content + readiness"] },
+      { name: "Enterprise", scope: "Permissioned organization", copy: "Organization RBAC, managed-creator consent, consolidated reporting and operations.", capabilities: ["Exact coworker permissions", "Creator-approved scope", "KYB + agreement gates"] }
     ],
     boundary: approvedLandingClaim("no-pay-to-rank")
   },
@@ -105,7 +121,7 @@ export const landingContent = {
     eyebrow: "OPEN TO EXPRESSION · CLOSED TO EXPLOITATION",
     title: "Expression needs boundaries people can trust.",
     copy: "WeVid separates age access, creator earnings, adult publishing, performer evidence, content moderation and staff authority. Each capability is checked for its own purpose.",
-    points: ["18+ access before protected entry", "Consent and rights evidence", "Server-authorized access and moderation", "Permission-based staff operations"]
+    points: ["18+ access before protected entry", "Performer consent, rights evidence and revocation state", "Tax, KYC and KYB gates only where the capability requires them", "Server-authorized moderation and permission-based staff operations"]
   },
   faq: [
     ["Is Continue to WeVid login or signup?", "Both, without guessing. We authenticate the method you choose. A known identity signs in; an unknown identity must explicitly start the three-step onboarding flow before an account or embedded wallet is created."],
@@ -113,6 +129,7 @@ export const landingContent = {
     ["Can I pay for more reach or better Mutuals results?", "No. Plans buy software capabilities and access. Money never buys organic ranking, Mutuals treatment, message priority or preferential social treatment."],
     ["What is Studio?", "Studio is the individual creator capability tier and workspace for analytics, scheduling, pricing and other professional tools. It extends the same account and profile; it is not a second app or organization account."],
     ["What is Enterprise?", "Enterprise is the organization workspace for agencies, teams, venues and approved partners. Access is contract- and permission-based, with creator consent and backend-owned RBAC."],
+    ["Can an agency coworker access everything?", "No. Enterprise coworkers need active organization membership and exact server-approved permissions. Managed creators separately approve the scope and current agreement; a tier or role label alone grants nothing."],
     ["Are Product Offers available now?", "Product Offers are the approved product direction, not a launch claim. They remain gated until seller, product-safety, fulfillment, privacy, tax, refund and operational requirements are implemented and approved."]
   ]
 } as const;

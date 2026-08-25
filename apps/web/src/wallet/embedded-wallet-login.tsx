@@ -7,7 +7,7 @@ import {
   useWallets as usePrivySolanaWallets
 } from "@privy-io/react-auth/solana";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiMutationError } from "@/api-mutations";
+import { ApiMutationError, getCurrentSession } from "@/api-mutations";
 import { safeMutationMessage } from "@/api-errors";
 import { ProviderLogo } from "@/brand/provider-logo";
 import { createBackendWalletSession } from "./backend-wallet-auth";
@@ -85,6 +85,7 @@ export function EmbeddedWalletLoginButton({
             return result.signature;
           }
         });
+        await getCurrentSession();
 
         setFlowRequested(false);
         onLinked?.(wallet.address);

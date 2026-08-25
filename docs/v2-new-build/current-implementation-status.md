@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: implementation status, known gaps, and next hardening priorities
-Last updated: 2026-08-24
+Last updated: 2026-08-25
 Source of truth: yes
 
 Owns:
@@ -38,14 +38,14 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `17f95f221de1d8c8354b958263a28cc534431924` |
-| Latest merged slice | Convergence 09C — Firefox admin smoke stabilization |
-| Latest merged migration | `packages/database/migrations/0117_moments_and_scheduled_publication.sql` |
+| Latest merged baseline | `829db67bc58c3d19c550b521250da9c45de5aa59` |
+| Latest merged slice | Convergence 09D — Landing final convergence |
+| Latest merged migration | `packages/database/migrations/0118_landing_convergence_analytics.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
-| Next planned slice | Convergence 09 — Release convergence pass |
+| Next planned slice | Convergence 09E — Cloud and provider acceptance |
 
-Next planned production slice: **Convergence 09 — Release convergence pass**.
+Next planned production slice: **Convergence 09E — Cloud and provider acceptance**.
 
 Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
@@ -66,6 +66,13 @@ plus scheduled publication without introducing a second content, player, moderat
 queue authority. Migration `0117` and its full contract, database, security, and browser proof merged
 in PR #102 at `9fc0fa5`. Convergence 09C is limited to making one audit-policy textarea replacement
 deterministic in Firefox; it changes no runtime, provider, contract, migration, or product behavior.
+
+Merged Convergence 09D replaces the overlapping scroll-story landing with one cinematic semantic
+page, one approved public-claim authority, responsive desktop/mobile presentation, privacy-minimized
+landing analytics, and one lifecycle-safe `Continue to WeVid` entry. PR #104 merged at `829db67`
+after protected browser, database, security, documentation, and exact-head checks. The landing does
+not turn Product Offers, sub-second settlement, provider approval, or staging readiness into launch
+claims; those remain gated by their recorded evidence and operations requirements.
 
 Merged Convergence 08 adds two narrowly scoped MCP media tools: one prepares a private-draft Bunny
 image or resumable-video handoff and one reads canonical readiness. Capabilities are hash-only,
