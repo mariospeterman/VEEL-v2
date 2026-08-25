@@ -38,9 +38,9 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `4551045fbe6205ef9961c46849e66bba3a9c45f1` |
-| Latest merged slice | Convergence 09A — Operator harness and staff RBAC |
-| Latest merged migration | `packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.sql` |
+| Latest merged baseline | `9fc0fa582c2f383828c310ba4b0da5ba5189b5b4` |
+| Latest merged slice | Convergence 09B — Moments and creator workspaces |
+| Latest merged migration | `packages/database/migrations/0117_moments_and_scheduled_publication.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
 | Next planned slice | Convergence 09 — Release convergence pass |
@@ -60,11 +60,12 @@ PASS. PR #101 merged at `4551045` after all eight protected checks, real-Postgre
 and exact-head review. Shared cloud configuration remains an owner-managed gate; the terminal state is
 `OPERATOR_READY_FOR_STAGING_CONFIGURATION`, not a claim that staging or launch is enabled.
 
-Active Convergence 09B separates the individual `/app/studio` creator workspace from the
+Merged Convergence 09B separates the individual `/app/studio` creator workspace from the
 organization `/app/enterprise` workspace, makes own Profile media-first, and adds canonical Moments
 plus scheduled publication without introducing a second content, player, moderation, analytics, or
-queue authority. Migration `0117` and its browser proof must merge before these behaviors become the
-protected baseline.
+queue authority. Migration `0117` and its full contract, database, security, and browser proof merged
+in PR #102 at `9fc0fa5`. Convergence 09C is limited to making one audit-policy textarea replacement
+deterministic in Firefox; it changes no runtime, provider, contract, migration, or product behavior.
 
 Merged Convergence 08 adds two narrowly scoped MCP media tools: one prepares a private-draft Bunny
 image or resumable-video handoff and one reads canonical readiness. Capabilities are hash-only,
@@ -376,7 +377,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 - Media creation has backend draft, admin-tunable draft/upload abuse policy enforcement with safe defaults, metadata/preview update, Event Access draft linking, persisted upload-session handoff, TUS browser upload/resume wiring, provider-status sync UI, entitlement-aware content playback rendering, explicit publish submission, and a separate `publish_state`.
 - Launch 03A adds a preview-first SFW-only Create journey, required people/rights declaration, one-action draft-and-upload handoff, paginated owner publication/review workspace, uploader-safe request-changes/rejection reasons, request-bound replay-safe appeals, transactional appeal closure/restoration, and an explicit public-profile `publish_state = 'published'` guard. Representation-only edits to existing adult content re-check adult-publisher capability across every editable state. Code and real local Postgres proof are complete; Bunny staging and launch-approved classifier/hash evidence remain the provider gate.
 - Launch 10 has converged the public entry, app shell, representative product workspaces, accessibility baseline, cross-browser smoke matrix, and PWA/offline contract. Final provider-backed visual journeys, manual assistive-technology/zoom checks, target-device iOS install/push behavior, and performance evidence belong to pre-production staging convergence.
-- Release convergence replaces broad staff admission with one registered role-to-permission policy, exact route/action guards, typed current-staff projection, owner-governed expiring invitation/acceptance lifecycle, last-owner protection, session revocation, notifications, and audited before/after state. The Admin shell is permission-derived and modular, no longer eagerly requests every endpoint, and resolves real organization IDs instead of a fixture constant. Migration `0116`, focused unit/API coverage, and isolated real-Postgres lifecycle proof are complete on the active release-convergence slice; protected-main CI and merge evidence remain required before this becomes stable merged truth.
+- Release convergence replaces broad staff admission with one registered role-to-permission policy, exact route/action guards, typed current-staff projection, owner-governed expiring invitation/acceptance lifecycle, last-owner protection, session revocation, notifications, and audited before/after state. The Admin shell is permission-derived and modular, no longer eagerly requests every endpoint, and resolves real organization IDs instead of a fixture constant. Migration `0116`, focused unit/API coverage, isolated real-Postgres lifecycle proof, protected-main CI, and merge evidence are complete in the stable merged baseline.
 - Launch 11 now has runtime-neutral public web configuration, a secret-excluding multi-target non-root OCI build, post-green-main GHCR publication and GitHub attestations, an immutable source/contract/migration/image manifest, exact-manifest staging and manual production promotion gates, shared API/worker OTLP bootstrap, privacy-minimized Web Vitals ingestion, synthetic and bounded-load checks, logical database restore proof, exact Storage-object restore parity proof, strict independent staging evidence orchestration, expanded redaction, and incident/rollback/legal runbooks. The workflows intentionally refuse to claim deployment until a hosting target and official OIDC adapter are selected. Shared staging credentials, provider dashboards/webhooks/domains, real provider journeys, collector/dashboard/alert destinations, real database/Storage restore receipts, final counsel-approved legal documents, production DNS/secrets, and explicit production approval remain `CODE_COMPLETE_PROVIDER_BLOCKED` external gates.
 - Local macOS Vitest/Vite execution is covered by optional `rolldown` Darwin native bindings and `pnpm run doctor`, which resolves the pinned Node.js/Corepack toolchain even when the interactive shell points at an older Node. Tests must still run locally and in the pinned Linux CI proof before provider or frontend slices are considered validated.
 

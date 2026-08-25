@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "4551045fbe6205ef9961c46849e66bba3a9c45f1",
-  "latestMergedSlice": "Convergence 09A — Operator harness and staff RBAC",
-  "latestMergedMigration": "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.sql",
+  "latestMergedBaseline": "9fc0fa582c2f383828c310ba4b0da5ba5189b5b4",
+  "latestMergedSlice": "Convergence 09B — Moments and creator workspaces",
+  "latestMergedMigration": "packages/database/migrations/0117_moments_and_scheduled_publication.sql",
   "nextPlannedSlice": "Convergence 09 — Release convergence pass",
-  "nextPlannedBranch": "codex/release-convergence-product-ux",
+  "nextPlannedBranch": "codex/release-convergence-firefox-smoke",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",
