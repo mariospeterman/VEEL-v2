@@ -618,7 +618,7 @@ export async function createDataRequest(
 
 export async function getFeedPage(
   mode: "recommended" | "following",
-  surface: "home" | "bits",
+  surface: "home" | "bits" | "moments",
   cursor?: string
 ): Promise<FeedPage> {
   const query = new URLSearchParams({ mode, surface });

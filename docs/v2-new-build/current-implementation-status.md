@@ -38,12 +38,12 @@ copied into this document. The machine-readable companion is `production-status.
 
 | Field | Current value |
 | --- | --- |
-| Latest merged baseline | `fe10413d8a28700b15cfdecde386e2807719d3d7` |
-| Latest merged slice | Convergence 08 — MCP media and provenance bridge |
-| Latest merged migration | `packages/database/migrations/0115_mcp_media_provenance_bridge.sql` |
+| Latest merged baseline | `4551045fbe6205ef9961c46849e66bba3a9c45f1` |
+| Latest merged slice | Convergence 09A — Operator harness and staff RBAC |
+| Latest merged migration | `packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.sql` |
 | Latest merged evidence | `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`, `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN` |
 | Known launch blockers | `STAGING_PROVEN`, `PROVIDER_APPROVED`, `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED` remain outstanding. |
-| Next planned slice | None — external launch gates only |
+| Next planned slice | Convergence 09 — Release convergence pass |
 
 Next planned production slice: **Convergence 09 — Release convergence pass**.
 
@@ -51,6 +51,20 @@ Readiness vocabulary is fixed to `DESIGNED`, `CODE_COMPLETE`, `UNIT_TESTED`,
 `REAL_POSTGRES_PROVEN`, `BROWSER_PROVEN`, `STAGING_PROVEN`, `PROVIDER_APPROVED`,
 `LEGAL_APPROVED`, `OPERATIONS_APPROVED`, and `LAUNCH_ENABLED`. “Accepted” describes a
 design decision; it never means implemented, tested, approved, enabled, or launch-ready.
+
+Merged Convergence 09A provides the canonical operator-ready cloud-staging harness and explicit
+permission-level staff RBAC. It replaces the duplicate legacy admin stack with one responsive Admin
+surface, adds invitation/acceptance, role change, suspension, revocation, last-owner protection,
+session revocation, mutation reasons, and audit evidence, and keeps unproved staging journeys out of
+PASS. PR #101 merged at `4551045` after all eight protected checks, real-Postgres staff concurrency,
+and exact-head review. Shared cloud configuration remains an owner-managed gate; the terminal state is
+`OPERATOR_READY_FOR_STAGING_CONFIGURATION`, not a claim that staging or launch is enabled.
+
+Active Convergence 09B separates the individual `/app/studio` creator workspace from the
+organization `/app/enterprise` workspace, makes own Profile media-first, and adds canonical Moments
+plus scheduled publication without introducing a second content, player, moderation, analytics, or
+queue authority. Migration `0117` and its browser proof must merge before these behaviors become the
+protected baseline.
 
 Merged Convergence 08 adds two narrowly scoped MCP media tools: one prepares a private-draft Bunny
 image or resumable-video handoff and one reads canonical readiness. Capabilities are hash-only,
@@ -315,7 +329,7 @@ Public product copy and API metadata use WeVid and Support. Technical package sc
 
 - Monorepo, pnpm workspace, CI/security workflow, docs checks, lint/typecheck/test/smoke scripts, GStack gates, and gitleaks local gate.
 - Toolchain versioning is explicit through `.node-version`, `.nvmrc`, `packageManager`, and `engines`: Node.js `22.16.0`, pnpm `10.0.0`, Corepack activation, `pnpm bootstrap`, `pnpm run doctor`, and `pnpm check`. The canonical CI proof job is `pinned-toolchain-proof`.
-- The production dependency graph no longer includes the unused `@solana/wallet-adapter-wallets` umbrella package or pnpm-auto-installed React Native/Metro peers. Next.js is pinned to `16.3.1`, Playwright is pinned to `1.62.1`, Fastify is pinned to `5.12.0`, `jose` is pinned to `6.2.9`, and Zustand resolves to `5.0.15`; required Solana codec/Stripe peers are explicit exact service dependencies, patched `axios`/`ws` resolutions are enforced, and UUID 8–10 consumers resolve to patched `uuid@11.1.1`. Supported queued upgrades were reapplied individually after official review: `pnpm/action-setup@v6` in PR #36, ESLint 10 in PR #37, `@fastify/rate-limit` 11 in PR #38, `fastify-raw-body` 6 in PR #39, `globals` 17 in PR #40, Supabase CLI in PR #58, Fastify in PR #60, Playwright in PR #59, Privy in PR #61, `jose` in PR #74, Zustand in PR #76, and Next.js in PR #77. PR #41 was rejected because it changed only one Rolldown native binding while the runtime and every other binding remained 1.0.3; PR #75 was rejected because it would have installed `@solana-program/system` against an unsupported `@solana/kit` major. `pnpm deps:check` guards both the vulnerable-resolution policy and exact Rolldown runtime/native-binding alignment. The current `pnpm audit --prod` reports one high advisory: unpatched `bigint-buffer` through official Solana SPL tooling; no critical, moderate, low, or informational advisory is reported. Exact reachability, mitigations, artifact evidence, ownership, review date, and production gate are recorded in [Production dependency security status](dependency-security-status.md).
+- The production dependency graph no longer includes the unused `@solana/wallet-adapter-wallets` umbrella package, pnpm-auto-installed React Native/Metro peers, or legacy `@solana/spl-token`/unpatched `bigint-buffer`. The API uses the official generated `@solana-program/token@0.15.0` client at the pinned `@solana/kit@7.1.0` boundary. Next.js is pinned to `16.3.1`, Playwright is pinned to `1.62.1`, Fastify is pinned to `5.12.0`, `jose` is pinned to `6.2.9`, and Zustand resolves to `5.0.15`; required Solana codec/Stripe peers are explicit exact service dependencies, patched `axios`/`ws` resolutions are enforced, and UUID 8–10 consumers resolve to patched `uuid@11.1.1`. Supported queued upgrades were reapplied individually after official review: `pnpm/action-setup@v6` in PR #36, ESLint 10 in PR #37, `@fastify/rate-limit` 11 in PR #38, `fastify-raw-body` 6 in PR #39, `globals` 17 in PR #40, Supabase CLI in PR #58, Fastify in PR #60, Playwright in PR #59, Privy in PR #61, `jose` in PR #74, Zustand in PR #76, and Next.js in PR #77. PR #41 was rejected because it changed only one Rolldown native binding while the runtime and every other binding remained 1.0.3; PR #75 was rejected because it would have installed `@solana-program/system` against an unsupported `@solana/kit` major. `pnpm deps:check` guards both the vulnerable-resolution policy and exact Rolldown runtime/native-binding alignment. The current `pnpm audit --prod` reports zero known vulnerabilities. Exact graph, removed findings, artifact evidence, and release rule are recorded in [Production dependency security status](dependency-security-status.md).
 - Privy `3.37.1` declares `@farcaster/mini-app-solana` as an optional peer and dynamically imports it only after its own Farcaster-environment detection. WeVid has no Farcaster login, query, referrer, or mini-app configuration and does not install or alias that peer; normal Privy email/social/passkey plus Solana wallet creation/signing does not execute the branch. Next webpack and Turbopack now narrowly ignore only that expected optional-import diagnostic inside Privy while every other missing module remains visible. Privy's official Solana peer packages are explicit exact web dependencies compatible with the pinned `@solana/kit` major. Owner: identity-provider dependency review. Review date: 2026-09-15. Removal condition: remove the narrow ignore when Privy publishes a compatible bundler-clean optional import, or install and stage-prove the peer only if Farcaster becomes an approved product surface.
 - OpenAPI, route map, and Fastify route registration are checked for route drift. The canonical follow endpoints are present only with their migration, repository, abuse/idempotency controls, feed impact, and real-Postgres/browser proof; no contract-only current-viewer alias is restored because the session endpoint remains that boundary.
 - Fastify API bootstrap with route registration, dependency construction, shared app-level Postgres client construction, close-hook lifecycle, env validation, raw-body support for signed webhooks, global rate limit, OpenAPI plugin, and Supabase boundary plugin.

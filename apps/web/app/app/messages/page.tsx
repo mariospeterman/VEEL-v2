@@ -2,14 +2,13 @@ import { getConversationMessages, getConversations } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { MessagesWorkspace } from "../../messages/messages-workspace";
 import { AppShell } from "../../app-shell";
-import { PageHeader } from "../../ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function MessagesPage({
   searchParams
 }: {
-  searchParams?: Promise<{ conversation?: string }>;
+  searchParams?: Promise<{ conversation?: string; share?: string }>;
 }) {
   await requireAppAccess("/app/messages");
   const params = await searchParams;
@@ -21,15 +20,14 @@ export default async function MessagesPage({
 
   return (
     <AppShell>
-      <PageHeader eyebrow="Messages" title="Inbox">
-        One respectful introduction, explicit consent, and natural realtime updates—without paid inbox access.
-      </PageHeader>
+      <h1 className="mb-4 text-2xl font-semibold tracking-tight">Messages</h1>
       <MessagesWorkspace
         initialConversationId={selected?.id ?? null}
         initialConversations={conversations}
-        initialMessages={messages}
-        initialMessagesAvailable={messagesResult?.ok ?? true}
-      />
+      initialMessages={messages}
+      initialMessagesAvailable={messagesResult?.ok ?? true}
+      initialSharedContentItemId={params?.share ?? null}
+    />
     </AppShell>
   );
 }

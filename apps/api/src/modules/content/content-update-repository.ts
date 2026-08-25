@@ -149,8 +149,20 @@ export function createContentUpdateRepositoryMethods(
                 else ci.asset_revision
               end,
               visibility = case when ${Boolean(input.visibility)} then ${input.visibility ?? ""} else ci.visibility end,
+              distribution_mode = case
+                when ${Boolean(input.distributionMode)} and ci.publish_state in ('draft', 'unpublished')
+                  then ${input.distributionMode ?? "post"}
+                else ci.distribution_mode
+              end,
+              scheduled_for = case
+                when ${input.scheduledForProvided} and ci.publish_state in ('draft', 'unpublished', 'submitted_for_review', 'scheduled')
+                  then ${input.scheduledFor ?? null}
+                else ci.scheduled_for
+              end,
               nsfw_label = case when ${Boolean(input.nsfwLabel)} then ${input.nsfwLabel ?? ""} else ci.nsfw_label end,
               publish_state = case
+                when ci.publish_state = 'scheduled' and ${input.scheduledForProvided} and ${input.scheduledFor ?? null}::timestamptz is null
+                  then 'unpublished'
                 when ci.publish_state = 'published' and (
                   (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
                   or (
@@ -186,7 +198,8 @@ export function createContentUpdateRepositoryMethods(
               and safety.id = ci.id
               and ci.creator_user_id = actor.id
               and ci.state <> 'deleted'
-            returning ci.id, ci.creator_user_id, ci.media_type, ci.caption, ci.body_text, ci.asset_revision, ci.nsfw_label
+            returning ci.id, ci.creator_user_id, ci.media_type, ci.distribution_mode, ci.expires_at,
+              ci.scheduled_for, ci.caption, ci.body_text, ci.asset_revision, ci.nsfw_label
           ),
           updated_media as (
             update media_assets ma
@@ -210,6 +223,9 @@ export function createContentUpdateRepositoryMethods(
           select
             ci.id,
             ci.media_type,
+            ci.distribution_mode,
+            ci.expires_at,
+            ci.scheduled_for,
             ci.caption,
             ci.body_text,
             ci.asset_revision,
@@ -275,7 +291,8 @@ async function selectOwnedCompositionRow(
   creatorUserId: string
 ): Promise<ContentUpdateRow | null> {
   const rows = await transaction<ContentUpdateRow[]>`
-    select ci.id, ci.media_type, ci.caption, ci.body_text, ci.asset_revision, ci.nsfw_label,
+    select ci.id, ci.media_type, ci.distribution_mode, ci.expires_at, ci.scheduled_for,
+      ci.caption, ci.body_text, ci.asset_revision, ci.nsfw_label,
       u.id as creator_id, p.handle, p.display_name, p.avatar_url, 'not_declared'::text as representation_mode
     from content_items ci
     join users u on u.id = ci.creator_user_id

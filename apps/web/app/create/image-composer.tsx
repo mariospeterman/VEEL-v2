@@ -43,9 +43,13 @@ const origins: Origin[] = ["human_created", "ai_assisted", "ai_generated", "mate
 const singleVideoTypes: Array<"bit" | "clip" | "vod"> = ["bit", "clip", "vod"];
 
 export function MediaAssetComposer({
+  canSchedule,
+  initialDistributionMode,
   storageScope,
   verification
 }: {
+  canSchedule: boolean;
+  initialDistributionMode: "post" | "moment";
   storageScope: string | null;
   verification: VerificationStatus | null;
 }) {
@@ -54,6 +58,8 @@ export function MediaAssetComposer({
   const [visibility, setVisibility] = useState<CreateContentRequest["visibility"]>("public");
   const [nsfwLabel, setNsfwLabel] = useState<CreateContentRequest["nsfwLabel"]>("none");
   const [representationMode, setRepresentationMode] = useState<CreateContentRequest["representationMode"]>("self_only");
+  const [distributionMode, setDistributionMode] = useState<CreateContentRequest["distributionMode"]>(initialDistributionMode);
+  const [scheduledFor, setScheduledFor] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [draft, setDraft] = useState<ContentItem | null>(null);
   const [pending, setPending] = useState<"upload" | "reorder" | "details" | "remove" | "publish" | null>(null);
@@ -67,7 +73,9 @@ export function MediaAssetComposer({
   const previewUrls = useRef(new Set<string>());
   const activeUpload = useRef<tus.Upload | null>(null);
   const pauseCurrentUpload = useRef<(() => void) | null>(null);
-  const draftKey = storageScope ? `wevid:create:${storageScope}:media-draft-v2` : null;
+  const draftKey = storageScope
+    ? `wevid:create:${storageScope}:${initialDistributionMode === "moment" ? "moment-" : ""}media-draft-v2`
+    : null;
   const allUploaded = assets.length > 0 && assets.every((asset) => asset.mediaAssetId && asset.transferComplete);
   const ageReady = verification?.capabilities.canUploadMedia === true;
   const adultSelected = nsfwLabel !== "none";
@@ -89,6 +97,8 @@ export function MediaAssetComposer({
         visibility?: CreateContentRequest["visibility"];
         nsfwLabel?: CreateContentRequest["nsfwLabel"];
         representationMode?: CreateContentRequest["representationMode"];
+        distributionMode?: CreateContentRequest["distributionMode"];
+        scheduledFor?: string;
         singleVideoType?: (typeof singleVideoTypes)[number];
       };
       if (typeof value.caption === "string") setCaption(value.caption);
@@ -97,6 +107,8 @@ export function MediaAssetComposer({
       if (value.representationMode && representationModes.includes(value.representationMode)) {
         setRepresentationMode(value.representationMode);
       }
+      if (value.distributionMode === "post" || value.distributionMode === "moment") setDistributionMode(value.distributionMode);
+      if (typeof value.scheduledFor === "string") setScheduledFor(value.scheduledFor);
       if (value.singleVideoType && singleVideoTypes.includes(value.singleVideoType)) {
         setSingleVideoType(value.singleVideoType);
       }
@@ -114,9 +126,11 @@ export function MediaAssetComposer({
       visibility,
       nsfwLabel,
       representationMode,
+      distributionMode,
+      scheduledFor,
       singleVideoType
     }));
-  }, [caption, draft?.id, draftKey, nsfwLabel, representationMode, singleVideoType, visibility]);
+  }, [caption, distributionMode, draft?.id, draftKey, nsfwLabel, representationMode, scheduledFor, singleVideoType, visibility]);
 
   const formatLabel = useMemo(() => {
     if (assets.length > 1) return "Carousel";
@@ -172,11 +186,13 @@ export function MediaAssetComposer({
       if (!activeDraft) {
         activeDraft = await createContentDraft({
           mediaType: mediaTypeFor(assets, singleVideoType),
+          distributionMode,
           caption: caption.trim(),
           visibility,
           nsfwLabel,
           representationMode,
-          contentSafetyPolicyAccepted: true
+          contentSafetyPolicyAccepted: true,
+          ...(scheduledFor ? { scheduledFor: toIsoDateTime(scheduledFor) } : {})
         }, createMutationIdempotencyKey());
         setDraft(activeDraft);
       }
@@ -331,9 +347,14 @@ export function MediaAssetComposer({
     try {
       const updated = await updateContent(draft.id, {
         caption: caption.trim(), visibility, nsfwLabel, representationMode,
-        contentSafetyPolicyAccepted: true
+        contentSafetyPolicyAccepted: true,
+        distributionMode,
+        scheduledFor: scheduledFor ? toIsoDateTime(scheduledFor) : null
       });
-      setDraft(await publishContent(updated.id, { confirmation: "submit_for_review" }));
+      setDraft(await publishContent(updated.id, {
+        confirmation: "submit_for_review",
+        ...(scheduledFor ? { scheduledFor: toIsoDateTime(scheduledFor) } : {})
+      }));
       setSubmitted(true);
       if (draftKey) window.localStorage.removeItem(draftKey);
     } catch (caught) {
@@ -351,6 +372,19 @@ export function MediaAssetComposer({
           <h2 className="mt-1 text-lg font-semibold">Add photos or videos</h2>
           <p className="mt-1 text-sm leading-6 text-(--muted)">Choose once for a single post or mixed carousel. Everything stays private until review.</p>
         </div>
+        {!draft ? (
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-semibold">Share as</legend>
+            <div className="grid grid-cols-2 gap-2">
+              {(["post", "moment"] as const).map((mode) => (
+                <button aria-pressed={distributionMode === mode} className={distributionMode === mode ? "rounded-xl border border-(--accent) bg-(--accent-soft) p-3 text-left" : "rounded-xl border border-(--line) p-3 text-left"} key={mode} onClick={() => setDistributionMode(mode)} type="button">
+                  <strong className="block capitalize">{mode}</strong>
+                  <span className="text-xs text-(--muted)">{mode === "moment" ? "Visible for 24 hours" : "Stays on your profile"}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        ) : null}
         <label className="grid min-h-32 cursor-pointer place-items-center rounded border border-dashed border-(--line) bg-(--background) p-6 text-center focus-within:ring-2 focus-within:ring-(--accent)">
           <span><span className="block font-semibold">{assets.length ? "Add more media" : "Choose 1–10 photos or videos"}</span><span className="mt-1 block text-sm text-(--muted)">JPEG, PNG, WebP, MP4, MOV, or WebM</span></span>
           <input accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm" className="sr-only" disabled={pending !== null || submitted || assets.length >= 10} multiple onChange={onFiles} type="file" />
@@ -370,7 +404,7 @@ export function MediaAssetComposer({
 
         {assets.length > 0 ? <>
           <label className="grid gap-1 text-sm"><span className="font-medium">Caption</span><textarea className="min-h-24 rounded border border-(--line) bg-(--background) px-3 py-2" maxLength={2200} onChange={(event) => setCaption(event.currentTarget.value)} value={caption} /></label>
-          <div className="grid gap-3 sm:grid-cols-2"><Select label="Content rating" onChange={(value) => { setNsfwLabel(value); setAccepted(false); }} options={nsfwLabels} value={nsfwLabel} /><Select label="Who can see it after approval?" onChange={setVisibility} options={visibilityValues} value={visibility} /><Select label="Who is represented?" onChange={(value) => { setRepresentationMode(value); setAccepted(false); }} options={representationModes} value={representationMode} /></div>
+          <div className="grid gap-3 sm:grid-cols-2"><Select label="Content rating" onChange={(value) => { setNsfwLabel(value); setAccepted(false); }} options={nsfwLabels} value={nsfwLabel} /><Select label="Who can see it after approval?" onChange={setVisibility} options={visibilityValues} value={visibility} /><Select label="Who is represented?" onChange={(value) => { setRepresentationMode(value); setAccepted(false); }} options={representationModes} value={representationMode} />{canSchedule ? <label className="grid gap-1 text-sm"><span className="text-(--muted)">Publish later (optional)</span><input className="rounded border border-(--line) bg-(--background) px-3 py-2" min={minimumLocalDateTime()} onChange={(event) => setScheduledFor(event.currentTarget.value)} type="datetime-local" value={scheduledFor} /></label> : <a className="self-end py-2 text-sm font-semibold text-(--accent-text)" href="/app/subscriptions">Scheduling is a Studio capability</a>}</div>
           <label className="flex min-h-12 items-start gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm leading-5"><input checked={accepted} className="mt-0.5" onChange={(event) => setAccepted(event.currentTarget.checked)} type="checkbox" /><span>I have the right to share this media, and every identifiable person is 18+ and consented.</span></label>
           <div className="flex flex-wrap gap-2"><button className="min-h-12 flex-1 rounded bg-(--foreground) px-4 py-3 font-semibold text-(--background) disabled:opacity-50" disabled={!ageReady || !accepted || pending !== null || allUploaded} type="submit">{pending === "upload" ? `Uploading ${progress}%…` : allUploaded ? "Media stored privately" : assets.some((asset) => asset.mediaAssetId && !asset.transferComplete) ? "Resume upload" : "Upload media"}</button>{pending === "upload" && activeUpload.current ? <button className="min-h-12 rounded border border-(--line) px-4 py-3 font-semibold" onClick={() => { void activeUpload.current?.abort().finally(() => pauseCurrentUpload.current?.()); }} type="button">Pause</button> : null}</div>
         </> : null}
@@ -406,6 +440,16 @@ function assetsCompatibleWithDraft(assets: LocalAsset[], mediaType: ContentItem[
 }
 
 class UploadPausedError extends Error {}
+
+function toIsoDateTime(value: string) {
+  return new Date(value).toISOString();
+}
+
+function minimumLocalDateTime() {
+  const date = new Date(Date.now() + 5 * 60_000);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
 
 async function uploadVideo(
   file: File,

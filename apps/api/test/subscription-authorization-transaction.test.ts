@@ -1,6 +1,6 @@
-import { ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ASSOCIATED_TOKEN_PROGRAM_ID } from "../src/modules/solana/token-program";
 import { createSubscriptionAuthorizationTransaction } from "../src/modules/subscription/subscription-authorization-transaction.js";
 import type { SubscriptionAuthorizationVerificationContext } from "../src/modules/subscription/types.js";
 

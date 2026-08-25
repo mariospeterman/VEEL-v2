@@ -10,6 +10,7 @@ import {
 } from "@/api-mutations";
 import type { VerificationStatus } from "@/api-client";
 import { MediaComposer } from "./media-composer";
+import { LiveCreateWorkspace } from "./live-create-workspace";
 import {
   nsfwLabels,
   representationModes,
@@ -17,28 +18,35 @@ import {
 } from "./composer-options";
 import { Select } from "./create-workspace-fields";
 
-type ComposerFormat = "media" | "text" | "poll";
+type ComposerFormat = "media" | "text" | "poll" | "live";
 
 const formatChoices: Array<{ value: ComposerFormat; title: string; description: string }> = [
   { value: "media", title: "Photos or video", description: "Upload visual media" },
   { value: "text", title: "Write something", description: "Share a text post" },
-  { value: "poll", title: "Poll", description: "Ask two to four choices" }
+  { value: "poll", title: "Poll", description: "Ask two to four choices" },
+  { value: "live", title: "Go live", description: "Prepare a safe live room" }
 ];
 
 export function UniversalComposer({
+  canSchedule,
+  initialDistributionMode,
+  initialFormat,
   storageScope,
   verification
 }: {
+  canSchedule: boolean;
+  initialDistributionMode: "post" | "moment";
+  initialFormat: ComposerFormat | null;
   storageScope: string | null;
   verification: VerificationStatus | null;
 }) {
-  const [format, setFormat] = useState<ComposerFormat | null>(null);
+  const [format, setFormat] = useState<ComposerFormat | null>(initialFormat);
 
   return (
     <section className="grid gap-4">
       <fieldset className="grid gap-3">
         <legend className="text-sm font-semibold">What do you want to share?</legend>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {formatChoices.map((choice) => (
             <button
               aria-pressed={format === choice.value}
@@ -59,9 +67,11 @@ export function UniversalComposer({
       </fieldset>
 
       {format === "media" ? (
-        <MediaComposer storageScope={storageScope} verification={verification} />
+        <MediaComposer canSchedule={canSchedule} initialDistributionMode={initialDistributionMode} storageScope={storageScope} verification={verification} />
+      ) : format === "live" ? (
+        <LiveCreateWorkspace enabled={verification?.capabilities.canUploadMedia === true} />
       ) : format === "text" || format === "poll" ? (
-        <TextOrPollComposer format={format} />
+        <TextOrPollComposer canSchedule={canSchedule} format={format} />
       ) : (
         <p className="rounded border border-dashed border-(--line) p-5 text-sm text-(--muted)">
           Choose a format to begin. Your draft remains private until review completes.
@@ -71,13 +81,14 @@ export function UniversalComposer({
   );
 }
 
-function TextOrPollComposer({ format }: { format: "text" | "poll" }) {
+function TextOrPollComposer({ canSchedule, format }: { canSchedule: boolean; format: "text" | "poll" }) {
   const [bodyText, setBodyText] = useState("");
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", ""]);
   const [visibility, setVisibility] = useState<CreateContentRequest["visibility"]>("public");
   const [nsfwLabel, setNsfwLabel] = useState<CreateContentRequest["nsfwLabel"]>("none");
   const [representationMode, setRepresentationMode] = useState<CreateContentRequest["representationMode"]>("self_only");
+  const [scheduledFor, setScheduledFor] = useState("");
   const [accepted, setAccepted] = useState(false);
   const [pending, setPending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -105,15 +116,20 @@ function TextOrPollComposer({ format }: { format: "text" | "poll" }) {
     try {
       const draft = await createContentDraft({
         mediaType: format,
+        distributionMode: "post",
         visibility,
         nsfwLabel,
         representationMode,
         contentSafetyPolicyAccepted: true,
+        ...(scheduledFor ? { scheduledFor: toIsoDateTime(scheduledFor) } : {}),
         ...(format === "text"
           ? { bodyText: bodyText.trim() }
           : { poll: { question: question.trim(), options: normalizedOptions } })
       }, idempotencyKey.current);
-      await publishContent(draft.id, { confirmation: "submit_for_review" });
+      await publishContent(draft.id, {
+        confirmation: "submit_for_review",
+        ...(scheduledFor ? { scheduledFor: toIsoDateTime(scheduledFor) } : {})
+      });
       setSubmitted(true);
     } catch (caught) {
       setError(errorMessage(caught));
@@ -181,6 +197,11 @@ function TextOrPollComposer({ format }: { format: "text" | "poll" }) {
         <Select label="Who is represented?" onChange={(value) => { setRepresentationMode(value); setAccepted(false); }} options={representationModes} value={representationMode} />
       </div>
 
+      {canSchedule ? <label className="grid gap-1 text-sm">
+        <span className="text-(--muted)">Publish later (optional)</span>
+        <input className="rounded border border-(--line) bg-(--background) px-3 py-2" min={minimumLocalDateTime()} onChange={(event) => setScheduledFor(event.currentTarget.value)} type="datetime-local" value={scheduledFor} />
+      </label> : <a className="text-sm font-semibold text-(--accent-text)" href="/app/subscriptions">Scheduling is a Studio capability</a>}
+
       <label className="flex min-h-12 items-start gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm leading-5">
         <input checked={accepted} className="mt-0.5" onChange={(event) => setAccepted(event.currentTarget.checked)} type="checkbox" />
         <span>I have the right to share this post, and any identifiable person represented is 18+ and consented.</span>
@@ -194,4 +215,14 @@ function TextOrPollComposer({ format }: { format: "text" | "poll" }) {
 function errorMessage(caught: unknown) {
   if (caught instanceof ApiMutationError) return caught.message;
   return caught instanceof Error ? caught.message : "The post could not be submitted.";
+}
+
+function toIsoDateTime(value: string) {
+  return new Date(value).toISOString();
+}
+
+function minimumLocalDateTime() {
+  const date = new Date(Date.now() + 5 * 60_000);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
 }

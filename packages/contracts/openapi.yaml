@@ -3538,7 +3538,7 @@ components:
       in: query
       schema:
         type: string
-        enum: [home, bits]
+        enum: [home, bits, moments]
     ContentId: { name: contentId, in: path, required: true, schema: { type: string, format: uuid } }
     MediaAssetId: { name: mediaAssetId, in: path, required: true, schema: { type: string, format: uuid } }
     RoomId: { name: roomId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -4726,7 +4726,7 @@ components:
         items: { type: array, items: { $ref: "#/components/schemas/ContentItem" } }
         nextCursor: { type: string, nullable: true }
         mode: { type: string, enum: [recommended, following] }
-        surface: { type: string, enum: [home, bits] }
+        surface: { type: string, enum: [home, bits, moments] }
         rankingVersion: { type: string, enum: [deterministic_v1] }
         generatedAt: { type: string, format: date-time }
     DiscoverPage:
@@ -4753,6 +4753,9 @@ components:
         id: { type: string, format: uuid }
         creator: { $ref: "#/components/schemas/User" }
         mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
+        distributionMode: { type: string, enum: [post, moment], default: post }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        scheduledFor: { type: string, format: date-time, nullable: true }
         caption: { type: string, nullable: true }
         bodyText: { type: string, minLength: 1, maxLength: 10000, nullable: true }
         compositionRevision: { type: integer, minimum: 1 }
@@ -5062,6 +5065,7 @@ components:
       required: [mediaType, visibility, nsfwLabel, representationMode, contentSafetyPolicyAccepted]
       properties:
         mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
+        distributionMode: { type: string, enum: [post, moment], default: post }
         caption: { type: string }
         bodyText: { type: string, minLength: 1, maxLength: 10000 }
         poll: { $ref: "#/components/schemas/ContentPollDraft" }
@@ -5069,6 +5073,7 @@ components:
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }
         contentSafetyPolicyAccepted: { type: boolean }
+        scheduledFor: { type: string, format: date-time, nullable: true }
         eventDraft: { $ref: "#/components/schemas/EventDraft" }
     UpdateContentRequest:
       type: object
@@ -5090,23 +5095,29 @@ components:
         teaserEndMs: { type: integer, nullable: true }
         thumbnailFrameMs: { type: integer, nullable: true }
         eventDraft: { $ref: "#/components/schemas/EventDraft" }
+        distributionMode: { type: string, enum: [post, moment] }
+        scheduledFor: { type: string, format: date-time, nullable: true }
     PublishContentRequest:
       type: object
       required: [confirmation]
       properties:
         confirmation: { type: string, enum: [submit_for_review] }
+        scheduledFor: { type: string, format: date-time, nullable: true }
     CreatorMediaItem:
       type: object
       required: [id, mediaType, visibility, publicationState, reviewState, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
+        distributionMode: { type: string, enum: [post, moment], default: post }
+        expiresAt: { type: string, format: date-time, nullable: true }
+        scheduledFor: { type: string, format: date-time, nullable: true }
         caption: { type: string, nullable: true }
         posterUrl: { type: string, format: uri, nullable: true }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
         publicationState:
           type: string
-          enum: [draft, upload_pending, processing, in_review, changes_requested, rejected, appeal_pending, published, blocked]
+          enum: [draft, upload_pending, processing, in_review, scheduled, changes_requested, rejected, appeal_pending, published, blocked]
         reviewState: { type: string }
         reviewMessage: { type: string, nullable: true }
         compositionRevision: { type: integer, minimum: 1 }
@@ -6744,7 +6755,7 @@ components:
       properties:
         name:
           type: string
-          enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays, media_moderation, analytics_projections, live_safety]
+          enum: [subscription_collections, notification_deliveries, payment_confirmation_emails, provider_event_replays, media_moderation, analytics_projections, live_safety, scheduled_publications]
         pendingCount: { type: integer }
         processingCount: { type: integer }
         failedCount: { type: integer }

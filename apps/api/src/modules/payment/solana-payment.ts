@@ -9,14 +9,14 @@ import {
   TransactionInstruction,
   type PartiallyDecodedInstruction
 } from "@solana/web3.js";
-import {
-  createAssociatedTokenAccountIdempotentInstruction,
-  createTransferCheckedInstruction,
-  getAssociatedTokenAddressSync,
-  TOKEN_PROGRAM_ID
-} from "@solana/spl-token";
 import { createHash, randomBytes } from "node:crypto";
 import bs58 from "bs58";
+import {
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+  createCheckedTokenTransferInstruction,
+  deriveAssociatedTokenAddress
+} from "../solana/token-program.js";
 import { hasSafeSettlementAmounts } from "./payment-amounts.js";
 import type {
   PaymentSettlementInput,
@@ -326,9 +326,9 @@ function isMatchingSplTokenTransfer(
   }
 
   const mint = new PublicKey(settlement.tokenMint);
-  const destination = getAssociatedTokenAddressSync(mint, new PublicKey(input.destinationWallet));
+  const destination = deriveAssociatedTokenAddress(mint, new PublicKey(input.destinationWallet));
   const source = input.sourceWallet
-    ? getAssociatedTokenAddressSync(mint, new PublicKey(input.sourceWallet))
+    ? deriveAssociatedTokenAddress(mint, new PublicKey(input.sourceWallet))
     : null;
   const info = instruction.parsed.info as {
     authority?: string;
@@ -411,24 +411,23 @@ function addSplTokenSplitInstructions(
   }
 
   const mint = new PublicKey(intent.tokenMint);
-  const source = getAssociatedTokenAddressSync(mint, buyer);
+  const source = deriveAssociatedTokenAddress(mint, buyer);
 
   for (const transfer of splitTransfers(intent)) {
     const owner = new PublicKey(transfer.wallet);
-    const destination = getAssociatedTokenAddressSync(mint, owner);
+    const destination = deriveAssociatedTokenAddress(mint, owner);
     transaction.add(
-      createAssociatedTokenAccountIdempotentInstruction(buyer, destination, owner, mint),
+      createAssociatedTokenAccountInstruction({ payer: buyer, address: destination, owner, mint }),
       withReference(
-        createTransferCheckedInstruction(
+        createCheckedTokenTransferInstruction({
           source,
           mint,
           destination,
-          buyer,
-          BigInt(transfer.amountMinor),
-          intent.tokenDecimals,
-          [],
-          TOKEN_PROGRAM_ID
-        ),
+          authority: buyer,
+          amount: BigInt(transfer.amountMinor),
+          decimals: intent.tokenDecimals,
+          tokenProgram: TOKEN_PROGRAM_ID
+        }),
         reference
       )
     );

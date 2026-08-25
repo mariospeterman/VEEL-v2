@@ -65,11 +65,13 @@ apps/web/app/
     app/layout.tsx
     app/home/page.tsx
     app/bits/page.tsx
+    app/moments/page.tsx
     app/create/page.tsx
     app/messages/page.tsx
     app/profile/page.tsx
     app/settings/page.tsx
     app/studio/page.tsx
+    app/enterprise/page.tsx
     app/wallet/page.tsx
   profile/[handle]/page.tsx
   content/[contentId]/page.tsx

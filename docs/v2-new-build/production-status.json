@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "fe10413d8a28700b15cfdecde386e2807719d3d7",
-  "latestMergedSlice": "Convergence 08 — MCP media and provenance bridge",
-  "latestMergedMigration": "packages/database/migrations/0115_mcp_media_provenance_bridge.sql",
+  "latestMergedBaseline": "4551045fbe6205ef9961c46849e66bba3a9c45f1",
+  "latestMergedSlice": "Convergence 09A — Operator harness and staff RBAC",
+  "latestMergedMigration": "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.sql",
   "nextPlannedSlice": "Convergence 09 — Release convergence pass",
-  "nextPlannedBranch": "codex/release-convergence-operator-rbac",
+  "nextPlannedBranch": "codex/release-convergence-product-ux",
   "latestMergedEvidenceStates": [
     "DESIGNED",
     "CODE_COMPLETE",

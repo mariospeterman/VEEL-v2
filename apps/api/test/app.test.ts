@@ -4099,6 +4099,85 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("creates a scheduled Moment as canonical content and rejects non-media Moments", async () => {
+    let schedulingEnabled = true;
+    const createDraft = vi.fn(async () => ({ ...homeFeedItem, distributionMode: "moment" as const }));
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({ async onFind() {
+        return { id: "00000000-0000-4000-8000-000000000010", state: "active", handle: "maki", displayName: "Maki", avatarUrl: null };
+      } }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: verificationRepositoryStub(),
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformAccess() {
+          const access = platformAccessFixture();
+          return { ...access, currentTier: { ...access.currentTier, capabilities: schedulingEnabled ? [...access.currentTier.capabilities, "scheduling"] : access.currentTier.capabilities } };
+        }
+      }),
+      contentRepository: { ...contentRepositoryWithDetail(homeFeedItem), createDraft }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "scheduled-moment-1" },
+      payload: {
+        mediaType: "image",
+        distributionMode: "moment",
+        scheduledFor: "2099-08-25T12:00:00.000Z",
+        visibility: "public",
+        nsfwLabel: "none",
+        representationMode: "self_only",
+        contentSafetyPolicyAccepted: true
+      }
+    });
+    expect(response.statusCode, response.body).toBe(201);
+    expect(createDraft).toHaveBeenCalledWith(expect.objectContaining({
+      distributionMode: "moment",
+      scheduledFor: "2099-08-25T12:00:00.000Z"
+    }));
+
+    schedulingEnabled = false;
+    const notEntitled = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "scheduled-post-without-capability" },
+      payload: {
+        mediaType: "image",
+        distributionMode: "post",
+        scheduledFor: "2099-08-26T12:00:00.000Z",
+        visibility: "public",
+        nsfwLabel: "none",
+        representationMode: "self_only",
+        contentSafetyPolicyAccepted: true
+      }
+    });
+    expect(notEntitled.statusCode).toBe(403);
+    expect(notEntitled.json()).toMatchObject({ message: "Scheduled publishing requires the Studio capability" });
+
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/v1/content",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "invalid-text-moment-1" },
+      payload: {
+        mediaType: "text",
+        distributionMode: "moment",
+        bodyText: "Not a visual Moment",
+        visibility: "public",
+        nsfwLabel: "none",
+        representationMode: "self_only",
+        contentSafetyPolicyAccepted: true
+      }
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toMatchObject({ message: "Moments require image or video media" });
+    expect(createDraft).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
   it("validates universal text and poll draft inputs before repository mutation", async () => {
     let createCalls = 0;
     const contentRepository: ContentRepository = {
@@ -4504,6 +4583,9 @@ describe("buildApi", () => {
           assetOrder: undefined,
           requestHash: undefined,
           visibility: "followers",
+          distributionMode: undefined,
+          scheduledFor: undefined,
+          scheduledForProvided: false,
           nsfwLabel: "adult",
           representationMode: "self_only",
           contentSafetyPolicyAccepted: true,
@@ -4701,6 +4783,7 @@ describe("buildApi", () => {
           items: [{
             id: "00000000-0000-4000-8000-000000000040",
             mediaType: "vod",
+            distributionMode: "post",
             caption: "studio cut",
             posterUrl: null,
             visibility: "public",
@@ -4894,6 +4977,9 @@ describe("buildApi", () => {
           assetOrder: undefined,
           requestHash: undefined,
           visibility: undefined,
+          distributionMode: undefined,
+          scheduledFor: undefined,
+          scheduledForProvided: false,
           nsfwLabel: undefined,
           representationMode: undefined,
           contentSafetyPolicyAccepted: false,
@@ -4949,7 +5035,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("submits provider-ready content for moderation through an explicit publish action", async () => {
+  it("submits provider-ready content with an optional scheduled release", async () => {
     const contentRepository: ContentRepository = {
       async createDraft() {
         throw new Error("not implemented");
@@ -4978,7 +5064,9 @@ describe("buildApi", () => {
         expect(input).toEqual({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           contentId: "00000000-0000-4000-8000-000000000040",
-          idempotencyKey: "content-publish-1"
+          idempotencyKey: "content-publish-1",
+          scheduledFor: "2099-08-25T12:00:00.000Z",
+          scheduledForProvided: true
         });
 
         return homeFeedItem;
@@ -5000,6 +5088,12 @@ describe("buildApi", () => {
       ageRepository: verifiedAgeRepository,
       walletRepository: walletRepositoryWithWallet,
       verificationRepository: creatorVerifiedVerificationRepository(),
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformAccess() {
+          const access = platformAccessFixture();
+          return { ...access, currentTier: { ...access.currentTier, capabilities: [...access.currentTier.capabilities, "scheduling"] } };
+        }
+      }),
       contentRepository
     });
     await app.ready();
@@ -5012,7 +5106,8 @@ describe("buildApi", () => {
         "idempotency-key": "content-publish-1"
       },
       payload: {
-        confirmation: "submit_for_review"
+        confirmation: "submit_for_review",
+        scheduledFor: "2099-08-25T12:00:00.000Z"
       }
     });
 
@@ -12327,6 +12422,7 @@ const homeFeedItem: ContentItem = {
     badges: []
   },
   mediaType: "image",
+  distributionMode: "post",
   caption: "First Veel v2 feed card",
   posterUrl: "https://media.example.test/poster.jpg",
   playback: {

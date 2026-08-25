@@ -12,18 +12,17 @@ import {
   getSubscriptionAuthorityDecoder
 } from "@solana/subscriptions";
 import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  TOKEN_2022_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
-  createAssociatedTokenAccountIdempotentInstruction,
-  getAssociatedTokenAddressSync
-} from "@solana/spl-token";
-import {
   Connection,
   PublicKey,
   Transaction,
   TransactionInstruction
 } from "@solana/web3.js";
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountInstruction,
+  deriveAssociatedTokenAddress
+} from "../solana/token-program.js";
 import type {
   SubscriptionAuthorizationTransaction,
   SubscriptionAuthorizationVerificationContext
@@ -57,13 +56,7 @@ export async function createSubscriptionAuthorizationTransaction(input: {
   const programAddress = address(context.delegationProgramId);
   const owner = createNoopSigner(address(context.subscriberWallet));
   const tokenProgramKey = context.tokenProgram === "token_2022" ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
-  const userAta = getAssociatedTokenAddressSync(
-    mintKey,
-    ownerKey,
-    false,
-    tokenProgramKey,
-    ASSOCIATED_TOKEN_PROGRAM_ID
-  );
+  const userAta = deriveAssociatedTokenAddress(mintKey, ownerKey, tokenProgramKey);
   const [authorityAddress] = await findSubscriptionAuthorityPda(
     { user: owner.address, tokenMint: address(context.tokenMint) },
     { programAddress }
@@ -91,14 +84,13 @@ export async function createSubscriptionAuthorizationTransaction(input: {
   transaction.feePayer = ownerKey;
   transaction.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;
   transaction.add(
-    createAssociatedTokenAccountIdempotentInstruction(
-      ownerKey,
-      userAta,
-      ownerKey,
-      mintKey,
-      tokenProgramKey,
-      ASSOCIATED_TOKEN_PROGRAM_ID
-    )
+    createAssociatedTokenAccountInstruction({
+      payer: ownerKey,
+      address: userAta,
+      owner: ownerKey,
+      mint: mintKey,
+      tokenProgram: tokenProgramKey
+    })
   );
 
   if (!authorityAccount) {

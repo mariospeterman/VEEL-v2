@@ -85,6 +85,9 @@ export async function registerContentCoreRoutes(
         message: compositionError
       });
     }
+    if (body.scheduledFor && !(await hasSchedulingCapability(options, access.supabaseUserId))) {
+      return reply.code(403).send({ code: "forbidden", message: "Scheduled publishing requires the Studio capability" });
+    }
 
     try {
       if (
@@ -102,6 +105,8 @@ export async function registerContentCoreRoutes(
       const poll = normalizePollDraft(body.poll);
       const draftBody = {
         mediaType: body.mediaType,
+        distributionMode: body.distributionMode === "moment" ? "moment" as const : "post" as const,
+        scheduledFor: body.scheduledFor ?? null,
         caption: typeof body.caption === "string" ? body.caption : null,
         bodyText: typeof body.bodyText === "string" ? body.bodyText.trim() : null,
         ...(poll ? { poll } : {}),
@@ -330,6 +335,9 @@ export async function registerContentCoreRoutes(
         message: validationError
       });
     }
+    if (body?.scheduledFor && !(await hasSchedulingCapability(options, access.supabaseUserId))) {
+      return reply.code(403).send({ code: "forbidden", message: "Scheduled publishing requires the Studio capability" });
+    }
 
     try {
       if (!options.contentRepository.updateOwnedContent) {
@@ -351,6 +359,9 @@ export async function registerContentCoreRoutes(
         assetOrder: body?.assetOrder,
         requestHash: body && ("bodyText" in body || "assetOrder" in body) ? hashIdempotencyPayload(body) : undefined,
         visibility: body?.visibility,
+        distributionMode: body?.distributionMode,
+        scheduledFor: body && "scheduledFor" in body ? body.scheduledFor ?? null : undefined,
+        scheduledForProvided: Boolean(body && "scheduledFor" in body),
         nsfwLabel: body?.nsfwLabel,
         representationMode: body?.representationMode,
         contentSafetyPolicyAccepted: body?.contentSafetyPolicyAccepted === true,
@@ -438,6 +449,20 @@ export async function registerContentCoreRoutes(
       });
     }
 
+    if (
+      body.scheduledFor !== undefined &&
+      body.scheduledFor !== null &&
+      (typeof body.scheduledFor !== "string" || Number.isNaN(Date.parse(body.scheduledFor)) || Date.parse(body.scheduledFor) <= Date.now())
+    ) {
+      return reply.code(400).send({
+        code: "validation_failed",
+        message: "scheduledFor must be a future ISO date-time or null"
+      });
+    }
+    if (body.scheduledFor && !(await hasSchedulingCapability(options, access.supabaseUserId))) {
+      return reply.code(403).send({ code: "forbidden", message: "Scheduled publishing requires the Studio capability" });
+    }
+
     try {
       const ownedContent = await options.contentRepository.findOwnedContentForUpload({
         supabaseUserId: access.supabaseUserId,
@@ -471,7 +496,9 @@ export async function registerContentCoreRoutes(
       const content = await options.contentRepository.publishOwnedContent({
         supabaseUserId: access.supabaseUserId,
         contentId: params.contentId,
-        idempotencyKey
+        idempotencyKey,
+        scheduledFor: body.scheduledFor ?? null,
+        scheduledForProvided: "scheduledFor" in body
       });
 
       if (!content) {
@@ -558,6 +585,18 @@ export async function registerContentCoreRoutes(
 }
 
 function validateCreateCompositionBody(body: Partial<CreateContentRequest>): string | null {
+  if (body.distributionMode === "moment" && !["bit", "clip", "image", "vod", "carousel"].includes(body.mediaType ?? "")) {
+    return "Moments require image or video media";
+  }
+
+  if (
+    body.scheduledFor !== undefined &&
+    body.scheduledFor !== null &&
+    (typeof body.scheduledFor !== "string" || Number.isNaN(Date.parse(body.scheduledFor)) || Date.parse(body.scheduledFor) <= Date.now())
+  ) {
+    return "scheduledFor must be a future ISO date-time or null";
+  }
+
   if ("bodyText" in body) {
     if (typeof body.bodyText !== "string") {
       return "bodyText must be a string";
@@ -622,6 +661,19 @@ function normalizePollDraft(
   };
 }
 
+async function hasSchedulingCapability(
+  options: RegisterContentRoutesOptions,
+  supabaseUserId: string
+): Promise<boolean> {
+  if (!options.subscriptionRepository.getPlatformAccess) return false;
+  try {
+    const access = await options.subscriptionRepository.getPlatformAccess({ supabaseUserId });
+    return access.currentTier.capabilities.includes("scheduling");
+  } catch {
+    return false;
+  }
+}
+
 function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefined): string | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return "Update body is required";
@@ -631,6 +683,8 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
     "caption" in body ||
     "bodyText" in body ||
     "assetOrder" in body ||
+    "distributionMode" in body ||
+    "scheduledFor" in body ||
     "visibility" in body ||
     "nsfwLabel" in body ||
     "representationMode" in body ||
@@ -688,6 +742,18 @@ function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefin
 
   if ("visibility" in body && !contentVisibilityValues.has(body.visibility ?? "")) {
     return "visibility is invalid";
+  }
+
+  if ("distributionMode" in body && !["post", "moment"].includes(body.distributionMode ?? "")) {
+    return "distributionMode is invalid";
+  }
+
+  if (
+    "scheduledFor" in body &&
+    body.scheduledFor !== null &&
+    (typeof body.scheduledFor !== "string" || Number.isNaN(Date.parse(body.scheduledFor)) || Date.parse(body.scheduledFor) <= Date.now())
+  ) {
+    return "scheduledFor must be a future ISO date-time or null";
   }
 
   if ("nsfwLabel" in body && !nsfwLabels.has(body.nsfwLabel ?? "")) {

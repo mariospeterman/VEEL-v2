@@ -12,6 +12,9 @@ export function createContentReadRepositoryMethods(
         select
           ci.id,
           ci.media_type,
+          ci.distribution_mode,
+          ci.expires_at,
+          ci.scheduled_for,
           ci.caption,
           ci.body_text,
           ci.asset_revision,

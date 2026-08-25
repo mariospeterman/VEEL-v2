@@ -58,13 +58,12 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   test.setTimeout(150_000);
 
   await gotoUntilVisible(page, "/app/home", () => page.getByRole("link", { name: "WeVid app home" }).first());
-  await expect(page.getByRole("heading", { name: "What’s happening" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Post by Aria Moon" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "For you" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("link", { name: "Open post" })).toBeVisible();
 
-  await page.goto("/app/profile");
-  await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
+  await page.goto("/app/studio");
+  await expect(page.getByRole("heading", { name: "Studio", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your media" })).toBeVisible();
   await expect(page.getByText("Please confirm the music rights.")).toBeVisible();
   await expect(page.getByRole("region", { name: "Media provenance review" })).toBeVisible();
@@ -83,8 +82,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await page.getByLabel("Why should this be reviewed again?").fill("I own the recording and the music license.");
   await page.getByRole("button", { name: "Send appeal" }).click();
   await expect(page.getByText("appeal pending")).toBeVisible();
-  await expect(page.getByText("Readiness score").locator("..")).toContainText("92%");
-  await expect(page.getByText("no balances or social priority")).toBeVisible();
+  await expect(page.getByText("Creator readiness").locator("..")).toContainText("92%");
 
   await page.goto("/app/profile/earnings");
   await expect(page.getByRole("heading", { name: "Enable earnings" })).toBeVisible();
@@ -109,13 +107,13 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await expect(page.getByRole("button", { name: "Start age verification" })).toBeEnabled();
 
   await page.goto("/app/home");
-  await expect(page.getByRole("heading", { name: "What’s happening" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Post by Aria Moon" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open post" })).toBeVisible();
 
   await page.goto("/app/create");
   await page.waitForLoadState("networkidle");
-  await expect(page.getByRole("heading", { name: "Share something" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Create", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Go live/ }).click();
   await expect(page.getByRole("heading", { name: "Start with OBS" })).toBeVisible();
   await page.getByRole("button", { name: /Photos or video/ }).click();
   await expect(page.getByRole("heading", { name: "Add photos or videos" })).toBeVisible();
@@ -199,6 +197,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   expect(requests.some((request) => request.method === "GET" && request.path === "/v1/activity/payments")).toBe(true);
 
   await page.goto("/app/profile");
+  await page.locator("summary").filter({ hasText: "Account menu" }).click();
   await page.getByRole("button", { name: "Log out" }).click();
   await page.waitForURL(/\/$/, { timeout: 15_000 });
   await expect(page.getByRole("heading", { name: "Create without asking the algorithm for permission." })).toBeVisible();
@@ -206,7 +205,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
 });
 
 test("creates text and poll posts through the canonical composer", async ({ page }) => {
-  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Share something" }));
+  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Create", exact: true }));
 
   await expect(page.getByRole("button", { name: /Photos or video/ })).toHaveAttribute("aria-pressed", "false");
   await page.getByRole("button", { name: /Write something/ }).click();
@@ -223,7 +222,7 @@ test("creates text and poll posts through the canonical composer", async ({ page
   await textCreate;
   await expect(page.getByRole("heading", { name: "Submitted for review" })).toBeVisible();
 
-  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Share something" }));
+  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Create", exact: true }));
   await page.getByRole("button", { name: /^Poll/ }).click();
   await page.getByLabel("Question").fill("Which format should come next?");
   await page.locator("#poll-option-0").fill("Photo");
@@ -244,7 +243,7 @@ test("creates text and poll posts through the canonical composer", async ({ page
 });
 
 test("builds an accessible private photo draft and explains its fail-closed review gate", async ({ page }) => {
-  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Share something" }));
+  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Create", exact: true }));
   await page.getByRole("button", { name: /Photos or video/ }).click();
   await expect(page.getByRole("heading", { name: "Add photos or videos" })).toBeVisible();
 
@@ -287,7 +286,7 @@ test("builds an accessible private photo draft and explains its fail-closed revi
 });
 
 test("creates one ordered mixed-media carousel without a second format chooser", async ({ page }) => {
-  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Share something" }));
+  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Create", exact: true }));
   await page.getByRole("button", { name: /Photos or video/ }).click();
   await expect(page.getByRole("heading", { name: "Add photos or videos" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Photos One image/ })).toHaveCount(0);
@@ -1095,6 +1094,7 @@ function creatorMediaItem() {
   return {
     id: draftContentId,
     mediaType: "clip",
+    distributionMode: "post",
     caption: "Studio draft needing an update",
     posterUrl: null,
     visibility: "private",
@@ -1237,6 +1237,7 @@ function contentItem(overrides: {
     id: overrides.id ?? contentId,
     creator: user(),
     mediaType: "clip",
+    distributionMode: "post",
     caption: overrides.caption ?? "Studio sunrise session",
     posterUrl: null,
     playback: {

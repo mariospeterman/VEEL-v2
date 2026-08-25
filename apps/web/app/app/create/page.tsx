@@ -1,29 +1,31 @@
-import { getVerificationStatus } from "@/api-client";
+import { getPlatformAccess, getVerificationStatus } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
-import { PageHeader } from "../../ui";
 import { UniversalComposer } from "../../create/universal-composer";
-import { LiveCreateWorkspace } from "../../create/live-create-workspace";
 
 export const dynamic = "force-dynamic";
 
-export default async function CreatePage() {
+export default async function CreatePage({ searchParams }: { searchParams: Promise<{ distribution?: string; mode?: string }> }) {
   const session = await requireAppAccess("/app/create");
-  const verification = await getVerificationStatus();
+  const params = await searchParams;
+  const [verification, platformAccess] = await Promise.all([getVerificationStatus(), getPlatformAccess()]);
   const canUpload = verification.ok && verification.data.capabilities.canUploadMedia === true;
   const verificationData = verification.ok ? verification.data : null;
+  const canSchedule = platformAccess.ok && platformAccess.data.currentTier.capabilities.includes("scheduling");
 
   return (
     <AppShell>
       <section className="mx-auto grid w-full max-w-3xl content-start gap-5">
-          <PageHeader eyebrow="Create" title="Share something">
-            Publish a post or prepare a safe-for-work live room.
-          </PageHeader>
-
-          <LiveCreateWorkspace enabled={canUpload} />
+          <h1 className="text-2xl font-semibold tracking-tight">Create</h1>
 
           {canUpload ? (
-            <UniversalComposer storageScope={session?.user?.id ?? null} verification={verificationData} />
+            <UniversalComposer
+              initialDistributionMode={params.distribution === "moment" ? "moment" : "post"}
+              initialFormat={params.mode === "live" ? "live" : params.distribution === "moment" ? "media" : null}
+              canSchedule={canSchedule}
+              storageScope={session?.user?.id ?? null}
+              verification={verificationData}
+            />
           ) : (
             <section className="rounded border border-(--line) bg-(--panel) p-5">
               <h2 className="font-semibold">Finish age access to post</h2>

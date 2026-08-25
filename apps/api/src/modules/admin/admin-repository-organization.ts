@@ -95,7 +95,7 @@ export function createOrganizationRepository(
             id, user_id, kind, title, body, action_url, related_resource_type, related_resource_id, idempotency_key
           ) values (
             gen_random_uuid(), ${party.owner_id}, 'studio_setup', 'Enterprise organization invitation',
-            'Review and accept the owner role before starting organization KYB.', '/app/studio',
+            'Review and accept the owner role before starting organization KYB.', '/app/enterprise',
             'organization_membership', ${membership.id}, ${`organization-provision:${organization.id}`}
           )
           on conflict (user_id, idempotency_key) do nothing

@@ -96,7 +96,9 @@ This document describes current v2 route and component ownership.
 - `app/event-access/[eventId]/page.tsx`: Event Access pass projection and purchase handoff
 - `app/passes/page.tsx`: pass inventory projection
 - `app/mutuals/page.tsx` and `app/mutuals/feed/page.tsx`: backend-owned Mutuals mode/projection
-- `app/app/studio/page.tsx`: Studio/org workspace projection
+- `app/app/studio/page.tsx`: individual creator workspace; platform Studio tier unlocks capability projections only
+- `app/app/enterprise/page.tsx`: organization, coworker, managed-creator, and Enterprise analytics workspace
+- `app/app/moments/page.tsx`: sequential temporary-media viewer reusing the canonical content renderer
 - `app/admin/page.tsx`: admin/ops projections and safe mutation panels
 - `app/app/settings/page.tsx`: preference projections and explicit mutations
 - `app/app/assistant/page.tsx`: capability-gated AI/MCP surface only; not primary mobile navigation

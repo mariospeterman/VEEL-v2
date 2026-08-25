@@ -223,6 +223,15 @@ export function createAccessRepository(
             count(*) filter (where state = 'dead_letter') as dead_letter_count,
             min(next_attempt_at) filter (where state in ('queued', 'retry')) as oldest_pending_at
           from live_safety_provider_actions
+          union all
+          select
+            'scheduled_publications'::text as name,
+            count(*) filter (where state in ('queued', 'retry')) as pending_count,
+            count(*) filter (where state = 'leased') as processing_count,
+            count(*) filter (where state = 'retry') as failed_count,
+            count(*) filter (where state = 'dead_letter') as dead_letter_count,
+            min(next_attempt_at) filter (where state in ('queued', 'retry')) as oldest_pending_at
+          from content_publication_jobs
         `
       ]);
 
@@ -398,6 +407,8 @@ export function createAccessRepository(
             "last_failure_code",
             "lease_expires_at"
           );
+        case "scheduled_publications":
+          return run("content_publication_jobs", "queued", "text", "last_error_code");
       }
     },
     async listUsers(input) {

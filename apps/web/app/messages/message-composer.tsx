@@ -13,6 +13,7 @@ import { createMutationIdempotencyKey } from "@/api-mutation-transport";
 
 interface MessageComposerProps {
   conversation: Conversation;
+  initialSharedContentItemId: string | null;
   replyTo: Message | null;
   onClearReply: () => void;
   onTyping: (active: boolean) => void;
@@ -29,13 +30,15 @@ interface QueuedMessage {
 const offlineQueueKey = "wevid:message-offline-queue:v1";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-export function MessageComposer({ conversation, replyTo, onClearReply, onTyping }: MessageComposerProps) {
+export function MessageComposer({ conversation, initialSharedContentItemId, replyTo, onClearReply, onTyping }: MessageComposerProps) {
   const queryClient = useQueryClient();
   const [body, setBody] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "queued" | "ready" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [sentMessage, setSentMessage] = useState<Message | null>(null);
-  const [sharedContentItemId, setSharedContentItemId] = useState("");
+  const [sharedContentItemId, setSharedContentItemId] = useState(
+    initialSharedContentItemId && uuidPattern.test(initialSharedContentItemId) ? initialSharedContentItemId : ""
+  );
   const [attachmentIds, setAttachmentIds] = useState("");
   const messageAttempt = useRef<{ requestHash: string; idempotencyKey: string } | null>(null);
   const trimmedBody = body.trim();

@@ -99,6 +99,9 @@ export function createContentFeedRepositoryMethods(
         select
           ci.id,
           ci.media_type,
+          ci.distribution_mode,
+          ci.expires_at,
+          ci.scheduled_for,
           ci.caption,
           ci.body_text,
           ci.asset_revision,
@@ -298,7 +301,11 @@ function eligibleFeedSql(
       and impression.first_seen_at <= ${asOf}::timestamptz
     where ci.creator_user_id <> viewer.id
       and ci.created_at <= ${asOf}::timestamptz
-      and (${input.surface} = 'home' or ci.media_type in ('bit', 'clip'))
+      and (
+        (${input.surface} = 'moments' and ci.distribution_mode = 'moment' and ci.expires_at > ${asOf}::timestamptz)
+        or (${input.surface} = 'home' and ci.distribution_mode = 'post')
+        or (${input.surface} = 'bits' and ci.distribution_mode = 'post' and ci.media_type in ('bit', 'clip'))
+      )
       and (${input.mode} <> 'following' or follow.state = 'active')
   `;
 }

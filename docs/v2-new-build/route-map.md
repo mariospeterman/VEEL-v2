@@ -43,17 +43,19 @@ Rules:
 | `/` onboarding state | Slice 02 target | step 1 | pending | created/connected in step | onboarding | Three visible steps only: Wallet, Minimal Profile, Age Verification. Mainstream Privy entry and external wallet entry converge on one backend wallet challenge/session; Supabase recovery is not a step. |
 | `/age` | MVP | yes | pending | yes | onboarding | Third-party age verification session/status. |
 | `/app/home` | MVP | yes | yes | yes | home | Recommended/Following/NSFW/SFW feed. |
+| `/app/moments` | Convergence 09 | yes | yes | yes | media | Sequential 24-hour Moment viewer over canonical content, access, engagement, and signed playback. |
 | `/app/bits` | MVP | yes | yes | yes | media/discover | Reels-style Bit and discovery surface for content, creators, live rooms, and Event Access. |
 | `/app/search` | Convergence 06 | yes | yes | yes | discover | Genuine grouped search for creators, content, hashtags, live rooms, and events, plus bounded device-only recent queries. |
-| `/app/create` | MVP | yes | yes | yes | create | Upload/capture, labels, event attach, monetisation, publish. |
+| `/app/create` | MVP | yes | yes | yes | create | Guided post, Moment, text, poll, or SFW live creation; optional scheduled release remains backend-owned. |
 | `/app/messages` | Phase 2 | yes | yes | yes | messages | Inbox, consent requests, approved media offers, structured creator requests, and Mutual/Event Access contexts. |
 | `/app/notifications` | Phase 2 | yes | yes | yes | notifications | Account-owned notification inbox with idempotent read state. |
-| `/app/profile` | MVP | yes | yes | yes | profile | Own profile, wallet/activity/settings links. |
+| `/app/profile` | MVP | yes | yes | yes | profile | Media-first own profile; operational creator state belongs to Studio. |
 | `/profile/:handle` | MVP | yes | yes | yes | profile | Public creator/user profile. Legacy `/app/profile/:handle` redirection was removed because it captured protected routes such as `/app/profile/earnings`; callers must use this canonical public URL. |
 | `/live/:id` | Phase 2 | yes | yes | yes | live | Live room/replay viewer, pass/chat state. |
 | `/app/activity` | Phase 2 | yes | yes | yes | activity | Purchases, unlocks, support, passes, wallet, referrals, receipts. |
 | `/app/wallet` | MVP | yes | yes | yes | wallet | Wallet address, top-up, external link, receipts. |
-| `/app/studio` | Phase 2 | yes | yes | yes | organizations | Studio and Enterprise organization dashboards for current members. |
+| `/app/studio` | Phase 2 | yes | yes | yes | creator | Individual creator workspace for publishing, content, analytics, monetisation, and readiness; Studio tier extends capabilities without affecting ranking. |
+| `/app/enterprise` | Phase 2 | yes | yes | yes | organizations | Separate organization/coworker/managed-creator workspace with exact membership, permission, KYB, agreement, and Enterprise capability checks. |
 | `/app/settings` | MVP | yes | yes | yes | settings | Profile, security, sessions, feed, privacy, notifications. |
 | `/app/settings` recovery | Slice 02 target | yes | yes | yes | auth/settings | Optional “Add account recovery,” primarily for external-wallet-only users; audited link to existing user only, fail closed on collision. |
 | `/passes` | Phase 3 | yes | yes | yes | events | Canonical My Passes and QR/access receipt list. |

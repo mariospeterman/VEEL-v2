@@ -210,7 +210,7 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
         await tx`
           insert into notifications (id, user_id, kind, title, body, action_url, related_resource_type, related_resource_id, idempotency_key)
           values (${randomUUID()}, ${party.creator_id}, 'studio_setup', 'Enterprise management invitation',
-            'Review permissions and the management share before accepting.', '/app/studio',
+            'Review permissions and the management share before accepting.', '/app/enterprise',
             'managed_creator_relationship', ${relationshipId}, ${`managed-creator:${relationshipId}`})
           on conflict (user_id, idempotency_key) do update set state = 'unread', created_at = now()
         `;
@@ -378,7 +378,7 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
           insert into notifications (id, user_id, kind, title, body, action_url, related_resource_type, related_resource_id, idempotency_key)
           values (${randomUUID()}, ${relationship.creator_user_id}, 'studio_setup', 'Management terms changed',
             'Review the changed permissions and management share. Current accepted terms remain active until you accept.',
-            '/app/studio', 'managed_creator_relationship', ${relationship.id}, ${`managed-agreement:${relationship.id}:${input.idempotencyKey}`})
+            '/app/enterprise', 'managed_creator_relationship', ${relationship.id}, ${`managed-agreement:${relationship.id}:${input.idempotencyKey}`})
           on conflict (user_id, idempotency_key) do nothing
         `;
         await recordEnterpriseAudit(tx, {
@@ -527,7 +527,7 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
           insert into notifications (id, user_id, kind, title, body, action_url, related_resource_type, related_resource_id, idempotency_key)
           values (${randomUUID()}, ${notificationUserId}, 'studio_setup', 'Management relationship ended',
             'The Enterprise management relationship has ended. Historical payment records are unchanged.',
-            '/app/studio', 'managed_creator_relationship', ${relationship.id}, ${`managed-termination:${relationship.id}`})
+            '/app/enterprise', 'managed_creator_relationship', ${relationship.id}, ${`managed-termination:${relationship.id}`})
           on conflict (user_id, idempotency_key) do nothing
         `;
         await recordEnterpriseAudit(tx, {

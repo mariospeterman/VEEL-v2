@@ -167,7 +167,7 @@ export async function getDiscoverSearch(query = ""): Promise<ApiResult<DiscoverP
 
 export async function getHomeFeed(
   mode = "recommended",
-  surface: "home" | "bits" = "home",
+  surface: "home" | "bits" | "moments" = "home",
   cursor?: string
 ): Promise<ApiResult<FeedPage>> {
   const query = new URLSearchParams({ mode, surface });

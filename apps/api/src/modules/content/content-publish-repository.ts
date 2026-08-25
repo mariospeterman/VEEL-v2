@@ -47,6 +47,9 @@ export function createContentPublishRepositoryMethods(
               ci.state,
               ci.publish_state,
               ci.moderation_state,
+              ci.distribution_mode,
+              ci.expires_at,
+              ci.scheduled_for,
               private.content_safety_release_ready(ci.id) as safety_ready,
               private.content_composition_provider_ready(ci.id) as provider_ready
             from content_items ci
@@ -56,14 +59,40 @@ export function createContentPublishRepositoryMethods(
           updated_content as (
             update content_items ci
             set
+              scheduled_for = case
+                when ${Boolean(input.scheduledForProvided)} then ${input.scheduledFor ?? null}
+                else ci.scheduled_for
+              end,
               publish_state = case
+                when cc.moderation_state = 'approved' and cc.safety_ready
+                  and coalesce(
+                    case when ${Boolean(input.scheduledForProvided)} then ${input.scheduledFor ?? null}::timestamptz else cc.scheduled_for end,
+                    '-infinity'::timestamptz
+                  ) > now()
+                then 'scheduled'
                 when cc.moderation_state = 'approved' and cc.safety_ready then 'published'
                 else 'submitted_for_review'
               end,
               publish_requested_at = coalesce(ci.publish_requested_at, now()),
               published_at = case
-                when cc.moderation_state = 'approved' and cc.safety_ready then coalesce(ci.published_at, now())
+                when cc.moderation_state = 'approved' and cc.safety_ready
+                  and coalesce(
+                    case when ${Boolean(input.scheduledForProvided)} then ${input.scheduledFor ?? null}::timestamptz else cc.scheduled_for end,
+                    '-infinity'::timestamptz
+                  ) <= now()
+                then coalesce(ci.published_at, now())
                 else ci.published_at
+              end,
+              expires_at = case
+                when cc.distribution_mode = 'moment'
+                  and cc.moderation_state = 'approved'
+                  and cc.safety_ready
+                  and coalesce(
+                    case when ${Boolean(input.scheduledForProvided)} then ${input.scheduledFor ?? null}::timestamptz else cc.scheduled_for end,
+                    '-infinity'::timestamptz
+                  ) <= now()
+                then coalesce(ci.expires_at, now() + interval '24 hours')
+                else ci.expires_at
               end,
               updated_at = now()
             from current_content cc
@@ -76,6 +105,9 @@ export function createContentPublishRepositoryMethods(
               ci.id,
               ci.creator_user_id,
               ci.media_type,
+              ci.distribution_mode,
+              ci.expires_at,
+              ci.scheduled_for,
               ci.caption,
               ci.nsfw_label,
               ci.state as content_state,

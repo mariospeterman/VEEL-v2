@@ -143,7 +143,7 @@ test("renders the canonical protected app home shell through /app", async ({ con
   await waitForClientReady(page);
 
   await expect(page.getByRole("link", { name: "WeVid app home" }).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: /What’s happening|Enter WeVid/ }).first()).toBeVisible();
+  await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
@@ -178,6 +178,8 @@ test("keeps representative authenticated workspaces free of blocking accessibili
     "/app/profile",
     "/app/settings",
     "/app/studio",
+    "/app/enterprise",
+    "/app/moments",
     "/app/subscriptions"
   ];
   const blocking: Array<{ path: string; id: string; targets: unknown[] }> = [];
@@ -216,9 +218,9 @@ test("explains connected assistant permissions without exposing protocol interna
 
 test("renders the provider-first Enterprise workspace without custody or payout controls", async ({ context, page }) => {
   await addE2eCookie(context);
-  await page.goto("/app/studio", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await page.goto("/app/enterprise", { waitUntil: "domcontentloaded", timeout: 45_000 });
 
-  await expect(page.getByRole("heading", { name: "Studio / Enterprise capabilities" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Enterprise", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Teams and managed creators" })).toBeVisible();
   await expect(page.getByText("Enterprise active")).toBeVisible();
   await expect(page.getByRole("button", { name: "Invite team member" })).toBeVisible();
@@ -234,6 +236,18 @@ test("renders the provider-first Enterprise workspace without custody or payout 
     scrollWidth: document.documentElement.scrollWidth
   }));
   expect(layout.scrollWidth).toBe(layout.clientWidth);
+});
+
+test("keeps Studio individual and opens Moments through the canonical renderer", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.goto("/app/studio", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await expect(page.getByRole("heading", { name: "Studio", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your content" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Teams and managed creators" })).toHaveCount(0);
+
+  await page.goto("/app/moments", { waitUntil: "domcontentloaded", timeout: 45_000 });
+  await expect(page.getByRole("region", { name: "Moment viewer" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Reply in messages" })).toHaveAttribute("href", /\/app\/messages\?share=/);
 });
 
 test("retries Realtime token acquisition after a transient API failure", async ({ context, page }) => {
@@ -1417,6 +1431,7 @@ function contentItem(id = "00000000-0000-4000-8000-000000000040") {
     id,
     creator: user(),
     mediaType: "clip",
+    distributionMode: "post",
     caption: "Studio sunrise session",
     posterUrl: null,
     playback: {

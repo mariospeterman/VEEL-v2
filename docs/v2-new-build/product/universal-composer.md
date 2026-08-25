@@ -1,7 +1,7 @@
 # Universal Composer
 
 Status: accepted
-Scope: one creator draft and rendering lifecycle for photo, video, carousel, text, and poll posts
+Scope: one creator draft and rendering lifecycle for photo, video, carousel, text, poll, Moment, and scheduled publication
 Last updated: 2026-08-22
 Source of truth: yes for Convergence 02 product behavior
 
@@ -26,8 +26,8 @@ Non-goals:
 
 ## Product Contract
 
-The canonical `/app/create` route starts with three choices: **Photos or video**, **Write
-something**, and **Poll**. The selection progressively reveals only fields relevant to that format.
+The canonical `/app/create` route starts with four choices: **Photos or video**, **Write
+something**, **Poll**, and **Go live**. The selection progressively reveals only fields relevant to that format.
 Every path creates or resumes one server-owned `content_items` draft and uses the same audience,
 rating, people/rights, review, publication, and owner workspace.
 
@@ -83,6 +83,11 @@ deduplicate signing of the selected asset, and never serialize a stored Bunny pl
 failure returns normalized blocked playback. Paid or otherwise gated cards redact body text, poll
 state/options, and per-asset delivery URLs until the
 viewer has canonical access; the creator remains authorized through the canonical app user id.
+
+Image/video compositions may be distributed as a persistent post or a 24-hour Moment, and any
+supported draft may request a future release time. These remain fields and a subordinate lease job
+on canonical content rather than separate media, calendar, moderation, or playback systems; see
+`product/moments-studio-enterprise.md`.
 
 ## Safety And Release
 

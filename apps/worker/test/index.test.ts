@@ -83,6 +83,7 @@ describe("buildWorkerRuntime", () => {
         "notification-deliveries",
         "payment-confirmation-emails",
         "provider-event-replays",
+        "scheduled-publications",
         "live-safety",
         "media-moderation",
         "media-asset-cleanups"
@@ -112,6 +113,11 @@ describe("buildWorkerRuntime", () => {
           name: "provider-event-replays",
           cadence: "every_minute",
           sourceIndex: "provider_event_replay_requests_state_created_idx"
+        },
+        {
+          name: "scheduled-publications",
+          cadence: "every_minute",
+          sourceIndex: "content_publication_jobs_due_idx"
         },
         {
           name: "live-safety",
@@ -162,6 +168,9 @@ describe("runScheduledWorkerTick", () => {
         async providerEventReplays() {
           calls.push("provider-replays");
         },
+        async scheduledPublications() {
+          calls.push("scheduled-publications");
+        },
         async subscriptionCollections() {
           calls.push("subscriptions");
         }
@@ -182,6 +191,7 @@ describe("runScheduledWorkerTick", () => {
       "moderation",
       "notifications",
       "provider-replays",
+      "scheduled-publications",
       "subscriptions"
     ]);
     expect(result).toEqual({
@@ -192,6 +202,7 @@ describe("runScheduledWorkerTick", () => {
       notificationDeliveries: "completed",
       paymentConfirmationEmails: "failed",
       providerEventReplays: "completed",
+      scheduledPublications: "completed",
       subscriptionCollections: "completed"
     });
     expect(errors).toEqual([
