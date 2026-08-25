@@ -1,14 +1,25 @@
-delete from analytics_onboarding_daily
-where event_key in (
-  'landing_cta_clicked', 'landing_nav_clicked', 'landing_section_viewed',
-  'landing_money_example_viewed', 'landing_comparison_viewed', 'landing_faq_opened'
-);
-
-delete from analytics_onboarding_journey_events
-where event_key in (
-  'landing_cta_clicked', 'landing_nav_clicked', 'landing_section_viewed',
-  'landing_money_example_viewed', 'landing_comparison_viewed', 'landing_faq_opened'
-);
+do $$
+begin
+  if exists (
+    select 1
+    from analytics_onboarding_daily
+    where event_key in (
+      'landing_cta_clicked', 'landing_nav_clicked', 'landing_section_viewed',
+      'landing_money_example_viewed', 'landing_comparison_viewed', 'landing_faq_opened'
+    )
+  ) or exists (
+    select 1
+    from analytics_onboarding_journey_events
+    where event_key in (
+      'landing_cta_clicked', 'landing_nav_clicked', 'landing_section_viewed',
+      'landing_money_example_viewed', 'landing_comparison_viewed', 'landing_faq_opened'
+    )
+  ) then
+    raise exception 'cannot roll back migration 0118 while landing convergence analytics facts exist; archive or migrate them explicitly first'
+      using errcode = 'check_violation';
+  end if;
+end
+$$;
 
 alter table analytics_onboarding_daily
   add constraint analytics_onboarding_daily_event_key_check_rollback check (event_key in (

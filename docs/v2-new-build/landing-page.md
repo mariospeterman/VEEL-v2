@@ -65,7 +65,7 @@ Current creator-economy research was reviewed to inform the problem framing. No 
 
 ## Analytics
 
-Landing interactions extend the existing privacy-minimized onboarding journey authority. The browser records no PII, query strings, wallet addresses, raw referrers, or provider payloads. Events cover landing views, CTA and navigation actions, section views, the money example, comparison, FAQ opens, authentication, account-not-found, onboarding, and returning login.
+Landing interactions extend the existing privacy-minimized onboarding journey authority. The browser records no PII, query strings, wallet addresses, raw referrers, or provider payloads. A random journey identifier, typed event, and timestamp are retained for at most 90 days; the public Privacy and Cookies notices disclose the collection, purpose, browser session storage, and retention. Events cover landing views, CTA and navigation actions, section views, the money example, comparison, FAQ opens, authentication, account-not-found, onboarding, and returning login.
 
 ## Accessibility And SEO
 

@@ -315,7 +315,7 @@ pre-production gates.
 
 ## Brand Compatibility Boundary
 
-Public product copy and API metadata use WeVid and Support. Technical package scopes, `VEEL_*` test-tool env names, `VEEL-` historical receipt identifiers, the legacy `X-Veel-Webhook-Signature` compatibility header, migration history, and the existing `/video/Veel.mp4` asset path remain unchanged to avoid a destructive rename. Historical `tip` records are normalized to Support on active reads; deeper compatibility cleanup belongs to the monetisation slice.
+Public product copy and API metadata use WeVid and Support. Technical package scopes, `VEEL_*` test-tool env names, `VEEL-` historical receipt identifiers, the legacy `X-Veel-Webhook-Signature` compatibility header, and migration history remain unchanged to avoid destructive renames. The retired, unreferenced `/video/Veel.mp4` landing film is removed with the legacy scroll story. Historical `tip` records are normalized to Support on active reads; deeper compatibility cleanup belongs to the monetisation slice.
 
 ## Slice Ownership For Remaining Onboarding Work
 

@@ -1,4 +1,4 @@
-import { approvedLandingClaim } from "./landing-claims";
+import { approvedLandingClaim, landingMoneyExample } from "./landing-claims";
 
 export const landingContent = {
   navigation: [
@@ -72,7 +72,10 @@ export const landingContent = {
     eyebrow: "NONCUSTODIAL BY DESIGN",
     title: "One approval. One verified split. No WeVid balance.",
     copy: "The buyer approves a server-composed transaction. The network confirms it. WeVid verifies settlement before access changes and records the receipt.",
-    example: approvedLandingClaim("one-usdc-example"),
+    example: {
+      ...landingMoneyExample,
+      claim: approvedLandingClaim("one-usdc-example")
+    },
     disclosure: "Illustrative default-fee example. WeVid provides software and verified access records; it is not a bank and does not hold creator product funds in platform balances. Network and provider conditions apply."
   },
   plans: {

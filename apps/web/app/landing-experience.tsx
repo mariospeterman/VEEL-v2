@@ -18,7 +18,7 @@ import {
   UsersRound,
   X
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { recordOnboardingEvent } from "@/analytics/onboarding-analytics";
 import { LandingAuthSurface } from "./landing-auth-surface";
@@ -40,6 +40,8 @@ export function LandingExperience({
 }: LandingEntryState) {
   const [authMode, setAuthMode] = useState<Exclude<LandingEntryMode, null> | null>(initialMode);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const authModalRef = useRef<HTMLElement | null>(null);
+  const authOpenerRef = useRef<HTMLElement | null>(null);
   const publicAuthState = useMemo<WebAuthState>(
     () => ({ authenticated: false, configured: true, email: null }),
     []
@@ -47,6 +49,7 @@ export function LandingExperience({
 
   const openContinue = useCallback((source: string) => {
     recordOnboardingEvent("landing_cta_clicked", source);
+    authOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setMobileMenuOpen(false);
     setAuthMode("login");
   }, []);
@@ -61,13 +64,54 @@ export function LandingExperience({
     const priorOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
+    const modal = authModalRef.current;
+    const focusableSelector = [
+      "a[href]",
+      "button:not([disabled])",
+      "input:not([disabled])",
+      "select:not([disabled])",
+      "textarea:not([disabled])",
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(",");
+    const focusable = () => [...(modal?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])]
+      .filter((element) => element.getClientRects().length > 0);
+    const topmostDialog = () => [...document.querySelectorAll<HTMLElement>('[role="dialog"]')]
+      .filter((dialog) => dialog.getClientRects().length > 0)
+      .at(-1);
+
+    (focusable()[0] ?? modal)?.focus();
+
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && initialMode === null) setAuthMode(null);
+      if (topmostDialog() !== modal) return;
+      if (event.key === "Escape" && initialMode === null) {
+        event.preventDefault();
+        setAuthMode(null);
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const available = focusable();
+      if (available.length === 0) {
+        event.preventDefault();
+        modal?.focus();
+        return;
+      }
+
+      const first = available[0]!;
+      const last = available.at(-1)!;
+      if (event.shiftKey && (document.activeElement === first || !modal?.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !modal?.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       document.body.style.overflow = priorOverflow;
       window.removeEventListener("keydown", closeOnEscape);
+      authOpenerRef.current?.focus();
     };
   }, [authMode, initialMode]);
 
@@ -163,9 +207,10 @@ export function LandingExperience({
 
         <section aria-label="Verified WeVid product facts" className="landing-proof" data-landing-section="proof">
           {landingContent.proof.map((fact) => (
-            <div key={fact.claim.id} title={fact.claim.qualification}>
+            <div key={fact.claim.id}>
               <strong>{fact.value}</strong>
               <span>{fact.label}</span>
+              <small>{fact.claim.qualification}</small>
             </div>
           ))}
         </section>
@@ -223,13 +268,13 @@ export function LandingExperience({
             </ul>
           </div>
           <div className="landing-split" aria-label="Illustrative one USDC settlement split">
-            <div className="landing-split-total"><span>Buyer approves</span><strong>1.00 <small>USDC</small></strong></div>
+            <div className="landing-split-total"><span>Buyer approves</span><strong>{landingContent.money.example.gross} <small>{landingContent.money.example.currency}</small></strong></div>
             <ArrowDown aria-hidden="true" />
             <div className="landing-split-recipients">
-              <div><span>Creator recipient</span><strong>0.90</strong></div>
-              <div><span>WeVid recipient</span><strong>0.10</strong></div>
+              <div><span>Creator recipient</span><strong>{landingContent.money.example.creator}</strong></div>
+              <div><span>WeVid recipient</span><strong>{landingContent.money.example.platform}</strong></div>
             </div>
-            <p>{landingContent.money.disclosure}</p>
+            <p>{landingContent.money.example.claim.qualification} {landingContent.money.disclosure}</p>
           </div>
         </section>
 
@@ -260,7 +305,7 @@ export function LandingExperience({
           <div className="landing-comparison-table" role="table" aria-label="Common old platform patterns compared with the WeVid model">
             <div className="landing-comparison-head" role="row"><span role="columnheader">Common category pattern</span><span role="columnheader">WeVid model</span></div>
             {landingContent.comparison.rows.map(([oldModel, wevidModel]) => (
-              <div key={oldModel} role="row"><span role="cell">{oldModel}</span><strong role="cell"><ArrowRight aria-hidden="true" />{wevidModel}</strong></div>
+              <div key={oldModel} role="row"><span aria-label={`Common category pattern: ${oldModel}`} role="cell">{oldModel}</span><strong aria-label={`WeVid model: ${wevidModel}`} role="cell"><ArrowRight aria-hidden="true" />{wevidModel}</strong></div>
             ))}
           </div>
         </section>
@@ -325,7 +370,14 @@ export function LandingExperience({
           }}
           role="presentation"
         >
-          <section aria-labelledby="landing-auth-title" aria-modal="true" className="landing-auth-modal" role="dialog">
+          <section
+            aria-labelledby="landing-auth-title"
+            aria-modal="true"
+            className="landing-auth-modal"
+            ref={authModalRef}
+            role="dialog"
+            tabIndex={-1}
+          >
             <header>
               <a className="landing-logo-link" href="/" aria-label="WeVid home">
                 <img alt="" height="38" src="/Logo-Light-Transparent.png" width="38" />

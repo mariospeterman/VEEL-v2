@@ -59,7 +59,7 @@ test.beforeEach(() => {
 test("renders the public landing with the current WeVid visual contract", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.getByRole("link", { name: "WeVid home" })).toBeVisible();
+  await expect(page.locator("header").getByRole("link", { name: "WeVid home" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Stop building on rented ground." })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue to WeVid" }).first()).toBeVisible();
   await expect(page.getByText("Public legal copy here is a product placeholder")).toHaveCount(0);

@@ -1,4 +1,12 @@
 @layer components {
+  html:has(.landing-shell),
+  body:has(.landing-shell) {
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
   .landing-shell {
     --landing-ink: #f7f7f4;
     --landing-soft: rgba(247, 247, 244, 0.68);
@@ -322,6 +330,15 @@
     max-width: 210px;
     color: var(--landing-soft);
     font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .landing-proof small {
+    display: block;
+    max-width: 30ch;
+    margin-top: 9px;
+    color: rgba(255, 255, 255, 0.56);
+    font-size: 0.68rem;
     line-height: 1.45;
   }
 
@@ -1675,7 +1692,15 @@
     }
 
     .landing-comparison-head {
-      display: none !important;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     .landing-trust-mark {

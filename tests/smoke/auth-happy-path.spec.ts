@@ -394,6 +394,7 @@ test("shows and updates audited payment commercial policy overrides", async ({ p
 
   await page.goto("/admin/settings", { waitUntil: "domcontentloaded" });
   await expect(page.getByText("safety.content_creation_abuse_policy", { exact: true })).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-client-ready", "true");
   const flagForm = page.getByRole("button", { name: "Save feature flag" }).locator("..");
   const policyJson = '{"maxDraftsPerHour":12,"enabled":true}';
   const policyJsonField = flagForm.getByLabel("Policy JSON");

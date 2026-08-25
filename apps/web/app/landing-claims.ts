@@ -23,6 +23,13 @@ export interface LandingClaim {
   placements: readonly LandingClaimPlacement[];
 }
 
+export const landingMoneyExample = {
+  gross: "1.00",
+  creator: "0.90",
+  platform: "0.10",
+  currency: "USDC"
+} as const;
+
 export const landingClaims = [
   {
     id: "checkout-one-approval",
@@ -66,7 +73,7 @@ export const landingClaims = [
   },
   {
     id: "one-usdc-example",
-    wording: "1.00 USDC → 0.90 creator + 0.10 WeVid",
+    wording: `${landingMoneyExample.gross} ${landingMoneyExample.currency} → ${landingMoneyExample.creator} creator + ${landingMoneyExample.platform} WeVid`,
     claimClass: "illustrative_example",
     evidenceOwner: "business-monetisation.md default split policy",
     lastVerified: "2026-08-25",

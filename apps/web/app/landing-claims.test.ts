@@ -23,4 +23,9 @@ describe("landing claims authority", () => {
     }
     expect(copy).toContain("product offers · planned rollout");
   });
+
+  it("renders the money example from the approved structured value", () => {
+    const { claim, creator, currency, gross, platform } = landingContent.money.example;
+    expect(claim.wording).toBe(`${gross} ${currency} → ${creator} creator + ${platform} WeVid`);
+  });
 });
