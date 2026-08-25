@@ -401,13 +401,8 @@ test("shows and updates audited payment commercial policy overrides", async ({ p
     if (!(element instanceof HTMLTextAreaElement)) {
       throw new TypeError("Policy JSON control must be a textarea");
     }
-    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-    if (!setValue) {
-      throw new TypeError("Textarea value setter is unavailable");
-    }
-    setValue.call(element, value);
-    element.dispatchEvent(new Event("input", { bubbles: true }));
-    element.dispatchEvent(new Event("change", { bubbles: true }));
+    element.defaultValue = value;
+    element.value = value;
   }, policyJson);
   await expect(policyJsonField).toHaveValue(policyJson);
   await flagForm.getByLabel("Audit reason").fill("Tune the reviewed content creation safety threshold");
