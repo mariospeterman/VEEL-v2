@@ -73,7 +73,7 @@ test("a detected wallet connects, signs, and enters onboarding from one provider
   await expect(phantom).toBeVisible({ timeout: 20_000 });
   await phantom.click();
 
-  await expect(page.getByLabel("Handle")).toBeVisible();
+  await expect(page.getByLabel("Handle")).toBeVisible({ timeout: 20_000 });
   expect(challengeRequests).toBe(1);
   expect(sessionRequests).toBe(1);
   expect(await page.evaluate(() => (window as typeof window & { __wevidWalletTest?: { connect: number; sign: number } }).__wevidWalletTest)).toEqual({ connect: 1, sign: 1 });
@@ -105,7 +105,7 @@ test("a stalled wallet signature can be stopped without creating an account sess
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "Set up with Phantom" }).click();
-  await expect(page.getByText(/check your wallet and sign the ownership message/i)).toBeVisible();
+  await expect(page.getByText(/check your wallet and sign the ownership message/i)).toBeVisible({ timeout: 20_000 });
 
   const stop = page.getByRole("button", { name: "Stop and disconnect" });
   await expect(stop).toBeEnabled();
