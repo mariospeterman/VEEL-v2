@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const supabaseBin = resolve("node_modules/.bin/supabase");
 const migrationsDir = resolve("packages/database/migrations");
+const linkedProjectRefPath = resolve("supabase/.temp/project-ref");
 
 const resolveDatabaseUrl = () => {
   const databaseUrl =
@@ -36,6 +37,24 @@ const resolveDatabaseUrl = () => {
   }
 
   return databaseUrl;
+};
+
+const resolveConnectionArgs = () => {
+  if (process.env.SUPABASE_MIGRATIONS_DB_URL || process.env.SUPABASE_DIRECT_DB_URL) {
+    return ["--db-url", resolveDatabaseUrl()];
+  }
+
+  const projectRef = process.env.SUPABASE_PROJECT_REF;
+  if (!projectRef || !process.env.SUPABASE_ACCESS_TOKEN) {
+    console.error("Set an explicit Supabase migration URL, or provide SUPABASE_PROJECT_REF and SUPABASE_ACCESS_TOKEN for the linked Management API path.");
+    process.exit(1);
+  }
+  if (!existsSync(linkedProjectRefPath) || readFileSync(linkedProjectRefPath, "utf8").trim() !== projectRef) {
+    console.error("The Supabase CLI project is not linked to SUPABASE_PROJECT_REF. Run pnpm supabase:link first.");
+    process.exit(1);
+  }
+
+  return ["--linked"];
 };
 
 const migrations = readdirSync(migrationsDir)
@@ -126,9 +145,10 @@ select json_build_object(
 ) as migration_history_status;
 `;
 
+const connectionArgs = resolveConnectionArgs();
 const result = spawnSync(
   supabaseBin,
-  ["db", "query", "--db-url", resolveDatabaseUrl(), "--output", "json", query],
+  ["db", "query", ...connectionArgs, "--output", "json", query],
   {
     encoding: "utf8",
     env: {
@@ -147,7 +167,10 @@ if (result.error?.name === "TimeoutError" || result.signal === "SIGTERM") {
 if (result.status !== 0) {
   console.error("Supabase migration history check failed.");
   if (result.stderr) {
-    console.error(result.stderr.replaceAll(resolveDatabaseUrl(), "[redacted-db-url]"));
+    const redacted = [process.env.SUPABASE_MIGRATIONS_DB_URL, process.env.SUPABASE_DIRECT_DB_URL]
+      .filter(Boolean)
+      .reduce((message, value) => message.replaceAll(value, "[redacted-db-url]"), result.stderr);
+    console.error(redacted);
   }
   process.exit(result.status ?? 1);
 }

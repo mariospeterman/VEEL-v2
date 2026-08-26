@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "latestMergedBaseline": "829db67bc58c3d19c550b521250da9c45de5aa59",
+  "latestMergedBaseline": "63f89cdad6955e4cd8024d2ab2652df72043c664",
   "latestMergedSlice": "Convergence 09D — Landing final convergence",
   "latestMergedMigration": "packages/database/migrations/0118_landing_convergence_analytics.sql",
   "nextPlannedSlice": "Convergence 09E — Cloud and provider acceptance",
