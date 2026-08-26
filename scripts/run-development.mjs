@@ -1,4 +1,11 @@
 import { spawn } from "node:child_process";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { prepareWebDevelopmentCache } from "./prepare-development.mjs";
+
+const repoRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const cache = await prepareWebDevelopmentCache({ repoRoot });
+if (cache.invalidated) console.info("Cleared stale web development output after a dependency or runtime change.");
 
 const filters = ["--filter", "@veel/api", "--filter", "@veel/web"];
 if (process.env.VEEL_DEV_FULL === "true") filters.push("--filter", "@veel/worker");

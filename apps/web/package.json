@@ -31,7 +31,7 @@
     "@veel/ui": "workspace:*",
     "fastestsmallesttextencoderdecoder": "1.0.22",
     "lucide-react": "^1.18.0",
-    "next": "16.3.1",
+    "next": "16.3.2",
     "player.js": "0.1.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
