@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const markerName = ".veel-dependency-fingerprint";
 
@@ -51,4 +52,11 @@ export async function prepareWebDevelopmentCache({
   await writeFile(markerPath, `${fingerprint}\n`, "utf8");
 
   return { invalidated, fingerprint };
+}
+
+const modulePath = fileURLToPath(import.meta.url);
+if (process.argv[1] && resolve(process.argv[1]) === modulePath) {
+  const repoRoot = dirname(dirname(modulePath));
+  const cache = await prepareWebDevelopmentCache({ repoRoot });
+  if (cache.invalidated) console.info("Cleared stale web development output after a dependency or runtime change.");
 }

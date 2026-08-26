@@ -49,11 +49,11 @@ const developmentPwaResetScript = `
       const veelCacheNames = cacheNames.filter((name) => name.startsWith("wevid-shell-"));
       if (veelRegistrations.length === 0 && veelCacheNames.length === 0) return;
 
-      const results = await Promise.all([
+      await Promise.all([
         ...veelRegistrations.map((registration) => registration.unregister()),
         ...veelCacheNames.map((name) => caches.delete(name))
       ]);
-      if (results.some(Boolean)) window.location.reload();
+      window.location.reload();
     })
     .catch(() => {
       // Development remains usable if browser storage is unavailable.
