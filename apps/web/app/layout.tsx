@@ -36,6 +36,31 @@ const themeScript = `
 })();
 `;
 
+const developmentPwaResetScript = `
+(() => {
+  if (!("serviceWorker" in navigator) || !("caches" in window)) return;
+
+  Promise.all([navigator.serviceWorker.getRegistrations(), caches.keys()])
+    .then(async ([registrations, cacheNames]) => {
+      const veelRegistrations = registrations.filter((registration) => {
+        const worker = registration.active ?? registration.waiting ?? registration.installing;
+        return worker?.scriptURL.endsWith("/veel-sw.js");
+      });
+      const veelCacheNames = cacheNames.filter((name) => name.startsWith("wevid-shell-"));
+      if (veelRegistrations.length === 0 && veelCacheNames.length === 0) return;
+
+      await Promise.all([
+        ...veelRegistrations.map((registration) => registration.unregister()),
+        ...veelCacheNames.map((name) => caches.delete(name))
+      ]);
+      window.location.reload();
+    })
+    .catch(() => {
+      // Development remains usable if browser storage is unavailable.
+    });
+})();
+`;
+
 export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -45,6 +70,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {process.env.NODE_ENV === "development" ? (
+          <script dangerouslySetInnerHTML={{ __html: developmentPwaResetScript }} />
+        ) : null}
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <script dangerouslySetInnerHTML={{ __html: serializePublicWebEnvScript(publicEnv) }} />
       </head>

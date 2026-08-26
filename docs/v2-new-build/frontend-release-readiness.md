@@ -70,6 +70,7 @@ Real wallet extensions, embedded-wallet provider domains, push delivery, and iOS
 - Navigations are network-first and use the offline document only when the network is unavailable. The offline document contains no user data.
 - Service-worker responses include restrictive script and cache headers. Service-worker updates remove obsolete named caches.
 - Push enrollment remains an explicit user action and reuses the existing registration.
+- Development startup fingerprints generated Next.js output against the lockfile and Node runtime, while the development document removes only Veel-owned service workers and caches before React loads. This prevents a previously installed localhost PWA from mixing old framework chunks into a newer development server without changing the production cache contract.
 
 ## Performance And Bundle Boundary
 
