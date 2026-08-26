@@ -9,8 +9,8 @@ if (!process.env.SUPABASE_ACCESS_TOKEN) throw new Error("SUPABASE_ACCESS_TOKEN i
 
 await run("pnpm", ["supabase:version"]);
 await run("node", ["--env-file-if-exists=.env.staging", "scripts/run-supabase-cli.mjs", "link", "--project-ref-env"]);
-await run("node", ["--env-file-if-exists=.env.staging", "scripts/run-supabase-cli.mjs", "migration", "list", "--db-url-env"]);
-await run("node", ["--env-file-if-exists=.env.staging", "scripts/run-supabase-cli.mjs", "db", "advisors", "--db-url-env", "--type", "all", "--level", "warn", "--fail-on", "none"]);
+await run("node", ["--env-file-if-exists=.env.staging", "scripts/run-supabase-cli.mjs", "migration", "list", "--connection-env"]);
+await run("node", ["--env-file-if-exists=.env.staging", "scripts/run-supabase-cli.mjs", "db", "advisors", "--connection-env", "--type", "all", "--level", "warn", "--fail-on", "none"]);
 console.log("READY cloud_link target_verified history_and_advisors_read_only");
 
 function run(command, args) {

@@ -41,17 +41,19 @@ pnpm supabase:push:dry
 ```
 
 Use `SUPABASE_MIGRATIONS_DB_URL` or `SUPABASE_DIRECT_DB_URL` for remote CLI checks when available.
-Generic application `DATABASE_URL` is never accepted for migration commands. If an explicit migration
-URL points at a Supabase transaction pooler, the root wrapper uses session-pooler port `5432` because
-migration commands require prepared-statement-compatible connections.
+Generic application `DATABASE_URL` is never accepted for migration commands. If neither explicit
+migration URL is configured, the wrappers require a matching `SUPABASE_PROJECT_REF`, authenticated
+`SUPABASE_ACCESS_TOKEN`, and linked CLI metadata, then use the Supabase Management API connection.
+If an explicit migration URL points at a Supabase transaction pooler, the root wrapper uses
+session-pooler port `5432` because migration commands require prepared-statement-compatible connections.
 
 The current shared remote project migration history is normalized to this package's sequence-named SQL
 files. `pnpm supabase:migrations` verifies local/remote version alignment; `pnpm
 supabase:history:check` reports missing sequential history or extra remote history rows; `pnpm
 supabase:push:dry` must report that the remote database is up to date before new schema work builds on
-the shared remote project. If direct database access is unavailable from the current network, use the
-authenticated Supabase MCP project connection to list/apply migrations and run advisors. Keep applied
-MCP migrations byte-for-byte aligned with committed files in this package.
+the shared remote project. If a direct migration connection is unavailable, use the authenticated,
+project-ref-validated linked CLI path; use Supabase MCP for read-only inspection and advisors. Apply
+sequential schema changes through the repo-local CLI so history stays aligned with this package.
 
 ## RLS Baseline
 

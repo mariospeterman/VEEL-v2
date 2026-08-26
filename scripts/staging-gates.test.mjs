@@ -1,5 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import {
   executeStagingProofPlan,
@@ -16,6 +19,7 @@ describe("strict staging convergence gates", () => {
   it("keeps the example environment and staging workflow aligned with the canonical registry", () => {
     const example = readFileSync(new URL("../.env.staging.example", import.meta.url), "utf8");
     const workflow = readFileSync(new URL("../.github/workflows/deploy-staging.yml", import.meta.url), "utf8");
+    expect(example).not.toMatch(/^[A-Z0-9_]+= #/m);
     const variables = [...new Set(stagingCapabilities.flatMap((capability) => capability.variables))];
     for (const variable of variables) {
       expect(example).toMatch(new RegExp(`^${variable.name}=`, "m"));
@@ -25,6 +29,28 @@ describe("strict staging convergence gates", () => {
     ));
     requiredWorkflowVariables.delete("RELEASE_MANIFEST_PATH");
     for (const name of requiredWorkflowVariables) expect(workflow).toContain(`${name}:`);
+  });
+
+  it("normalizes legacy blank entries and keeps the private staging file owner-only", () => {
+    const directory = mkdtempSync(join(tmpdir(), "wevid-staging-init-"));
+    try {
+      const example = "DEPLOY_ENV=staging # public|required\nSUPABASE_URL= # public|required\n";
+      const target = `${example}PRESERVED_VALUE=configured\n`;
+      writeFileSync(join(directory, ".env.staging.example"), example);
+      writeFileSync(join(directory, ".env.staging"), target, { mode: 0o644 });
+
+      const result = spawnSync(process.execPath, [fileURLToPath(new URL("./staging-init.mjs", import.meta.url))], {
+        cwd: directory,
+        encoding: "utf8"
+      });
+
+      expect(result.status).toBe(0);
+      expect(readFileSync(join(directory, ".env.staging"), "utf8")).toContain('SUPABASE_URL="" # public|required');
+      expect(readFileSync(join(directory, ".env.staging"), "utf8")).toContain("PRESERVED_VALUE=configured");
+      expect(statSync(join(directory, ".env.staging")).mode & 0o777).toBe(0o600);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("reports every missing configuration group and rejects unsafe staging values", () => {

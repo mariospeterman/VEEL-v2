@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdtempSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   symlinkSync
@@ -16,6 +17,7 @@ const supabaseBin = resolve("node_modules/.bin/supabase");
 const supabaseConfig = resolve("supabase/config.toml");
 const supabaseTempDir = resolve("supabase/.temp");
 const canonicalMigrationsDir = resolve("packages/database/migrations");
+const linkedProjectRefPath = resolve(supabaseTempDir, "project-ref");
 
 if (!existsSync(supabaseBin)) {
   console.error("Local Supabase CLI was not found. Run pnpm install first.");
@@ -54,6 +56,24 @@ const resolveDatabaseUrl = () => {
   return databaseUrl;
 };
 
+const resolveConnectionArgs = () => {
+  if (process.env.SUPABASE_MIGRATIONS_DB_URL || process.env.SUPABASE_DIRECT_DB_URL) {
+    return ["--db-url", resolveDatabaseUrl()];
+  }
+
+  const projectRef = process.env.SUPABASE_PROJECT_REF;
+  if (!projectRef || !process.env.SUPABASE_ACCESS_TOKEN) {
+    console.error("Set an explicit Supabase migration URL, or provide SUPABASE_PROJECT_REF and SUPABASE_ACCESS_TOKEN for the linked Management API path.");
+    process.exit(1);
+  }
+  if (!existsSync(linkedProjectRefPath) || readFileSync(linkedProjectRefPath, "utf8").trim() !== projectRef) {
+    console.error("The Supabase CLI project is not linked to SUPABASE_PROJECT_REF. Run pnpm supabase:link first.");
+    process.exit(1);
+  }
+
+  return ["--linked"];
+};
+
 const args = process.argv.slice(2).flatMap((arg) => {
   if (arg === "--project-ref-env") {
     const projectRef = process.env.SUPABASE_PROJECT_REF;
@@ -66,6 +86,10 @@ const args = process.argv.slice(2).flatMap((arg) => {
 
   if (arg === "--db-url-env") {
     return ["--db-url", resolveDatabaseUrl()];
+  }
+
+  if (arg === "--connection-env") {
+    return resolveConnectionArgs();
   }
 
   return [arg];

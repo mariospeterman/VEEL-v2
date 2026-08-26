@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { constants } from "node:fs";
-import { copyFile, readFile } from "node:fs/promises";
+import { chmod, copyFile, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { stagingCapabilities } from "./staging-config.mjs";
 
@@ -15,6 +15,14 @@ try {
   if (error?.code !== "EEXIST") throw error;
   console.log("Kept existing .env.staging unchanged.");
 }
+
+const current = await readFile(target, "utf8");
+const normalized = current.replace(/^([A-Z][A-Z0-9_]*)= #/gm, '$1="" #');
+if (normalized !== current) {
+  await writeFile(target, normalized, "utf8");
+  console.log("Normalized legacy blank staging entries without changing configured values.");
+}
+await chmod(target, 0o600);
 
 for (const capability of stagingCapabilities) {
   const exposure = [...new Set(capability.variables.map((entry) => entry.exposure))].join("+");
