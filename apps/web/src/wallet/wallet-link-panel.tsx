@@ -52,6 +52,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
         .sort((left, right) => walletSortRank(left) - walletSortRank(right)),
     [wallets]
   );
+  const hasDetectedWallets = mounted && detectedWallets.length > 0;
 
   useEffect(() => {
     setMounted(true);
@@ -111,15 +112,20 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
 
       if (!wallet || wallet.adapter.name !== selectedWallet.adapter.name) {
         select(selectedWallet.adapter.name);
-        return;
       }
 
-      if (connected && publicKey) {
-        void completeConnectedWallet(selectedWallet);
-        return;
+      if (!selectedWallet.adapter.connected) {
+        connectionAttemptRef.current = selectedWallet.adapter.name;
+        try {
+          await selectedWallet.adapter.connect();
+        } finally {
+          if (connectionAttemptRef.current === selectedWallet.adapter.name) {
+            connectionAttemptRef.current = null;
+          }
+        }
       }
 
-      void connectSelectedWallet();
+      await completeConnectedWallet(selectedWallet);
     } catch {
       setAwaitingWallet(false);
       setState("error");
@@ -171,11 +177,15 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
     try {
       const walletProvider = providerForWallet(selectedWallet);
 
-      if (!signMessage) {
+      const adapterSignMessage = "signMessage" in selectedWallet.adapter && typeof selectedWallet.adapter.signMessage === "function"
+        ? selectedWallet.adapter.signMessage.bind(selectedWallet.adapter)
+        : signMessage;
+
+      if (!adapterSignMessage) {
         throw new ApiMutationError(`${selectedWallet.adapter.name} is connected but does not expose message signing.`);
       }
 
-      const address = publicKey?.toString();
+      const address = selectedWallet.adapter.publicKey?.toString() ?? publicKey?.toString();
 
       if (!address) {
         throw new ApiMutationError("Wallet did not return a public address.");
@@ -189,7 +199,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
           provider: walletProvider,
           purpose: authPurpose,
           signal: attempt.controller.signal,
-          signMessage: (message) => signMessage(new TextEncoder().encode(message))
+          signMessage: (message) => adapterSignMessage(new TextEncoder().encode(message))
         });
         if (!isCurrentAuthAttempt(attempt.id)) return;
         const appSession = await getCurrentSession();
@@ -212,7 +222,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
         provider: walletProvider
       });
       if (!isCurrentAuthAttempt(attempt.id)) return;
-      const signature = await signMessage(new TextEncoder().encode(challenge.message));
+      const signature = await adapterSignMessage(new TextEncoder().encode(challenge.message));
       if (!isCurrentAuthAttempt(attempt.id)) return;
 
       await linkWallet({
@@ -308,7 +318,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
         </div>
       )}
 
-      {!loginSimple && mounted && detectedWallets.length > 0 && (
+      {!loginSimple && hasDetectedWallets && (
         <div className="auth-wallet-detected" aria-label="Detected wallet support">
           <p>Detected</p>
           <div>
@@ -354,7 +364,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
             }) : null}
             {children}
             <button
-              aria-label={detectedWallets.length === 0 ? authPurpose === "login" ? "Choose a wallet" : "Choose an external wallet" : "More wallet options"}
+              aria-label={!hasDetectedWallets ? authPurpose === "login" ? "Choose a wallet" : "Choose an external wallet" : "More wallet options"}
               className="auth-provider-button auth-provider-button-secondary"
               disabled={state === "linking" || connecting}
               onClick={startWalletFlow}
@@ -363,8 +373,8 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
             >
               <ProviderLogo label="Wallet options" name="wallet" />
               <span>
-                <strong>{detectedWallets.length === 0 ? "Choose wallet" : "More wallets"}</strong>
-                <small>{state === "linking" || connecting ? "Waiting" : detectedWallets.length === 0 ? "View available wallets" : "Open wallet list"}</small>
+                <strong>{!hasDetectedWallets ? "Choose wallet" : "More wallets"}</strong>
+                <small>{state === "linking" || connecting ? "Waiting" : !hasDetectedWallets ? "View available wallets" : "Open wallet list"}</small>
               </span>
             </button>
           </div>

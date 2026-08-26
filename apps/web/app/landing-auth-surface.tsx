@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ComponentType, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { safeMutationMessage } from "@/api-errors";
 import {
   ApiMutationError,
@@ -10,22 +10,14 @@ import {
   uploadMyProfileAvatar
 } from "@/api-mutations";
 import type { WebAuthState } from "@/supabase/auth-state";
-import { ProviderLogo } from "@/brand/provider-logo";
 import { SupabaseAuthPanel } from "@/supabase/supabase-auth-panel";
 import type { WalletAuthPurpose } from "@/wallet/backend-wallet-auth";
+import { LandingWalletRuntime } from "./landing-wallet-runtime";
 import {
   consumeExpectedOnboardingJourneyExit,
   markOnboardingJourneyHandoff,
   recordOnboardingEvent
 } from "@/analytics/onboarding-analytics";
-
-type LandingWalletRuntimeProps = {
-  autoStart?: boolean;
-  authState: WebAuthState;
-  purpose: WalletAuthPurpose;
-  onAccountNotFound?: (() => void) | undefined;
-  onLinked?: ((address: string) => void) | undefined;
-};
 
 const onboardingSteps = [
   {
@@ -170,67 +162,7 @@ function LandingWalletList({ authState, onAccountNotFound, onLinked, purpose }: 
   onLinked?: ((address: string) => void) | undefined;
   purpose: WalletAuthPurpose;
 }) {
-  const [runtime, setRuntime] = useState<ComponentType<LandingWalletRuntimeProps> | null>(null);
-  const [runtimeError, setRuntimeError] = useState<string | null>(null);
-  const [runtimeAttempt, setRuntimeAttempt] = useState(0);
-  const [autoStart, setAutoStart] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void import("./landing-wallet-runtime")
-      .then((module) => {
-        if (!cancelled) {
-          setRuntime(() => module.LandingWalletRuntime);
-          recordOnboardingEvent("wallet_runtime_ready");
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setRuntimeError("Sign-in options could not load. Refresh and try again.");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [runtimeAttempt]);
-
-  if (runtime) {
-    const Runtime = runtime;
-    return <Runtime authState={authState} autoStart={autoStart} onAccountNotFound={onAccountNotFound} onLinked={onLinked} purpose={purpose} />;
-  }
-
-  return (
-    <div className="landing-wallet-runtime" aria-label="Sign-in options">
-      {!runtimeError ? (
-        <>
-          <button
-            aria-describedby="wallet-runtime-status"
-            className="auth-provider-button"
-            disabled={autoStart}
-            onClick={() => {
-              setAutoStart(true);
-            }}
-            type="button"
-          >
-            <ProviderLogo label={purpose === "login" ? "Choose a wallet" : "Choose an external wallet"} name="wallet" />
-            <span><strong>{autoStart ? "Opening wallet" : purpose === "login" ? "Choose wallet" : "Choose external wallet"}</strong></span>
-          </button>
-          <p className="sr-only" id="wallet-runtime-status" role="status">
-            {autoStart ? "Opening wallet connection" : "Wallet connection ready"}
-          </p>
-        </>
-      ) : null}
-      {runtimeError ? (
-        <div className="landing-wallet-retry">
-          <p className="landing-auth-error">{runtimeError}</p>
-          <button className="auth-provider-button" onClick={() => {
-            setRuntimeError(null);
-            setRuntimeAttempt((attempt) => attempt + 1);
-          }} type="button">Retry wallet connection</button>
-        </div>
-      ) : null}
-    </div>
-  );
+  return <LandingWalletRuntime authState={authState} onAccountNotFound={onAccountNotFound} onLinked={onLinked} purpose={purpose} />;
 }
 
 function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {

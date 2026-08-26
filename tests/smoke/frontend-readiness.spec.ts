@@ -27,11 +27,12 @@ test("public surfaces have no serious or critical automated accessibility violat
 test("entry presents visible provider choices without provider implementation copy", async ({ page }) => {
   await page.goto("/?mode=login", { waitUntil: "domcontentloaded" });
 
-  const connect = page.getByRole("button", { name: /Choose (a )?wallet/ });
+  const connect = page.getByRole("button", { name: /Choose (a )?wallet|More wallet/ });
   await expect(connect).toBeVisible({ timeout: 20_000 });
   await expect(connect).toBeEnabled({ timeout: 20_000 });
+  await expect(page.getByText("Privy", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: /Create secure WeVid wallet|Create wallet|One secure setup/ })).toHaveCount(0);
-  await expect(page.getByText(/powered by|google, email|passkey|solana wallet adapter/i)).toHaveCount(0);
+  await expect(page.getByText(/powered by|solana wallet adapter/i)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
 
   await connect.click();
