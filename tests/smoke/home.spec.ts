@@ -73,7 +73,9 @@ test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Continue to WeVid." })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByRole("button", { name: /Choose (a )?wallet|More wallet/ })).toBeEnabled({ timeout: 20_000 });
   await expect(page.getByRole("button", { name: /Create secure WeVid wallet|Create wallet|One secure setup/ })).toHaveCount(0);
-  await expect(page.getByText("Privy", { exact: true })).toBeVisible();
+  const walletRuntime = page.getByLabel("Wallet sign in");
+  const embeddedConfigured = await walletRuntime.getAttribute("data-embedded") === "true";
+  await expect(page.getByText("Privy", { exact: true })).toHaveCount(embeddedConfigured ? 1 : 0);
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
