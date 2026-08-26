@@ -17,39 +17,65 @@ export async function createBackendWalletSession({
   address,
   provider,
   purpose,
+  signal,
   signMessage
 }: {
   address: string;
   provider: WalletAuthProvider;
   purpose: WalletAuthPurpose;
+  signal?: AbortSignal | undefined;
   signMessage: (message: string) => Promise<Uint8Array>;
 }) {
   const chain = walletChain();
-  const challenge = await createWalletAuthChallenge({
-    address,
-    chain,
-    provider,
-    purpose
-  });
-  const signature = await signMessage(challenge.message);
-  const session = await createWalletAuthSession({
-    address,
-    chain,
-    provider,
-    purpose,
-    proof: {
-      challengeId: challenge.id,
-      message: challenge.message,
-      signature: bytesToBase64(signature),
-      signatureEncoding: "base64"
-    }
-  });
+  const challenge = await abortable(
+    createWalletAuthChallenge({
+      address,
+      chain,
+      provider,
+      purpose
+    }),
+    signal
+  );
+  const signature = await abortable(signMessage(challenge.message), signal);
+  const session = await abortable(
+    createWalletAuthSession({
+      address,
+      chain,
+      provider,
+      purpose,
+      proof: {
+        challengeId: challenge.id,
+        message: challenge.message,
+        signature: bytesToBase64(signature),
+        signatureEncoding: "base64"
+      }
+    }),
+    signal
+  );
 
   recordOnboardingEvent("wallet_authentication_completed");
   recordOnboardingEvent("wallet_ownership_verified");
   if (purpose === "login") recordOnboardingEvent("returning_login_completed");
 
   return session;
+}
+
+function abortable<T>(operation: Promise<T>, signal?: AbortSignal) {
+  if (!signal) return operation;
+  if (signal.aborted) return Promise.reject(walletFlowCancelledError());
+
+  return new Promise<T>((resolve, reject) => {
+    const cancel = () => reject(walletFlowCancelledError());
+    signal.addEventListener("abort", cancel, { once: true });
+
+    operation.then(resolve, reject).finally(() => {
+      signal.removeEventListener("abort", cancel);
+    });
+  });
+}
+
+function walletFlowCancelledError() {
+  return new DOMException("Wallet sign-in was cancelled.", "AbortError");
 }
 
 export function walletChain(): WalletChain {

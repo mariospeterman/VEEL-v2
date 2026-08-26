@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { WalletReadyState } from "@solana/wallet-adapter-base";
 import { useWallet, type Wallet } from "@solana/wallet-adapter-react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
@@ -22,6 +22,7 @@ type ExternalWalletProvider = LinkWalletRequest["provider"];
 interface WalletLinkPanelProps {
   authState: WebAuthState;
   autoStart?: boolean;
+  children?: ReactNode;
   compact?: boolean;
   loginSimple?: boolean;
   authPurpose?: WalletAuthPurpose;
@@ -30,8 +31,8 @@ interface WalletLinkPanelProps {
   reloadOnSession?: boolean;
 }
 
-export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "login", compact = false, loginSimple = false, onAccountNotFound, onLinked, reloadOnSession = true }: WalletLinkPanelProps) {
-  const { connect, connected, connecting, disconnect, publicKey, signMessage, wallet, wallets } = useWallet();
+export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "login", children, compact = false, loginSimple = false, onAccountNotFound, onLinked, reloadOnSession = true }: WalletLinkPanelProps) {
+  const { connect, connected, connecting, disconnect, publicKey, select, signMessage, wallet, wallets } = useWallet();
   const { setVisible: setWalletModalVisible } = useWalletModal();
   const [mounted, setMounted] = useState(false);
   const [awaitingWallet, setAwaitingWallet] = useState(false);
@@ -40,17 +41,24 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
   const [linkedAddress, setLinkedAddress] = useState<string | null>(null);
   const primaryButtonRef = useRef<HTMLButtonElement | null>(null);
   const autoStartHandledRef = useRef(false);
+  const connectionAttemptRef = useRef<string | null>(null);
+  const authAttemptRef = useRef<{ controller: AbortController; id: number; timeout: number } | null>(null);
+  const authAttemptIdRef = useRef(0);
 
   const detectedWallets = useMemo(
     () =>
       wallets
         .filter((wallet) => wallet.readyState !== WalletReadyState.Unsupported)
-        .map((wallet) => ({ label: wallet.adapter.name, provider: providerForWallet(wallet) })),
+        .sort((left, right) => walletSortRank(left) - walletSortRank(right)),
     [wallets]
   );
 
   useEffect(() => {
     setMounted(true);
+
+    return () => {
+      cancelAuthAttempt();
+    };
   }, []);
 
   useEffect(() => {
@@ -69,14 +77,16 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
       return;
     }
 
-    if (!connecting) {
+    if (!connecting && connectionAttemptRef.current !== wallet.adapter.name) {
       void connectSelectedWallet();
     }
   }, [awaitingWallet, connected, connecting, publicKey, state, wallet]);
 
   function startWalletFlow() {
     recordOnboardingEvent("auth_method_selected", `external-${authPurpose}`);
+    cancelAuthAttempt();
     setMessage(null);
+    setState("idle");
     setAwaitingWallet(true);
 
     if (!connected || !publicKey || !wallet) {
@@ -87,22 +97,38 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
     void completeConnectedWallet(wallet);
   }
 
-  async function chooseAnotherWallet() {
+  async function chooseWallet(selectedWallet: Wallet) {
+    recordOnboardingEvent("auth_method_selected", `external-${authPurpose}`);
+    cancelAuthAttempt();
     setMessage(null);
+    setState("idle");
     setAwaitingWallet(true);
 
     try {
-      if (connected) {
+      if (wallet && wallet.adapter.name !== selectedWallet.adapter.name && connected) {
         await disconnect();
       }
+
+      if (!wallet || wallet.adapter.name !== selectedWallet.adapter.name) {
+        select(selectedWallet.adapter.name);
+        return;
+      }
+
+      if (connected && publicKey) {
+        void completeConnectedWallet(selectedWallet);
+        return;
+      }
+
+      void connectSelectedWallet();
     } catch {
-      // Continue into the modal; the adapter can still present available wallets.
-    } finally {
-      setWalletModalVisible(true);
+      setAwaitingWallet(false);
+      setState("error");
+      setMessage("That wallet could not be selected. Unlock it and try again.");
     }
   }
 
   async function disconnectWallet() {
+    cancelAuthAttempt();
     setMessage(null);
     setAwaitingWallet(false);
 
@@ -118,18 +144,29 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
   }
 
   async function connectSelectedWallet() {
+    const selectedWalletName = wallet?.adapter.name;
+    if (!selectedWalletName || connectionAttemptRef.current === selectedWalletName) return;
+    connectionAttemptRef.current = selectedWalletName;
+
     try {
       await connect();
     } catch (error) {
       setAwaitingWallet(false);
       setState("error");
       setMessage(walletMutationMessage(error));
+    } finally {
+      if (connectionAttemptRef.current === selectedWalletName) {
+        connectionAttemptRef.current = null;
+      }
     }
   }
 
   async function completeConnectedWallet(selectedWallet: Wallet) {
+    if (authAttemptRef.current) return;
+
+    const attempt = beginAuthAttempt();
     setState("linking");
-    setMessage(null);
+    setMessage("Check your wallet and sign the ownership message. No payment is requested.");
 
     try {
       const walletProvider = providerForWallet(selectedWallet);
@@ -151,9 +188,12 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
           address,
           provider: walletProvider,
           purpose: authPurpose,
+          signal: attempt.controller.signal,
           signMessage: (message) => signMessage(new TextEncoder().encode(message))
         });
+        if (!isCurrentAuthAttempt(attempt.id)) return;
         const appSession = await getCurrentSession();
+        if (!isCurrentAuthAttempt(attempt.id)) return;
 
         setLinkedAddress(address);
         setState("linked");
@@ -171,7 +211,9 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
         chain,
         provider: walletProvider
       });
+      if (!isCurrentAuthAttempt(attempt.id)) return;
       const signature = await signMessage(new TextEncoder().encode(challenge.message));
+      if (!isCurrentAuthAttempt(attempt.id)) return;
 
       await linkWallet({
         address,
@@ -184,6 +226,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
           signatureEncoding: "base64"
         }
       });
+      if (!isCurrentAuthAttempt(attempt.id)) return;
 
       setLinkedAddress(address);
       setState("linked");
@@ -191,6 +234,15 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
       setMessage("Wallet linked. Access still depends on backend age and policy state.");
       onLinked?.(address);
     } catch (error) {
+      if (isWalletFlowCancellation(error)) {
+        if (isCurrentAuthAttempt(attempt.id)) {
+          setAwaitingWallet(false);
+          setState("idle");
+          setMessage("Wallet sign-in stopped. Choose a method when you are ready.");
+        }
+        return;
+      }
+
       setAwaitingWallet(false);
       if (error instanceof ApiMutationError && error.status === 404 && authPurpose === "login") {
         setState("account_not_found");
@@ -199,7 +251,39 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
       }
       setState("error");
       setMessage(walletMutationMessage(error));
+    } finally {
+      finishAuthAttempt(attempt.id);
     }
+  }
+
+  function beginAuthAttempt() {
+    cancelAuthAttempt();
+    const id = authAttemptIdRef.current + 1;
+    authAttemptIdRef.current = id;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 45_000);
+    const attempt = { controller, id, timeout };
+    authAttemptRef.current = attempt;
+    return attempt;
+  }
+
+  function cancelAuthAttempt() {
+    const attempt = authAttemptRef.current;
+    if (!attempt) return;
+    window.clearTimeout(attempt.timeout);
+    attempt.controller.abort();
+    authAttemptRef.current = null;
+  }
+
+  function finishAuthAttempt(id: number) {
+    const attempt = authAttemptRef.current;
+    if (!attempt || attempt.id !== id) return;
+    window.clearTimeout(attempt.timeout);
+    authAttemptRef.current = null;
+  }
+
+  function isCurrentAuthAttempt(id: number) {
+    return authAttemptRef.current?.id === id;
   }
 
   return (
@@ -229,7 +313,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
           <p>Detected</p>
           <div>
             {detectedWallets.map((wallet) => (
-              <span key={`${wallet.provider}-${wallet.label}`}>{wallet.label}</span>
+              <span key={wallet.adapter.name}>{wallet.adapter.name}</span>
             ))}
           </div>
         </div>
@@ -247,49 +331,51 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
       {loginSimple ? (
         <>
           <div className="auth-provider-button-grid auth-provider-button-grid-wallets" aria-label="Wallet login providers">
+            {mounted ? detectedWallets.map((detectedWallet) => {
+              const active = wallet?.adapter.name === detectedWallet.adapter.name;
+              const busy = active && (state === "linking" || connecting);
+
+              return (
+                <button
+                  aria-label={`${authPurpose === "login" ? "Continue" : "Set up"} with ${detectedWallet.adapter.name}`}
+                  className={`auth-provider-button${active ? " auth-provider-button-active" : ""}`}
+                  disabled={busy}
+                  key={detectedWallet.adapter.name}
+                  onClick={() => void chooseWallet(detectedWallet)}
+                  type="button"
+                >
+                  <ProviderLogo label={detectedWallet.adapter.name} name={logoForWallet(detectedWallet)} />
+                  <span>
+                    <strong>{detectedWallet.adapter.name}</strong>
+                    <small>{busy ? state === "linking" ? "Check wallet" : "Opening" : active && publicKey ? shortWalletAddress(publicKey.toString()) : "Connect and sign"}</small>
+                  </span>
+                </button>
+              );
+            }) : null}
+            {children}
             <button
-              aria-label={connected && publicKey ? "Continue with connected wallet" : authPurpose === "login" ? "Use an existing wallet" : "Use an external wallet"}
-              className="auth-provider-button"
+              aria-label={detectedWallets.length === 0 ? authPurpose === "login" ? "Choose a wallet" : "Choose an external wallet" : "More wallet options"}
+              className="auth-provider-button auth-provider-button-secondary"
               disabled={state === "linking" || connecting}
               onClick={startWalletFlow}
               ref={primaryButtonRef}
               type="button"
             >
-              <ProviderLogo label="Connect wallet" name="wallet" />
+              <ProviderLogo label="Wallet options" name="wallet" />
               <span>
-                <strong>{connected && publicKey ? "Continue" : authPurpose === "login" ? "Use an existing wallet" : "Use an external wallet"}</strong>
-                <small>{state === "linking" || connecting ? "Waiting" : connected && publicKey ? shortWalletAddress(publicKey.toString()) : "Choose wallet"}</small>
+                <strong>{detectedWallets.length === 0 ? "Choose wallet" : "More wallets"}</strong>
+                <small>{state === "linking" || connecting ? "Waiting" : detectedWallets.length === 0 ? "View available wallets" : "Open wallet list"}</small>
               </span>
             </button>
-            {connected ? (
-              <>
-                <button
-                  className="auth-provider-button auth-provider-button-secondary"
-                  disabled={state === "linking" || connecting}
-                  onClick={() => void chooseAnotherWallet()}
-                  type="button"
-                >
-                  <ProviderLogo label="Choose another wallet" name="wallet" />
-                  <span>
-                    <strong>Switch</strong>
-                    <small>Choose another</small>
-                  </span>
-                </button>
-                <button
-                  className="auth-provider-button auth-provider-button-secondary"
-                  disabled={state === "linking" || connecting}
-                  onClick={() => void disconnectWallet()}
-                  type="button"
-                >
-                  <ProviderLogo label="Disconnect wallet" name="wallet" />
-                  <span>
-                    <strong>Disconnect</strong>
-                    <small>Clear session</small>
-                  </span>
-                </button>
-              </>
-            ) : null}
           </div>
+          {connected || state === "linking" ? (
+            <div className="auth-wallet-session-actions">
+              <span>{wallet ? `${wallet.adapter.name}${publicKey ? ` · ${shortWalletAddress(publicKey.toString())}` : ""}` : "Wallet request active"}</span>
+              <button onClick={() => void disconnectWallet()} type="button">
+                {state === "linking" ? "Stop and disconnect" : "Disconnect"}
+              </button>
+            </div>
+          ) : null}
         </>
       ) : (
         <button
@@ -350,6 +436,21 @@ function walletNameIncludes(wallet: Wallet, value: string) {
   return wallet.adapter.name.toLowerCase().includes(value);
 }
 
+function logoForWallet(wallet: Wallet): "backpack" | "phantom" | "solflare" | "wallet" {
+  if (walletNameIncludes(wallet, "backpack")) return "backpack";
+  if (walletNameIncludes(wallet, "phantom")) return "phantom";
+  if (walletNameIncludes(wallet, "solflare")) return "solflare";
+  return "wallet";
+}
+
+function walletSortRank(wallet: Wallet) {
+  const logo = logoForWallet(wallet);
+  if (logo === "phantom") return 0;
+  if (logo === "backpack") return 1;
+  if (logo === "solflare") return 2;
+  return 3;
+}
+
 function providerForWallet(wallet: Wallet | null): ExternalWalletProvider {
   if (!wallet) {
     return "wallet_adapter";
@@ -388,6 +489,10 @@ function walletMutationMessage(error: unknown) {
   }
 
   return safeMutationMessage(error, "Wallet connection");
+}
+
+function isWalletFlowCancellation(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

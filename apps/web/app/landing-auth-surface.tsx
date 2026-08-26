@@ -212,8 +212,8 @@ function LandingWalletList({ authState, onAccountNotFound, onLinked, purpose }: 
             }}
             type="button"
           >
-            <ProviderLogo label={purpose === "login" ? "Use an existing wallet" : "Use an external wallet"} name="wallet" />
-            <span><strong>{autoStart ? "Opening wallet" : purpose === "login" ? "Use an existing wallet" : "Use an external wallet"}</strong></span>
+            <ProviderLogo label={purpose === "login" ? "Choose a wallet" : "Choose an external wallet"} name="wallet" />
+            <span><strong>{autoStart ? "Opening wallet" : purpose === "login" ? "Choose wallet" : "Choose external wallet"}</strong></span>
           </button>
           <p className="sr-only" id="wallet-runtime-status" role="status">
             {autoStart ? "Opening wallet connection" : "Wallet connection ready"}

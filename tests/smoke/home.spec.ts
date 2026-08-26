@@ -71,7 +71,7 @@ test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await page.goto("/?mode=login", { waitUntil: "domcontentloaded", timeout: 20_000 });
 
   await expect(page.getByRole("heading", { name: "Continue to WeVid." })).toBeVisible({ timeout: 5_000 });
-  await expect(page.getByRole("button", { name: "Use an existing wallet" })).toBeEnabled({ timeout: 5_000 });
+  await expect(page.getByRole("button", { name: /Choose (a )?wallet/ })).toBeEnabled({ timeout: 20_000 });
   await expect(page.getByRole("button", { name: /Create secure WeVid wallet|Create wallet|One secure setup/ })).toHaveCount(0);
   await expect(page.getByText("Privy", { exact: true })).toHaveCount(0);
 
@@ -80,7 +80,7 @@ test("renders inline login and onboarding entry surfaces", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Continue to WeVid." })).toBeVisible({ timeout: 5_000 });
   await expect(page.getByText(/powered by|google, email|passkey|solana wallet adapter/i)).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Use an external wallet" }).click();
+  await page.getByRole("button", { name: "Choose an external wallet" }).click();
   await expect(page.getByRole("dialog", { name: /wallet.*Solana|need a wallet/i })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Continue to WeVid." })).toBeVisible();
 });

@@ -49,7 +49,7 @@ export function EmbeddedWalletLauncher({
         <ProviderLogo label={label} name="privy" />
         <span>
           <strong>{label}</strong>
-          <small>{state === "loading" ? "Opening" : purpose === "login" ? "Existing account" : "One secure setup"}</small>
+          <small>{state === "loading" ? "Opening" : purpose === "login" ? "Email · social · passkey" : "Secure embedded wallet"}</small>
         </span>
       </button>
       {state === "error" ? (

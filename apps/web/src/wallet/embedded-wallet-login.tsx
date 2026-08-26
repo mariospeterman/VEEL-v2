@@ -141,7 +141,7 @@ export function EmbeddedWalletLoginButton({
       message={message}
       onClick={start}
       secondary={secondary}
-      status={state === "working" ? "Opening" : "Connect and sign"}
+      status={state === "working" ? "Opening" : purpose === "login" ? "Email · social · passkey" : "Secure embedded wallet"}
       tone={state === "error" ? "error" : "muted"}
       />
       {state === "account_not_found" && onAccountNotFound ? (
