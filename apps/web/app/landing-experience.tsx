@@ -40,7 +40,7 @@ export function LandingExperience({
 }: LandingEntryState) {
   const [authMode, setAuthMode] = useState<Exclude<LandingEntryMode, null> | null>(initialMode);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const authOpenerRef = useRef<HTMLElement | null>(null);
+  const authOpenerKeyRef = useRef<string | null>(null);
   const publicAuthState = useMemo<WebAuthState>(
     () => ({ authenticated: false, configured: true, email: null }),
     []
@@ -48,7 +48,7 @@ export function LandingExperience({
 
   const openContinue = useCallback((source: string) => {
     recordOnboardingEvent("landing_cta_clicked", source);
-    authOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    authOpenerKeyRef.current = source;
     setMobileMenuOpen(false);
     setAuthMode("login");
   }, []);
@@ -85,7 +85,14 @@ export function LandingExperience({
 
   const closeAuth = useCallback(() => {
     setAuthMode(null);
-    window.requestAnimationFrame(() => authOpenerRef.current?.focus());
+    window.requestAnimationFrame(() => {
+      const key = authOpenerKeyRef.current;
+      const source = [...document.querySelectorAll<HTMLElement>("[data-landing-auth-opener]")]
+        .find((element) => element.dataset.landingAuthOpener === key && element.getClientRects().length > 0);
+      const fallback = [...document.querySelectorAll<HTMLElement>("[data-landing-auth-opener]")]
+        .find((element) => element.getClientRects().length > 0);
+      (source ?? fallback)?.focus();
+    });
   }, []);
 
   if (authMode) {
@@ -142,7 +149,7 @@ export function LandingExperience({
             </a>
           ))}
         </nav>
-        <button className="landing-header-cta" onClick={() => openContinue("header")} type="button">
+        <button className="landing-header-cta" data-landing-auth-opener="header" onClick={() => openContinue("header")} type="button">
           Continue <ArrowRight aria-hidden="true" size={16} />
         </button>
         <button
@@ -167,7 +174,7 @@ export function LandingExperience({
               {item.label}<ArrowRight aria-hidden="true" size={16} />
             </a>
           ))}
-          <button onClick={() => openContinue("mobile-menu")} type="button">Continue to WeVid</button>
+          <button data-landing-auth-opener="mobile-menu" onClick={() => openContinue("mobile-menu")} type="button">Continue to WeVid</button>
         </div>
       </header>
 
@@ -182,7 +189,7 @@ export function LandingExperience({
             <h1>{landingContent.hero.title}</h1>
             <p className="landing-hero-copy">{landingContent.hero.copy}</p>
             <div className="landing-hero-actions">
-              <button className="landing-primary-button" onClick={() => openContinue("hero")} type="button">
+              <button className="landing-primary-button" data-landing-auth-opener="hero" onClick={() => openContinue("hero")} type="button">
                 {landingContent.hero.primary}<ArrowRight aria-hidden="true" size={18} />
               </button>
               <a className="landing-secondary-button" href="#why">
@@ -347,7 +354,7 @@ export function LandingExperience({
         <section className="landing-final-cta" data-landing-section="final-cta">
           <p className="landing-eyebrow">YOUR NEXT MOVE</p>
           <h2>Build where the relationship can compound.</h2>
-          <button className="landing-primary-button" onClick={() => openContinue("final")} type="button">
+          <button className="landing-primary-button" data-landing-auth-opener="final" onClick={() => openContinue("final")} type="button">
             Continue to WeVid<ArrowRight aria-hidden="true" />
           </button>
           <p>One entry. Existing accounts continue. New people choose onboarding first.</p>
