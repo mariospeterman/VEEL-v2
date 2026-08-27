@@ -44,8 +44,6 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
   const connectionAttemptRef = useRef<string | null>(null);
   const authAttemptRef = useRef<{ controller: AbortController; id: number; timeout: number } | null>(null);
   const authAttemptIdRef = useRef(0);
-  const walletRuntimeRef = useRef({ connect, wallet });
-  walletRuntimeRef.current = { connect, wallet };
 
   const detectedWallets = useMemo(
     () =>
@@ -113,17 +111,15 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
         await disconnect();
       }
 
-      let activeWallet = selectedWallet;
       if (!wallet || wallet.adapter.name !== selectedWallet.adapter.name) {
         select(selectedWallet.adapter.name);
-        activeWallet = await waitForSelectedWallet(selectedWallet.adapter.name);
       }
 
-      if (!activeWallet.adapter.connected) {
-        await walletRuntimeRef.current.connect();
+      if (!selectedWallet.adapter.connected) {
+        await selectedWallet.adapter.connect();
       }
 
-      await completeConnectedWallet(activeWallet);
+      await completeConnectedWallet(selectedWallet);
     } catch {
       setAwaitingWallet(false);
       setState("error");
@@ -133,18 +129,6 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
         connectionAttemptRef.current = null;
       }
     }
-  }
-
-  async function waitForSelectedWallet(walletName: string) {
-    const deadline = Date.now() + 2_000;
-
-    while (Date.now() < deadline) {
-      const selected = walletRuntimeRef.current.wallet;
-      if (selected?.adapter.name === walletName) return selected;
-      await new Promise((resolve) => window.setTimeout(resolve, 10));
-    }
-
-    throw new ApiMutationError("Wallet selection did not become ready.");
   }
 
   async function disconnectWallet() {
