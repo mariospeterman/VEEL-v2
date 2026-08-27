@@ -15,6 +15,7 @@ import { ProviderLogo } from "@/brand/provider-logo";
 import { safeMutationMessage } from "@/api-errors";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { bytesToBase64, createBackendWalletSession, walletChain, type WalletAuthPurpose } from "./backend-wallet-auth";
+import { walletSupportsMessageSigning } from "./wallet-capabilities";
 import { recordOnboardingEvent } from "@/analytics/onboarding-analytics";
 
 type ExternalWalletProvider = LinkWalletRequest["provider"];
@@ -51,6 +52,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
     () =>
       wallets
         .filter((wallet) => wallet.readyState !== WalletReadyState.Unsupported)
+        .filter(walletSupportsMessageSigning)
         .sort((left, right) => walletSortRank(left) - walletSortRank(right)),
     [wallets]
   );

@@ -37,7 +37,7 @@ Runtime:    Node.js LTS first; Bun evaluated later
 Deploy:     Docker first; serverless/edge only for proven slices
 ```
 
-Wallet onboarding presents one provider grid. Installed Solana Wallet Standard adapters are direct cards, the adapter chooser is a fallback, and configured Privy is a peer card whose official surface owns its email/social/passkey choices. Both paths sign the same WeVid backend challenge and converge on one application-session authority. Supabase remains Settings-only recovery. The embedded wallet mode must be noncustodial/user-controlled and must not create a WeVid-controlled balance. No second embedded-wallet runtime is part of the launch architecture.
+Wallet onboarding presents one provider grid. Installed Solana Wallet Standard adapters that advertise `solana:signMessage` are direct cards, transaction-only or otherwise incompatible adapters remain in the adapter chooser fallback, and configured Privy is a peer card whose official surface owns its email/social/passkey choices. Both authentication paths sign the same WeVid backend challenge and converge on one application-session authority. Supabase remains Settings-only recovery. The embedded wallet mode must be noncustodial/user-controlled and must not create a WeVid-controlled balance. No second embedded-wallet runtime is part of the launch architecture.
 
 ## Official Documentation Checked
 
