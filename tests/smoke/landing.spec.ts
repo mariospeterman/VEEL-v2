@@ -15,6 +15,7 @@ test("landing tells one honest creator story and keeps one Continue entry", asyn
 
   await page.getByRole("button", { name: "Continue to WeVid" }).first().click();
   await expect(page.locator(".landing-auth-page")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Continue to WeVid." })).toBeFocused();
   await expect(page.getByRole("dialog", { name: "Continue to WeVid." })).toHaveCount(0);
   await expect(page.getByText(/known accounts continue.*new identities move into onboarding/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /Choose (a )?wallet|More wallet/ })).toBeEnabled({ timeout: 20_000 });

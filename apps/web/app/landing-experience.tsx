@@ -41,6 +41,7 @@ export function LandingExperience({
   const [authMode, setAuthMode] = useState<Exclude<LandingEntryMode, null> | null>(initialMode);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const authOpenerKeyRef = useRef<string | null>(null);
+  const authTitleRef = useRef<HTMLHeadingElement | null>(null);
   const publicAuthState = useMemo<WebAuthState>(
     () => ({ authenticated: false, configured: true, email: null }),
     []
@@ -61,6 +62,7 @@ export function LandingExperience({
     if (!authMode) return;
     recordOnboardingEvent(authMode === "login" ? "login_opened" : "onboarding_opened");
     window.scrollTo({ top: 0 });
+    window.requestAnimationFrame(() => authTitleRef.current?.focus());
   }, [authMode]);
 
   useEffect(() => {
@@ -119,7 +121,7 @@ export function LandingExperience({
         <section className="landing-auth-stage" id="landing-auth-main">
           <div className="landing-auth-heading">
             <p>ONE CLEAN ENTRY</p>
-            <h1 id="landing-auth-title">Continue to WeVid.</h1>
+            <h1 id="landing-auth-title" ref={authTitleRef} tabIndex={-1}>Continue to WeVid.</h1>
             <span>Choose a wallet or Privy. Known accounts continue; new identities move into onboarding before a wallet or account is created.</span>
           </div>
           {initialAuthError ? <p className="landing-auth-error">{initialAuthError}</p> : null}

@@ -134,9 +134,10 @@ Yes, the platform supports controlled staging fixtures, but it intentionally doe
 2. Create each demo user through the real entry and three-step onboarding. Use the local mock age adapter only for local development; use the real staging age provider for acceptance.
 3. Read the resulting canonical WeVid user UUIDs from the operator/admin surface or a read-only database query.
 4. Set a unique `STAGING_FIXTURE_NAMESPACE` and map those existing UUIDs in `STAGING_FIXTURE_USERS_JSON` to the required roles (`platform_owner`, `trust_safety`, `finance`, `support`, `operations`, `compliance`, `readonly_auditor`).
-5. Run `pnpm staging:seed`. This grants controlled staff fixtures and records every created resource in the namespace ledger.
-6. Run `pnpm staging:acceptance`; it creates controlled content/provider fixtures through public contracts after real identity onboarding. Never insert demo auth users, entitlements, payments, or media state directly.
-7. Clean only that namespace with the exact `STAGING_CLEANUP_ACK=DELETE_FIXTURES:<namespace>` and `pnpm staging:cleanup`.
+5. Run `pnpm staging:seed`. This grants controlled staff memberships and records every created resource in the namespace ledger. It does not create demo media or provider state.
+6. Populate demo profiles and SFW content through the normal authenticated app/API using those test users. Use the Create workspace for uploads and the ordinary payment/live journeys for provider state so the same authorization, moderation, settlement, and audit rules are exercised. The repository does not currently provide an automated demo-content seeder; do not claim that `staging:acceptance` creates content.
+7. Run `pnpm staging:acceptance` to verify the populated environment. Never insert demo auth users, entitlements, payments, or media state directly.
+8. Clean only ledger-owned resources in that namespace with the exact `STAGING_CLEANUP_ACK=DELETE_FIXTURES:<namespace>` and `pnpm staging:cleanup`. Manually created demo content follows the normal authenticated deletion/moderation lifecycle and is not deleted by this command.
 
 ## 10. Ordered verification
 
