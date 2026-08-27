@@ -4,6 +4,8 @@ Status: code-complete orchestration; externally blocked until the staging accoun
 
 This is the operator packet for promoting one already-built WeVid release into the isolated staging environment. Staging is an environment, not a branch. Never put a secret or raw provider payload in an evidence identifier, workflow log, artifact manifest, or frontend runtime value. `.env.staging.example` is the canonical annotated variable contract and `scripts/staging-config.mjs` is the sole executable capability registry.
 
+Account creation, dashboard configuration, real `DATABASE_URL` selection, local mock-age use, and controlled demo-user/content setup are documented in `docs/v2-new-build/operator/provider-setup-and-demo-data.md`.
+
 ## 1. Owner actions
 
 The account owner must select the hosting target and authorize a GitHub OIDC trust for this repository and the `staging` GitHub Environment. Add the provider adapter only from that provider's current official deployment and OIDC documentation. Do not set `STAGING_DEPLOY_ENABLED=true` before the reviewed adapter exists.
