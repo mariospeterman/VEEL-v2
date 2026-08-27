@@ -43,6 +43,7 @@ test("entry presents visible provider choices without provider implementation co
 
 test("a detected wallet connects, signs, and enters onboarding from one provider click", async ({ page }) => {
   await installMockSolanaWallet(page, "Phantom");
+  const requestFailures = observeRequestFailures(page);
   let challengeRequests = 0;
   let sessionRequests = 0;
 
@@ -81,7 +82,7 @@ test("a detected wallet connects, signs, and enters onboarding from one provider
   try {
     await expect(page.getByLabel("Handle")).toBeVisible({ timeout: 20_000 });
   } catch (error) {
-    throw await walletFlowError(page, error);
+    throw await walletFlowError(page, error, { challengeRequests, requestFailures, sessionRequests });
   }
   expect(challengeRequests).toBe(1);
   expect(sessionRequests).toBe(1);
@@ -90,10 +91,13 @@ test("a detected wallet connects, signs, and enters onboarding from one provider
 
 test("a stalled wallet signature can be stopped without creating an account session", async ({ page }) => {
   await installMockSolanaWallet(page, "Phantom", true);
+  const requestFailures = observeRequestFailures(page);
+  let challengeRequests = 0;
   let sessionRequests = 0;
 
   await page.route("**/v1/auth/wallet/challenges", async (route) => {
     if (await fulfillCorsPreflight(route)) return;
+    challengeRequests += 1;
     await route.fulfill({
       contentType: "application/json",
       headers: corsHeaders(route),
@@ -120,7 +124,7 @@ test("a stalled wallet signature can be stopped without creating an account sess
   try {
     await expect(page.getByText(/check your wallet and sign the ownership message/i)).toBeVisible({ timeout: 20_000 });
   } catch (error) {
-    throw await walletFlowError(page, error);
+    throw await walletFlowError(page, error, { challengeRequests, requestFailures, sessionRequests });
   }
 
   const stop = page.getByRole("button", { name: "Stop and disconnect" });
@@ -289,10 +293,19 @@ async function installMockSolanaWallet(page: Page, name: string, pendingSignatur
   }, { keepSignaturePending: pendingSignature, walletName: name });
 }
 
-async function walletFlowError(page: Page, cause: unknown) {
+async function walletFlowError(
+  page: Page,
+  cause: unknown,
+  requests: {
+    challengeRequests: number;
+    requestFailures: Array<{ errorText: string | null; method: string; url: string }>;
+    sessionRequests: number;
+  }
+) {
   const diagnostic = {
     handleCount: await page.getByLabel("Handle").count(),
     message: await page.locator(".auth-wallet-message").textContent(),
+    requests,
     sessionActions: await page.locator(".auth-wallet-session-actions").textContent(),
     testState: await page.evaluate(() => (window as typeof window & {
       __wevidWalletTest?: { connect: number; sign: number };
@@ -300,6 +313,18 @@ async function walletFlowError(page: Page, cause: unknown) {
   };
   const message = cause instanceof Error ? cause.message : String(cause);
   return new Error(`${message}\nWallet flow diagnostic: ${JSON.stringify(diagnostic)}`, { cause });
+}
+
+function observeRequestFailures(page: Page) {
+  const failures: Array<{ errorText: string | null; method: string; url: string }> = [];
+  page.on("requestfailed", (request) => {
+    failures.push({
+      errorText: request.failure()?.errorText ?? null,
+      method: request.method(),
+      url: request.url()
+    });
+  });
+  return failures;
 }
 
 function corsHeaders(route: Route) {
