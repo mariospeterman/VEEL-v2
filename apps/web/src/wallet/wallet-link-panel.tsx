@@ -234,7 +234,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
         address,
         chain,
         provider: walletProvider
-      });
+      }, attempt.controller.signal);
       if (!isCurrentAuthAttempt(attempt.id)) return;
       const signature = await adapterSignMessage(new TextEncoder().encode(challenge.message));
       if (!isCurrentAuthAttempt(attempt.id)) return;
@@ -249,7 +249,7 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
           signature: bytesToBase64(signature),
           signatureEncoding: "base64"
         }
-      });
+      }, attempt.controller.signal);
       if (!isCurrentAuthAttempt(attempt.id)) return;
 
       setLinkedAddress(address);

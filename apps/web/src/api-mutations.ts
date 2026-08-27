@@ -278,15 +278,17 @@ export async function uploadMyProfileAvatar(
 }
 
 export async function createWalletAuthChallenge(
-  body: CreateWalletAuthChallengeRequest
+  body: CreateWalletAuthChallengeRequest,
+  signal?: AbortSignal
 ): Promise<WalletAuthChallenge> {
-  return publicMutation<WalletAuthChallenge>("/v1/auth/wallet/challenges", "POST", body);
+  return publicMutation<WalletAuthChallenge>("/v1/auth/wallet/challenges", "POST", body, signal);
 }
 
 export async function createWalletAuthSession(
-  body: CreateWalletAuthSessionRequest
+  body: CreateWalletAuthSessionRequest,
+  signal?: AbortSignal
 ): Promise<WalletAuthSession> {
-  return publicMutation<WalletAuthSession>("/v1/auth/wallet/sessions", "POST", body);
+  return publicMutation<WalletAuthSession>("/v1/auth/wallet/sessions", "POST", body, signal);
 }
 
 export async function recordOnboardingAnalyticsEvent(
@@ -326,13 +328,14 @@ export async function unlinkRecoveryIdentity(): Promise<ApplicationSessionExpiry
 }
 
 export async function createWalletLinkChallenge(
-  body: CreateWalletLinkChallengeRequest
+  body: CreateWalletLinkChallengeRequest,
+  signal?: AbortSignal
 ): Promise<WalletLinkChallenge> {
-  return authenticatedMutation<WalletLinkChallenge>("/v1/wallets/link-challenges", "POST", body);
+  return authenticatedMutation<WalletLinkChallenge>("/v1/wallets/link-challenges", "POST", body, undefined, signal);
 }
 
-export async function linkWallet(body: LinkWalletRequest): Promise<Wallet> {
-  return authenticatedMutation<Wallet>("/v1/wallets/link", "POST", body);
+export async function linkWallet(body: LinkWalletRequest, signal?: AbortSignal): Promise<Wallet> {
+  return authenticatedMutation<Wallet>("/v1/wallets/link", "POST", body, undefined, signal);
 }
 
 export async function createContentDraft(

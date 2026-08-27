@@ -33,7 +33,7 @@ export async function createBackendWalletSession({
       chain,
       provider,
       purpose
-    }),
+    }, signal),
     signal
   );
   const signature = await abortable(signMessage(challenge.message), signal);
@@ -49,7 +49,7 @@ export async function createBackendWalletSession({
         signature: bytesToBase64(signature),
         signatureEncoding: "base64"
       }
-    }),
+    }, signal),
     signal
   );
 
