@@ -59,13 +59,18 @@ export default defineConfig({
         name: "desktop-webkit",
         use: {
           ...devices["Desktop Safari"],
+          // Wallet API calls are page-routed test doubles. A registered PWA
+          // worker can consume them before Playwright's route handler in
+          // WebKit, so keep worker behavior in the dedicated Chromium PWA test.
+          serviceWorkers: "block",
           viewport: { width: 1440, height: 1000 }
         }
       },
       {
         name: "mobile-webkit",
         use: {
-          ...devices["iPhone 13"]
+          ...devices["iPhone 13"],
+          serviceWorkers: "block"
         }
       }
     ])
