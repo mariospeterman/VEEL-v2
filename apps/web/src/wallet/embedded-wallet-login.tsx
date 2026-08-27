@@ -45,7 +45,8 @@ export function EmbeddedWalletLoginButton({
   const [state, setState] = useState<"idle" | "working" | "account_not_found" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [walletProvisioned, setWalletProvisioned] = useState(false);
-  const autoStarted = useRef(false);
+  const autoStartInitialized = useRef(false);
+  const autoStartInvoked = useRef(false);
 
   useEffect(() => {
     if (!flowRequested || !authenticated || !ready || !walletsReady || flowRunning.current) return;
@@ -127,10 +128,28 @@ export function EmbeddedWalletLoginButton({
   }, [authenticated, login, ready, walletsReady]);
 
   useEffect(() => {
-    if (!autoStart || autoStarted.current || !ready || !walletsReady) return;
-    autoStarted.current = true;
+    if (!autoStart || autoStartInitialized.current) return;
+    autoStartInitialized.current = true;
+    setState("working");
+    setMessage("Loading secure sign-in…");
+  }, [autoStart]);
+
+  useEffect(() => {
+    if (!autoStart || autoStartInvoked.current || !ready || !walletsReady) return;
+    autoStartInvoked.current = true;
     start();
   }, [autoStart, ready, start, walletsReady]);
+
+  useEffect(() => {
+    if (!autoStart || (ready && walletsReady)) return;
+
+    const timeout = window.setTimeout(() => {
+      setState("error");
+      setMessage("Secure sign-in did not become ready. Check that this site origin and login methods are enabled in Privy, then try again.");
+    }, 12_000);
+
+    return () => window.clearTimeout(timeout);
+  }, [autoStart, ready, walletsReady]);
 
   return (
     <>
