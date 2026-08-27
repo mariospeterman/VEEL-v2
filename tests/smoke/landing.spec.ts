@@ -22,7 +22,7 @@ test("landing tells one honest creator story and keeps one Continue entry", asyn
     expect(await page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]')))).toBe(true);
   }
   await expect(page.getByText(/authenticate first.*choose whether to start onboarding/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Use an existing wallet" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /Choose (a )?wallet|More wallet/ })).toBeEnabled({ timeout: 20_000 });
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Continue to WeVid" }).first()).toBeFocused();

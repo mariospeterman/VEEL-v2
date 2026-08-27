@@ -20,8 +20,8 @@ export function EmbeddedWalletProviders({ children, purpose = "login" }: Readonl
     () => ({
       appearance: {
         accentColor: "#20eaa4",
-        landingHeader: "Enter WeVid",
-        loginMessage: "Unlock your embedded Solana wallet.",
+        landingHeader: "Continue to WeVid",
+        loginMessage: "Choose email, social, or passkey. WeVid checks for an existing account before onboarding.",
         showWalletLoginFirst: false,
         theme: "dark",
         walletChainType: "solana-only"

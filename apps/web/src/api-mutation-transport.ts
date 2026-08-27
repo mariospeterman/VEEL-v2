@@ -32,9 +32,10 @@ export async function authenticatedMutation<T>(
   path: string,
   method: "DELETE" | "PATCH" | "POST" | "PUT",
   body: unknown,
-  idempotencyKey?: string
+  idempotencyKey?: string,
+  signal?: AbortSignal
 ): Promise<T> {
-  const response = await sendAuthenticatedMutation(path, method, body, idempotencyKey);
+  const response = await sendAuthenticatedMutation(path, method, body, idempotencyKey, signal);
 
   if (!response.ok) {
     throw new ApiMutationError(await errorMessage(response), response.status);
@@ -86,7 +87,8 @@ export async function authenticatedBinaryMutation<T>(
 export async function publicMutation<T>(
   path: string,
   method: "POST",
-  body: unknown
+  body: unknown,
+  signal?: AbortSignal
 ): Promise<T> {
   const env = readPublicWebEnv();
   const response = await mutationFetch(browserApiUrl(path, env.NEXT_PUBLIC_API_BASE_URL), {
@@ -98,7 +100,8 @@ export async function publicMutation<T>(
       "content-type": "application/json",
       "idempotency-key": createMutationIdempotencyKey()
     },
-    method
+    method,
+    ...(signal ? { signal } : {})
   });
 
   if (!response.ok) {
@@ -162,7 +165,8 @@ async function sendAuthenticatedMutation(
   path: string,
   method: "DELETE" | "PATCH" | "POST" | "PUT",
   body: unknown,
-  idempotencyKey?: string
+  idempotencyKey?: string,
+  signal?: AbortSignal
 ): Promise<Response> {
   const { token } = await browserSessionToken();
   const env = readPublicWebEnv();
@@ -181,7 +185,8 @@ async function sendAuthenticatedMutation(
     cache: "no-store",
     credentials: "include",
     headers,
-    method
+    method,
+    ...(signal ? { signal } : {})
   });
 }
 

@@ -61,7 +61,7 @@
   }
 
   .auth-provider-button-grid-wallets {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
   }
 
   .auth-provider-button-grid-embedded {
@@ -112,6 +112,13 @@
     background:
       linear-gradient(112deg, rgba(20, 241, 149, 0.1), rgba(3, 225, 255, 0.08), rgba(153, 69, 255, 0.1)),
       color-mix(in srgb, var(--panel) 42%, transparent);
+  }
+
+  .auth-provider-button-active {
+    border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+    background:
+      linear-gradient(112deg, rgba(20, 241, 149, 0.09), rgba(3, 225, 255, 0.05)),
+      color-mix(in srgb, var(--panel) 46%, transparent);
   }
 
   .auth-provider-button:focus-visible,
@@ -188,6 +195,37 @@
 
   .auth-provider-note-error {
     color: var(--danger);
+  }
+
+  .auth-wallet-session-actions {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .auth-wallet-session-actions span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .auth-wallet-session-actions button {
+    flex: 0 0 auto;
+    border: 0;
+    background: transparent;
+    color: var(--foreground);
+    cursor: pointer;
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .auth-wallet-session-actions button:hover {
+    color: var(--accent);
   }
 
   .provider-logo,

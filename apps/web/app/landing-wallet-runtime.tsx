@@ -37,17 +37,18 @@ export function LandingWalletRuntime({
             onAccountNotFound={onAccountNotFound}
             onLinked={onLinked}
             reloadOnSession={!onLinked}
-          />
+          >
+            {embeddedWallets.provider.configured ? (
+              <EmbeddedWalletLauncher
+                label="Privy"
+                onAccountNotFound={onAccountNotFound}
+                onLinked={onLinked}
+                purpose={purpose}
+                secondary={false}
+              />
+            ) : null}
+          </WalletLinkPanel>
         </div>
-        {embeddedWallets.provider.configured ? (
-          <EmbeddedWalletLauncher
-            label={purpose === "login" ? "Use another sign-in method" : "Create secure WeVid wallet"}
-            onAccountNotFound={onAccountNotFound}
-            onLinked={onLinked}
-            purpose={purpose}
-            secondary
-          />
-        ) : null}
       </div>
     </WalletRuntimeBaseProviders>
   );

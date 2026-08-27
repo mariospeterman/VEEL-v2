@@ -39,8 +39,8 @@ for linking recovery and logging out all devices remain unchanged.
 
 The public entry begins with one `Continue to WeVid` action and then offers only configured methods:
 
-- `Continue with email, social or passkey` for the configured embedded-wallet provider.
-- `Use an existing wallet` for supported external Solana wallets.
+- `Privy` for the configured embedded-wallet provider; its official surface then owns email, social, and passkey selection.
+- One direct card for each detected supported external Solana wallet, plus `More wallets` only as the adapter fallback.
 - `Use account recovery` when the configured recovery provider is available.
 
 Login language never promises wallet creation. Privy login disables automatic wallet creation,

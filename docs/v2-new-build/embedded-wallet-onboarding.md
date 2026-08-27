@@ -42,8 +42,8 @@ Protected app access rule:
   1. wallet session from embedded or external noncustodial wallet
   2. profile setup
   3. age verification
-- `Connect wallet` through the external/native Solana boundary is the primary landing login and onboarding action.
-- `Create secure WeVid wallet` is a quiet secondary action when Privy is configured. Email, Google, passkey, or another approved method appears only inside Privy's official surface after that click.
+- Configured sign-in methods appear together in one provider grid. Detected Phantom, Backpack, Solflare, and other Wallet Standard wallets are direct one-click cards; a wallet-list fallback remains for mobile, installation, and less common adapters.
+- `Privy` is a peer card when configured. Its official surface owns email, Google, passkey, and other approved identity choices after that one WeVid click; WeVid does not duplicate those provider controls.
 - One wallet path is mandatory; the other path can be added, changed, or selected as primary later in profile/settings.
 - Wallet capability must be ready before age verification starts, but provider authentication, wallet provisioning, challenge signing, and session creation remain one continuous Step 1 flow.
 - No user enters the protected app shell until age verification is complete.
@@ -65,10 +65,10 @@ External wallets remain first-class for crypto-native users.
 
 Use a wallet infrastructure provider instead of building key management.
 
-Provider docs checked for this implementation slice on 2026-06-14, with login and session teardown behavior rechecked on 2026-08-11:
+Provider docs checked for this implementation slice on 2026-06-14, with login, direct Wallet Adapter selection, signing, and session teardown behavior rechecked on 2026-08-26:
 
 - Privy docs: React setup uses a `PrivyProvider` with `appId`; Solana support is exposed through Privy wallet APIs and must be configured with the project app id before embedded-wallet buttons are enabled.
-- WeVid does not use Privy's modal as the primary external-wallet chooser. Privy's official email/social/passkey surface appears only after `Create secure WeVid wallet`; external wallet ownership remains handled by Solana Wallet Adapter plus the backend challenge flow.
+- WeVid does not use Privy's modal as the external-wallet chooser. Its official email/social/passkey surface appears after the visible `Privy` card; external wallet discovery, direct selection, connection, and ownership signing remain handled by Solana Wallet Adapter plus the backend challenge flow.
 - Solana Wallet Adapter docs: browser wallet connection should use wallet adapter/injected-wallet support for desktop and Android-compatible browsers, with backend nonce signing for authentication.
 - Solana Mobile Wallet Adapter docs: Android Chrome supports mobile wallet adapter flows through wallet adapter; iOS mobile wallet adapter support is not currently available, so iOS web must use wallet-specific universal/deep links or embedded providers.
 - Dynamic docs: embedded wallets support noncustodial MPC, Solana via EdDSA/FROST, and can remain an evaluated fallback.
@@ -81,7 +81,7 @@ External wallet docs checked for the browser wallet-link handoff on 2026-06-07:
 
 Runtime/session behavior:
 
-- Landing preloads one canonical wallet runtime when the login/onboarding frame opens so the first visible provider click directly opens Privy or the Solana wallet chooser. Configured Privy calls its official React SDK login and Solana signing APIs; Solana Wallet Adapter remains the single external-wallet chooser.
+- Landing preloads one canonical wallet runtime when the login/onboarding frame opens. Installed Wallet Standard providers are rendered immediately and selected directly; `More wallets` opens the adapter chooser only as a fallback. Configured Privy is visible in the same grid, lazy-loads its official React runtime on selection, and immediately opens its account flow. Both routes sign the same backend challenge.
 - The authenticated app mounts the same provider boundary so profile logout can terminate active provider state with supported SDK methods. Logout calls Privy `logout` and Solana Wallet Adapter `disconnect`, revokes the canonical WeVid application session, clears the optional local Supabase recovery state, and expires server cookies before redirecting to `/`.
 - Provider SDK storage keys are not guessed or deleted by application code. Provider teardown errors are isolated so one unavailable SDK cannot prevent other sessions from closing or block the landing redirect.
 
