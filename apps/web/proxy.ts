@@ -7,15 +7,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/admin/:path*",
-    "/age/:path*",
-    "/app/:path*",
-    "/auth/:path*",
-    "/content/:path*",
-    "/event-access/:path*",
-    "/live/:path*",
-    "/mutuals/:path*",
-    "/oauth/:path*",
-    "/passes/:path*"
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|veel-sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|mp4|webm)$).*)"
   ]
 };
