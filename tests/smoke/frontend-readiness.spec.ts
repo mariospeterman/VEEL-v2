@@ -33,6 +33,8 @@ test("entry presents visible provider choices without provider implementation co
   const walletRuntime = page.getByLabel("Wallet sign in");
   const embeddedConfigured = await walletRuntime.getAttribute("data-embedded") === "true";
   await expect(page.getByText("Privy", { exact: true })).toHaveCount(embeddedConfigured ? 1 : 0);
+  await expect(page.getByRole("button", { name: "Can't access your account?" })).toBeVisible();
+  await expect(page.locator('[data-recovery-auth="true"]')).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Create secure WeVid wallet|Create wallet|One secure setup/ })).toHaveCount(0);
   await expect(page.getByText(/powered by|solana wallet adapter/i)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Language" })).toHaveCount(0);
