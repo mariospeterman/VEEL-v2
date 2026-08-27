@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
 const publicSurfaces = [
   { name: "landing", path: "/", heading: "Stop building on rented ground." },
@@ -47,9 +47,11 @@ test("a detected wallet connects, signs, and enters onboarding from one provider
   let sessionRequests = 0;
 
   await page.route("**/v1/auth/wallet/challenges", async (route) => {
+    if (await fulfillCorsPreflight(route)) return;
     challengeRequests += 1;
     await route.fulfill({
       contentType: "application/json",
+      headers: corsHeaders(route),
       json: {
         address: "11111111111111111111111111111111",
         chain: "solana_devnet",
@@ -63,11 +65,12 @@ test("a detected wallet connects, signs, and enters onboarding from one provider
     });
   });
   await page.route("**/v1/auth/wallet/sessions", async (route) => {
+    if (await fulfillCorsPreflight(route)) return;
     sessionRequests += 1;
-    await route.fulfill({ contentType: "application/json", json: { ok: true }, status: 201 });
+    await route.fulfill({ contentType: "application/json", headers: corsHeaders(route), json: { ok: true }, status: 201 });
   });
   await page.route("**/v1/session", async (route) => {
-    await route.fulfill({ contentType: "application/json", json: { appAccessState: { allowed: false, reason: "identity_required" } }, status: 200 });
+    await route.fulfill({ contentType: "application/json", headers: corsHeaders(route), json: { appAccessState: { allowed: false, reason: "identity_required" } }, status: 200 });
   });
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded" });
@@ -90,8 +93,10 @@ test("a stalled wallet signature can be stopped without creating an account sess
   let sessionRequests = 0;
 
   await page.route("**/v1/auth/wallet/challenges", async (route) => {
+    if (await fulfillCorsPreflight(route)) return;
     await route.fulfill({
       contentType: "application/json",
+      headers: corsHeaders(route),
       json: {
         address: "11111111111111111111111111111111",
         chain: "solana_devnet",
@@ -105,8 +110,9 @@ test("a stalled wallet signature can be stopped without creating an account sess
     });
   });
   await page.route("**/v1/auth/wallet/sessions", async (route) => {
+    if (await fulfillCorsPreflight(route)) return;
     sessionRequests += 1;
-    await route.fulfill({ contentType: "application/json", json: { ok: true }, status: 201 });
+    await route.fulfill({ contentType: "application/json", headers: corsHeaders(route), json: { ok: true }, status: 201 });
   });
 
   await page.goto("/?mode=onboarding", { waitUntil: "domcontentloaded" });
@@ -294,4 +300,27 @@ async function walletFlowError(page: Page, cause: unknown) {
   };
   const message = cause instanceof Error ? cause.message : String(cause);
   return new Error(`${message}\nWallet flow diagnostic: ${JSON.stringify(diagnostic)}`, { cause });
+}
+
+function corsHeaders(route: Route) {
+  const origin = route.request().headers().origin ?? "http://127.0.0.1:3000";
+
+  return {
+    "access-control-allow-credentials": "true",
+    "access-control-allow-origin": origin
+  };
+}
+
+async function fulfillCorsPreflight(route: Route) {
+  if (route.request().method() !== "OPTIONS") return false;
+
+  await route.fulfill({
+    headers: {
+      ...corsHeaders(route),
+      "access-control-allow-headers": "accept, content-type, idempotency-key",
+      "access-control-allow-methods": "POST, OPTIONS"
+    },
+    status: 204
+  });
+  return true;
 }

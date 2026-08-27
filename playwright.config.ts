@@ -54,7 +54,7 @@ export default defineConfig({
         launchOptions: chromiumExecutablePath ? { executablePath: chromiumExecutablePath } : undefined
       }
     },
-    ...(process.platform === "darwin" ? [] : [
+    ...(process.platform === "darwin" && process.env.PLAYWRIGHT_ENABLE_WEBKIT !== "true" ? [] : [
       {
         name: "desktop-webkit",
         use: {
