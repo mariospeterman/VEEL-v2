@@ -95,13 +95,27 @@ export function LandingAuthSurface({
 }
 
 function LandingLoginForm({ authState, onAccountNotFound }: { authState: WebAuthState; onAccountNotFound: () => void }) {
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+
   return (
     <div className="landing-auth-block">
-      <p className="landing-auth-method-title">Continue with your WeVid account</p>
+      <p className="landing-auth-method-title">Choose how to continue</p>
       <LandingWalletList authState={authState} onAccountNotFound={onAccountNotFound} purpose="login" />
       <div className="landing-recovery-entry">
-        <p>Use account recovery</p>
-        <SupabaseAuthPanel mode="recovery" />
+        <button
+          aria-expanded={recoveryOpen}
+          className="landing-inline-link landing-recovery-toggle"
+          onClick={() => setRecoveryOpen((open) => !open)}
+          type="button"
+        >
+          {recoveryOpen ? "Hide account recovery" : "Can't access your account?"}
+        </button>
+        {recoveryOpen ? (
+          <div className="landing-recovery-panel">
+            <p>Recovery can find an existing linked account. It never creates a new WeVid account.</p>
+            <SupabaseAuthPanel mode="recovery" />
+          </div>
+        ) : null}
       </div>
     </div>
   );

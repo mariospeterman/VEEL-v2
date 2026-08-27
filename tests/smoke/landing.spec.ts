@@ -14,17 +14,16 @@ test("landing tells one honest creator story and keeps one Continue entry", asyn
   await expect(page.locator("body")).not.toContainText(/53% of surveyed creators|1M\+|150\+ countries|99\.9%/i);
 
   await page.getByRole("button", { name: "Continue to WeVid" }).first().click();
-  const dialog = page.getByRole("dialog", { name: "Continue to WeVid." });
-  await expect(dialog).toBeVisible();
-  expect(await page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]')))).toBe(true);
-  for (let index = 0; index < 12; index += 1) {
-    await page.keyboard.press("Tab");
-    expect(await page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"]')))).toBe(true);
-  }
-  await expect(page.getByText(/authenticate first.*choose whether to start onboarding/i)).toBeVisible();
+  await expect(page.locator(".landing-auth-page")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Continue to WeVid." })).toBeFocused();
+  await expect(page.getByRole("dialog", { name: "Continue to WeVid." })).toHaveCount(0);
+  await expect(page.getByText(/known accounts continue.*new identities move into onboarding/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /Choose (a )?wallet|More wallet/ })).toBeEnabled({ timeout: 20_000 });
-  await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Can't access your account?" })).toBeVisible();
+  await expect(page.getByText(/recovery can find an existing linked account/i)).toHaveCount(0);
+  expect(await page.evaluate(() => getComputedStyle(document.body).overflowY)).toBe("auto");
+  await page.getByRole("button", { name: "Back to WeVid" }).click();
+  await expect(page.locator(".landing-auth-page")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Continue to WeVid" }).first()).toBeFocused();
   await expect(page.getByText(/final backend quote controls each transaction/i)).toBeVisible();
 

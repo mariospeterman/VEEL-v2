@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Mail, ShieldCheck, WalletCards } from "lucide-react";
 import { FaDiscord, FaGithub, FaGoogle, FaXTwitter } from "react-icons/fa6";
+import { safeProviderImageSource } from "./provider-image-source";
 
 type ProviderLogoName =
   | "backpack"
@@ -35,13 +36,15 @@ const providerLogoSources: Partial<Record<ProviderLogoName, string>> = {
 
 export function ProviderLogo({
   label,
-  name
+  name,
+  source
 }: {
   name: ProviderLogoName;
   label: string;
+  source?: string | undefined;
 }) {
   const [assetFailed, setAssetFailed] = useState(false);
-  const src = providerLogoSources[name];
+  const src = safeProviderImageSource(source) ?? providerLogoSources[name];
 
   return (
     <span aria-hidden="true" className={`provider-logo provider-logo-${name}`}>

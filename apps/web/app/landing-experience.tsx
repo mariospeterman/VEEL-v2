@@ -40,8 +40,8 @@ export function LandingExperience({
 }: LandingEntryState) {
   const [authMode, setAuthMode] = useState<Exclude<LandingEntryMode, null> | null>(initialMode);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const authModalRef = useRef<HTMLElement | null>(null);
-  const authOpenerRef = useRef<HTMLElement | null>(null);
+  const authOpenerKeyRef = useRef<string | null>(null);
+  const authTitleRef = useRef<HTMLHeadingElement | null>(null);
   const publicAuthState = useMemo<WebAuthState>(
     () => ({ authenticated: false, configured: true, email: null }),
     []
@@ -49,7 +49,7 @@ export function LandingExperience({
 
   const openContinue = useCallback((source: string) => {
     recordOnboardingEvent("landing_cta_clicked", source);
-    authOpenerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    authOpenerKeyRef.current = source;
     setMobileMenuOpen(false);
     setAuthMode("login");
   }, []);
@@ -61,73 +61,12 @@ export function LandingExperience({
   useEffect(() => {
     if (!authMode) return;
     recordOnboardingEvent(authMode === "login" ? "login_opened" : "onboarding_opened");
-    const priorOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const modal = authModalRef.current;
-    const focusableSelector = [
-      "a[href]",
-      "button:not([disabled])",
-      "input:not([disabled])",
-      "select:not([disabled])",
-      "textarea:not([disabled])",
-      '[tabindex]:not([tabindex="-1"])'
-    ].join(",");
-    const focusable = () => [...(modal?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])]
-      .filter((element) => element.getClientRects().length > 0);
-    const topmostDialog = () => [...document.querySelectorAll<HTMLElement>('[role="dialog"]')]
-      .filter((dialog) => dialog.getClientRects().length > 0)
-      .at(-1);
-
-    const keepFocusInside = () => {
-      if (topmostDialog() !== modal) return;
-      if (modal?.contains(document.activeElement)) return;
-      (focusable()[0] ?? modal)?.focus();
-    };
-
-    (focusable()[0] ?? modal)?.focus();
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (topmostDialog() !== modal) return;
-      if (event.key === "Escape" && initialMode === null) {
-        event.preventDefault();
-        setAuthMode(null);
-        return;
-      }
-      if (event.key !== "Tab") return;
-
-      const available = focusable();
-      if (available.length === 0) {
-        event.preventDefault();
-        modal?.focus();
-        return;
-      }
-
-      const first = available[0]!;
-      const last = available.at(-1)!;
-      if (event.shiftKey && (document.activeElement === first || !modal?.contains(document.activeElement))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (document.activeElement === last || !modal?.contains(document.activeElement))) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    const recaptureFocus = () => keepFocusInside();
-    const focusObserver = new MutationObserver(keepFocusInside);
-    if (modal) focusObserver.observe(modal, { childList: true, subtree: true });
-    window.addEventListener("keydown", closeOnEscape);
-    document.addEventListener("focusin", recaptureFocus, true);
-    return () => {
-      document.body.style.overflow = priorOverflow;
-      focusObserver.disconnect();
-      window.removeEventListener("keydown", closeOnEscape);
-      document.removeEventListener("focusin", recaptureFocus, true);
-      authOpenerRef.current?.focus();
-    };
-  }, [authMode, initialMode]);
+    window.scrollTo({ top: 0 });
+    window.requestAnimationFrame(() => authTitleRef.current?.focus());
+  }, [authMode]);
 
   useEffect(() => {
+    if (authMode) return;
     const observed = [...document.querySelectorAll<HTMLElement>("[data-landing-section]")];
     const observer = new IntersectionObserver(
       (entries) => {
@@ -144,7 +83,54 @@ export function LandingExperience({
     );
     observed.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
+  }, [authMode]);
+
+  const closeAuth = useCallback(() => {
+    setAuthMode(null);
+    window.requestAnimationFrame(() => {
+      const key = authOpenerKeyRef.current;
+      const source = [...document.querySelectorAll<HTMLElement>("[data-landing-auth-opener]")]
+        .find((element) => element.dataset.landingAuthOpener === key && element.getClientRects().length > 0);
+      const fallback = [...document.querySelectorAll<HTMLElement>("[data-landing-auth-opener]")]
+        .find((element) => element.getClientRects().length > 0);
+      (source ?? fallback)?.focus();
+    });
   }, []);
+
+  if (authMode) {
+    return (
+      <main className="landing-shell landing-auth-page">
+        <a className="landing-skip-link" href="#landing-auth-main">Skip to sign in</a>
+        <div aria-hidden="true" className="landing-auth-page-media">
+          <img alt="" height="941" src="/images/wevid-landing-hero-v2.jpg" width="1672" />
+        </div>
+        <div aria-hidden="true" className="landing-auth-page-scrim" />
+        <header className="landing-auth-page-header">
+          <a className="landing-logo-link" href="/" aria-label="WeVid home">
+            <img alt="" height="40" src="/Logo-Light-Transparent.png" width="40" />
+            <span><strong>WeVid</strong><small>FRAME YOUR WAY</small></span>
+          </a>
+          {initialMode === null ? (
+            <button aria-label="Back to WeVid" className="landing-auth-close" onClick={closeAuth} type="button">
+              <X aria-hidden="true" />
+            </button>
+          ) : (
+            <a aria-label="Back to WeVid" className="landing-auth-close" href="/"><X aria-hidden="true" /></a>
+          )}
+        </header>
+        <section className="landing-auth-stage" id="landing-auth-main">
+          <div className="landing-auth-heading">
+            <p>ONE CLEAN ENTRY</p>
+            <h1 id="landing-auth-title" ref={authTitleRef} tabIndex={-1}>Continue to WeVid.</h1>
+            <span>Choose a wallet or Privy. Known accounts continue; new identities move into onboarding before a wallet or account is created.</span>
+          </div>
+          {initialAuthError ? <p className="landing-auth-error">{initialAuthError}</p> : null}
+          <LandingAuthSurface authState={publicAuthState} initialOnboardingStep={initialOnboardingStep} mode={authMode} />
+          <p className="landing-auth-footnote"><ShieldCheck aria-hidden="true" />Signing proves wallet ownership. It never approves a payment.</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="landing-shell">
@@ -165,7 +151,7 @@ export function LandingExperience({
             </a>
           ))}
         </nav>
-        <button className="landing-header-cta" onClick={() => openContinue("header")} type="button">
+        <button className="landing-header-cta" data-landing-auth-opener="header" onClick={() => openContinue("header")} type="button">
           Continue <ArrowRight aria-hidden="true" size={16} />
         </button>
         <button
@@ -190,7 +176,7 @@ export function LandingExperience({
               {item.label}<ArrowRight aria-hidden="true" size={16} />
             </a>
           ))}
-          <button onClick={() => openContinue("mobile-menu")} type="button">Continue to WeVid</button>
+          <button data-landing-auth-opener="mobile-menu" onClick={() => openContinue("mobile-menu")} type="button">Continue to WeVid</button>
         </div>
       </header>
 
@@ -205,7 +191,7 @@ export function LandingExperience({
             <h1>{landingContent.hero.title}</h1>
             <p className="landing-hero-copy">{landingContent.hero.copy}</p>
             <div className="landing-hero-actions">
-              <button className="landing-primary-button" onClick={() => openContinue("hero")} type="button">
+              <button className="landing-primary-button" data-landing-auth-opener="hero" onClick={() => openContinue("hero")} type="button">
                 {landingContent.hero.primary}<ArrowRight aria-hidden="true" size={18} />
               </button>
               <a className="landing-secondary-button" href="#why">
@@ -370,7 +356,7 @@ export function LandingExperience({
         <section className="landing-final-cta" data-landing-section="final-cta">
           <p className="landing-eyebrow">YOUR NEXT MOVE</p>
           <h2>Build where the relationship can compound.</h2>
-          <button className="landing-primary-button" onClick={() => openContinue("final")} type="button">
+          <button className="landing-primary-button" data-landing-auth-opener="final" onClick={() => openContinue("final")} type="button">
             Continue to WeVid<ArrowRight aria-hidden="true" />
           </button>
           <p>One entry. Existing accounts continue. New people choose onboarding first.</p>
@@ -389,42 +375,6 @@ export function LandingExperience({
         <span>© 2026 WeVid</span>
       </footer>
 
-      {authMode ? (
-        <div
-          className="landing-auth-backdrop"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target && initialMode === null) setAuthMode(null);
-          }}
-          role="presentation"
-        >
-          <section
-            aria-labelledby="landing-auth-title"
-            aria-modal="true"
-            className="landing-auth-modal"
-            ref={authModalRef}
-            role="dialog"
-            tabIndex={-1}
-          >
-            <header>
-              <a className="landing-logo-link" href="/" aria-label="WeVid home">
-                <img alt="" height="38" src="/Logo-Light-Transparent.png" width="38" />
-                <span><strong>WeVid</strong><small>FRAME YOUR WAY</small></span>
-              </a>
-              {initialMode === null ? (
-                <button aria-label="Close" onClick={() => setAuthMode(null)} type="button"><X aria-hidden="true" /></button>
-              ) : null}
-            </header>
-            <div className="landing-auth-heading">
-              <p>ONE CLEAN ENTRY</p>
-              <h2 id="landing-auth-title">Continue to WeVid.</h2>
-              <span>We authenticate first. If your identity is new, you choose whether to start onboarding before anything is created.</span>
-            </div>
-            {initialAuthError ? <p className="landing-auth-error">{initialAuthError}</p> : null}
-            <LandingAuthSurface authState={publicAuthState} initialOnboardingStep={initialOnboardingStep} mode={authMode} />
-            <p className="landing-auth-footnote"><ShieldCheck aria-hidden="true" />Wallet ownership is identity proof—not payment proof.</p>
-          </section>
-        </div>
-      ) : null}
     </main>
   );
 }

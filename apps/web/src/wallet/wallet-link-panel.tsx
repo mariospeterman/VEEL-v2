@@ -368,7 +368,11 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
                   onClick={() => void chooseWallet(detectedWallet)}
                   type="button"
                 >
-                  <ProviderLogo label={detectedWallet.adapter.name} name={logoForWallet(detectedWallet)} />
+                  <ProviderLogo
+                    label={detectedWallet.adapter.name}
+                    name={logoForWallet(detectedWallet)}
+                    source={detectedWallet.adapter.icon}
+                  />
                   <span>
                     <strong>{detectedWallet.adapter.name}</strong>
                     <small>{busy ? state === "linking" ? "Check wallet" : "Opening" : active && publicKey ? shortWalletAddress(publicKey.toString()) : "Connect and sign"}</small>
