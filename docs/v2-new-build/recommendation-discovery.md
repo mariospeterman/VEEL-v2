@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: Home feed, Bits feed, Discover, hashtags, mentions, NSFW controls, ranking safety
-Last updated: 2026-08-20
+Last updated: 2026-11-04
 Source of truth: yes for v2 content delivery and discovery
 
 Owns:
 - recommendation discovery decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -26,10 +26,29 @@ Current implementation state:
 
 - `GET /v1/content/feed` is the canonical protected Home/Bits read model. It accepts an explicit `surface=home|bits`, `mode`, and opaque compound cursor and returns ranking metadata with each page.
 - `GET /v1/discover/search`, `/hashtags`, `/hashtags/{slug}`, `/creators`, `/events`, and `/live` are implemented as protected Discover read models.
+- Grouped search uses independent scope-bound opaque cursors for content, creators, hashtags, events,
+  and live rooms. Each cursor carries the matching deterministic keyset and is rejected if reused for
+  another group; no mixed cursor is cast across timestamp, text, and UUID query boundaries. Live-room
+  pagination uses immutable `(created_at, id)` ordering, so a waiting-to-live state transition cannot
+  move an unseen room across the continuation boundary.
 - The route requires authenticated app readiness server-side: profile, verified age state, and wallet readiness.
 - Captions are parsed server-side for normalized hashtags. Frontend does not submit trusted hashtag state.
 - Eligibility is applied before scoring through `private.eligible_content(...)`: ready/published/approved media, active age-ready creator and public profile, age-ready viewer or constrained anonymous preview, public/follower/member visibility, active entitlement where applicable, viewer content preference, hidden creators/topics, blocks, and viewer reports. Feed, detail, Discover, public profile, share, unlock, and engagement consume this same gate. Anonymous public profiles are public-visibility and Safe-only. Bits additionally accepts only Bit/clip media. Following has no recommendation fallback and returns active followed creators only.
-- `deterministic_v1` freezes `generatedAt` and the prior-impression baseline on page one, then carries the same instant, feed mode/surface, an opaque fingerprint of the viewer's eligible ranking inputs, and `(ranking_score, created_at, id)` in a validated cursor. New posts and impressions emitted by the active scroll cannot shift that walk. Eligibility, follow, or engagement changes alter the read-time fingerprint and make the client restart from page one instead of skipping re-ranked items. This avoids any global mutation lock. Cross-surface reuse, stale fingerprints, and duplicate regressions are covered against more than one page of real Postgres fixtures. Access-rule and entitlement validity is always evaluated at request time.
+- Discover content is mapped by the canonical content access projection and then passed through the
+  same server-side Bunny playback/image capability and viewing-allowance decision as feed/detail.
+  Discover live rooms use the canonical safety/replay/access projection and the same Livepeer JWT and
+  allowance decision as room detail. Provider identifiers and unsigned stored delivery resources are
+  never exposed as usable playback; locked/subscriber-only, exhausted-allowance, rejected, and
+  quarantined resources fail closed without a short-lived delivery credential.
+- `deterministic_v1` now ranks one index-backed candidate window of at most 512 content IDs on page
+  one and stores only that derived ordering in a server-only session for at most 30 minutes. The opaque
+  cursor carries the session ID, mode/surface, and last delivered ordinal. New posts, impressions, and
+  unrelated engagement cannot shift or invalidate the active walk, and later pages never recompute or
+  hash the eligible corpus. Current canonical eligibility, visibility, blocks, Following membership,
+  Moment expiry, access rules, and entitlements are re-evaluated before each item is delivered; revoked
+  items are skipped. Engagement counters and viewer reaction state are read live for display but do not
+  re-rank the snapshot. Cross-surface reuse is rejected, and only an expired or unavailable session
+  requires a first-page restart.
 - Ranking uses only follow, bounded freshness, projected engagement quality, creator diversity, bounded exploration, and prior-impression de-prioritisation. Purchase value, wallet balance, settlement, creator earnings, checkout, membership, and Commerce Kit data are not queried and cannot influence ranking.
 - Engagement counters and follow counts are maintained as bounded write-time projections. The feed reads those projections, selects page IDs before playback/access lateral reads, and avoids count-correlated subqueries and per-card API calls.
 - The web Home surface renders the mixed feed plus its real live rail. `/app/bits` renders the same canonical projection as an immersive vertical surface. Both mount playback only for the active item, preload only the next poster, restore route scroll, reconcile real engagement/follow mutations, and render explicit loading/error/empty/exhausted states. Neither surface renders local business-data fixtures or raw provider payloads.
@@ -207,7 +226,6 @@ Backend ranking may use:
 - content freshness
 - hashtag/topic match
 - language/region where relevant
-- paid/unlocked state
 - creator quality/safety signals
 - diversity/fairness constraints
 - ranking mode: Recommended / Following
@@ -233,7 +251,6 @@ Rank for:
 - diversity across creators
 - healthy engagement
 - low report/block rate
-- conversion to legitimate purchases/unlocks/tickets/subscriptions
 
 Do not rank only for:
 
@@ -267,7 +284,8 @@ The launch `deterministic_v1` pipeline is:
 5. diversify creators
 6. apply the independent content preference
 7. apply prior-impression de-prioritisation and bounded deterministic exploration
-8. freeze the page-one timestamp and impression baseline, bind the cursor to mode/surface and an eligible-input fingerprint, and paginate by `(ranking_score, created_at, id)`
+8. freeze at most 512 ranked IDs in a 30-minute server-only session and paginate by session ordinal,
+   rechecking canonical eligibility and access at delivery
 
 Only add ML/vector personalization after enough data exists.
 
@@ -286,11 +304,11 @@ Required launch controls:
 - NSFW/SFW preference stored under Settings
 - moderation and safety filters applied before ranking
 
-Paid distribution rule:
+Commercial separation rule:
 
-- do not silently sell ranking boost in For You
-- any paid promotion product must be labeled, user-control aware, policy-reviewed, and covered by a separate ADR
-- creator monetisation potential can be a business metric, but it cannot override safety, reports, blocks, age gates, or user feed preferences
+- Veel does not sell ranking weight, recommendation visibility, or preferential discovery.
+- Contextual access and Product Offer actions may be rendered after an item is selected, but payment, purchase, subscription, revenue, wallet, referral, and entitlement facts do not influence selection or score.
+- Authorized private analytics may measure commerce outcomes by feed mode; those measurements are never ranking inputs.
 
 ## Feed API
 
@@ -300,7 +318,7 @@ GET /v1/content/feed?mode=following
 PATCH /v1/feed/preferences { "defaultMode": "recommended|following", "nsfwPreference": "both|sfw|nsfw" }
 POST /v1/feed/impressions
 GET /v1/discover/hashtags/:slug
-GET /v1/discover/search?q=...
+GET /v1/discover/search?q=...&contentCursor=...&creatorCursor=...&hashtagCursor=...&eventCursor=...&liveCursor=...
 ```
 
 API responses include:
@@ -339,12 +357,18 @@ Admin cannot:
 - `Adult only` includes only adult and explicit media and remains behind platform 18+ access
 - anonymous public profile content is Safe-only
 - ranking tabs never overwrite the saved content preference
-- following mode returns followed creators only or primarily, depending fallback policy
+- following mode returns active followed creators only, with no recommendation fallback
 - blocked creators/content do not appear
 - hashtags parse and normalize
 - mentions notify unless muted/blocked
 - creator mislabel correction is audited
 - feed pagination is stable
+- grouped Discover pagination keeps an independent validated cursor per group, preserves timestamp
+  ties with an ID key, cannot feed a content timestamp into a live-room UUID predicate, and does not
+  lose an unseen live room when its state changes between pages
+- Discover responses never expose usable private Bunny or Livepeer delivery without the canonical
+  short-lived credential; locked/subscriber-only content, rejected/quarantined live rooms, and
+  exhausted public-media allowances remain blocked
 - replayed and concurrent impression keys increment at most once; changed-content key reuse returns conflict
 - Home and Bits render from the real feed contract on desktop and mobile
 - ranking does not expose internal sensitive signals

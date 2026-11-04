@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-08-23
+Last updated: 2026-11-04
 Source of truth: yes
 
 Owns:
 - identity provider wiring decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -39,7 +39,7 @@ Current implementation state:
 - Local/test environments can enable `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=true` to use API-owned mock adapters for age, creator KYC, and organization KYB. These adapters create normal pending sessions, immediately apply a normalized valid result through the repository boundary, and are disabled when `NODE_ENV=production`.
 - The landing path exposes one recommended age action and lets the server choose the lowest-friction configured method. Didit Adaptive Age Verification is the preferred low-friction path; Yoti Digital ID is the reusable credential candidate. The UI does not hardcode provider availability.
 - Adult-publishing intent is not part of the locked three-step onboarding. Adult eligibility begins later from Create when explicit publication is selected; a valid higher-assurance result may satisfy ordinary age access only under explicit reuse policy.
-- Successful provider session starts are stored in `verification_sessions` with a matching pending `verification_records` entry. `verification_records` is the sole application authority; `age_verifications` is a revoked historical archive after migration `0077`.
+- Before any provider request, the API atomically reserves a `verification_sessions` row and its matching pending `verification_records` entry. Provider selection is persisted before the external HTTP call, and the remote identifiers are attached afterward. This makes an early signed webhook reconcilable even if it arrives before the provider response. `verification_records` is the sole application authority; `age_verifications` is a revoked historical archive after migration `0077`.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
 
 ## Official references
@@ -48,16 +48,22 @@ Current implementation state:
 - Phantom deeplinks: https://docs.phantom.com/phantom-deeplinks/handling-sessions
 - Solana Mobile Wallet Adapter: https://docs.solanamobile.com/developers/mobile-wallet-adapter
 - Sumsub API auth + webhooks: https://docs.sumsub.com/reference/get-started-with-api
+- Sumsub hosted WebSDK link: https://docs.sumsub.com/reference/generate-websdk-external-link
 - Sumsub applicant review webhook: https://docs.sumsub.com/docs/receive-verification-results
+- Sumsub webhook payload fields: https://docs.sumsub.com/docs/user-verification-webhooks
 - Sumsub webhook signature verification: https://docs.sumsub.com/docs/webhook-manager
 - Yoti age verification overview: https://developers.yoti.com/age-verification/age-verification-introduction
 - Yoti notifications/signature verification: https://developers.yoti.com/age-verification/notifications
 - Didit Sessions API: https://docs.didit.me/integration/api-full-flow
 - Didit Adaptive Age Verification: https://docs.didit.me/core-technology/age-estimation/overview
 - Didit docs/pricing: https://docs.didit.me/getting-started/pricing
-- Persona docs: https://docs.withpersona.com/
+- Persona create inquiry: https://docs.withpersona.com/api-reference/inquiries/create-an-inquiry
+- Persona generate one-time link: https://docs.withpersona.com/api-reference/inquiries/generate-a-one-time-link
+- Didit webhook ordering and signatures: https://docs.didit.me/integration/webhooks
 - EU age verification / EUDI: https://digital-strategy.ec.europa.eu/en/policies/eu-age-verification
 - Scytales age verification connector: https://www.scytales.com/age-verification-connector
+
+The Sumsub session/webhook, Persona inquiry/link, Didit webhook, and Yoti age-notification references above were re-checked on 2026-11-04. Sumsub requires the declared HMAC algorithm over the exact raw bytes; Yoti embeds its RSA-PSS signature in the JSON notification and retries unless the receiver returns `200`.
 
 ## Wallet signing
 
@@ -70,7 +76,7 @@ Current implementation state:
 
 - Supported through the official Solana Wallet Adapter React stack: `ConnectionProvider`, `WalletProvider`, and `WalletModalProvider`.
 - The web provider follows the current Solana React cookbook pattern: install `@solana/wallet-adapter-base`, `@solana/wallet-adapter-react`, `@solana/wallet-adapter-react-ui`, and `@solana/wallet-adapter-wallets`, pass `wallets={[]}`, and let wallet-standard/mobile discovery populate available adapters.
-- The Wallet Adapter modal owns wallet selection and install/open handling. WeVid does not maintain a second wallet chooser. Account creation starts only after a wallet connects, signs the backend challenge, and the API creates the wallet session.
+- WeVid renders detected Wallet Standard providers as direct cards and uses the Wallet Adapter modal only as the fallback for installation, mobile handoff, or less common adapters. Account creation starts only after a wallet connects, signs the backend challenge, and the API creates the wallet session.
 - Profile logout calls Wallet Adapter `disconnect` through the mounted runtime before app-owned wallet state and cookies are expired. It does not infer provider state from browser storage keys.
 
 ### iOS
@@ -110,7 +116,7 @@ Landing onboarding should prefer reusable or light/free age assurance:
 2. light fallback: Didit Adaptive Age Verification with document fallback
 3. regional non-document/eID checks where supported
 
-Users may leave the landing surface to create a reusable ID and then return to complete age assurance. Wallet connection stays mandatory; profile and Supabase recovery auth stay optional; age assurance stays mandatory for protected app access.
+Users may leave the landing surface to create a reusable ID and then return to complete age assurance. The wallet-owned application session and unique handle stay mandatory; display name, avatar, and Supabase recovery linking stay optional; age assurance stays mandatory for protected app access.
 
 Current API behavior:
 
@@ -209,9 +215,22 @@ The frontend has neutral monogram fallbacks for local development, but those fal
 - Signed provider webhooks update the pending session and append a normalized record.
 - Raw provider payloads, identity documents, selfies, biometric templates, registry files, and private provider review comments stay out of core app tables and browser resources.
 
+### Session and decision lifecycle invariants
+
+- The API reserves the session and pending record transactionally before provider I/O. A repeated idempotency key cannot create a second reservation; reuse with a different request hash is rejected explicitly.
+- The stable provider subject reference is separate from the provider-created applicant, inquiry, session, or transaction id. For Sumsub, `externalUserId` is the WeVid subject reference and `applicantId` is the later provider applicant id; they are never relabeled as each other.
+- The chosen provider and method are persisted before the external request. Once a provider call is attempted, the API does not silently fall through to another provider because the first provider may have created a remote session even when the response was lost.
+- Signed webhooks that arrive before the remote id is attached are stored as normalized unmatched receipts and reconciled by the stable subject reference when session creation completes.
+- Provider delivery order is not decision order. Decisions are applied by the provider-authored event timestamp. An older approval cannot overwrite a newer denial; at equal timestamps the more restrictive decision wins. A timestamp-less positive result cannot overwrite an existing decision.
+- Provider event idempotency uses the provider's documented immutable event id when one exists. Sumsub's `correlationId` is stored only as correlation metadata because multiple decisions can share it; Sumsub events use a fingerprint of the exact signed payload as the event id.
+- A launch link's `expires_at` describes only how long the browser may start the provider flow. A valid evidence record does not inherit that TTL. Valid evidence remains active until provider revocation or an approved re-check/retention policy supplies an evidence expiry; that policy still requires legal and provider acceptance before launch.
+- A valid canonical age result may activate a provisional user, but it does not change the user's selected profile visibility. Age evidence stores the threshold (`18`) and result (`true`) required by the capability resolver.
+
 ### Provider-specific runtime notes
 
-- Didit age, adult-publisher, creator KYC, and org KYB session creation uses `POST /v3/session/` with `x-api-key`, a purpose-specific workflow ID, `callback`, `callback_method=completer`, opaque `vendor_data`, and non-sensitive metadata. Didit V3 webhooks use one application-level destination at `POST /v1/webhooks/verification/{provider}` with `provider=didit`; the API requires `X-Signature-V2` and a fresh `X-Timestamp` within five minutes, keys idempotency on `event_id`, and normalizes the documented plural decision arrays. Adult-publisher and creator-KYC approval fails closed unless document, liveness, and face-match nodes are all approved.
+- Didit age, adult-publisher, creator KYC, and org KYB session creation uses `POST /v3/session/` with `x-api-key`, a purpose-specific workflow ID, `callback`, `callback_method=completer`, opaque `vendor_data`, and non-sensitive metadata. Didit V3 webhooks use one application-level destination at `POST /v1/webhooks/verification/{provider}` with `provider=didit`; the API requires `X-Signature-V2`, verifies the documented canonical JSON body, derives the five-minute freshness window from the signed V3 envelope `timestamp`, and requires `X-Timestamp` to equal that signed value. A refreshed unsigned header can never make an old signed body fresh. Processing keys idempotency on the documented stable `event_id` and normalizes the documented plural decision arrays. Adult-publisher and creator-KYC approval fails closed unless document, liveness, and face-match nodes are all approved.
+
+This direct adapter has no installed Didit server SDK. The V3 envelope and `X-Signature-V2` contract were re-checked against `https://docs.didit.me/integration/webhooks` and the official `didit-protocol/plugin-wordpress` verifier on 2026-11-04. The official generic sample still illustrates freshness from the independently supplied header, while the signed envelope contract states that body `timestamp` is present, refreshed per delivery attempt, used for signature verification, and covered by V2. We therefore require header/body equality and trust only the signed body value for freshness. A real Console `Try Webhook` fixture for the exact destination remains mandatory before provider promotion.
 
 Didit launch approval requires four separately published workflows in the Business Console:
 
@@ -221,8 +240,8 @@ Didit launch approval requires four separately published workflows in the Busine
 - organization KYB for legal-entity workflows.
 
 The production webhook destination must subscribe to `status.updated`, use webhook version V3, and point to the verification webhook route with the `didit` provider path parameter. Console-issued credentials and a signed sandbox fixture remain mandatory launch evidence; mock approval is disabled in production.
-- Persona session creation uses the Persona Inquiries API, `key-inflection: kebab`, purpose-specific template ids, and `meta.redirect-uri`. Persona webhooks verify `Persona-Signature` as timestamped HMAC-SHA256 over `timestamp.rawBody`.
-- Sumsub session creation signs `POST /resources/accessTokens/sdk` with `x-app-token`, `x-app-access-ts`, and `x-app-access-sig`. Creator and organization levels should be separate.
+- Persona session creation is an explicit two-step server flow pinned to `Persona-Version: 2026-09-29`: create the inquiry with the purpose-specific template, then call Persona's generate-one-time-link inquiry endpoint. The browser receives only `meta.one-time-link`. Persona webhooks verify `Persona-Signature` as timestamped HMAC-SHA256 over `timestamp.rawBody`.
+- Sumsub session creation signs `POST /resources/sdkIntegrations/levels/-/websdkLink` with `x-app-token`, `x-app-access-ts`, and `x-app-access-sig`, supplies the purpose-specific level and stable external user id, and returns the hosted `url`. An SDK access token is SDK input, not a browser callback URL, and is not appended to the WeVid callback. Creator and organization levels should be separate.
 - Veriff session creation uses the Veriff Sessions API with `x-auth-client`. Veriff webhooks verify `x-hmac-signature` against the raw payload. In this scaffold Veriff is creator KYC only, not organization KYB.
 
 ### Required dashboard setup
@@ -230,7 +249,7 @@ The production webhook destination must subscribe to `status.updated`, use webho
 1. Create or select a Sumsub verification level intended for the approved creator/compliance use case.
 2. Set the level name into `SUMSUB_LEVEL_NAME`.
 3. Add the production webhook URL:
-   - `POST https://<api-domain>/v1/webhooks/age/{provider}`
+   - `POST https://<api-domain>/v1/webhooks/age/sumsub`
 4. Configure the webhook signing secret to match `SUMSUB_WEBHOOK_SECRET`.
 5. Ensure the webhook includes applicant review events.
 6. Keep the API app token and secret key server-side only.
@@ -238,14 +257,20 @@ The production webhook destination must subscribe to `status.updated`, use webho
 ### Sumsub webhook expectations in this repo
 
 - Route:
-  - `POST /v1/webhooks/age/{provider}` with `{provider}=sumsub`
+  - `POST /v1/webhooks/age/sumsub`
 - Signature:
   - header `x-payload-digest`
   - header `x-payload-digest-alg`
   - validated against the raw JSON payload with the HMAC algorithm declared by Sumsub
   - supported values are `HMAC_SHA256_HEX`, `HMAC_SHA512_HEX`, and legacy `HMAC_SHA1_HEX`
+  - both headers are required; missing or unknown algorithm values fail closed rather than defaulting to SHA-256
 - Provider reference lookup:
-  - the repo resolves the pending age verification by `applicantId`, falling back to `externalUserId` when provider setup uses that reference
+  - `applicantId` is the provider-created applicant id; `externalUserId` is the stable WeVid subject reference used to reconcile callbacks that beat the session response
+  - the repo attaches the applicant id when known and can match an early callback by the external user id
+- Event identity and ordering:
+  - the exact signed payload fingerprint is the event id because Sumsub can reuse one `correlationId` across multiple final decisions
+  - `correlationId` is retained separately for investigation
+  - `createdAt` is the decision timestamp; later provider decisions win, including a later `RED` after an earlier `GREEN`
 - Result ownership:
   - the browser cannot complete or override the result
   - only the verified webhook path applies the over-18 decision
@@ -257,7 +282,7 @@ The production webhook destination must subscribe to `status.updated`, use webho
 
 ### Runtime behavior in this repo
 
-- The API starts the Sumsub session.
+- The API creates a Sumsub hosted WebSDK link for the configured level and stable external user id.
 - The provider launch URL is returned to the browser; `/age` redirects to it only after the backend creates the session.
 - The browser cannot self-complete the age check.
 - A signed `applicantReviewed` webhook with `reviewResult.reviewAnswer=GREEN` applies the over-18 decision server-side.
@@ -279,18 +304,19 @@ The production webhook destination must subscribe to `status.updated`, use webho
 
 1. Create the Yoti age-verification application for the production domain.
 2. Configure the notification / webhook endpoint:
-   - `POST https://<api-domain>/v1/webhooks/age/{provider}`
+   - `POST https://<api-domain>/v1/webhooks/age/yoti`
 3. Export the Yoti notification public key to the API host and set its path in `YOTI_NOTIFICATION_KEY_PATH`.
 4. Keep the API token server-side only.
 
 ### Yoti webhook expectations in this repo
 
 - Route:
-  - `POST /v1/webhooks/age/{provider}` with `{provider}=yoti`
+  - `POST /v1/webhooks/age/yoti`
 - Signature field:
   - JSON payload field `signature`
 - Verification:
   - the repo verifies the signed notification with RSA-SHA256/PSS using the public key at `YOTI_NOTIFICATION_KEY_PATH`
+  - the route returns `200` after an accepted or duplicate notification because Yoti retries any notification not acknowledged with that exact success status
 - Provider reference lookup:
   - the repo resolves the pending age verification by `session_key`, falling back to `reference_id`
 - Result ownership:
@@ -309,7 +335,7 @@ The production webhook destination must subscribe to `status.updated`, use webho
 - The browser cannot self-complete the check.
 - A signed notification with `state=COMPLETE` applies the over-18 decision server-side.
 - A signed notification with `state=FAIL` or `state=ERROR` records a failed age state.
-- Duplicate provider events return `202` but are not applied twice.
+- Duplicate provider events return `200` but are not applied twice.
 
 ## Production guardrails
 
@@ -327,7 +353,7 @@ The production webhook destination must subscribe to `status.updated`, use webho
    - do not use Sumsub or Veriff as default viewer onboarding
 2. Set the matching provider env in the API runtime.
 3. Keep `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=false` in production.
-4. Configure the provider dashboard webhook to call the correct `/v1/webhooks/age/{provider}` endpoint.
+4. Configure the provider dashboard webhook to call the exact `/v1/webhooks/age/sumsub` or `/v1/webhooks/age/yoti` endpoint selected for the approved workflow.
 5. Verify the webhook secret or notification key matches the API env.
 6. Complete one full provider session on a staging domain and confirm:
    - the webhook is received

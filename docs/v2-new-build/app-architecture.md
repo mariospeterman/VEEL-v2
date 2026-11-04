@@ -3,7 +3,7 @@
 Status: accepted
 Scope: full product architecture
 Last updated: 2026-08-15
-Source of truth: yes
+Source of truth: current system/module architecture
 
 Owns:
 - whole-platform module boundaries and runtime responsibilities
@@ -146,8 +146,8 @@ flowchart TB
 | Wallet onboarding | Embedded wallet provider + external wallet adapter | Reduces conversion friction while preserving noncustodial user approval and backend settlement verification. |
 | DB | Supabase Postgres | Relational money/access/media truth needs Postgres, transactions, constraints, and auditability. |
 | Realtime | Supabase Realtime Broadcast/Presence + selective Postgres Changes | Avoids custom websocket infrastructure for messages/live/activity while keeping backend policy. |
-| Queue/workers | Fastify-compatible worker process with pg-boss launch default | Webhooks, provider reconciliation, moderation, media status, and retries need controlled background jobs; BullMQ/Redis is a measured scale option. |
-| Contracts | OpenAPI generated from Fastify schemas or shared Zod schema source | API contracts must remain source of truth for frontend client types. |
+| Queue/workers | TypeScript worker with domain-owned Postgres lease tables | Existing durable job tables own retries, schedules, leases, and dead-letter state. Consolidation behind a queue library requires a measured ADR; no parallel queue authority is introduced. |
+| Contracts | Canonical OpenAPI YAML generates TypeScript types and route schema artifacts | `packages/contracts/openapi.yaml` is the one-way API source of truth. Runtime handlers must implement it rather than regenerate it from divergent route schemas. |
 | Package manager | pnpm workspaces | Current repo already uses pnpm; lowest migration risk for monorepo and CI. |
 | Runtime | Node.js LTS | Best provider SDK and ops compatibility for launch. |
 | Payments | Official Solana JS/Solana Pay tooling, selected Commerce Kit Solana Pay codec in Slice 06, and Solana Subscriptions/Allowances after staging approval | Server composes requests and retains exact split/settlement authority; Commerce Kit is an isolated URL/QR/deep-link interoperability dependency, not a second wallet, checkout, order, or verifier. |
@@ -205,7 +205,7 @@ Supabase is not a replacement for backend business logic.
 
 Allowed direct client use:
 
-- Supabase Auth session handling.
+- Supabase recovery UI only at the explicit recovery exchange; its credential is never ordinary API authority.
 - Realtime subscriptions to rows/channels already authorized by RLS.
 - Presence/broadcast for low-risk typing/online/live viewer state.
 

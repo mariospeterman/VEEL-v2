@@ -9,7 +9,7 @@ Owns:
 - adult content compliance decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, immutable database migrations, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -47,7 +47,7 @@ Provider choice does not remove platform obligations. The Fastify API remains th
 
 ## Contextual verification UX
 
-Ordinary onboarding asks only for age assurance. A user who already intends to publish adult content may opt into one stronger identity-and-age flow during onboarding; this is never preselected or required for viewer/SFW access. The same adult-publisher flow appears contextually when adult or explicit is selected in Create. The API records versioned Adult Publisher Terms acceptance before the provider session and derives ordinary age access only from an approved high-assurance documentary result.
+Ordinary onboarding asks only for age assurance and never asks for adult-publishing intent. The independent adult-publisher flow appears contextually only when Adult or Explicit publication is selected in Create. The API records versioned Adult Publisher Terms acceptance before the provider session and derives ordinary age access only from an approved high-assurance documentary result.
 
 ## Jurisdiction notes
 

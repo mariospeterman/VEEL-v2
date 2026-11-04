@@ -9,7 +9,7 @@ Owns:
 - stack decision decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -27,7 +27,7 @@ Web:        Next.js PWA, TypeScript, Tailwind v4, TanStack Query, Zustand
 API:        Fastify TypeScript
 DB/Auth:    Supabase Postgres/RLS + optional Supabase Auth recovery linking
 Realtime:   Supabase Realtime, selectively
-Workers:    TypeScript worker runtime with pg-boss launch default; BullMQ/Redis only when measured scale requires it
+Workers:    TypeScript worker runtime with domain-owned Postgres lease tables; BullMQ/Redis only when measured scale requires it
 Contracts:  OpenAPI generated from schemas
 Payments:   Solana JS + Solana Pay; selected Commerce Kit Solana Pay codec in Slice 06; Solana Subscriptions/Allowances after staging approval
 Wallets:    Privy embedded Solana wallet + intentional Solana Wallet Standard adapters
@@ -152,7 +152,7 @@ Use edge/serverless later only for isolated stateless endpoints. A full serverle
 
 ## Node 22 / pnpm 10 Decision
 
-Decision: **pin CI and the launch build to Node.js 22.16.0 and pnpm 10.0.0.**
+Decision: **pin CI and the launch build to Node.js 22.23.4 and pnpm 10.0.0.**
 
 Why Node 22 instead of the newest current runtime:
 

@@ -38,7 +38,9 @@ the onboarding explanation before account or embedded-wallet creation. Login nev
 
 `/app/search` groups creators, content, hashtags, live rooms, and events from the existing deterministic
 discover authority. Empty search provides age-safe suggestions; recent queries stay bounded on the
-device and never become recommendation truth. Money is not a ranking input.
+device and never become recommendation truth. Each result group advances with its own opaque,
+scope-bound cursor. Content and live cards reuse the same viewer-relative access, safety, allowance,
+and signed-delivery projections as their canonical detail surfaces. Money is not a ranking input.
 
 ## Privacy And Account Control
 

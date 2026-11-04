@@ -20,7 +20,7 @@ Launch scope:
 Non-goals:
 - bulk-copying historical context code
 
-This is the detailed build plan for a clean `veel-v2` repository. It is not an in-place upgrade checklist and not a code-copy plan. Build decisions come from this docs pack, OpenAPI, schema blueprint, ADRs, tests, and official provider docs.
+This is the detailed build plan for a clean `veel-v2` repository. It is not an in-place upgrade checklist and not a code-copy plan. Build decisions come from this docs pack, OpenAPI, the immutable migration chain for database shape, ADRs, tests, and official provider docs. The schema blueprint is historical orientation only.
 
 Use this as the primary v2 starting document. `slice-workflow.md` is the operational slice workflow. There is no in-place upgrade plan in this scaffold.
 
@@ -425,7 +425,7 @@ Each slice must include:
 
 If a developer reviews any historical material for context, the process is:
 
-1. Extract the lesson into the relevant v2 doc, OpenAPI contract, schema blueprint, or test plan.
+1. Extract the lesson into the relevant v2 doc, OpenAPI contract, conceptual schema notes, a forward migration, or a test plan. The migration chain remains the database-shape authority.
 2. Treat the v2 artifact as the only implementation source.
 3. Do not copy files, CSS, controllers, services, provider adapters, or abstractions.
 4. Do not infer missing behavior from historical code.

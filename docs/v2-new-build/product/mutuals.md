@@ -9,7 +9,7 @@ Owns:
 - Mutuals product decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, legal advice, or hidden source-of-truth rules
@@ -69,6 +69,10 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 - `/mutuals/feed` and `/mutuals` use typed API-backed projections through the
   canonical API routes `GET /v1/mutuals/feed` and `GET /v1/mutuals`; they fail
   closed when the API is unavailable instead of rendering fixture Mutuals data.
+- The Mutuals feed currently presents visual `bit`, `clip`, `image`, `vod`,
+  `live_replay`, and `carousel` content. Its `mediaKind` is derived from the
+  canonical content type and selected cover asset; text and poll participation
+  requires a later explicit response-contract decision.
 - The visible Interested and Not interested controls submit to
   `POST /v1/mutuals/interests`, retain one idempotency key across a lost-response
   retry, and render the canonical persisted action plus only the backend-owned
@@ -216,7 +220,7 @@ Launch defaults:
 
 Mutuals itself has no external dating provider. It depends on:
 
-- Supabase Auth for identity.
+- the canonical WeVid user and opaque application session for identity; optional Supabase Auth recovery does not authorize Mutuals resources.
 - Age provider waterfall before activation.
 - Supabase Realtime / backend events for Mutual chat updates.
 - Moderation providers if content/user safety scanning is added.

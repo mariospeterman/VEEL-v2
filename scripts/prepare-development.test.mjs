@@ -21,7 +21,7 @@ afterEach(async () => {
 describe("web development dependency cache", () => {
   it("keeps compatible Next.js output across normal restarts", async () => {
     const repoRoot = await createRepo();
-    const runtime = { repoRoot, nodeVersion: "v22.16.0", platform: "darwin", architecture: "arm64" };
+    const runtime = { repoRoot, nodeVersion: "v22.23.4", platform: "darwin", architecture: "arm64" };
 
     await prepareWebDevelopmentCache(runtime);
     await writeFile(join(repoRoot, "apps/web/.next/current-chunk.js"), "compatible", "utf8");
@@ -32,7 +32,7 @@ describe("web development dependency cache", () => {
 
   it("removes stale Next.js chunks when the lockfile changes", async () => {
     const repoRoot = await createRepo();
-    const runtime = { repoRoot, nodeVersion: "v22.16.0", platform: "darwin", architecture: "arm64" };
+    const runtime = { repoRoot, nodeVersion: "v22.23.4", platform: "darwin", architecture: "arm64" };
 
     await prepareWebDevelopmentCache(runtime);
     await writeFile(join(repoRoot, "apps/web/.next/stale-chunk.js"), "next-16.3.0", "utf8");
@@ -43,7 +43,7 @@ describe("web development dependency cache", () => {
   });
 
   it("includes the Node runtime and host architecture in the fingerprint", () => {
-    const base = { lockfile: "same", nodeVersion: "v22.16.0", platform: "darwin", architecture: "arm64" };
+    const base = { lockfile: "same", nodeVersion: "v22.23.4", platform: "darwin", architecture: "arm64" };
 
     expect(createWebDependencyFingerprint(base)).not.toBe(
       createWebDependencyFingerprint({ ...base, nodeVersion: "v22.17.0" })

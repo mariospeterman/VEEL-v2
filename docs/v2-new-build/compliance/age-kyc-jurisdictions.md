@@ -9,7 +9,7 @@ Owns:
 - age kyc jurisdictions decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -35,8 +35,8 @@ These are separate controls and should stay separate in data, policy, and UI.
 1. Let the user reach landing and teaser surfaces without heavy verification.
 2. Create an app session through wallet auth or passkey auth.
 3. Require third-party 18+ assurance before protected app access.
-4. Present a simple provider-choice flow when multiple supported reusable proofs are available.
-5. Fall back only when the preferred reusable proof is unavailable or inconclusive.
+4. Let backend policy select the configured primary provider and at most one documented fallback; ordinary onboarding does not expose an operator/provider chooser.
+5. Fall back only when the selected primary proof is unavailable or inconclusive.
 6. Trigger KYC or KYB later only for suspicious or operationally necessary cases.
 
 ## Best-practice age path
@@ -57,7 +57,7 @@ This is the best-practice 2026 setup to keep:
 
 Webhook rule:
 
-- provider callbacks are accepted only through `POST /v1/webhooks/age/{provider}`
+- direct age callbacks are accepted only through the literal provider boundaries `POST /v1/webhooks/age/sumsub` and `POST /v1/webhooks/age/yoti`; other identity workflows use their separately contracted verification routes
 - provider signatures must verify before state changes
 - provider retries must be idempotent
 - the app stores normalized receipt/event/result state only, never raw document, biometric, or private provider-review payloads
@@ -90,7 +90,7 @@ Launch-default recommendation:
 - primary onboarding path: reusable age credential first (`Didit`, `Yoti Digital ID`, `EUDI Wallet`, `Scytales`) where provider contracts and regional availability support it
 - first fallback path: free/light age assurance (`Didit` age estimation or `Persona`/`Didit` document check) when reusable proof is not available
 - do not show Sumsub or Veriff in ordinary viewer onboarding; keep them as Studio/enterprise compliance fallbacks after privacy/security/procurement review
-- product rule: let the user choose a supported reusable provider when possible, then fall back within the same third-party flow when needed
+- product rule: backend policy selects the launch-approved primary and at most one documented fallback; the browser renders only the provider-safe next action
 
 Expanded provider recommendation:
 

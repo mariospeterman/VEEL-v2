@@ -32,7 +32,7 @@ Non-goals:
 - OAuth revocation: `/oauth/revoke`
 - Authenticated web consent: `/oauth/consent/:requestId`
 - Scoped tool listing and tool execution
-- Stable MCP `2025-11-25` negotiation with standard text plus `structuredContent` results
+- Deliberate MCP `2025-11-25` compatibility negotiation with standard text plus `structuredContent` results. The official `2026-07-28` specification is the latest final release; WeVid does not claim that negotiation level until its exact client matrix is implemented and staged.
 - Protocol-version headers on post-initialization smoke requests and HTTP 400 rejection for explicit
   unsupported versions
 - Configured-Origin validation for Streamable HTTP requests
@@ -40,6 +40,7 @@ Non-goals:
 - Minimized creator profile/readiness, canonical Analytics Core queries, owned private-draft reads,
   and idempotent SFW private-draft preparation for review in WeVid
 - Hash-only authorization codes and access tokens
+- Authorization-code redemption is a single transactional compare-and-set across exact client, redirect, S256 challenge, resource, expiry, active connection, code consumption, request state, and token issuance. A unique `code_id` constraint provides defense in depth; concurrent reuse returns `invalid_grant`, and token-insert failure rolls the consume back.
 - Connection and token revocation
 - Redacted MCP tool-call audit rows
 - Minimized durable MCP private-draft origin rows without prompts, tokens, model keys, provider
@@ -80,9 +81,11 @@ The seed script validates exact redirect URIs, rejects wildcard redirects, rejec
 1. Start the API and web apps:
 
 ```bash
-PATH="/Users/maki/.nvm/versions/node/v22.16.0/bin:$PATH" pnpm --filter @veel/api dev
-PATH="/Users/maki/.nvm/versions/node/v22.16.0/bin:$PATH" pnpm --filter @veel/web dev
+corepack pnpm --filter @veel/api dev
+corepack pnpm --filter @veel/web dev
 ```
+
+Use the repository-pinned Node and pnpm versions reported by `pnpm doctor`; no host-specific installation path is part of this proof.
 
 2. Seed a local client:
 
@@ -236,6 +239,7 @@ Remote MCP is production-auth-capable only after public HTTPS deployment, OAuth 
 - MCP Inspector: `https://modelcontextprotocol.io/docs/tools/inspector`
 - MCP Authorization: `https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization`
 - MCP Streamable HTTP transport: `https://modelcontextprotocol.io/specification/2025-11-25/basic/transports`
+- Latest final MCP specification: `https://modelcontextprotocol.io/specification/2026-07-28`
 - Claude Code MCP: `https://docs.anthropic.com/en/docs/claude-code/mcp`
 - Claude custom connectors: `https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp`
 - OpenAI MCP/connectors: `https://developers.openai.com/api/docs/guides/tools-connectors-mcp`

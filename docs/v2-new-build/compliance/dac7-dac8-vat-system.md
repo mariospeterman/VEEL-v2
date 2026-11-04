@@ -139,7 +139,7 @@ VAT collected from users is output tax to remit. Input VAT recovery applies only
 | Event Access Pass - virtual/streamed | Creator/event owner | virtual access software | access receipt naming event owner | customer-country VAT may apply for B2C virtual access |
 | Creator Membership | Creator | membership entitlement software | membership receipt naming creator | creator recurring supply unless deemed-supplier config says Veel |
 | Veel Plus | Veel | seller | Veel VAT receipt/invoice | Veel B2C/B2B platform digital service |
-| Veel Studio | Veel | seller | Veel VAT receipt/invoice | Veel B2C/B2B platform digital service; KYC required for creator tools |
+| Veel Studio | Veel | seller | Veel VAT receipt/invoice | Veel B2C/B2B platform digital service; buying Studio does not itself require creator KYC or grant earning capability. Any recipient KYC is resolved independently per product, jurisdiction, and effective policy. |
 | Enterprise | Veel | seller/contracting party | Veel VAT invoice/contract invoice | B2B/KYB, reverse charge or local VAT depending jurisdiction |
 | Platform commission | Veel -> creator | Veel service fee | creator fee statement/invoice | B2B service; domestic VAT or reverse charge depending creator status/location |
 | Referral commission | Veel -> referrer/partner | marketing/revenue share from Veel fee only | commission statement | report/tax treatment based on referrer status/location |

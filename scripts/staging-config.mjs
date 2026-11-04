@@ -34,8 +34,6 @@ export const stagingCapabilities = [
   ]),
   capability("wallet", true, [
     variable("NEXT_PUBLIC_PRIVY_APP_ID", "public", true),
-    variable("PRIVY_APP_SECRET", "secret", true),
-    variable("PRIVY_JWKS_ENDPOINT", "public", true),
     variable("NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED", "public", true),
     variable("NEXT_PUBLIC_SOLANA_CHAIN", "public", true),
     variable("NEXT_PUBLIC_SOLANA_RPC_URL", "public", true)
@@ -238,7 +236,7 @@ function validateGlobalSafety(env) {
         // URL syntax is reported by the earlier global URL validation.
       }
     }
-    for (const name of ["DATABASE_URL", "SUPABASE_DIRECT_DB_URL"]) {
+    for (const name of ["DATABASE_URL", "SUPABASE_DIRECT_DB_URL", "SUPABASE_MIGRATIONS_DB_URL"]) {
       if (present(env[name]) && !databaseUrlMatchesProject(env[name], env.SUPABASE_PROJECT_REF)) {
         errors.push(`${name}=staging_project_ref`);
       }

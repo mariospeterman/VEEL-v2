@@ -9,7 +9,7 @@ Owns:
 - 0002 provider decisions 2026 decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, immutable database migrations, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -134,24 +134,24 @@ Before implementation, verify the latest official docs for each provider/API. Th
 | Privy user authentication | `https://docs.privy.io/authentication/user-authentication/privy-auth` |
 | Privy Solana setup | `https://docs.privy.io/recipes/solana/getting-started-with-privy-and-solana` |
 | Privy external-wallet connectors | `https://docs.privy.io/wallets/connectors/setup/configuring-external-connector-wallets` |
-| MCP authorization | `https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization` |
+| MCP current final specification | `https://modelcontextprotocol.io/specification/2026-07-28` |
+| MCP tested compatibility authorization | `https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization` |
 | MCP security best practices | `https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices` |
 | OpenAI MCP/connectors | `https://developers.openai.com/api/docs/guides/tools-connectors-mcp` |
 | OpenAI remote MCP server guide | `https://developers.openai.com/api/docs/mcp` |
 
 Provider docs override assumptions in this ADR if an API has changed. Any changed provider behavior needs an ADR update before coding.
 
-### MCP re-verification — 2026-08-24
+### MCP re-verification — 2026-11-04
 
-Convergence 07 was re-checked against the official stable MCP `2025-11-25` authorization and
-Streamable HTTP specifications, the official MCP security guidance, and current OpenAI remote MCP
-and review guidance. The accepted implementation remains OAuth authorization-code plus S256 PKCE,
+The official MCP `2026-07-28` specification is final. Convergence 07 remains a bounded
+`2025-11-25` compatibility implementation using OAuth authorization-code plus S256 PKCE,
 protected-resource discovery, exact redirect matching, resource/audience-bound short-lived bearer
 tokens, no token passthrough, explicit scopes, per-request authorization, Origin validation,
-standard structured tool results, accurate tool annotations, minimized results, and audit. The July
-2026 MCP release candidate is not adopted while it remains non-final and lacks the required
-supported-client staging proof. OpenAI-compatible remote usage remains unclaimed until the public
-HTTPS staging matrix in `mcp-staging-proof.md` passes.
+standard structured tool results, accurate tool annotations, minimized results, and audit. It does
+not yet implement the current release's stateless discovery/routing/cache contract, and rejects that
+version rather than falsely negotiating it. OpenAI-compatible remote usage and current-protocol
+compatibility remain unclaimed until the public HTTPS matrix in `mcp-staging-proof.md` passes.
 
 ### MCP media handoff re-verification — 2026-08-24
 

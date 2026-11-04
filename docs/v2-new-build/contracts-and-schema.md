@@ -3,13 +3,13 @@
 Status: accepted
 Scope: OpenAPI and database starting point
 Last updated: 2026-08-20
-Source of truth: yes
+Source of truth: API contract guide; database authority is the immutable migration chain
 
 Owns:
 - contracts and schema decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, immutable database migrations, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -20,12 +20,12 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This document explains the first concrete implementation artifacts:
+This document explains the contract and database authority boundaries:
 
 - `packages/contracts/openapi.yaml`
-- `packages/database/schema-blueprint.sql`
+- ordered SQL in `packages/database/migrations/`
 
-They are intentionally broad enough to cover the full platform, but not final migrations. Convert them into proper migrations and generated clients during the first implementation slices.
+`packages/contracts/openapi.yaml` is canonical for HTTP shape and generates the TypeScript contract artifact. The ordered migration chain is canonical for database shape. `packages/database/schema-blueprint.sql` is retained as non-authoritative planning history and must not be used to infer a current column, constraint, policy, or table.
 
 ## Contract Principles
 
@@ -96,7 +96,7 @@ The first contract skeleton is in `packages/contracts/openapi.yaml`. It intentio
 Before building a slice:
 
 1. Add or refine OpenAPI paths.
-2. Add migrations based on the schema blueprint.
+2. Add a new ordered migration against the final schema produced by the existing immutable chain; never rewrite applied history or derive a change from the historical blueprint alone.
 3. Add generated TS client/types.
 4. Implement Fastify route/service/adapter.
 5. Add tests and frontend smoke.

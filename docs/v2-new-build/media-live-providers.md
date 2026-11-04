@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: Bunny, Livepeer, media, live
-Last updated: 2026-08-24
+Last updated: 2026-11-04
 Source of truth: yes
 
 Owns:
 - media live providers decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -26,7 +26,7 @@ Current implementation state:
 - Content draft creation persists a non-expiring server-only receipt keyed by actor, action, and `Idempotency-Key`. An exact replay returns the original draft, changed-input reuse fails with `409`, and retries never consume draft quota twice.
 - Adult/explicit draft creation requires a first-party representation declaration and explicit policy acceptance. `self_only` reuses the creator's valid Didit-backed adult-publisher identity and records one scoped consent; MCP cannot accept this declaration for the creator.
 - `POST /v1/content` enforces a backend-owned draft quota before inserting content. The default policy is 20 drafts per rolling 24 hours, and an active `safety.content_creation_abuse_policy` admin software-policy flag can tighten or relax the draft count/window without giving the browser, money, tiers, Mutuals, recommendations, messages, or moderation priority any control.
-- `POST /v1/media/uploads` creates a Bunny Stream upload session for an owned content draft, persists the corresponding backend `media_assets` record, returns its frontend-safe `mediaAssetId`, and enforces a backend-owned upload-session quota before touching Bunny. The default policy is 30 upload sessions per rolling 24 hours, with the same active admin safety policy controlling launch operations.
+- `POST /v1/media/uploads` binds the content id, filename, MIME type, byte size, and SHA-256 checksum to one actor/idempotency key and reserves `media_upload_operations` before touching Bunny. One claimed operation may create one Bunny VideoId under an opaque title derived from the reserved media asset id; the VideoId is durably recorded before media attachment, exact response retries re-sign that same VideoId, changed-file reuse fails with `409`, and an attach failure enters the canonical retired-asset cleanup queue before provider deletion is attempted. If Create Video commits but its response is lost, retries remain fail-closed instead of creating a duplicate and the opaque title is the operator reconciliation handle. The default policy is 30 upload sessions per rolling 24 hours, with the same active admin safety policy controlling launch operations.
 - `/create` now uses those backend endpoints for explicit draft creation, metadata/preview updates, upload-session creation, provider-status sync, and content projection refresh, then uploads bytes through `tus-js-client` using the server-issued Bunny TUS endpoint and headers. The browser displays progress, pause/resume state, safe upload headers, expiry, persisted media asset id, and frontend-safe content access/playback projection; it does not receive the Bunny API key, mutate moderation state, or publish content locally.
 - `PATCH /v1/content/{contentId}` is creator-owned and idempotency-header gated. It updates caption, visibility, NSFW label, teaser start/end, thumbnail frame controls, and draft Event Access metadata/pass types for the same owned content item. It does not publish content, publish the event, approve moderation, grant access, or update provider playback truth.
 - `POST /v1/content/{contentId}/publish` is creator-owned and idempotency-header gated. It requires explicit `submit_for_review` confirmation and provider-ready media before moving `publish_state` to `submitted_for_review` or `published` if moderation was already approved. It does not approve moderation, grant access, or create paid visibility.
@@ -35,12 +35,12 @@ Current implementation state:
 - Migration `0088` makes `media_safety_cases` canonical, guards approved content at the database boundary, stores minimized provider scan evidence, and adds performer consent, appeal, and reporting workflow records with RLS. Migration `0092` adds only the uploader-safe decision message, scoped appeal idempotency, and owner publication-list index; it does not introduce a second moderation authority.
 - The Bunny adapter follows the current Bunny Stream TUS flow: create video object, generate server-side SHA256 upload signature, return `https://video.bunnycdn.com/tusupload` plus safe upload headers.
 - `BUNNY_STREAM_API_KEY` and `BUNNY_STREAM_LIBRARY_ID` are server-only config values; the Stream API key is never returned to the browser.
-- Upload state is stored in `media_assets` as normalized provider/provider asset/provider state only.
+- Completed upload state is stored in `media_assets` as normalized provider/provider asset/provider state only. The server-only operation row retains the minimal request hash and opaque VideoId needed for idempotency and compensation; it stores no filename, bytes, provider payload, API key, or upload signature.
 - `GET /v1/content/{contentId}` returns a frontend-safe media viewer projection backed by `content_access_rules`, creator profile data, and the first media poster.
 - `/content/[contentId]` consumes that projection through the web API helper and renders backend access/playback state only. Full backend-issued Bunny embed resources render in an iframe, direct/HLS resources render in the browser media element, and blocked/teaser/not-ready states stay gated; it does not create local payment or playback fixtures.
 - Access projection is conservative: free/teaser/pass/locked states are exposed, entitlement grants remain backend-settlement-owned, and provider management URLs are never exposed to the browser.
 - `GET /v1/content/{contentId}` fails full Bunny playback closed unless backend access is already `free`, `unlocked`, or `subscribed` and a short-lived Bunny embed token can be generated server-side.
-- `POST /v1/webhooks/media/{provider}` accepts Bunny Stream signed webhooks for the `bunny` provider and Livepeer signed stream webhooks for the `livepeer` provider, verifies raw-body HMAC signatures, records idempotent provider receipts, and applies normalized media/live processing state.
+- `POST /v1/webhooks/media/{provider}` accepts Bunny Stream signed webhooks for the `bunny` provider and Livepeer signed stream webhooks for the `livepeer` provider, verifies raw-body HMAC signatures, and records the receipt plus normalized provider event in one database transaction. Redelivery repairs a legacy receipt-only interruption and reapplies an event whenever `processed_at` is still null, so neither a receipt commit nor a crash before asset apply can suppress recovery.
 - SFW live creation now reserves the canonical room and one atomic provider-creation claim before calling Livepeer. Concurrent retries cannot create two streams, and a created provider stream that cannot be attached is suspended and terminated as fail-closed compensation.
 - Creator OBS setup is available through an owner-only host workspace. The ordinary endpoint stays masked; the one-response reveal requires recent authentication, an explicit secret-handling acknowledgement, idempotency, no-store headers, and an audit/control receipt.
 - Viewer playback receives the short-lived Livepeer JWT as a separate player credential, never as a URL query parameter. Ordinary viewer/list repository reads select neither the ingest URL nor stream key.
@@ -69,12 +69,17 @@ Official references checked:
 - Bunny Optimizer Dynamic Images: https://bunny.net/docs/optimizer/dynamic-images/overview
 - Bunny Optimizer limits: https://bunny.net/docs/optimizer/limits
 - Bunny Shield upload scanning: https://bunny.net/docs/shield/upload-scanning
+- Bunny CDN token authentication: https://bunny.net/docs/cdn/security/token-authentication
+- Bunny advanced HMAC token authentication: https://bunny.net/docs/cdn/security/token-authentication/advanced
+
+The Bunny Stream create/delete, TUS, Storage HTTP, Stream security, CDN token-authentication, and Dynamic Images behavior above was rechecked against the official documentation on 2026-11-04. Provider approval state remains unchanged: no candidate production path is promoted by this recheck alone.
 
 ## Provider Split
 
 - Bunny Stream owns VOD upload/resumability, storage, encoding, delivery, and provider playback. Bunny Shield is used only on upload paths with staging-proven coverage.
 - Bunny Storage plus Optimizer is the candidate image boundary: the API streams sanitized originals to opaque private paths with the server-only Storage `AccessKey`, while Optimizer produces responsive derivatives after release. The path stays fail-closed until exact staging evidence exists.
-- Private image ingestion is additionally feature-gated by `BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED=false`. Configuration requires the zone-scoped `BUNNY_STORAGE_ACCESS_KEY`, `BUNNY_STORAGE_ZONE_NAME`, regional `BUNNY_STORAGE_API_ENDPOINT`, `BUNNY_STORAGE_PULL_ZONE_URL`, and server-only `BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY`. The server sends the sanitized object's uppercase SHA-256 through Bunny's documented `Checksum` header and accepts only the documented `201`; completion records `stored_private`, private provider readiness, and the provider check time so safety reconciliation may start. This is neither public playability nor release evidence.
+- Private image ingestion is additionally feature-gated by `BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED=false`. Configuration requires the zone-scoped `BUNNY_STORAGE_ACCESS_KEY`, `BUNNY_STORAGE_ZONE_NAME`, regional `BUNNY_STORAGE_API_ENDPOINT`, `BUNNY_STORAGE_PULL_ZONE_URL`, server-only `BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY`, and a bounded `BUNNY_STORAGE_DELIVERY_TOKEN_TTL_SECONDS` (default 300 seconds). The server sends the sanitized object's uppercase SHA-256 through Bunny's documented `Checksum` header and accepts only the documented `201`; completion records `stored_private`, private provider readiness, and the provider check time so safety reconciliation may start. This is neither public playability nor release evidence.
+- A private Bunny Storage object reference is never serialized. After the canonical viewer-relative access projection allows full composition access, the API issues Bunny's advanced `HS256-` HMAC query capability for the original plus signed `width=480`, `960`, and `1440` Optimizer variants. The response includes expiry metadata, the web renderer refreshes shortly before expiry and once after an image error, and locked/revoked/deleted projections receive neither the object reference nor a delivery capability. Signed URLs are response-only bearer capabilities and must not be stored or logged.
 - Creator removal retires the canonical draft asset before idempotent Bunny Storage/Stream deletion. Provider outages remain an audited, lease-based worker retry with bounded backoff and never restore the asset to the active composition.
 - Livepeer owns live ingest, transcoding, recording, and provider playback.
 - WeVid backend owns drafts/quarantine, performer and consent requirements, moderation/release, room/access/monetisation policy, entitlement/playback authorization, report and suspend/end orchestration, and replay release.
@@ -92,9 +97,10 @@ sequenceDiagram
 
   Web->>API: Create content draft
   Web->>API: Request upload intent
+  API->>DB: Reserve actor + key + request hash
   API->>Bunny: Create video object
   Bunny-->>API: videoId
-  API->>DB: Store asset provider id/status
+  API->>DB: Durably record videoId, then attach asset
   API-->>Web: TUS endpoint + safe headers
   Web->>Bunny: TUS upload directly
   Bunny->>API: Webhook/status
@@ -104,7 +110,7 @@ sequenceDiagram
 
 Rules:
 
-- Bunny video object is created by backend before TUS upload.
+- Bunny video object is created by the backend only after the logical operation has been reserved. Exact retries never call Create Video again after the VideoId is recorded; they regenerate only the expiring TUS signature.
 - Bunny API key never reaches frontend.
 - Frontend receives only upload target/headers needed for TUS.
 - Bunny status webhooks require `X-BunnyStream-Signature-Version: v1`, `X-BunnyStream-Signature-Algorithm: hmac-sha256`, and `X-BunnyStream-Signature`; the backend verifies the exact raw request body with `BUNNY_STREAM_WEBHOOK_READONLY_KEY`.

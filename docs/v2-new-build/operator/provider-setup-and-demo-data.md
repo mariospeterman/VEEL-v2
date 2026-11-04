@@ -34,6 +34,8 @@ Also set the existing Supabase variables from **Project Settings → API** and t
 
 Before applying anything, verify the exact project and migration plan:
 
+The history gate accepts only an unchanged applied prefix followed by the checkout's pending suffix. A fresh database (no history table), a current database, and one or more new trailing migrations may proceed to the CLI dry run; history holes, unknown remote versions, renamed or changed applied migrations, and history rows without replayable statement evidence fail closed. Staging commands inherit the `.env.staging` process environment and do not require a separate `.env` file.
+
 ```text
 pnpm supabase:link
 pnpm supabase:migrations
@@ -62,7 +64,7 @@ Create separate Privy apps for local/staging and production. In the Privy dashbo
 1. Add web app clients for `http://localhost:3000` and `http://127.0.0.1:3000`; include the port. Add only the exact HTTPS staging origin to the staging app.
 2. Enable email, Google, X/Twitter, Discord, and passkey login methods that should appear in Privy's official login UI. Configure each social client and callback in its provider dashboard.
 3. Enable Solana and embedded wallets. Embedded wallet creation must remain `off` for login and `users-without-wallets` for explicit onboarding; the repository enforces that policy.
-4. Put the public app ID in `NEXT_PUBLIC_PRIVY_APP_ID`. Put `PRIVY_APP_SECRET` and the official app JWKS endpoint in server-only configuration. Set `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=true` only for an approved app/origin pair.
+4. Put the browser-safe app ID in `NEXT_PUBLIC_PRIVY_APP_ID`. Set `NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED=true` only for an approved app/origin pair. The current backend authenticates the resulting user-controlled wallet with its own signed challenge; it does not consume a Privy subject token, app secret, or JWKS endpoint.
 5. Test both identities: an existing Privy wallet must sign the backend ownership challenge and enter the app; a new Privy identity must show the onboarding transition before the wallet is created.
 
 The external wallet buttons need no provider keys. They use Wallet Standard discovery, show the installed wallet's supplied icon when it is a safe embedded image, and request a message signature—not a payment. Test Phantom plus at least one other Solana-compatible wallet on devnet.
@@ -81,16 +83,16 @@ AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=true
 
 It creates the canonical pending record and auto-approves that record through the same repository boundary. It does not bypass wallet, profile, session, or app-access policy. Production and real staging reject the mock flag; set `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=false` there and configure one approved real provider workflow.
 
-For real age acceptance, create the selected Didit workflow, configure `DIDIT_API_KEY`, `DIDIT_WEBHOOK_SECRET`, and `DIDIT_AGE_WORKFLOW_ID`, then point the signed provider webhook at the API age webhook base. KYC/KYB workflow IDs are separate and are not universal onboarding. Verify signature failure, replay denial, approval, rejection, and delayed callback recovery.
+For real age acceptance, select exactly one configured `AGE_VERIFICATION_DRIVER` and complete only that provider's server-side block in `.env.staging`. The staging template includes the complete supported Didit, Yoti, Sumsub, Persona, and Veriff blocks so operators do not have to infer variable names. Empty alternative blocks remain disabled and fail closed; they are not a requirement to buy or configure every provider. Keep age, adult-publisher, creator-KYC, and organization-KYB workflows purpose-specific, point the signed provider webhook at the documented API route, and verify signature failure, replay denial, approval, rejection, and delayed callback recovery. The exact dashboard steps and callback rules live in `providers/identity-provider-wiring.md`.
 
-Official references: [Didit quick start](https://docs.didit.me/getting-started/quick-start), [age estimation](https://docs.didit.me/core-technology/age-estimation/overview), [webhooks](https://docs.didit.me/integration/webhooks).
+Official references: [Didit quick start](https://docs.didit.me/getting-started/quick-start), [Persona inquiries](https://docs.withpersona.com/2025-10-27/inquiries), [Yoti AVS sessions](https://developers.yoti.com/age-verification/create-a-session), [Sumsub access tokens](https://docs.sumsub.com/reference/generate-access-token), and [Veriff sessions](https://devdocs.veriff.com/apidocs/v1sessions).
 
 ## 5. Solana Pay and settlement evidence
 
 Keep all local/staging payment values on devnet:
 
 1. Create a dedicated devnet platform-fee recipient wallet and set `PAYMENT_PLATFORM_FEE_WALLET`; never provide its private key to the web app.
-2. Set browser and server RPC URLs to an approved devnet RPC. Set `SOLANA_CLUSTER=devnet`, `SOLANA_NETWORK=solana:devnet`, `NEXT_PUBLIC_SOLANA_CHAIN=solana:devnet`, and `HELIUS_CLUSTER=devnet`.
+2. Set browser and server RPC URLs to an approved devnet RPC. `SOLANA_CLUSTER=devnet` is the canonical server network choice. Legacy/consumer aliases, when supplied, must agree exactly: `SOLANA_NETWORK=solana:devnet`, `NEXT_PUBLIC_SOLANA_CHAIN=solana:devnet`, `HELIUS_CLUSTER=devnet`, `HELIUS_WEBHOOK_CLUSTER=devnet`, and `SUBSCRIPTIONS_SOLANA_NETWORK=devnet`. Runtime parsing rejects contradictions and derives omitted server aliases from `SOLANA_CLUSTER`; it never guesses a private RPC's network from its hostname. The staging proof must still verify the configured RPC against devnet before money flows are accepted.
 3. Create a Helius devnet project and signed/authorized webhook for the relevant recipient/reference addresses. Store its secret only as `HELIUS_WEBHOOK_SECRET` and point it to the payment webhook route exposed by the API.
 4. Fund test wallets from the official devnet faucet. Configure the official devnet USDC mint only when testing USDC; never substitute a similarly named token.
 5. Exercise both external and embedded wallet paths: backend quote, wallet approval, confirmed transaction, exact amount/mint/recipient/reference verification, idempotent webhook reconciliation, receipt, and entitlement. A wallet approval or client callback alone is never settlement proof.
@@ -136,7 +138,7 @@ Yes, the platform supports controlled staging fixtures, but it intentionally doe
 4. Set a unique `STAGING_FIXTURE_NAMESPACE` and map those existing UUIDs in `STAGING_FIXTURE_USERS_JSON` to the required roles (`platform_owner`, `trust_safety`, `finance`, `support`, `operations`, `compliance`, `readonly_auditor`).
 5. Run `pnpm staging:seed`. This grants controlled staff memberships and records every created resource in the namespace ledger. It does not create demo media or provider state.
 6. Populate demo profiles and SFW content through the normal authenticated app/API using those test users. Use the Create workspace for uploads and the ordinary payment/live journeys for provider state so the same authorization, moderation, settlement, and audit rules are exercised. The repository does not currently provide an automated demo-content seeder; do not claim that `staging:acceptance` creates content.
-7. Run `pnpm staging:acceptance` to verify the populated environment. Never insert demo auth users, entitlements, payments, or media state directly.
+7. Register each journey's actual `PASS`, `FAIL`, `BLOCKED`, or `NOT_RUN` outcome in the protected release evidence bundle with its opaque evidence ID, exact manifest digest, exact source SHA, and execution timestamp. Then run `pnpm staging:acceptance` to execute the named proof plan and staging browser checks and derive the matrix. Never copy committed manifest labels into the evidence bundle, and never insert demo auth users, entitlements, payments, or media state directly.
 8. Clean only ledger-owned resources in that namespace with the exact `STAGING_CLEANUP_ACK=DELETE_FIXTURES:<namespace>` and `pnpm staging:cleanup`. Manually created demo content follows the normal authenticated deletion/moderation lifecycle and is not deleted by this command.
 
 ## 10. Ordered verification
@@ -153,8 +155,7 @@ pnpm staging:bootstrap
 pnpm staging:run
 pnpm staging:seed
 pnpm staging:acceptance
-pnpm staging:prove
 pnpm staging:report
 ```
 
-Only exit `0` from the doctor and proof gates is green. Missing provider accounts, keys, dashboard callbacks, legal approval, or real-device evidence remain explicit blockers; they are never replaced by browser mocks in staging.
+`pnpm staging:prove` remains available as a standalone proof diagnostic; `staging:acceptance` executes the same named plan and records its outcomes. Only exit `0` from the doctor, acceptance, and report gates is green. Missing provider accounts, keys, dashboard callbacks, legal approval, or real-device evidence remain explicit blockers; they are never replaced by browser mocks in staging. A missing journey receipt remains `NOT_RUN`, and the overall matrix cannot pass until every enabled journey has current-release `PASS` evidence.

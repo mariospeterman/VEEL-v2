@@ -13,9 +13,48 @@ import {
   redactedStagingSummary,
   stagingCapabilities
 } from "./staging-config.mjs";
-import { deriveJourneyResults } from "./staging-acceptance-status.mjs";
+import {
+  deriveAcceptanceOverall,
+  deriveJourneyResults
+} from "./staging-acceptance-status.mjs";
 
 describe("strict staging convergence gates", () => {
+  it("documents every supported payment guardrail and verification provider key", () => {
+    const examples = [
+      readFileSync(new URL("../.env.example", import.meta.url), "utf8"),
+      readFileSync(new URL("../apps/api/.env.example", import.meta.url), "utf8"),
+      readFileSync(new URL("../.env.staging.example", import.meta.url), "utf8")
+    ];
+    const paymentControls = [
+      "PAYMENT_MIN_CONTENT_UNLOCK_SOL_LAMPORTS",
+      "PAYMENT_MIN_CONTENT_UNLOCK_USDC_ATOMIC",
+      "PAYMENT_MIN_PAID_MESSAGE_SOL_LAMPORTS",
+      "PAYMENT_MIN_PAID_MESSAGE_USDC_ATOMIC",
+      "PAYMENT_MIN_LIVE_PASS_SOL_LAMPORTS",
+      "PAYMENT_MIN_LIVE_PASS_USDC_ATOMIC",
+      "PAYMENT_MIN_EVENT_ACCESS_PASS_SOL_LAMPORTS",
+      "PAYMENT_MIN_EVENT_ACCESS_PASS_USDC_ATOMIC",
+      "PAYMENT_QUOTE_TTL_SECONDS"
+    ];
+    for (const example of examples) {
+      for (const name of paymentControls) expect(example).toMatch(new RegExp(`^${name}=`, "m"));
+    }
+
+    const staging = examples[2];
+    const verificationProviderKeys = [
+      "DIDIT_API_KEY", "DIDIT_WEBHOOK_SECRET", "DIDIT_AGE_WORKFLOW_ID",
+      "DIDIT_ADULT_PUBLISHER_WORKFLOW_ID", "DIDIT_KYC_WORKFLOW_ID", "DIDIT_KYB_WORKFLOW_ID",
+      "DIDIT_API_BASE_URL", "YOTI_SDK_ID", "YOTI_API_TOKEN", "YOTI_NOTIFICATION_KEY_PATH",
+      "YOTI_API_BASE_URL", "YOTI_LAUNCH_BASE_URL", "SUMSUB_APP_TOKEN", "SUMSUB_SECRET_KEY",
+      "SUMSUB_WEBHOOK_SECRET", "SUMSUB_LEVEL_NAME", "SUMSUB_CREATOR_KYC_LEVEL_NAME",
+      "SUMSUB_ORG_KYB_LEVEL_NAME", "SUMSUB_API_BASE_URL", "PERSONA_API_KEY",
+      "PERSONA_WEBHOOK_SECRET", "PERSONA_TEMPLATE_ID", "PERSONA_CREATOR_KYC_TEMPLATE_ID",
+      "PERSONA_ORG_KYB_TEMPLATE_ID", "PERSONA_API_BASE_URL", "VERIFF_API_KEY",
+      "VERIFF_SHARED_SECRET", "VERIFF_API_BASE_URL"
+    ];
+    for (const name of verificationProviderKeys) expect(staging).toMatch(new RegExp(`^${name}=`, "m"));
+  });
+
   it("keeps the example environment and staging workflow aligned with the canonical registry", () => {
     const example = readFileSync(new URL("../.env.staging.example", import.meta.url), "utf8");
     const workflow = readFileSync(new URL("../.github/workflows/deploy-staging.yml", import.meta.url), "utf8");
@@ -113,8 +152,6 @@ describe("strict staging convergence gates", () => {
     env.ENTERPRISE_STAGING_SESSION_COOKIE = "cookie";
     env.ENTERPRISE_STAGING_ORGANIZATION_ID = "organization";
     env.ENTERPRISE_STAGING_RELATIONSHIP_ID = "relationship";
-    env.ENTERPRISE_STAGING_KYB_EVIDENCE_ID = "kyb";
-    env.ENTERPRISE_STAGING_CONTRACT_EVIDENCE_ID = "contract";
     const bundle = JSON.parse(env.STAGING_EVIDENCE_BUNDLE_JSON);
     bundle.receipts.STAGING_SUBSCRIPTIONS_PROOF_ID = "subscription-proof";
     env.STAGING_EVIDENCE_BUNDLE_JSON = JSON.stringify(bundle);
@@ -163,20 +200,120 @@ describe("strict staging convergence gates", () => {
     expect(prove.stdout).toContain("CODE_COMPLETE_PROVIDER_BLOCKED target-device-accessibility");
   });
 
-  it("never promotes an unproved journey from global command success", () => {
-    const journeys = deriveJourneyResults({
-      journeys: [
-        { id: "auth.continue_to_wevid", status: "BLOCKED_CONFIGURATION", blockerClass: "wallet_provider_credentials" },
-        { id: "admin.permission_rbac", status: "PASS", blockerClass: null },
-        { id: "mcp.optional_bridge", status: "BLOCKED_CONFIGURATION", blockerClass: "public_https_and_client_configuration" }
-      ],
-      capabilityStatus: new Map([["mcp", "DISABLED"]])
-    });
-    expect(journeys).toEqual([
-      expect.objectContaining({ id: "auth.continue_to_wevid", status: "BLOCKED_CONFIGURATION" }),
-      expect.objectContaining({ id: "admin.permission_rbac", status: "PASS" }),
-      expect.objectContaining({ id: "mcp.optional_bridge", status: "DEFERRED", blockerClass: "optional_capability_disabled" })
+  it("derives journeys from exact-release outcomes and never promotes a partial matrix", () => {
+    const digest = `sha256:${"a".repeat(64)}`;
+    const sourceSha = "1".repeat(40);
+    const journeyDefinitions = [
+      {
+        id: "auth.continue_to_wevid",
+        requiredCapabilities: ["wallet"],
+        requiredProofs: ["identity-wallet", "target-device-accessibility"],
+        blockerClass: "wallet_provider_credentials"
+      },
+      {
+        id: "admin.permission_rbac",
+        requiredCapabilities: ["core"],
+        requiredProofs: ["target-device-accessibility"],
+        blockerClass: "admin_rbac_journey_not_proven"
+      },
+      {
+        id: "mcp.optional_bridge",
+        requiredCapabilities: ["core", "mcp"],
+        requiredProofs: ["target-device-accessibility"],
+        optionalCapability: "mcp",
+        blockerClass: "public_https_and_client_configuration"
+      }
+    ];
+    const capabilityStatus = new Map([
+      ["core", "READY"],
+      ["wallet", "READY"],
+      ["mcp", "DISABLED"]
     ]);
+    const proofOutcomes = [
+      { name: "release-manifest", status: "passed" },
+      { name: "synthetic", status: "passed" },
+      { name: "identity-wallet", status: "evidence_registered" },
+      { name: "target-device-accessibility", status: "evidence_registered" }
+    ];
+    const configuration = [
+      { name: "core", status: "READY" },
+      { name: "wallet", status: "READY" },
+      { name: "mcp", status: "DISABLED" }
+    ];
+    const commands = [
+      { name: "cloud-link", status: "PASS" },
+      { name: "release-manifest-verification", status: "PASS" },
+      { name: "staging-browser", status: "PASS" }
+    ];
+    const releaseManifest = { manifestDigest: digest, sourceSha };
+    const recorded = (status, evidenceId, overrides = {}) => ({
+      status,
+      evidenceId,
+      manifestDigest: digest,
+      releaseSha: sourceSha,
+      executedAt: "2026-11-04T12:00:00.000Z",
+      ...overrides
+    });
+    const derive = (journeyOutcomes) => deriveJourneyResults({
+      journeys: journeyDefinitions,
+      capabilityStatus,
+      proofOutcomes,
+      evidenceBundle: { manifestDigest: digest, journeyOutcomes },
+      releaseManifest
+    });
+    const overall = (journeys) => deriveAcceptanceOverall({
+      configuration,
+      commands,
+      proofs: proofOutcomes,
+      journeys
+    });
+
+    const nothingRan = derive({});
+    expect(nothingRan).toEqual([
+      expect.objectContaining({ id: "auth.continue_to_wevid", status: "NOT_RUN" }),
+      expect.objectContaining({ id: "admin.permission_rbac", status: "NOT_RUN" }),
+      expect.objectContaining({ id: "mcp.optional_bridge", status: "DEFERRED" })
+    ]);
+    expect(overall(nothingRan)).toBe("INCOMPLETE");
+
+    const failedAdmin = derive({
+      "auth.continue_to_wevid": recorded("PASS", "proof-auth"),
+      "admin.permission_rbac": recorded("FAIL", undefined, { reason: "admin_journey_failed" })
+    });
+    expect(failedAdmin.find((journey) => journey.id === "admin.permission_rbac")?.status).toBe("FAIL");
+    expect(overall(failedAdmin)).toBe("FAIL");
+
+    const staleWallet = derive({
+      "auth.continue_to_wevid": recorded("PASS", "proof-auth", {
+        manifestDigest: `sha256:${"b".repeat(64)}`
+      })
+    });
+    expect(staleWallet.find((journey) => journey.id === "auth.continue_to_wevid")).toMatchObject({
+      status: "FAIL",
+      reason: "journey_evidence_manifest_digest_mismatch"
+    });
+
+    const wrongReleaseWallet = derive({
+      "auth.continue_to_wevid": recorded("PASS", "proof-auth", { releaseSha: "2".repeat(40) })
+    });
+    expect(wrongReleaseWallet.find((journey) => journey.id === "auth.continue_to_wevid")).toMatchObject({
+      status: "FAIL",
+      reason: "journey_evidence_release_sha_mismatch"
+    });
+
+    const walletOnly = derive({
+      "auth.continue_to_wevid": recorded("PASS", "proof-auth")
+    });
+    expect(walletOnly.find((journey) => journey.id === "auth.continue_to_wevid")?.status).toBe("PASS");
+    expect(walletOnly.find((journey) => journey.id === "admin.permission_rbac")?.status).toBe("NOT_RUN");
+    expect(overall(walletOnly)).toBe("INCOMPLETE");
+
+    const complete = derive({
+      "auth.continue_to_wevid": recorded("PASS", "proof-auth"),
+      "admin.permission_rbac": recorded("PASS", "proof-admin")
+    });
+    expect(complete.map((journey) => journey.status)).toEqual(["PASS", "PASS", "DEFERRED"]);
+    expect(overall(complete)).toBe("PASS");
   });
 });
 

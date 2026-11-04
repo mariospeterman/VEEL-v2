@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: product workflows
-Last updated: 2026-06-03
+Last updated: 2026-11-04
 Source of truth: yes
 
 Owns:
 - product flows decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -33,17 +33,21 @@ Non-goals:
 sequenceDiagram
   participant User
   participant Web as Next.js PWA
-  participant Auth as Supabase Auth
+  participant Wallet as External or embedded wallet
   participant API as Fastify API
   participant DB as Postgres
   participant Age as Age/KYC Provider
 
   User->>Web: Open app
-  Web->>Auth: Get session
-  Auth-->>Web: JWT or anonymous
-  Web->>API: GET /me with JWT
+  Web->>API: Request wallet challenge
+  Web->>Wallet: Ask user to sign challenge
+  Wallet-->>Web: Wallet signature
+  Web->>API: Exchange signed challenge
+  API->>DB: Map wallet to user and create app session
+  API-->>Web: Opaque HttpOnly application-session cookie
+  Web->>API: GET /v1/session with cookie
   API->>DB: Load user, profile, wallet, age state
-  API-->>Web: Safe app session
+  API-->>Web: Safe session projection
   alt Age required
     Web->>API: Start age check
     API->>Age: Create provider session

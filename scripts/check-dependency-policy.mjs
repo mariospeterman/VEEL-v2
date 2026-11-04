@@ -20,12 +20,47 @@ const expectedUiDevelopmentPeers = {
 };
 
 const expectedRolldownRuntimeVersion = "1.0.3";
+const expectedNodeEngine = ">=22.23.4 <23";
 const expectedRolldownDarwinBindings = [
   "@rolldown/binding-darwin-arm64",
   "@rolldown/binding-darwin-x64"
 ];
 
-export function validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPackage, webPackage, workerPackage, uiPackage }) {
+const expectedSecurityOverrides = {
+  "@grpc/grpc-js@>=1.14.0 <1.14.5": "1.14.5",
+  "axios@>=1.15.2 <1.20.0": "1.20.0",
+  "brace-expansion@>=2.0.0 <2.1.7": "2.1.7",
+  "decode-uri-component@<=0.5.0": "0.5.1",
+  "fast-copy@>=3.0.0 <3.1.0": "3.1.0",
+  "fast-uri@>=3.0.0 <3.1.9": "3.1.9",
+  "fast-uri@>=4.0.0 <4.2.3": "4.2.3",
+  "follow-redirects@>=1.16.0 <1.16.2": "1.16.2",
+  "gaxios@7.1.3>rimraf": "-",
+  "hono@<4.13.11": "4.13.11",
+  "ip-address@<=10.7.3": "10.7.4",
+  "source-map-js@>=1.0.0 <1.2.2": "1.2.2",
+  "stream-json@<3.7.0": "3.7.0",
+  "systeminformation@<5.33.16": "5.33.16",
+  "uuid@>=8.0.0 <11.1.1": "11.1.1",
+  "ws@>=8.0.0 <8.21.0": "8.21.3"
+};
+
+const expectedPinnedProductionDependencies = {
+  api: {
+    "@coinbase/cdp-sdk": "1.60.0",
+    fastify: "5.12.8",
+    sharp: "0.35.5"
+  },
+  config: {
+    zod: "4.6.7"
+  },
+  web: {
+    "@privy-io/react-auth": "3.51.1",
+    next: "16.4.5"
+  }
+};
+
+export function validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPackage, webPackage, workerPackage, uiPackage, configPackage }) {
   const errors = [];
 
   if (!npmrc.split(/\r?\n/u).some((line) => line.trim() === "auto-install-peers=false")) {
@@ -47,8 +82,28 @@ export function validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPack
     }
   }
 
-  if (rootPackage?.pnpm?.overrides?.["uuid@>=8.0.0 <11.1.1"] !== "11.1.1") {
-    errors.push("pnpm must override vulnerable uuid 8-10 releases to 11.1.1");
+  if (rootPackage?.engines?.node !== expectedNodeEngine) {
+    errors.push(`root Node engine must remain ${expectedNodeEngine}`);
+  }
+
+  const pinnedManifests = { api: apiPackage, config: configPackage, web: webPackage };
+  for (const [workspace, dependencies] of Object.entries(expectedPinnedProductionDependencies)) {
+    for (const [name, version] of Object.entries(dependencies)) {
+      if (pinnedManifests[workspace]?.dependencies?.[name] !== version) {
+        errors.push(`${workspace} must pin ${name}@${version}`);
+      }
+    }
+  }
+
+  for (const [selector, version] of Object.entries(expectedSecurityOverrides)) {
+    if (rootPackage?.pnpm?.overrides?.[selector] !== version) {
+      errors.push(`pnpm security override ${selector} must remain ${version}`);
+    }
+  }
+
+  const gaxiosBlocks = [...lockfile.matchAll(/^ {2}gaxios@7\.1\.3:\n((?: {4,}.*\n)*)/gmu)];
+  if (gaxiosBlocks.some(([, block]) => /^ {6}rimraf:/mu.test(block))) {
+    errors.push("gaxios@7.1.3 must not retain its unused vulnerable rimraf production dependency");
   }
 
   for (const binding of expectedRolldownDarwinBindings) {
@@ -86,17 +141,18 @@ export function validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPack
 }
 
 async function main() {
-  const [npmrc, lockfile, rootPackage, apiPackage, webPackage, workerPackage, uiPackage] = await Promise.all([
+  const [npmrc, lockfile, rootPackage, apiPackage, webPackage, workerPackage, uiPackage, configPackage] = await Promise.all([
     readFile(".npmrc", "utf8"),
     readFile("pnpm-lock.yaml", "utf8"),
     readJson("package.json"),
     readJson("apps/api/package.json"),
     readJson("apps/web/package.json"),
     readJson("apps/worker/package.json"),
-    readJson("packages/ui/package.json")
+    readJson("packages/ui/package.json"),
+    readJson("packages/config/package.json")
   ]);
 
-  const errors = validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPackage, webPackage, workerPackage, uiPackage });
+  const errors = validateDependencyPolicy({ npmrc, lockfile, rootPackage, apiPackage, webPackage, workerPackage, uiPackage, configPackage });
   if (errors.length > 0) {
     throw new Error(`Dependency policy check failed:\n- ${errors.join("\n- ")}`);
   }

@@ -1,144 +1,23 @@
 # Frontend Component Map
 
 Status: accepted
-Scope: documentation
-Last updated: 2026-06-12
-Source of truth: yes
+Scope: frontend component ownership pointer
+Last updated: 2026-11-04
+Source of truth: no; `frontend-architecture.md` owns the current route/component/provider/state map
 
-Owns:
-- component map decisions for its named domain
+## Purpose
 
-Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+This file remains as a stable link for older reviews. It does not maintain a second route or
+component inventory.
 
-Does not own:
-- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+Use:
 
-Launch scope:
-- accepted v2 launch or phased behavior stated in this document
+- `frontend-architecture.md` for current route, component, provider, API-client, and state ownership
+- `route-map.md` for canonical URLs and access semantics
+- `frontend/design-system.md` for implemented shared primitives and visual tokens
+- `landing-page.md` for the public entry surface
+- `frontend-release-readiness.md` for browser and launch evidence
 
-Non-goals:
-- historical-context inference, duplicate systems, and unapproved provider/product expansion
-
-This document describes current v2 route and component ownership.
-
-## Routes
-
-### `app/page.tsx`
-
-- public landing experience
-- teaser-safe product positioning and public entry points
-- no backend/provider secrets, raw trust state, or app-shell business truth
-
-### `app/landing-experience.tsx`
-
-- landing-owned login and onboarding story frames
-- Supabase magic-link/recovery UI
-- optional profile setup UI
-- external wallet challenge handoff UI
-- dark-only public brand surface
-
-### `app/layout.tsx`
-
-- root app shell, styles, metadata, and provider boundaries
-
-### `app/age/page.tsx`
-
-- provider-backed age status
-- provider session start panel
-
-### `app/app/create/page.tsx`
-
-- creator draft workspace
-- backend content draft and metadata mutation handoff
-- Bunny upload session creation and TUS upload state
-- publish submission handoff without client-side moderation truth
-
-### `app/content/[contentId]/page.tsx`
-
-- media detail projection
-- backend-issued playback resource rendering
-- unlock-intent and wallet transaction request panel
-
-### `app/live/[liveRoomId]/page.tsx`
-
-- live room projection
-- Livepeer playback resource rendering
-- public, profile-member, or single paid-event access panel
-
-### `app/app/messages/page.tsx`
-
-- conversation, inbox, and activity shell
-- media-offer and creator-accepted request handoff where the backend projects it
-
-### `app/app/profile/page.tsx`
-
-- managed profile
-- own badges, verification status, activity, wallet/payment stats
-
-### `app/profile/[handle]/page.tsx`
-
-- contextual creator route
-- public creator badges, creator media, follow/support/subscribe actions
-
-### `app/app/bits/page.tsx`
-
-- Bits/search and discovery surface
-- creator, hashtag, event, live, and safe category discovery
-- no `/discover` route owner; canonical app discovery lives here
-
-### Protected operations routes
-
-- `app/app/wallet/page.tsx`: wallet projections, funding receipts, transaction state
-- `app/app/activity/page.tsx` and `app/activity/refund-request-panel.tsx`: payment activity, receipt/confirmation state, withdrawal-review status, and real refund/access-issue review request mutation
-- `app/app/activity/page.tsx`: activity projection
-- `app/app/subscriptions/page.tsx`: backend-owned subscription authorization and cancellation controls
-- `app/event-access/[eventId]/page.tsx`: Event Access pass projection and purchase handoff
-- `app/passes/page.tsx`: pass inventory projection
-- `app/mutuals/page.tsx` and `app/mutuals/feed/page.tsx`: backend-owned Mutuals mode/projection
-- `app/app/studio/page.tsx`: individual creator workspace; platform Studio tier unlocks capability projections only
-- `app/app/enterprise/page.tsx`: organization, coworker, managed-creator, and Enterprise analytics workspace
-- `app/app/moments/page.tsx`: sequential temporary-media viewer reusing the canonical content renderer
-- `app/admin/page.tsx`: admin/ops projections and safe mutation panels
-- `app/app/settings/page.tsx`: preference projections and explicit mutations
-- `app/app/assistant/page.tsx`: capability-gated AI/MCP surface only; not primary mobile navigation
-
-## Feature slices
-
-### Shared route helpers
-
-- `src/api-client.ts` owns typed server/read API calls and attaches the current
-  Supabase access token when available.
-- `src/api-mutations.ts` owns typed browser mutations, Idempotency-Key creation,
-  and browser token attachment.
-- `src/supabase/*` owns SSR/browser Supabase setup, auth state, cookie refresh,
-  and guarded E2E auth helpers.
-
-### Route-local panels
-
-- Use route-local panels when the component is tightly coupled to one workflow:
-  `enter/*panel.tsx`, `create/create-workspace.tsx`,
-  `content/[contentId]/content-unlock-panel.tsx`,
-  `live/[liveRoomId]/live-pass-panel.tsx`,
-  `subscriptions/*panel.tsx`, and admin row/panel files.
-- Promote shared components only after more than one route needs the same
-  behavior and contract.
-
-### UI primitives
-
-- Shared controls live under `packages/ui`.
-- Use project primitives for buttons, sheets, inputs, textareas, selects,
-  checkboxes, and segmented controls.
-- Native file/range inputs remain only where required by browser upload/media
-  behavior.
-
-### Smoke and E2E harness
-
-- `tests/smoke` owns browser coverage for landing, canonical route ownership, shell/projection behavior, and raw-error redaction.
-- `tests/smoke/auth-happy-path.spec.ts` owns the local authenticated happy path:
-  landing onboarding -> app/profile -> app/wallet -> age -> app/home -> app/create -> unlock.
-- The auth smoke harness uses a local mock API on `127.0.0.1:4000`, a guarded
-  non-production `veel_e2e_access_token` cookie, and serialized Playwright
-  workers so other smoke specs do not observe the mock backend by accident.
-- `NEXT_PUBLIC_ENABLE_E2E_AUTH` is test-only and must remain ineffective in
-  production.
+The checked-in source under `apps/web/app`, `apps/web/src`, and `packages/ui`, together with its
+tests, determines implementation status. Old component names, proposed `features/*` paths, and
+mockup route names are not implementation instructions.

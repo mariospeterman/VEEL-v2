@@ -3,13 +3,13 @@
 Status: accepted
 Scope: database
 Last updated: 2026-06-01
-Source of truth: yes
+Source of truth: conceptual domain relationships only; physical schema is migration-owned
 
 Owns:
 - data model decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, immutable database migrations, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -20,7 +20,7 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This is the conceptual Postgres model for v2. It is not a migration file.
+This is a conceptual domain model, not a physical Postgres inventory. Exact tables, columns, constraints, indexes, functions, policies, and state values come only from the ordered immutable files in `packages/database/migrations/`. Names in diagrams below are domain concepts unless shown in backticks.
 
 ## Domain Tables
 
@@ -28,20 +28,20 @@ This is the conceptual Postgres model for v2. It is not a migration file.
 erDiagram
   users ||--o{ wallets : owns
   users ||--o{ content_items : creates
-  content_items ||--o{ content_assets : has
-  content_items ||--o{ engagements : receives
+  content_items ||--o{ media_assets : has
+  content_items ||--o{ engagement_records : receives
   content_items ||--o{ payment_intents : subject
-  payment_intents ||--o{ payment_splits : has
-  payment_intents ||--o{ settlements : has
+  payment_intents ||--o{ payment_ledger_entries : records
+  payment_intents ||--o{ payment_settlement_attempts : verifies
   payment_intents ||--o| entitlements : grants
   users ||--o{ referral_tokens : creates
   referral_tokens ||--o{ referral_attributions : tracks
-  settlements ||--o{ commissions : may_create
+  payment_intents ||--o{ referral_commissions : may_create
   users ||--o{ conversations : participates
   conversations ||--o{ messages : contains
   users ||--o{ live_rooms : hosts
   live_rooms ||--o{ live_sessions : has
-  live_rooms ||--o{ live_passes : sells
+  live_rooms ||--o{ entitlements : authorizes
   users ||--o{ verification_records : has
   users ||--o{ audit_events : actor
 ```

@@ -42,8 +42,9 @@ keys, provider payloads, auth tokens, private messages, and raw personal data ar
 
 ## Protocol and trust boundary
 
-- Stable MCP protocol target: `2025-11-25`; the July 2026 release candidate is observed but not
-  adopted before finalization and supported-client proof.
+- Tested MCP compatibility target: `2025-11-25`. MCP `2026-07-28` is the latest final specification,
+  but the current initialize-based endpoint does not implement its stateless discovery/routing/cache
+  contract and must reject that version until the migration and exact-client staging matrix pass.
 - OAuth authorization-code plus S256 PKCE, exact redirect matching, audience/resource binding,
   short-lived hash-only bearer tokens, revocation, and per-request authorization remain mandatory.
 - Streamable HTTP requests with an `Origin` header are accepted only from configured WeVid origins;
@@ -65,6 +66,9 @@ keys, provider payloads, auth tokens, private messages, and raw personal data ar
   draft for the same logical operation.
 - Analytics privacy suppression and stale/unavailable freshness are returned honestly; the bridge
   cannot infer or fill suppressed values.
+- Tool execution uses the same Fastify rate-limit store as the API, keyed by connection ID and tool
+  risk class with a one-minute TTL. Production refuses the process-memory store; replicas therefore
+  share the quota. Exceeded calls return HTTP 429, MCP error `-32029`, and a bounded `Retry-After`.
 - Connection revocation remains available in WeVid settings. Operator health uses existing MCP audit,
   OAuth, rate-limit, and staging-proof surfaces; no second operations console is introduced.
 

@@ -2,14 +2,17 @@
 
 Status: accepted
 Scope: frontend
-Last updated: 2026-06-12
+Last updated: 2026-11-04
 Source of truth: yes
 
 Owns:
-- frontend architecture decisions for its named domain
+- the current route, component, provider, and frontend-state ownership map
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- `route-map.md` for public/protected URL semantics
+- `landing-page.md` for the public story and entry contract
+- OpenAPI, the immutable migration chain, backend services, provider ADRs, and narrow product docs for business truth
+- `frontend-release-readiness.md` for release evidence
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -31,6 +34,24 @@ Keep Next.js PWA and build the frontend architecture cleanly around:
 - Zustand/local state for UI state
 - Tailwind v4 tokens and component-owned styles
 - Playwright visual and flow tests
+
+## Authority And Implementation Status
+
+This is the only current frontend route/component/provider/state ownership map. Narrow documents may
+own visual tokens, copy, motion, landing behavior, or release evidence, but they do not redefine this
+map:
+
+- `route-map.md` owns canonical URL and access semantics.
+- `landing-page.md` owns the semantic poster-first landing and full-page query-state login/onboarding entry.
+- `frontend/design-system.md`, `frontend/copy-system.md`, and `frontend/motion-system.md` own only their stated narrow design domains.
+- `native-ui-ux-screens.md` is interaction intent; current source paths and tests decide whether an interaction is implemented.
+- `frontend/component-map.md` is a reference bridge to this document, not a second inventory.
+- `frontend/ui-kit-lock.md` records current shared primitives and shell constraints only.
+- `apps/web/public/mockup/design.md` and the mockup images are visual/historical references. Their routes, workflows, copy, provider rules, and implementation instructions are non-authoritative.
+
+“Implemented” below means the named source path exists. It does not imply provider sandbox,
+cross-browser, accessibility, or production evidence. Those claims require the release-readiness and
+staging records.
 
 ## Frontend Boundary
 
@@ -58,64 +79,52 @@ Frontend does not own:
 
 ```text
 apps/web/app/
-  (public)/
-    page.tsx
-    legal/[slug]/page.tsx
-  (app)/
-    app/layout.tsx
-    app/home/page.tsx
-    app/bits/page.tsx
-    app/moments/page.tsx
-    app/create/page.tsx
-    app/messages/page.tsx
-    app/profile/page.tsx
-    app/settings/page.tsx
-    app/studio/page.tsx
-    app/enterprise/page.tsx
-    app/wallet/page.tsx
+  page.tsx
+  age/page.tsx
+  legal/[slug]/page.tsx
   profile/[handle]/page.tsx
   content/[contentId]/page.tsx
   live/[liveRoomId]/page.tsx
   event-access/[eventId]/page.tsx
+  mutuals/{page.tsx,feed/page.tsx}
+  passes/page.tsx
+  performer-consent/{[token]/page.tsx,return/page.tsx}
+  oauth/mcp/consent/page.tsx
+  offline/page.tsx
+  app/
+    layout.tsx
+    home/page.tsx
+    bits/page.tsx
+    search/page.tsx
+    moments/page.tsx
+    create/page.tsx
+    messages/page.tsx
+    notifications/page.tsx
+    activity/page.tsx
+    profile/{page.tsx,earnings/page.tsx}
+    settings/page.tsx
+    subscriptions/page.tsx
+    studio/page.tsx
+    enterprise/page.tsx
+    assistant/page.tsx
+    wallet/page.tsx
+    live/[liveRoomId]/page.tsx
+  admin/{page.tsx,staff/page.tsx,[section]/page.tsx}
 ```
 
-Routes parse URL state only and pass it into feature surfaces.
+Routes parse URL state and request canonical projections. `/app/*` is the authenticated shell;
+public/contextual routes and the separate admin shell do not become alternate app shells.
 
-## Feature Structure
+## Implemented Ownership Map
 
-```text
-features/
-  api/
-    client.ts
-    generated/
-    payments-api.ts
-    media-api.ts
-  app-shell/
-    app-shell.tsx
-    navigation/
-    top-actions/
-  home/
-    home-surface.tsx
-    home-feed.tsx
-    home-card.tsx
-    activity-rail.tsx
-  media-viewer/
-    media-viewer-route.tsx
-    media-stage.tsx
-    action-rail.tsx
-    comments-panel.tsx
-    share-sheet.tsx
-    unlock-sheet.tsx
-  create/
-  live/
-  messages/
-  profile/
-  shared/
-    avatar.tsx
-    button.tsx
-    sheet.tsx
-    media-poster.tsx
-```
+- `apps/web/app/layout.tsx` owns root metadata, global styles, and PWA registration. It does not mount wallet, payment, realtime, or identity providers.
+- `apps/web/app/app/layout.tsx` owns the authenticated wallet runtime plus Query and Realtime providers; `app-shell.tsx` owns primary and secondary navigation.
+- `landing-experience.tsx` owns the public story and full-page login/onboarding state. `landing-wallet-runtime.tsx` scopes wallet runtime to explicit landing authentication intent.
+- Contextual content, live, Event Access, profile, consent, and Mutuals pages own their route-local projection and action panels. A contextual action mounts a small local runtime only when its provider is required; it must not create a second provider instance under `/app/*`.
+- `src/api-client-read.ts` and the typed API client modules own reads; `src/api-mutations.ts` and `src/api-mutation-transport.ts` own browser mutations and idempotency transport.
+- `src/payment-handoff-panel.tsx` owns the shared verified one-time-payment handoff. Product wrappers may supply display context but never settlement or entitlement truth.
+- `packages/ui` owns the implemented shared primitives. `apps/web/app/ui.tsx` reexports its listed subset and adds safe error/auth states; consumers import `Button` and `ButtonLink` directly from `@veel/ui`.
+- Provider playback stays behind `provider-playback.tsx`; provider payloads and signed resources are never frontend truth.
 
 ## Desktop/Mobile Layout Model
 
@@ -152,11 +161,34 @@ Gestures must have visible button alternatives.
 
 ## UI State Rules
 
-- Server state: TanStack Query.
+- Server projections: server-component reads through typed clients, or TanStack Query inside the authenticated app provider boundary.
 - UI state: local component state or Zustand only.
 - Wallet state: wallet adapter/provider state.
 - Supabase session state: auth provider.
 - Do not duplicate backend state into Zustand.
+- Realtime invalidates owned app queries; contextual server routes refresh their canonical projection after a verified mutation.
+
+## Browser-Persisted State Policy
+
+Browser persistence is a UX/recovery aid only. It never authorizes identity, payment, access,
+moderation, or provider state. New persisted keys must be added to this inventory with an explicit
+scope, data bound, expiry, and cleanup path; private data must fail closed when storage is malformed
+or unavailable.
+
+| Data | Storage and scope | Bound and cleanup |
+| --- | --- | --- |
+| Offline message outbox | `localStorage`, keyed by actor, browser session, and conversation; the browser-session marker is in `sessionStorage` | At most 25 messages per conversation, each expires after 24 hours; current/all-device logout removes the legacy key, all actor queues, and the session marker. |
+| Recent searches | `sessionStorage`, keyed by canonical application user ID as `wevid:search:recent:v2:<userId>` | At most six normalized 120-character queries, each expires after 24 hours; actor claim purges the legacy global `localStorage` key and all foreign actor keys, while Clear and both logout paths remove the current/all search state. No actor means no read or write. |
+| Creator composition recovery | `localStorage`, keyed by canonical application user ID and post/Moment surface | Metadata only (draft ID, caption, visibility/safety/representation choices, scheduling, and format); never media bytes or provider URLs. Removed after submit-for-review; actor scoping prevents another account from restoring it. |
+| Embedded-wallet resume choice | `sessionStorage`, one authentication method and login/onboarding purpose | Cleared by completion, cancellation, failure, or the browser session ending; contains no credential or provider token. |
+| Performer-consent return | `sessionStorage`, invitation capability for the public provider-return journey | Removed after accept/reject and otherwise ends with the browser session; never copied into account-scoped app state. |
+| Onboarding analytics deduplication | `sessionStorage`, random journey UUID plus up to 64 event/occurrence names | Ends with the browser session and contains no wallet, email, handle, content, query, or provider payload. |
+| Feed scroll restoration | `sessionStorage`, surface/mode key with numeric scroll offset | Replaced during navigation and ends with the browser session; contains no content IDs or account data. |
+| Theme | `localStorage`, browser-wide `light`/`dark` value | Non-account preference retained until the user/browser changes or clears it. |
+| PWA shell cache | Cache Storage, versioned public static assets and offline document only | Navigations remain network-first; old `wevid-shell-*` caches are removed on worker activation and authenticated API responses are never cached. |
+
+The canonical application session remains an opaque secure cookie owned by the server. Browser
+storage keys are not session, ownership, entitlement, or recent-auth evidence.
 
 ## API Client Rules
 
@@ -193,9 +225,10 @@ Required v2 tests:
 
 Current implementation state:
 
-- `pnpm smoke` runs Playwright against the Next.js app shell and Home media card.
+- `pnpm smoke` runs Playwright against the Next.js app shell and product routes using its documented local/mock harness.
 - The smoke suite runs desktop Chromium and mobile Chromium projects from `tests/smoke`.
 - CI installs Chromium and runs the smoke suite after lint, typecheck, and unit tests.
+- Mocked browser smoke is not provider sandbox, real-wallet, real-webhook, long-feed, or production deployment evidence.
 - Smoke runs are serialized because the authenticated happy-path spec owns a
   temporary local API server on the shared smoke API port.
 - `/`, `/age`, `/content/[contentId]`, `/live/[liveRoomId]`, `/profile/[handle]`, `/app/activity`, `/app/messages`, `/app/wallet`, `/app/subscriptions`, `/app/studio`, `/app/bits`, `/event-access/[eventId]`, `/passes`, `/mutuals/feed`, `/mutuals`, `/admin`, and `/app/settings` read backend projections through the typed web API helper instead of local business-data fixtures.
