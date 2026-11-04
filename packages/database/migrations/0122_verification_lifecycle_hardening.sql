@@ -40,4 +40,3 @@ create index verification_records_subject_decision_idx
 create index verification_events_unmatched_reference_idx
   on verification_events (provider, provider_subject_reference, received_at)
   where processing_status in ('received', 'failed') and session_id is null;
-

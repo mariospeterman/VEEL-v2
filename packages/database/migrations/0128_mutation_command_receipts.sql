@@ -23,4 +23,3 @@ comment on table mutation_command_receipts is
   'Server-only lifelong idempotency receipts scoped by actor, action and key. Target, request schema version, body hash and original response are immutable replay authority.';
 comment on column mutation_command_receipts.request_body_hash is
   'SHA-256 of the stable JSON mutation body; raw request bodies and secrets are never stored here.';
-

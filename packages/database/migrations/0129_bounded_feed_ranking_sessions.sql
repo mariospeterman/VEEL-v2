@@ -35,4 +35,3 @@ revoke all on table feed_ranking_sessions from public, anon, authenticated;
 
 comment on table feed_ranking_sessions is
   'Server-only, short-lived, bounded feed ordering snapshots. Canonical content eligibility and access are re-evaluated when each page is delivered; engagement counters remain independent live projections.';
-

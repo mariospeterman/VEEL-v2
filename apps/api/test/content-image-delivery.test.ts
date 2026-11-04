@@ -88,4 +88,3 @@ describe("authorized private image delivery", () => {
     expect(projected.mediaAssets?.[0]?.imageDelivery).toBeUndefined();
   });
 });
-

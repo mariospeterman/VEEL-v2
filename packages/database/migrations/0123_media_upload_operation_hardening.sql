@@ -48,4 +48,3 @@ comment on table media_upload_operations is
   'Server-only idempotency and compensation authority for direct creator video provisioning.';
 comment on column media_upload_operations.provider_asset_id is
   'Opaque server-side Bunny VideoId; never serialize this reference to clients.';
-
