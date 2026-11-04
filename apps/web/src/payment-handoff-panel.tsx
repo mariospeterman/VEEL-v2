@@ -11,7 +11,11 @@ import {
 } from "@/api-mutations";
 import { safeMutationMessage } from "@/api-errors";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
-import { formatAssetAmount } from "@/format-asset-amount";
+import { formatAtomicAssetAmount } from "@/format-asset-amount";
+import {
+  paymentProjectionCheckoutState,
+  refreshPaymentProjection
+} from "@/payment-confirmation-projection";
 
 const PaymentWalletRuntime = dynamic(
   () => import("./payment-wallet-runtime").then((module) => module.PaymentWalletRuntime),
@@ -25,6 +29,7 @@ interface PaymentHandoffPanelProps {
   idleCopy: string;
   pendingLabel?: string;
   readyCopy: string;
+  onConfirmed?: () => void | Promise<void>;
 }
 
 type CheckoutState =
@@ -33,6 +38,7 @@ type CheckoutState =
   | "review"
   | "wallet"
   | "submitted"
+  | "awaiting_projection"
   | "confirmed"
   | "error";
 
@@ -41,6 +47,7 @@ export function PaymentHandoffPanel({
   ctaLabel,
   disabled = false,
   idleCopy,
+  onConfirmed,
   pendingLabel = "Preparing checkout",
   readyCopy
 }: PaymentHandoffPanelProps) {
@@ -51,7 +58,12 @@ export function PaymentHandoffPanel({
   const [consent, setConsent] = useState(false);
   const [waiverConsent, setWaiverConsent] = useState(false);
   const checkoutAttempt = useRef<string | null>(null);
+  const projectionRefresh = useRef(onConfirmed);
   const activeIntentId = intent?.id;
+
+  useEffect(() => {
+    projectionRefresh.current = onConfirmed;
+  }, [onConfirmed]);
 
   useEffect(() => {
     if (!activeIntentId || (state !== "wallet" && state !== "submitted")) return;
@@ -66,10 +78,18 @@ export function PaymentHandoffPanel({
           const current = await getPaymentIntent(paymentIntentId);
           if (cancelled) return;
           setIntent(current);
-          if (current.state === "confirmed" || current.state === "settled") {
+          const confirmedState = paymentProjectionCheckoutState(
+            current.state,
+            Boolean(projectionRefresh.current)
+          );
+          if (confirmedState) {
             checkoutAttempt.current = null;
-            setState("confirmed");
-            setMessage(readyCopy);
+            setState(confirmedState);
+            setMessage(
+              confirmedState === "awaiting_projection"
+                ? "Payment confirmed by the backend. Waiting for the canonical access record."
+                : readyCopy
+            );
             return;
           }
           if (
@@ -99,6 +119,28 @@ export function PaymentHandoffPanel({
     };
   }, [activeIntentId, readyCopy, state]);
 
+  useEffect(() => {
+    if (state !== "awaiting_projection") return;
+
+    const refresh = projectionRefresh.current;
+    if (!refresh) {
+      setState("confirmed");
+      setMessage(readyCopy);
+      return;
+    }
+
+    const controller = new AbortController();
+    void refreshPaymentProjection(refresh, { signal: controller.signal }).then((result) => {
+      if (result === "exhausted" && !controller.signal.aborted) {
+        setMessage(
+          "The backend record is complete, but access is still updating. Refresh access or check payment activity."
+        );
+      }
+    });
+
+    return () => controller.abort();
+  }, [readyCopy, state]);
+
   async function prepareCheckout() {
     setState("creating");
     setMessage(null);
@@ -112,8 +154,13 @@ export function PaymentHandoffPanel({
       const paymentIntent = await createIntent(checkoutAttempt.current);
       if (!paymentIntent) {
         checkoutAttempt.current = null;
-        setState("confirmed");
-        setMessage(readyCopy);
+        if (projectionRefresh.current) {
+          setState("awaiting_projection");
+          setMessage("The backend accepted the access change. Waiting for the canonical access record.");
+        } else {
+          setState("confirmed");
+          setMessage(readyCopy);
+        }
         return;
       }
       setIntent(paymentIntent);
@@ -174,10 +221,10 @@ export function PaymentHandoffPanel({
       {intent ? (
         <div className="grid gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm">
           <div className="grid grid-cols-2 gap-3">
-            <Fact label="Total" value={formatAssetAmount(intent.amountMinor, intent.currency)} />
+            <Fact label="Total" value={formatAtomicAssetAmount(intent.amountMinor, intent.currency)} />
             <Fact label="Product" value={productLabel(intent.productType)} />
-            <Fact label="Creator side" value={formatAssetAmount(intent.creatorSideProceedsMinor, intent.currency)} />
-            <Fact label="Platform fee" value={formatAssetAmount(intent.platformFeeAmountMinor, intent.currency)} />
+            <Fact label="Creator side" value={formatAtomicAssetAmount(intent.creatorSideProceedsMinor, intent.currency)} />
+            <Fact label="Platform fee" value={formatAtomicAssetAmount(intent.platformFeeAmountMinor, intent.currency)} />
           </div>
           <p className="text-xs leading-5 text-(--muted)">
             The wallet approval is not payment proof. WeVid grants access or issues a receipt only after backend onchain verification.
@@ -222,8 +269,15 @@ export function PaymentHandoffPanel({
         </div>
       ) : null}
 
-      {state === "submitted" ? (
-        <a className="secondary-button text-center" href="/app/activity">View payment activity</a>
+      {state === "submitted" || state === "awaiting_projection" ? (
+        <div className="flex flex-wrap gap-2">
+          <a className="secondary-button text-center" href="/app/activity">View payment activity</a>
+          {state === "awaiting_projection" && onConfirmed ? (
+            <button className="secondary-button" onClick={() => void onConfirmed()} type="button">
+              Refresh access
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {message && state === "error" ? (
         <div className="grid gap-2 rounded border border-[#7f1d1d] bg-[#450a0a] px-3 py-2 text-sm text-[#fecaca]">

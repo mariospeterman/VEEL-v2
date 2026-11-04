@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { CreatorProfile } from "@/api-client";
 import { createPaymentIntent } from "@/api-mutations";
-import { formatAssetAmount } from "@/format-asset-amount";
+import { formatAtomicAssetAmount } from "@/format-asset-amount";
 import { PaymentHandoffPanel } from "@/payment-handoff-panel";
 
 interface CreatorSupportPanelProps {
@@ -40,7 +40,7 @@ export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
               onClick={() => setAmountMinor(preset)}
               type="button"
             >
-              {formatAssetAmount(preset, "USDC")}
+              {formatAtomicAssetAmount(preset, "USDC")}
             </button>
           ))}
         </div>

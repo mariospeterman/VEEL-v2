@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FeedPage } from "@/api-client";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
 import { ApiMutationError, getFeedPage, recordFeedImpression } from "@/api-mutations";
+import { shouldIgnoreGlobalShortcut } from "@/navigation/global-shortcut-policy";
 import { ContentRenderer } from "../../content/content-renderer";
 import { ContentEngagementPanel } from "../../content/[contentId]/content-engagement-panel";
 
@@ -52,7 +53,10 @@ export function MomentViewer({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (
+        (event.key !== "ArrowLeft" && event.key !== "ArrowRight") ||
+        shouldIgnoreGlobalShortcut(event)
+      ) return;
       event.preventDefault();
       void move(event.key === "ArrowLeft" ? -1 : 1);
     }
@@ -90,13 +94,13 @@ export function MomentViewer({
         <a aria-label="Close moments" className="moment-close" href="/app/home">×</a>
       </header>
       <div className="moment-media">
-        <ContentRenderer item={item} title={`${item.creator.displayName} moment`} />
+        <ContentRenderer item={item} key={item.id} title={`${item.creator.displayName} moment`} />
       </div>
       <button aria-label="Previous moment" className="moment-nav moment-nav-previous" disabled={index === 0} onClick={() => void move(-1)} type="button">‹</button>
       <button aria-label="Next moment" className="moment-nav moment-nav-next" disabled={index === page.items.length - 1 && !page.nextCursor} onClick={() => void move(1)} type="button">›</button>
       <footer className="moment-footer">
         {item.caption ? <p>{item.caption}</p> : <span />}
-        <ContentEngagementPanel accessState={item.accessState} contentId={item.id} creatorUserId={item.creator.id} initialEngagement={item.engagement} />
+        <ContentEngagementPanel accessState={item.accessState} contentId={item.id} creatorUserId={item.creator.id} initialEngagement={item.engagement} key={item.id} />
         <a className="text-sm font-semibold" href={`/app/messages?share=${encodeURIComponent(item.id)}`}>Reply in messages</a>
       </footer>
       {error ? <p className="moment-error" role="alert">{error}</p> : null}

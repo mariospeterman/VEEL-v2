@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent 
 import * as tus from "tus-js-client";
 import type { VerificationStatus } from "@/api-client";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
+import { createResumableVideoUploadKey } from "@/media/resumable-upload-key";
 import {
   ApiMutationError,
   createContentDraft,
@@ -68,6 +69,7 @@ export function MediaAssetComposer({
   const [notice, setNotice] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [singleVideoType, setSingleVideoType] = useState<(typeof singleVideoTypes)[number]>("clip");
+  const [restorationReady, setRestorationReady] = useState(false);
   const uploadKeys = useRef(new Map<string, string>());
   const removalKeys = useRef(new Map<string, string>());
   const previewUrls = useRef(new Set<string>());
@@ -87,9 +89,15 @@ export function MediaAssetComposer({
   }, []);
 
   useEffect(() => {
-    if (!draftKey) return;
+    if (!draftKey) {
+      setRestorationReady(true);
+      return;
+    }
     const saved = window.localStorage.getItem(draftKey);
-    if (!saved) return;
+    if (!saved) {
+      setRestorationReady(true);
+      return;
+    }
     try {
       const value = JSON.parse(saved) as {
         draftId?: string;
@@ -112,14 +120,22 @@ export function MediaAssetComposer({
       if (value.singleVideoType && singleVideoTypes.includes(value.singleVideoType)) {
         setSingleVideoType(value.singleVideoType);
       }
-      if (value.draftId) void getContentForMutation(value.draftId).then(setDraft).catch(() => undefined);
+      if (value.draftId) {
+        void getContentForMutation(value.draftId).then((restored) => {
+          setDraft(restored);
+          setNotice("Saved draft restored. Re-select unfinished files to resume matching video transfers.");
+        }).catch(() => undefined).finally(() => setRestorationReady(true));
+      } else {
+        setRestorationReady(true);
+      }
     } catch {
       window.localStorage.removeItem(draftKey);
+      setRestorationReady(true);
     }
   }, [draftKey]);
 
   useEffect(() => {
-    if (!draftKey) return;
+    if (!draftKey || !restorationReady) return;
     window.localStorage.setItem(draftKey, JSON.stringify({
       draftId: draft?.id,
       caption,
@@ -130,7 +146,7 @@ export function MediaAssetComposer({
       scheduledFor,
       singleVideoType
     }));
-  }, [caption, distributionMode, draft?.id, draftKey, nsfwLabel, representationMode, scheduledFor, singleVideoType, visibility]);
+  }, [caption, distributionMode, draft?.id, draftKey, nsfwLabel, representationMode, restorationReady, scheduledFor, singleVideoType, visibility]);
 
   const formatLabel = useMemo(() => {
     if (assets.length > 1) return "Carousel";
@@ -201,21 +217,32 @@ export function MediaAssetComposer({
       for (const [index, localAsset] of nextAssets.entries()) {
         if (localAsset.mediaAssetId && localAsset.transferComplete) continue;
         let idempotencyKey = uploadKeys.current.get(localAsset.key);
-        if (!idempotencyKey) {
-          idempotencyKey = createMutationIdempotencyKey();
-          uploadKeys.current.set(localAsset.key, idempotencyKey);
-        }
         let mediaAssetId: string;
         if (localAsset.kind === "image") {
+          if (!idempotencyKey) {
+            idempotencyKey = createMutationIdempotencyKey();
+            uploadKeys.current.set(localAsset.key, idempotencyKey);
+          }
           const uploaded = await uploadContentImageAsset(activeDraft.id, localAsset.file, idempotencyKey);
           mediaAssetId = uploaded.mediaAssetId;
         } else {
           let uploadSession = localAsset.uploadSession;
           if (!uploadSession) {
+            const checksumSha256 = await sha256File(localAsset.file);
+            idempotencyKey = await createResumableVideoUploadKey({
+              checksumSha256,
+              contentId: activeDraft.id,
+              fileName: localAsset.file.name,
+              fileSizeBytes: localAsset.file.size,
+              mimeType: localAsset.file.type
+            });
+            uploadKeys.current.set(localAsset.key, idempotencyKey);
             uploadSession = await createMediaUpload({
               contentId: activeDraft.id,
               fileName: localAsset.file.name,
-              mimeType: localAsset.file.type
+              mimeType: localAsset.file.type,
+              fileSizeBytes: localAsset.file.size,
+              checksumSha256
             }, idempotencyKey);
             nextAssets[index] = { ...localAsset, mediaAssetId: uploadSession.mediaAssetId, uploadSession };
             setAssets([...nextAssets]);
@@ -417,6 +444,11 @@ export function MediaAssetComposer({
   );
 }
 
+async function sha256File(file: File): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function originLabel(value: Origin) {
   return ({ human_created: "Created by me", ai_assisted: "AI-assisted", ai_generated: "AI-generated", materially_ai_manipulated: "Materially AI-edited" } as const)[value];
 }
@@ -477,7 +509,10 @@ async function uploadVideo(
     activeUpload.current = upload;
     pauseCurrentUpload.current = () => reject(new UploadPausedError());
     void upload.findPreviousUploads().then((previousUploads) => {
-      if (previousUploads[0]) upload.resumeFromPreviousUpload(previousUploads[0]);
+      const matchingUpload = previousUploads.find((candidate) =>
+        candidate.uploadUrl === session.uploadUrl && candidate.metadata.contentId === contentId
+      );
+      if (matchingUpload) upload.resumeFromPreviousUpload(matchingUpload);
       upload.start();
     }).catch(reject);
   }).finally(() => {

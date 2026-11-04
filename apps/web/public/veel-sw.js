@@ -42,15 +42,15 @@ self.addEventListener("fetch", (event) => {
 
 self.addEventListener("push", (event) => {
   const payload = safeJson(event.data);
-  const title = typeof payload.title === "string" ? payload.title : "WeVid";
-  const body = typeof payload.body === "string" ? payload.body : "New account notification";
-  const actionUrl = safeInternalPath(payload.actionUrl);
+  const validRefresh = payload.type === "notification_refresh" && payload.version === 1;
 
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
+    self.registration.showNotification("WeVid", {
+      body: validRefresh
+        ? "You have a new account notification."
+        : "Open WeVid to refresh your notifications.",
       data: {
-        actionUrl
+        actionUrl: "/app/notifications"
       }
     })
   );
@@ -111,11 +111,30 @@ function escapeHtmlAttribute(value) {
 }
 
 function safeInternalPath(value) {
-  if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
+  if (
+    typeof value !== "string" ||
+    !value.startsWith("/") ||
+    value.startsWith("//") ||
+    hasUnsafePathCharacter(value) ||
+    /%(?:0[0-9a-f]|1[0-9a-f]|2f|5c|7f)/iu.test(value)
+  ) {
     return "/app/notifications";
   }
 
-  return value;
+  try {
+    const resolved = new URL(value, self.location.origin);
+    return resolved.origin === self.location.origin ? value : "/app/notifications";
+  } catch {
+    return "/app/notifications";
+  }
+}
+
+function hasUnsafePathCharacter(value) {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (character === "\\" || codePoint <= 0x1f || codePoint === 0x7f) return true;
+  }
+  return false;
 }
 
 const SHELL_CACHE = "wevid-shell-v1";

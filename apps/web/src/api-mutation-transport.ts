@@ -33,9 +33,10 @@ export async function authenticatedMutation<T>(
   method: "DELETE" | "PATCH" | "POST" | "PUT",
   body: unknown,
   idempotencyKey?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  additionalHeaders?: HeadersInit
 ): Promise<T> {
-  const response = await sendAuthenticatedMutation(path, method, body, idempotencyKey, signal);
+  const response = await sendAuthenticatedMutation(path, method, body, idempotencyKey, signal, additionalHeaders);
 
   if (!response.ok) {
     throw new ApiMutationError(await errorMessage(response), response.status);
@@ -166,7 +167,8 @@ async function sendAuthenticatedMutation(
   method: "DELETE" | "PATCH" | "POST" | "PUT",
   body: unknown,
   idempotencyKey?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  additionalHeaders?: HeadersInit
 ): Promise<Response> {
   const { token } = await browserSessionToken();
   const env = readPublicWebEnv();
@@ -178,6 +180,11 @@ async function sendAuthenticatedMutation(
 
   if (token) {
     headers.set("authorization", `Bearer ${token}`);
+  }
+  for (const [name, value] of new Headers(additionalHeaders)) {
+    if (name.toLowerCase() !== "authorization" && name.toLowerCase() !== "idempotency-key") {
+      headers.set(name, value);
+    }
   }
 
   return mutationFetch(browserApiUrl(path, env.NEXT_PUBLIC_API_BASE_URL), {

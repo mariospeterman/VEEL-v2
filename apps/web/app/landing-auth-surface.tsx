@@ -18,6 +18,7 @@ import {
   markOnboardingJourneyHandoff,
   recordOnboardingEvent
 } from "@/analytics/onboarding-analytics";
+import { safeSameOriginPath } from "@/navigation/safe-same-origin-path";
 
 const onboardingSteps = [
   {
@@ -84,7 +85,6 @@ export function LandingAuthSurface({
         <LandingLoginForm
           authState={authState}
           onAccountNotFound={() => {
-            recordOnboardingEvent("account_not_found");
             setOnboardingStep(0);
             setAuthMode("onboard");
           }}
@@ -519,6 +519,5 @@ function fileToBase64(file: File): Promise<string> {
 
 function resolveSafeNextPath() {
   const params = new URLSearchParams(window.location.search);
-  const next = params.get("next") ?? "/app/home";
-  return next.startsWith("/") && !next.startsWith("//") ? next : "/app/home";
+  return safeSameOriginPath(params.get("next"), "/app/home");
 }

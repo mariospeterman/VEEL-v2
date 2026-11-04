@@ -4,27 +4,50 @@ import type { DiscoverPage } from "@/api-client";
 import { CalendarDays, Hash, Radio, Search, UserRound, Video } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import {
+  claimRecentSearches,
+  clearRecentSearchesForActor,
+  recordRecentSearch
+} from "@/search/recent-searches";
 
-const recentKey = "wevid:search:recent";
-
-export function SearchExperience({ initialResults, query }: { initialResults: DiscoverPage; query: string }) {
+export function SearchExperience({
+  actorUserId,
+  initialResults,
+  query
+}: {
+  actorUserId: string | null;
+  initialResults: DiscoverPage;
+  query: string;
+}) {
   const [recent, setRecent] = useState<string[]>([]);
 
   useEffect(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(recentKey) ?? "[]") as unknown;
-      if (Array.isArray(stored)) setRecent(stored.filter((item): item is string => typeof item === "string").slice(0, 6));
-      if (query) {
-        const next = [query, ...(Array.isArray(stored) ? stored.filter((item) => item !== query) : [])]
-          .filter((item): item is string => typeof item === "string")
-          .slice(0, 6);
-        localStorage.setItem(recentKey, JSON.stringify(next));
-        setRecent(next);
-      }
-    } catch {
-      setRecent(query ? [query] : []);
+    if (!actorUserId) {
+      setRecent([]);
+      return;
     }
-  }, [query]);
+
+    try {
+      setRecent(
+        query
+          ? recordRecentSearch(window.sessionStorage, actorUserId, query, new Date(), window.localStorage)
+          : claimRecentSearches(window.sessionStorage, actorUserId, new Date(), window.localStorage)
+      );
+    } catch {
+      setRecent([]);
+    }
+  }, [actorUserId, query]);
+
+  function clearRecent() {
+    if (actorUserId) {
+      try {
+        clearRecentSearchesForActor(window.sessionStorage, actorUserId, window.localStorage);
+      } catch {
+        // The visible list still clears when browser storage is unavailable.
+      }
+    }
+    setRecent([]);
+  }
 
   const resultCount = initialResults.content.length + initialResults.creators.length + initialResults.hashtags.length + initialResults.events.length + initialResults.liveRooms.length;
 
@@ -45,7 +68,10 @@ export function SearchExperience({ initialResults, query }: { initialResults: Di
 
       {!query && recent.length > 0 ? (
         <section aria-labelledby="recent-searches">
-          <h2 className="text-sm font-semibold" id="recent-searches">Recent searches</h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold" id="recent-searches">Recent searches</h2>
+            <button className="ghost-button min-h-9 px-3 text-sm" onClick={clearRecent} type="button">Clear</button>
+          </div>
           <div className="mt-2 flex flex-wrap gap-2">{recent.map((item) => <a className="rounded-full border border-(--line) px-3 py-2 text-sm" href={`/app/search?q=${encodeURIComponent(item)}`} key={item}>{item}</a>)}</div>
         </section>
       ) : null}

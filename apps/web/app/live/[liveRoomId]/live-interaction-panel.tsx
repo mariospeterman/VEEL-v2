@@ -9,7 +9,7 @@ import {
   createSafetyReport,
   getLiveChatMessages
 } from "@/api-mutations";
-import { formatAssetAmount } from "@/format-asset-amount";
+import { formatAtomicAssetAmount } from "@/format-asset-amount";
 import { PaymentHandoffPanel } from "@/payment-handoff-panel";
 
 const supportPresets = [500_000, 1_000_000, 2_000_000] as const;
@@ -110,7 +110,7 @@ export function LiveInteractionPanel({ initialMessages, room }: { initialMessage
         <p className="mt-1 text-xs leading-5 text-(--muted)">Voluntary support does not buy access, visibility, or priority.</p>
         <div className="mt-3 grid grid-cols-3 gap-2">
           {supportPresets.map((preset) => (
-            <button className={`rounded border px-2 py-2 text-sm ${amountMinor === preset ? "border-(--accent) bg-(--accent-soft)" : "border-(--line)"}`} key={preset} onClick={() => setAmountMinor(preset)} type="button">{formatAssetAmount(preset, "USDC")}</button>
+            <button className={`rounded border px-2 py-2 text-sm ${amountMinor === preset ? "border-(--accent) bg-(--accent-soft)" : "border-(--line)"}`} key={preset} onClick={() => setAmountMinor(preset)} type="button">{formatAtomicAssetAmount(preset, "USDC")}</button>
           ))}
         </div>
         <div className="mt-3">

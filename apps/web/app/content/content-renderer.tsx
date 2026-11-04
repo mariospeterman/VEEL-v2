@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent
@@ -34,7 +35,7 @@ export function ContentRenderer({ active = true, item, title }: ContentRendererP
   if (item.mediaType === "image") {
     const image = orderedAssets(item).find((asset) => asset.kind === "image");
     return image?.posterUrl
-      ? <img alt={image.altText ?? ""} className="h-full w-full object-contain" loading={active ? "eager" : "lazy"} src={image.posterUrl} />
+      ? <AuthorizedImage active={active} asset={image} />
       : <ContentState title="Image unavailable" detail="This image is still being prepared or is no longer available." />;
   }
 
@@ -42,8 +43,10 @@ export function ContentRenderer({ active = true, item, title }: ContentRendererP
     return <CarouselRenderer active={active} item={item} title={title} />;
   }
 
-  if (!active && item.posterUrl) {
-    return <img alt="" className="h-full w-full object-contain" loading="lazy" src={item.posterUrl} />;
+  if (!active) {
+    return item.posterUrl
+      ? <img alt="" className="h-full w-full object-contain" loading="lazy" src={item.posterUrl} />
+      : <ContentState title="Media paused" detail="Open this post to load its media." />;
   }
 
   return <ProviderPlayback playback={item.playback} posterUrl={item.posterUrl} title={title} />;
@@ -137,7 +140,7 @@ function CarouselAsset({ active, asset, item, title }: {
   title: string;
 }) {
   if (asset.kind === "image" && asset.posterUrl) {
-    return <img alt={asset.altText ?? ""} className="h-full w-full object-contain" loading={active ? "eager" : "lazy"} src={asset.posterUrl} />;
+    return <AuthorizedImage active={active} asset={asset} />;
   }
 
   if (asset.kind === "video" && active) {
@@ -158,6 +161,39 @@ function CarouselAsset({ active, asset, item, title }: {
   }
 
   return <ContentState title="Media unavailable" detail="This item is still being prepared or is no longer available." />;
+}
+
+function AuthorizedImage({ active, asset }: {
+  active: boolean;
+  asset: NonNullable<ContentItem["mediaAssets"]>[number];
+}) {
+  const router = useRouter();
+  const refreshedAfterError = useRef(false);
+  const delivery = asset.imageDelivery;
+
+  useEffect(() => {
+    if (!delivery?.expiresAt) return;
+    const delay = Math.max(0, Date.parse(delivery.expiresAt) - Date.now() - 10_000);
+    const timeout = window.setTimeout(() => router.refresh(), delay);
+    return () => window.clearTimeout(timeout);
+  }, [delivery?.expiresAt, router]);
+
+  return (
+    <img
+      alt={asset.altText ?? ""}
+      className="h-full w-full object-contain"
+      loading={active ? "eager" : "lazy"}
+      onError={() => {
+        if (refreshedAfterError.current) return;
+        refreshedAfterError.current = true;
+        router.refresh();
+      }}
+      src={delivery?.url ?? asset.posterUrl ?? undefined}
+      srcSet={delivery?.variants
+        .map((variant) => `${variant.url} ${variant.widthPixels}w`)
+        .join(", ")}
+    />
+  );
 }
 
 function PollRenderer({ contentId, initialPoll }: {

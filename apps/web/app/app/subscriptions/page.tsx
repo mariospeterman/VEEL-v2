@@ -7,7 +7,7 @@ import {
   type SubscriptionPlan
 } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
-import { formatAssetAmount } from "@/format-asset-amount";
+import { formatTwoDecimalMinorAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
 import { SubscriptionAuthorizationPanel } from "../../subscriptions/subscription-authorization-panel";
@@ -18,13 +18,13 @@ export const dynamic = "force-dynamic";
 export default async function SubscriptionsPage() {
   await requireAppAccess("/app/subscriptions");
 
-  const [platformAccess, plans, subscriptions] = await Promise.all([
+  const [platformAccess, plans, subscriptions, subscriptionHistory] = await Promise.all([
     getPlatformAccess(),
     getSubscriptionPlans(),
-    getSubscriptions()
+    getSubscriptions(),
+    getSubscriptions({ view: "history" })
   ]);
   const platformPlans = plans.ok ? plans.data.items.filter((plan) => plan.scope === "platform") : [];
-  const creatorPlans = plans.ok ? plans.data.items.filter((plan) => plan.scope === "creator") : [];
   const platformSubscriptions = subscriptions.ok
     ? subscriptions.data.items.filter((subscription) => subscription.scope === "platform")
     : [];
@@ -40,7 +40,7 @@ export default async function SubscriptionsPage() {
             Choose a WeVid plan or manage memberships you joined from creator profiles.
           </PageHeader>
 
-          <section className="grid gap-3">
+          <section className="grid gap-3" id="platform-plans">
             <h2 className="text-base font-semibold tracking-normal">Platform plans</h2>
             {platformAccess.ok ? (
               <PlatformTierGrid access={platformAccess.data} plans={platformPlans} />
@@ -51,17 +51,10 @@ export default async function SubscriptionsPage() {
 
           <section className="grid gap-3">
             <h2 className="text-base font-semibold tracking-normal">Creator memberships</h2>
-            {plans.ok ? (
-              creatorPlans.length > 0 ? (
-                creatorPlans.map((plan) => <PlanRow plan={plan} key={plan.id} />)
-              ) : (
-                <EmptyState title="No creator memberships available">
-                  Membership offers will appear here and on creator profiles when available.
-                </EmptyState>
-              )
-            ) : (
-              <ErrorState result={plans} title="Subscription plans unavailable" context="Subscription plans" />
-            )}
+            <EmptyState title="Memberships start on creator profiles">
+              Find a creator and review their current offer before joining. {" "}
+              <a className="font-semibold underline" href="/app/search">Find creators</a>
+            </EmptyState>
           </section>
         </section>
 
@@ -102,6 +95,25 @@ export default async function SubscriptionsPage() {
           </Card>
 
           <Card className="p-4">
+            <p className="text-sm font-medium">Subscription history</p>
+            {subscriptionHistory.ok ? (
+              subscriptionHistory.data.items.length > 0 ? (
+                subscriptionHistory.data.items.map((subscription) => (
+                  <SubscriptionSummary subscription={subscription} key={subscription.id} />
+                ))
+              ) : (
+                <p className="mt-3 text-sm text-(--muted)">No cancelled or interrupted subscriptions.</p>
+              )
+            ) : (
+              <ErrorState
+                result={subscriptionHistory}
+                title="Subscription history unavailable"
+                context="Subscription history"
+              />
+            )}
+          </Card>
+
+          <Card className="p-4">
             <p className="text-sm font-medium">Payment protection</p>
             <p className="mt-3 text-sm leading-6 text-(--muted)">
               Your wallet limits every automatic payment to the displayed price and billing period.
@@ -120,27 +132,16 @@ function SubscriptionSummary({ subscription }: { subscription: Subscription }) {
       <Fact label="Status" value={friendlyState(subscription.state)} />
       <Fact label="Renewal" value="Automatic" />
       <Fact label="Next collection" value={subscription.nextCollectionAt ?? "pending authorization"} />
+      {subscription.failureReason ? (
+        <>
+          <Fact label="Action needed" value={failureGuidance(subscription.failureReason)} />
+          <a className="secondary-button w-fit" href={failureActionHref(subscription)}>
+            {failureActionLabel(subscription.failureReason)}
+          </a>
+        </>
+      ) : null}
       <SubscriptionCancelPanel subscription={subscription} />
     </div>
-  );
-}
-
-function PlanRow({ plan }: { plan: SubscriptionPlan }) {
-  return (
-    <Card className="p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="font-medium">{plan.label}</p>
-          <p className="mt-1 text-sm text-(--muted)">
-            {formatAssetAmount(plan.amountMinor, plan.currency)} every {plan.periodDays} days
-          </p>
-        </div>
-        <StatusPill tone={plan.providerState === "launch_approved" ? "good" : "warn"}>
-          {plan.providerState === "launch_approved" ? "Available" : "Coming soon"}
-        </StatusPill>
-      </div>
-      <SubscriptionAuthorizationPanel plan={plan} />
-    </Card>
   );
 }
 
@@ -167,7 +168,7 @@ function PlatformTierGrid({
                     ? "Custom contract"
                     : tier.monthlyPriceMinor === 0
                       ? "Included"
-                      : `${formatAssetAmount(tier.monthlyPriceMinor, tier.currency ?? "USDC")} / month`}
+                      : `${formatTwoDecimalMinorAmount(tier.monthlyPriceMinor, tier.currency ?? "USDC")} / month`}
                 </p>
               </div>
               <StatusPill tone={tier.key === access.currentTier.key ? "good" : "neutral"}>
@@ -203,4 +204,25 @@ function friendlyState(state: Subscription["state"]) {
   if (state === "renewal_pending") return "Confirming payment";
   if (state === "grace_period") return "Payment needs attention";
   return state.charAt(0).toUpperCase() + state.slice(1).replaceAll("_", " ");
+}
+
+function failureGuidance(reason: NonNullable<Subscription["failureReason"]>) {
+  if (reason === "insufficient_funds") return "Add funds; WeVid will retry the bounded collection.";
+  if (reason === "authorization_revoked") return "Reconnect wallet authorization from the plan page.";
+  if (reason === "provider_unavailable") return "Provider temporarily unavailable; retry later.";
+  return "Wallet setup no longer matches this plan; review and reconnect authorization.";
+}
+
+function failureActionHref(subscription: Subscription) {
+  if (subscription.failureReason === "insufficient_funds") return "/app/wallet";
+  if (subscription.failureReason === "provider_unavailable") return "/app/subscriptions";
+  return subscription.creator?.handle
+    ? `/profile/${encodeURIComponent(subscription.creator.handle)}`
+    : "/app/subscriptions#platform-plans";
+}
+
+function failureActionLabel(reason: NonNullable<Subscription["failureReason"]>) {
+  if (reason === "insufficient_funds") return "Open wallet";
+  if (reason === "provider_unavailable") return "Retry status";
+  return "Reconnect authorization";
 }

@@ -66,6 +66,7 @@ export type {
   RespondToMessageRequest,
   UpdateConversationMuteRequest,
   Notification,
+  NotificationPage,
   NotificationPreferences,
   UpdateNotificationPreferencesRequest,
   NotificationDevice,
@@ -74,6 +75,7 @@ export type {
   McpConnection,
   McpOAuthRedirect,
   Message,
+  MessagePage,
   MediaModerationAppeal,
   CreatorMediaPage,
   PaymentIntent,
@@ -181,6 +183,7 @@ import type {
   RespondToMessageRequest,
   UpdateConversationMuteRequest,
   Notification,
+  NotificationPage,
   NotificationPreferences,
   UpdateNotificationPreferencesRequest,
   NotificationDevice,
@@ -189,6 +192,7 @@ import type {
   McpConnection,
   McpOAuthRedirect,
   Message,
+  MessagePage,
   MediaModerationAppeal,
   CreatorMediaPage,
   PaymentIntent,
@@ -272,9 +276,10 @@ export async function updateMyCreatorOnboarding(
 }
 
 export async function uploadMyProfileAvatar(
-  body: UploadProfileAvatarRequest
+  body: UploadProfileAvatarRequest,
+  idempotencyKey = crypto.randomUUID()
 ): Promise<ProfileAvatarUpload> {
-  return authenticatedMutation<ProfileAvatarUpload>("/v1/profiles/me/avatar", "POST", body);
+  return authenticatedMutation<ProfileAvatarUpload>("/v1/profiles/me/avatar", "POST", body, idempotencyKey);
 }
 
 export async function createWalletAuthChallenge(
@@ -673,8 +678,8 @@ export async function createLiveRoom(
   return authenticatedMutation<LiveRoom>("/v1/live/rooms", "POST", body, idempotencyKey);
 }
 
-export async function getMyLiveRoomsForMutation(): Promise<LiveRoomPage> {
-  return authenticatedGet<LiveRoomPage>("/v1/live/rooms/mine");
+export async function getMyLiveRoomsForMutation(cursor?: string): Promise<LiveRoomPage> {
+  return authenticatedGet<LiveRoomPage>(withCursor("/v1/live/rooms/mine", cursor));
 }
 
 export async function getLiveHostConnection(liveRoomId: string): Promise<HostConnection> {
@@ -747,32 +752,54 @@ export async function createEventAccessPassIntent(
 export async function createMessage(
   conversationId: string,
   body: CreateMessageRequest,
-  idempotencyKey?: string
+  idempotencyKey: string,
+  expectedActorUserId: string,
+  signal?: AbortSignal
 ): Promise<Message> {
   return authenticatedMutation<Message>(
     `/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`,
     "POST",
     body,
-    idempotencyKey
+    idempotencyKey,
+    signal,
+    { "x-wevid-expected-actor-id": expectedActorUserId }
   );
 }
 
-export async function getConversationsForMutation(): Promise<{ items: Conversation[] }> {
-  return authenticatedGet<{ items: Conversation[] }>("/v1/messages/conversations");
+export async function getConversationsForMutation(
+  cursor?: string
+): Promise<{ items: Conversation[]; nextCursor: string | null }> {
+  return authenticatedGet<{ items: Conversation[]; nextCursor: string | null }>(
+    withCursor("/v1/messages/conversations", cursor)
+  );
 }
 
-export async function getConversationMessagesForMutation(conversationId: string): Promise<{ items: Message[] }> {
-  return authenticatedGet<{ items: Message[] }>(
-    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`
+export async function getConversationMessagesForMutation(
+  conversationId: string,
+  cursor?: string
+): Promise<MessagePage> {
+  return authenticatedGet<MessagePage>(
+    withCursor(
+      `/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`,
+      cursor
+    )
   );
 }
 
 export async function getConversationCommercialInteractions(
-  conversationId: string
+  conversationId: string,
+  cursor?: string
 ): Promise<ConversationCommercialInteractions> {
   return authenticatedGet<ConversationCommercialInteractions>(
-    `/v1/messages/conversations/${encodeURIComponent(conversationId)}/commercial-interactions`
+    withCursor(
+      `/v1/messages/conversations/${encodeURIComponent(conversationId)}/commercial-interactions`,
+      cursor
+    )
   );
+}
+
+function withCursor(path: string, cursor: string | undefined): string {
+  return cursor ? `${path}?cursor=${encodeURIComponent(cursor)}` : path;
 }
 
 export async function createCreatorMediaOffer(
@@ -906,6 +933,10 @@ export async function markNotificationRead(notificationId: string): Promise<Noti
   );
 }
 
+export async function getNotificationsForMutation(): Promise<NotificationPage> {
+  return authenticatedGet<NotificationPage>("/v1/notifications");
+}
+
 export async function updateNotificationPreferences(
   body: UpdateNotificationPreferencesRequest
 ): Promise<NotificationPreferences> {
@@ -987,12 +1018,14 @@ export async function createSubscriptionIntent(
 
 export async function submitSubscriptionAuthorization(
   authorizationIntentId: string,
-  body: SubmitSubscriptionAuthorizationRequest
+  body: SubmitSubscriptionAuthorizationRequest,
+  idempotencyKey?: string
 ): Promise<Subscription> {
   return authenticatedMutation<Subscription>(
     `/v1/subscriptions/authorizations/${encodeURIComponent(authorizationIntentId)}/submissions`,
     "POST",
-    body
+    body,
+    idempotencyKey
   );
 }
 

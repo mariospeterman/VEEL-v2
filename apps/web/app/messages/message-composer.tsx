@@ -4,14 +4,26 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Conversation } from "@/api-client";
 import {
+  ApiMutationError,
   createMessage,
   type CreateMessageRequest,
   type Message
 } from "@/api-mutations";
-import { safeMutationMessage } from "@/api-errors";
-import { createMutationIdempotencyKey } from "@/api-mutation-transport";
+import {
+  claimOfflineMessageSession,
+  classifyMessageFailure,
+  createOfflineMessage,
+  enqueueOfflineMessage,
+  isOfflineMessageStorageKey,
+  readOfflineMessages,
+  removeOfflineMessage,
+  updateOfflineMessage,
+  type OfflineMessageRecord,
+  type OfflineMessageScope
+} from "@/messages/offline-message-queue";
 
 interface MessageComposerProps {
+  actorUserId: string | null;
   conversation: Conversation;
   initialSharedContentItemId: string | null;
   replyTo: Message | null;
@@ -19,73 +31,180 @@ interface MessageComposerProps {
   onTyping: (active: boolean) => void;
 }
 
-interface QueuedMessage {
-  conversationId: string;
-  optimisticId: string;
-  idempotencyKey: string;
-  request: CreateMessageRequest;
-  createdAt: string;
-}
-
-const offlineQueueKey = "wevid:message-offline-queue:v1";
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const maxAutomaticAttempts = 5;
 
-export function MessageComposer({ conversation, initialSharedContentItemId, replyTo, onClearReply, onTyping }: MessageComposerProps) {
+export function MessageComposer({
+  actorUserId,
+  conversation,
+  initialSharedContentItemId,
+  replyTo,
+  onClearReply,
+  onTyping
+}: MessageComposerProps) {
   const queryClient = useQueryClient();
   const [body, setBody] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "queued" | "ready" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
-  const [sentMessage, setSentMessage] = useState<Message | null>(null);
   const [sharedContentItemId, setSharedContentItemId] = useState(
     initialSharedContentItemId && uuidPattern.test(initialSharedContentItemId) ? initialSharedContentItemId : ""
   );
   const [attachmentIds, setAttachmentIds] = useState("");
-  const messageAttempt = useRef<{ requestHash: string; idempotencyKey: string } | null>(null);
+  const [browserSessionId, setBrowserSessionId] = useState<string | null>(null);
+  const [outbox, setOutbox] = useState<OfflineMessageRecord[]>([]);
+  const [queueRevision, setQueueRevision] = useState(0);
+  const flushInFlight = useRef(false);
+  const activeFlush = useRef<AbortController | null>(null);
   const trimmedBody = body.trim();
-  const isBusy = state === "sending";
 
   useEffect(() => {
-    const flush = async () => {
-      if (!navigator.onLine) return;
-      const queued = readQueue().filter((item) => item.conversationId === conversation.id);
-      for (const item of queued) {
-        try {
-          const created = await createMessage(item.conversationId, item.request, item.idempotencyKey);
-          removeQueued(item.idempotencyKey);
-          queryClient.setQueryData<{ items: Message[] }>(
-            ["messages", "conversation", item.conversationId],
-            (current) => ({
-              items: (current?.items ?? []).map((message) => message.id === item.optimisticId ? created : message)
-            })
-          );
-        } catch {
-          if (!navigator.onLine) return;
-          removeQueued(item.idempotencyKey);
-          queryClient.setQueryData<{ items: Message[] }>(
-            ["messages", "conversation", item.conversationId],
-            (current) => ({ items: (current?.items ?? []).filter((message) => message.id !== item.optimisticId) })
-          );
-        }
-      }
-      void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
-    };
-    for (const item of readQueue().filter((queued) => queued.conversationId === conversation.id)) {
-      queryClient.setQueryData<{ items: Message[] }>(
-        ["messages", "conversation", conversation.id],
-        (current) => current?.items.some((message) => message.id === item.optimisticId)
-          ? current
-          : { items: [...(current?.items ?? []), optimisticMessage(item)] }
-      );
+    if (!actorUserId) {
+      setBrowserSessionId(null);
+      setOutbox([]);
+      return;
     }
-    window.addEventListener("online", flush);
-    void flush();
-    return () => window.removeEventListener("online", flush);
-  }, [conversation.id, queryClient]);
+    const nextBrowserSessionId = claimOfflineMessageSession(
+      window.localStorage,
+      window.sessionStorage,
+      actorUserId
+    );
+    setBrowserSessionId(nextBrowserSessionId);
+  }, [actorUserId]);
 
-  async function sendVisibleMessage() {
+  useEffect(() => {
+    if (!actorUserId || !browserSessionId) return;
+    const scope: OfflineMessageScope = {
+      actorUserId,
+      browserSessionId,
+      conversationId: conversation.id
+    };
+    let disposed = false;
+
+    const syncOutbox = () => {
+      if (!disposed) setOutbox(readOfflineMessages(window.localStorage, scope));
+    };
+    const flush = async () => {
+      if (disposed || !navigator.onLine || flushInFlight.current) return;
+      flushInFlight.current = true;
+      try {
+        const now = Date.now();
+        const queued = readOfflineMessages(window.localStorage, scope).filter((item) =>
+          ["queued", "retrying", "sending"].includes(item.state) &&
+          (item.nextAttemptAt === null || Date.parse(item.nextAttemptAt) <= now)
+        );
+        for (const item of queued) {
+          if (disposed || !navigator.onLine) break;
+          const sending: OfflineMessageRecord = {
+            ...item,
+            state: item.attemptCount === 0 ? "sending" : "retrying"
+          };
+          if (!updateOfflineMessage(window.localStorage, scope, sending)) continue;
+          syncOutbox();
+
+          const controller = new AbortController();
+          activeFlush.current = controller;
+          const timeout = window.setTimeout(() => controller.abort(), 10_000);
+          try {
+            await createMessage(
+              item.conversationId,
+              item.request,
+              item.idempotencyKey,
+              actorUserId,
+              controller.signal
+            );
+            removeOfflineMessage(window.localStorage, scope, item.clientMessageId);
+            setState("ready");
+            setMessage("Message sent.");
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["messages", "conversation", item.conversationId] }),
+              queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] })
+            ]);
+          } catch (error) {
+            if (disposed || controller.signal.aborted && !navigator.onLine) break;
+            const disposition = classifyMessageFailure(error instanceof ApiMutationError ? error.status : undefined);
+            const attemptCount = item.attemptCount + 1;
+            const retryable = disposition === "auto_retry" && attemptCount < maxAutomaticAttempts;
+            const failed: OfflineMessageRecord = {
+              ...item,
+              attemptCount,
+              state: disposition === "pause_auth"
+                ? "paused_auth"
+                : disposition === "manual_attention"
+                  ? "needs_attention"
+                  : retryable
+                    ? "retrying"
+                    : "retryable_failed",
+              lastFailureKind: disposition === "pause_auth"
+                ? "authentication"
+                : disposition === "manual_attention"
+                  ? "request"
+                  : "transport",
+              nextAttemptAt: retryable
+                ? new Date(Date.now() + retryDelayMs(attemptCount)).toISOString()
+                : null
+            };
+            updateOfflineMessage(window.localStorage, scope, failed);
+            setState(disposition === "auto_retry" ? "queued" : "error");
+            setMessage(
+              disposition === "pause_auth"
+                ? "Sign in again before retrying this queued message."
+                : disposition === "manual_attention"
+                  ? "This message needs your attention before retrying."
+                  : "Message delivery will retry safely with the same request key."
+            );
+          } finally {
+            window.clearTimeout(timeout);
+            if (activeFlush.current === controller) activeFlush.current = null;
+            syncOutbox();
+          }
+        }
+      } finally {
+        flushInFlight.current = false;
+        syncOutbox();
+      }
+    };
+
+    const onStorage = (event: StorageEvent) => {
+      if (!isOfflineMessageStorageKey(event.key)) return;
+      activeFlush.current?.abort();
+      syncOutbox();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void flush();
+    };
+    const interval = window.setInterval(() => void flush(), 2_000);
+    window.addEventListener("online", flush);
+    window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVisible);
+    syncOutbox();
+    void flush();
+
+    return () => {
+      disposed = true;
+      activeFlush.current?.abort();
+      window.clearInterval(interval);
+      window.removeEventListener("online", flush);
+      window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [actorUserId, browserSessionId, conversation.id, queryClient, queueRevision]);
+
+  function currentScope(): OfflineMessageScope | null {
+    return actorUserId && browserSessionId
+      ? { actorUserId, browserSessionId, conversationId: conversation.id }
+      : null;
+  }
+
+  function sendVisibleMessage() {
     if (!trimmedBody) return;
-    resetResult("sending");
-    const optimisticId = `optimistic-${Date.now()}`;
+    const scope = currentScope();
+    if (!scope) {
+      setState("error");
+      setMessage("Reload messages after signing in before sending.");
+      return;
+    }
+    setState("sending");
+    setMessage(null);
     const parsedAttachments = attachmentIds.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean);
     if (parsedAttachments.length > 4 || new Set(parsedAttachments).size !== parsedAttachments.length || parsedAttachments.some((id) => !uuidPattern.test(id))) {
       setState("error");
@@ -103,47 +222,40 @@ export function MessageComposer({ conversation, initialSharedContentItemId, repl
       sharedContentItemId: sharedContentItemId.trim() || null,
       attachmentContentItemIds: parsedAttachments
     };
-    const idempotencyKey = idempotencyKeyForRequest(messageAttempt, request);
-    const queued: QueuedMessage = { conversationId: conversation.id, optimisticId, idempotencyKey, request, createdAt: new Date().toISOString() };
-    const optimistic = optimisticMessage(queued);
-    const queryKey = ["messages", "conversation", conversation.id] as const;
-    queryClient.setQueryData<{ items: Message[] }>(queryKey, (current) => ({
-      items: [...(current?.items ?? []), optimistic]
-    }));
-
-    if (!navigator.onLine) {
-      enqueue(queued);
-      clearComposer();
-      setState("queued");
-      setMessage("Message is queued on this device and will retry when the connection returns.");
+    const queued = createOfflineMessage(scope, request);
+    if (!enqueueOfflineMessage(window.localStorage, queued)) {
+      setState("error");
+      setMessage("This device outbox is full. Retry or cancel an older message before sending another.");
       return;
     }
 
-    try {
-      const created = await createMessage(conversation.id, request, idempotencyKey);
-      messageAttempt.current = null;
-      setSentMessage(created);
-      queryClient.setQueryData<{ items: Message[] }>(queryKey, (current) => ({
-        items: (current?.items ?? []).map((item) => item.id === optimisticId ? created : item)
-      }));
-      void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
-      clearComposer();
-      setState("ready");
-      setMessage("Message sent.");
-    } catch (error) {
-      if (!navigator.onLine) {
-        enqueue(queued);
-        clearComposer();
-        setState("queued");
-        setMessage("Message is queued on this device and will retry when the connection returns.");
-        return;
-      }
-      queryClient.setQueryData<{ items: Message[] }>(queryKey, (current) => ({
-        items: (current?.items ?? []).filter((item) => item.id !== optimisticId)
-      }));
-      setState("error");
-      setMessage(errorMessage(error));
-    }
+    setOutbox(readOfflineMessages(window.localStorage, scope));
+    clearComposer();
+    setState(navigator.onLine ? "sending" : "queued");
+    setMessage(navigator.onLine
+      ? "Sending from the protected outbox."
+      : "Message is queued on this device and will retry when the connection returns.");
+    setQueueRevision((revision) => revision + 1);
+  }
+
+  function retryQueued(item: OfflineMessageRecord) {
+    const scope = currentScope();
+    if (!scope) return;
+    updateOfflineMessage(window.localStorage, scope, {
+      ...item,
+      state: "queued",
+      attemptCount: 0,
+      nextAttemptAt: new Date().toISOString(),
+      lastFailureKind: null
+    });
+    setQueueRevision((revision) => revision + 1);
+  }
+
+  function cancelQueued(item: OfflineMessageRecord) {
+    const scope = currentScope();
+    if (!scope) return;
+    removeOfflineMessage(window.localStorage, scope, item.clientMessageId);
+    setOutbox(readOfflineMessages(window.localStorage, scope));
   }
 
   function clearComposer() {
@@ -153,12 +265,6 @@ export function MessageComposer({ conversation, initialSharedContentItemId, repl
     onClearReply();
   }
 
-  function resetResult(nextState: "sending") {
-    setState(nextState);
-    setMessage(null);
-    setSentMessage(null);
-  }
-
   return (
     <section className="border-t border-(--line) p-4">
       <label className="grid gap-2">
@@ -166,10 +272,7 @@ export function MessageComposer({ conversation, initialSharedContentItemId, repl
         <textarea
           className="min-h-28 resize-none rounded border border-(--line) bg-(--background) p-3 text-sm outline-none focus:border-(--accent)"
           maxLength={4000}
-          disabled={
-            !conversation.canSend &&
-            !(conversation.requestState === "pending" && conversation.requestRole === "initiator")
-          }
+          disabled={!conversation.canSend}
           onBlur={() => onTyping(false)}
           onChange={(event) => { setBody(event.target.value); onTyping(event.target.value.trim().length > 0); }}
           placeholder="Write a message..."
@@ -193,25 +296,39 @@ export function MessageComposer({ conversation, initialSharedContentItemId, repl
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           className="rounded bg-(--foreground) px-3 py-2 text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isBusy || !trimmedBody || !conversation.canSend}
+          disabled={!trimmedBody || !conversation.canSend || !actorUserId || !browserSessionId}
           onClick={sendVisibleMessage}
           type="button"
         >
-          {state === "sending" ? "Sending" : "Send"}
+          Send
         </button>
       </div>
-      {sentMessage ? (
-        <p className="mt-3 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm text-(--muted)">{sentMessage.deliveryState === "visible" ? "Delivered" : "Sending safely"}</p>
+
+      {outbox.length > 0 ? (
+        <div className="mt-3 grid gap-2" aria-label="Message outbox">
+          {outbox.map((item) => (
+            <article className="rounded border border-(--line) bg-(--background) px-3 py-2 text-sm" key={item.clientMessageId}>
+              <p className="line-clamp-2">{item.request.body}</p>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-(--muted)">
+                <span>{outboxLabel(item)}</span>
+                <span className="flex gap-2">
+                  {["paused_auth", "needs_attention", "retryable_failed"].includes(item.state) ? (
+                    <button className="underline" onClick={() => retryQueued(item)} type="button">Retry</button>
+                  ) : null}
+                  <button className="underline" onClick={() => cancelQueued(item)} type="button">Cancel</button>
+                </span>
+              </div>
+            </article>
+          ))}
+        </div>
       ) : null}
 
       {message ? (
-        <p
-          className={`mt-3 rounded border px-3 py-2 text-sm ${
-            state === "error"
-              ? "border-[#7f1d1d] bg-[#450a0a] text-[#fecaca]"
-              : "border-(--line) bg-(--background) text-(--muted)"
-          }`}
-        >
+        <p className={`mt-3 rounded border px-3 py-2 text-sm ${
+          state === "error"
+            ? "border-[#7f1d1d] bg-[#450a0a] text-[#fecaca]"
+            : "border-(--line) bg-(--background) text-(--muted)"
+        }`}>
           {message}
         </p>
       ) : null}
@@ -219,61 +336,18 @@ export function MessageComposer({ conversation, initialSharedContentItemId, repl
   );
 }
 
-function errorMessage(error: unknown) {
-  return safeMutationMessage(error, "Message action");
+function retryDelayMs(attemptCount: number): number {
+  const base = Math.min(60_000, 2_000 * 2 ** Math.max(0, attemptCount - 1));
+  return Math.round(base * (0.8 + Math.random() * 0.4));
 }
 
-function idempotencyKeyForRequest(
-  attempt: { current: { requestHash: string; idempotencyKey: string } | null },
-  request: CreateMessageRequest
-) {
-  const requestHash = JSON.stringify(request);
-  if (attempt.current?.requestHash === requestHash) {
-    return attempt.current.idempotencyKey;
+function outboxLabel(item: OfflineMessageRecord): string {
+  switch (item.state) {
+    case "sending": return "Sending";
+    case "queued": return "Queued on this device";
+    case "retrying": return `Retrying · attempt ${item.attemptCount}`;
+    case "paused_auth": return "Paused until you sign in again";
+    case "needs_attention": return "Needs attention";
+    case "retryable_failed": return "Automatic retries paused";
   }
-
-  const idempotencyKey = createMutationIdempotencyKey();
-  attempt.current = { requestHash, idempotencyKey };
-  return idempotencyKey;
-}
-
-function optimisticMessage(item: QueuedMessage): Message {
-  return {
-    id: item.optimisticId,
-    conversationId: item.conversationId,
-    sender: { id: "current-user", handle: "you", displayName: "You", avatarUrl: null, badges: [] },
-    body: item.request.body,
-    deliveryState: "visible",
-    paymentIntentId: null,
-    replyToMessageId: item.request.replyToMessageId ?? null,
-    sharedContentItemId: item.request.sharedContentItemId ?? null,
-    attachments: [],
-    reactions: [],
-    createdAt: item.createdAt
-  };
-}
-
-function readQueue(): QueuedMessage[] {
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(offlineQueueKey) ?? "[]") as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is QueuedMessage => Boolean(
-      item && typeof item === "object" &&
-      typeof (item as QueuedMessage).conversationId === "string" &&
-      typeof (item as QueuedMessage).idempotencyKey === "string" &&
-      typeof (item as QueuedMessage).request?.body === "string"
-    )).slice(-25);
-  } catch {
-    return [];
-  }
-}
-
-function enqueue(item: QueuedMessage) {
-  const queue = readQueue();
-  if (!queue.some((queued) => queued.idempotencyKey === item.idempotencyKey)) queue.push(item);
-  window.localStorage.setItem(offlineQueueKey, JSON.stringify(queue.slice(-25)));
-}
-
-function removeQueued(idempotencyKey: string) {
-  window.localStorage.setItem(offlineQueueKey, JSON.stringify(readQueue().filter((item) => item.idempotencyKey !== idempotencyKey)));
 }

@@ -4,8 +4,8 @@ import { ErrorState } from "../../ui";
 import { CreatorSupportPanel } from "./creator-support-panel";
 import { ProfileFollowPanel } from "./profile-follow-panel";
 import { ProfileMessageButton } from "./profile-message-button";
-import { SubscriptionAuthorizationPanel } from "../../subscriptions/subscription-authorization-panel";
 import { ContentRenderer } from "../../content/content-renderer";
+import { CreatorMembershipCheckout } from "./creator-membership-checkout";
 
 export default async function PublicCreatorProfilePage({
   params
@@ -85,7 +85,7 @@ function ProfileView({ followState, profile }: { followState: FollowState | null
                 {profile.monetisation.membershipOffer.description}
               </p>
             ) : null}
-            <SubscriptionAuthorizationPanel plan={profile.monetisation.membershipOffer} />
+            <CreatorMembershipCheckout plan={profile.monetisation.membershipOffer} />
           </div>
         ) : null}
       </aside>

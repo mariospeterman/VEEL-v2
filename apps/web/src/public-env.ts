@@ -1,4 +1,8 @@
-import { parsePublicWebEnv, type PublicWebEnv } from "@veel/config/public";
+import {
+  assertCompatibleSolanaEnvironment,
+  parsePublicWebEnv,
+  type PublicWebEnv
+} from "@veel/config/public";
 
 declare global {
   var __WEVID_PUBLIC_ENV__: PublicWebEnv | undefined;
@@ -35,6 +39,7 @@ export function readPublicWebEnv() {
 }
 
 export function readServerPublicWebEnv(env: NodeJS.ProcessEnv): PublicWebEnv {
+  assertCompatibleSolanaEnvironment(env);
   return parsePublicWebEnv(
     Object.fromEntries(publicEnvKeys.map((key) => [key, env[key]]))
   );

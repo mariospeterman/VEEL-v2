@@ -17,7 +17,6 @@ import {
   blockUser,
   createContentComment,
   createContentShare,
-  createMessage,
   createSafetyReport,
   getContentComments,
   getConversationsForMutation,
@@ -206,22 +205,9 @@ export function ContentEngagementPanel({
 
   async function shareToConversation() {
     if (!conversationId) return;
-    setPending("share");
-    setNotice(null);
-    const key = actionAttempts.current["share:internal"] ?? createMutationIdempotencyKey();
-    actionAttempts.current["share:internal"] = key;
-    try {
-      await createContentShare({ targetType: "content", targetId: contentId, mode: "internal_message" }, key);
-      await createMessage(conversationId, { body: "Shared a post", sharedContentItemId: contentId }, key);
-      delete actionAttempts.current["share:internal"];
-      setEngagement((current) => ({ ...current, shareCount: current.shareCount + 1 }));
-      setPanel(null);
-      setNotice({ kind: "success", text: "Post sent in Messages." });
-    } catch (error) {
-      setNotice({ kind: "error", text: safeMutationMessage(error, "Message share") });
-    } finally {
-      setPending(null);
-    }
+    window.location.assign(
+      `/app/messages?conversation=${encodeURIComponent(conversationId)}&share=${encodeURIComponent(contentId)}`
+    );
   }
 
   async function submitReport() {

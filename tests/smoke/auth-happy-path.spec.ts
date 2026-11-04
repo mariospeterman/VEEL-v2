@@ -714,7 +714,13 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       hashtags: [{ slug: "studio", displayName: "Studio", state: "active" }],
       events: [],
       liveRooms: [liveRoom()],
-      nextCursor: null
+      nextCursors: {
+        content: null,
+        creators: null,
+        hashtags: null,
+        events: null,
+        liveRooms: null
+      }
     });
     return;
   }

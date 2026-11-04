@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ApiMutationError, createLiveRoom } from "@/api-mutations";
+import { OwnedLiveRoomHistory } from "./owned-live-room-history";
 
 type AccessMode = "public" | "profile_members" | "paid_event";
 
@@ -124,6 +125,7 @@ export function LiveCreateWorkspace({ enabled }: { enabled: boolean }) {
         {!enabled ? <p className="text-sm text-(--muted)">Finish age access before creating a live room.</p> : null}
         {error ? <p className="text-sm font-medium text-red-400" role="alert">{error}</p> : null}
       </form>
+      <OwnedLiveRoomHistory />
     </section>
   );
 }

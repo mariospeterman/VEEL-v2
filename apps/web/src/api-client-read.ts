@@ -49,6 +49,7 @@ import type {
   CreatorOnboarding,
   CreatorProfile,
   DiscoverPage,
+  DiscoverCursorSet,
   Event,
   EventAccessPass,
   EventAccessPassPage,
@@ -99,8 +100,8 @@ export async function getLiveRoom(liveRoomId: string): Promise<ApiResult<LiveRoo
   return getJson<LiveRoom>(`/v1/live/rooms/${encodeURIComponent(liveRoomId)}`);
 }
 
-export async function getMyLiveRooms(): Promise<ApiResult<LiveRoomPage>> {
-  return getJson<LiveRoomPage>("/v1/live/rooms/mine");
+export async function getMyLiveRooms(cursor?: string): Promise<ApiResult<LiveRoomPage>> {
+  return getJson<LiveRoomPage>(withCursor("/v1/live/rooms/mine", cursor));
 }
 
 export async function getLiveRoomMessages(liveRoomId: string): Promise<ApiResult<LiveChatPage>> {
@@ -127,24 +128,46 @@ export async function getWalletTransactionActivity(): Promise<ApiResult<WalletTr
   return getJson<WalletTransactionPage>("/v1/activity/wallet-transactions");
 }
 
-export async function getConversations(): Promise<ApiResult<ConversationList>> {
-  return getJson<ConversationList>("/v1/messages/conversations");
+export async function getConversations(cursor?: string): Promise<ApiResult<ConversationList>> {
+  return getJson<ConversationList>(withCursor("/v1/messages/conversations", cursor));
 }
 
-export async function getConversationMessages(conversationId: string): Promise<ApiResult<MessagePage>> {
-  return getJson<MessagePage>(`/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`);
+export async function getConversationMessages(
+  conversationId: string,
+  cursor?: string
+): Promise<ApiResult<MessagePage>> {
+  return getJson<MessagePage>(
+    withCursor(
+      `/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`,
+      cursor
+    )
+  );
+}
+
+function withCursor(path: string, cursor: string | undefined): string {
+  return cursor ? `${path}?cursor=${encodeURIComponent(cursor)}` : path;
 }
 
 export async function getWallets(): Promise<ApiResult<WalletList>> {
   return getJson<WalletList>("/v1/wallets");
 }
 
-export async function getSubscriptionPlans(): Promise<ApiResult<SubscriptionPlanPage>> {
-  return getJson<SubscriptionPlanPage>("/v1/subscriptions/plans");
+export async function getSubscriptionPlans(cursor?: string): Promise<ApiResult<SubscriptionPlanPage>> {
+  return getJson<SubscriptionPlanPage>(withCursor("/v1/subscriptions/plans", cursor));
 }
 
-export async function getSubscriptions(): Promise<ApiResult<SubscriptionPage>> {
-  return getJson<SubscriptionPage>("/v1/subscriptions");
+export async function getSubscriptions(options: {
+  cursor?: string;
+  scope?: "platform" | "creator";
+  view?: "active" | "history";
+} = {}): Promise<ApiResult<SubscriptionPage>> {
+  const query = new URLSearchParams();
+  if (options.cursor) query.set("cursor", options.cursor);
+  if (options.scope) query.set("scope", options.scope);
+  if (options.view) query.set("view", options.view);
+  return getJson<SubscriptionPage>(
+    `/v1/subscriptions${query.size > 0 ? `?${query.toString()}` : ""}`
+  );
 }
 
 export async function getMyCreatorMembershipOffer(): Promise<ApiResult<SubscriptionPlan>> {
@@ -155,11 +178,25 @@ export async function getPlatformAccess(): Promise<ApiResult<PlatformAccess>> {
   return getJson<PlatformAccess>("/v1/platform-access");
 }
 
-export async function getDiscoverSearch(query = ""): Promise<ApiResult<DiscoverPage>> {
+export async function getDiscoverSearch(
+  query = "",
+  cursors: Partial<DiscoverCursorSet> = {}
+): Promise<ApiResult<DiscoverPage>> {
   const search = new URLSearchParams();
 
   if (query) {
     search.set("q", query);
+  }
+
+  const cursorParameters = [
+    ["contentCursor", cursors.content],
+    ["creatorCursor", cursors.creators],
+    ["hashtagCursor", cursors.hashtags],
+    ["eventCursor", cursors.events],
+    ["liveCursor", cursors.liveRooms]
+  ] as const;
+  for (const [parameter, cursor] of cursorParameters) {
+    if (cursor) search.set(parameter, cursor);
   }
 
   return getJson<DiscoverPage>(`/v1/discover/search${search.size > 0 ? `?${search.toString()}` : ""}`);

@@ -22,7 +22,8 @@
   --accent-text: #14f195;
   --accent-2: #9945ff;
   --accent-3: #03e1ff;
-  --accent-strong: #031f18;
+  --accent-strong: #76ffc8;
+  --accent-on-solid: #032017;
   --accent-soft: rgba(20, 241, 149, 0.18);
   --warning: #f59e0b;
   --danger: #f43f5e;
@@ -52,6 +53,7 @@
   --accent-2: #9945ff;
   --accent-3: #03e1ff;
   --accent-strong: #063f31;
+  --accent-on-solid: #032017;
   --accent-soft: rgba(0, 143, 99, 0.13);
 }
 

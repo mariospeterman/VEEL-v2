@@ -27,6 +27,7 @@ import { RecoveryAccessPanel } from "../../settings/recovery-access-panel";
 import { SessionSecurityActions } from "../../settings/session-security-actions";
 import { ContentPreferenceControl } from "./content-preference-control";
 import { PrivacyControls } from "./privacy-controls";
+import { ProfileEditor } from "./profile-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -149,11 +150,14 @@ function ProfileFacts({ session }: { session: ApiResult<SessionState> }) {
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <Fact label="Handle" value={session.data.user?.handle ? `@${session.data.user.handle}` : "not set"} />
-      <Fact label="Display name" value={session.data.user?.displayName ?? "not set"} />
-      <Fact label="Session" value={session.data.authenticated ? "application session active" : "not authenticated"} />
-      <Fact label="Access" value={session.data.appAccessState.allowed ? "ready" : session.data.appAccessState.reason} />
+    <div className="grid gap-4">
+      {session.data.user ? <ProfileEditor initialUser={session.data.user} /> : (
+        <p className="text-sm text-(--muted)">Complete onboarding before editing your profile.</p>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Fact label="Session" value={session.data.authenticated ? "application session active" : "not authenticated"} />
+        <Fact label="Access" value={session.data.appAccessState.allowed ? "ready" : session.data.appAccessState.reason} />
+      </div>
     </div>
   );
 }

@@ -1,13 +1,13 @@
 import { getNotifications } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
-import { Card, EmptyState, ErrorState, PageHeader } from "../../ui";
+import { Card, ErrorState, PageHeader } from "../../ui";
 import { NotificationList } from "./notification-list";
 
 export const dynamic = "force-dynamic";
 
 export default async function NotificationsPage() {
-  await requireAppAccess("/app/notifications");
+  const session = await requireAppAccess("/app/notifications");
   const notifications = await getNotifications();
 
   return (
@@ -18,13 +18,7 @@ export default async function NotificationsPage() {
         </PageHeader>
         <Card>
           {notifications.ok ? (
-            notifications.data.items.length > 0 ? (
-              <NotificationList initialItems={notifications.data.items} />
-            ) : (
-              <div className="p-5">
-                <EmptyState title="You’re all caught up">New account activity appears here.</EmptyState>
-              </div>
-            )
+            <NotificationList actorUserId={session?.user?.id ?? "unknown"} initialPage={notifications.data} />
           ) : (
             <div className="p-5">
               <ErrorState result={notifications} title="Notifications unavailable" context="Notifications" />

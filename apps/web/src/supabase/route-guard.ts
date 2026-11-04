@@ -1,11 +1,9 @@
 import { redirect } from "next/navigation";
-import { getSession, type SessionState } from "../api-client";
+import { getSession } from "../api-client";
+import { appAccessRedirectForPath, signInRedirectForPath } from "./access-redirect";
 import { getWebAuthState } from "./auth-state";
 
-export function signInRedirectForPath(path: string): string {
-  const params = new URLSearchParams({ mode: "login", next: path });
-  return `/?${params.toString()}`;
-}
+export { appAccessRedirectForPath, signInRedirectForPath } from "./access-redirect";
 
 export async function requireConfiguredSession(path: string) {
   const authState = await getWebAuthState();
@@ -15,27 +13,6 @@ export async function requireConfiguredSession(path: string) {
   }
 
   return authState;
-}
-
-export function appAccessRedirectForPath(
-  path: string,
-  reason: SessionState["appAccessState"]["reason"]
-): string {
-  const next = safeNext(path);
-
-  if (reason === "identity_required") {
-    return withNext("/", next, { mode: "onboarding", step: "profile" });
-  }
-
-  if (reason === "wallet_required") {
-    return withNext("/", next, { mode: "onboarding", step: "wallet" });
-  }
-
-  if (reason === "age_required" || reason === "age_pending") {
-    return withNext("/", next, { mode: "onboarding", step: "age" });
-  }
-
-  return withNext("/", next, { mode: "login" });
 }
 
 export async function requireAppAccess(path: string) {
@@ -64,13 +41,4 @@ export async function requireAppAccess(path: string) {
   }
 
   return session.data;
-}
-
-function safeNext(path: string) {
-  return path.startsWith("/") && !path.startsWith("//") ? path : "/";
-}
-
-function withNext(path: string, next: string, initial?: Record<string, string>) {
-  const params = new URLSearchParams({ ...initial, next });
-  return `${path}?${params.toString()}`;
 }

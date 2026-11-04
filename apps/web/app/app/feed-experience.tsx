@@ -12,6 +12,7 @@ import {
 } from "@/api-mutations";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
 import { safeMutationMessage } from "@/api-errors";
+import { maxRenderedFeedItems, retainNewestFeedItems } from "@/feed/bounded-feed-window";
 import { ContentRenderer } from "../content/content-renderer";
 import { FollowButton } from "../follow-button";
 import { ContentEngagementPanel } from "../content/[contentId]/content-engagement-panel";
@@ -39,12 +40,16 @@ export function FeedExperience({
   const [error, setError] = useState<string | null>(null);
   const [activeId, setActiveId] = useState(initialPage.items[0]?.id ?? null);
   const [followOverrides, setFollowOverrides] = useState<Record<string, FollowState>>({});
+  const [discardedHeight, setDiscardedHeight] = useState(0);
   const feedRef = useRef<HTMLDivElement>(null);
   const loadSentinelRef = useRef<HTMLDivElement>(null);
   const pendingRef = useRef(false);
   const seenRef = useRef(new Set<string>());
   const retryRef = useRef<{ mode: FeedMode; cursor?: string } | null>(null);
   const processedPreferenceRefreshRef = useRef(0);
+  const pageRef = useRef(initialPage);
+  const discardedHeightRef = useRef(0);
+  pageRef.current = page;
   const restoreKey = `wevid:${surface}:${mode}:scroll`;
 
   const load = useCallback(async (nextMode: FeedMode, cursor?: string) => {
@@ -54,9 +59,29 @@ export function FeedExperience({
     setError(null);
     try {
       const next = await getFeedPage(nextMode, surface, cursor);
-      setPage((current) => cursor
-        ? { ...next, items: mergeItems(current.items, next.items) }
-        : next);
+      let resolved = next;
+      if (cursor) {
+        const retained = retainNewestFeedItems(
+          pageRef.current.items,
+          next.items,
+          maxRenderedFeedItems
+        );
+        resolved = { ...next, items: retained.items };
+        if (retained.evicted.length > 0) {
+          const addedHeight = measureEvictedHeight(
+            feedRef.current,
+            retained.evicted.map((item) => item.id),
+            discardedHeightRef.current > 0
+          );
+          discardedHeightRef.current += addedHeight;
+          setDiscardedHeight(discardedHeightRef.current);
+        }
+      } else {
+        discardedHeightRef.current = 0;
+        setDiscardedHeight(0);
+      }
+      pageRef.current = resolved;
+      setPage(resolved);
       setActiveId((current) => {
         if (!cursor) return next.items[0]?.id ?? null;
         return current ?? next.items[0]?.id ?? null;
@@ -68,7 +93,10 @@ export function FeedExperience({
       if (cursor && failure instanceof ApiMutationError && failure.status === 409) {
         try {
           const fresh = await getFeedPage(nextMode, surface);
+          pageRef.current = fresh;
           setPage(fresh);
+          discardedHeightRef.current = 0;
+          setDiscardedHeight(0);
           setActiveId(fresh.items[0]?.id ?? null);
           retryRef.current = null;
           return true;
@@ -285,6 +313,7 @@ export function FeedExperience({
         ref={feedRef}
         role="tabpanel"
       >
+        {discardedHeight > 0 ? <div aria-hidden="true" style={{ height: discardedHeight }} /> : null}
         {page.items.map((item) => (
           <FeedCard
             active={activeId === item.id}
@@ -396,11 +425,6 @@ function FeedSkeleton({ surface }: { surface: FeedSurface }) {
   return <div aria-label="Loading more posts" className={surface === "bits" ? "bits-card feed-skeleton" : "home-feed-card feed-skeleton"} role="status" />;
 }
 
-function mergeItems(current: ContentItem[], incoming: ContentItem[]) {
-  const ids = new Set(current.map((item) => item.id));
-  return [...current, ...incoming.filter((item) => !ids.has(item.id))];
-}
-
 function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -409,4 +433,16 @@ function isInteractiveTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && Boolean(target.closest(
     "a, button, input, textarea, select, [contenteditable='true'], [role='tab']"
   ));
+}
+
+function measureEvictedHeight(root: HTMLElement | null, ids: string[], hasExistingSpacer: boolean) {
+  if (!root || ids.length === 0) return 0;
+  const evictedIds = new Set(ids);
+  let height = 0;
+  root.querySelectorAll<HTMLElement>("[data-content-id]").forEach((element) => {
+    if (evictedIds.has(element.dataset.contentId ?? "")) height += element.getBoundingClientRect().height;
+  });
+  const gap = Number.parseFloat(window.getComputedStyle(root).rowGap) || 0;
+  const replacedGapCount = hasExistingSpacer ? ids.length : Math.max(0, ids.length - 1);
+  return height + replacedGapCount * gap;
 }

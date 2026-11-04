@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import type { Conversation, Message } from "@/api-client";
+import type { ConversationList, Message, MessagePage } from "@/api-client";
 import {
   getConversationMessagesForMutation,
   getConversationsForMutation,
@@ -14,31 +14,46 @@ import { Card, EmptyState, StatusPill } from "../ui";
 import { ConversationStateActions } from "./conversation-state-actions";
 import { MessageComposer } from "./message-composer";
 import { CommercialInteractionsPanel } from "./commercial-interactions-panel";
+import {
+  findSelectedConversation,
+  replyForConversation
+} from "@/messages/conversation-selection";
+import {
+  appendUniquePageItems,
+  prependUniquePageItems
+} from "@/pagination/merge-page-items";
 
 export function MessagesWorkspace(input: {
-  initialConversations: Conversation[];
+  actorUserId: string | null;
+  initialConversations: ConversationList;
   initialConversationId: string | null;
-  initialMessages: Message[];
+  initialMessages: MessagePage;
   initialMessagesAvailable: boolean;
   initialSharedContentItemId: string | null;
 }) {
   const router = useRouter();
-  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const queryClient = useQueryClient();
+  const [reply, setReply] = useState<{ conversationId: string; message: Message } | null>(null);
+  const [conversationPaging, setConversationPaging] = useState({ pending: false, error: false });
+  const [messagePaging, setMessagePaging] = useState<{
+    conversationId: string | null;
+    pending: boolean;
+    error: boolean;
+  }>({ conversationId: null, pending: false, error: false });
   const conversations = useQuery({
     queryKey: ["messages", "conversations"],
-    queryFn: getConversationsForMutation,
-    initialData: { items: input.initialConversations }
+    queryFn: () => getConversationsForMutation(),
+    initialData: input.initialConversations
   });
-  const selected = conversations.data.items.find((item) => item.id === input.initialConversationId)
-    ?? conversations.data.items[0]
-    ?? null;
+  const selected = findSelectedConversation(conversations.data.items, input.initialConversationId);
+  const replyTo = replyForConversation(reply, selected?.id);
   const messages = useQuery({
     queryKey: ["messages", "conversation", selected?.id],
     queryFn: () => getConversationMessagesForMutation(selected?.id ?? ""),
     enabled: Boolean(selected),
     retry: 1,
     initialData: selected?.id === input.initialConversationId && input.initialMessagesAvailable
-      ? { items: input.initialMessages }
+      ? input.initialMessages
       : undefined
   });
   const scopedKeys = useMemo(
@@ -63,6 +78,48 @@ export function MessagesWorkspace(input: {
       ? `/app/messages?conversation=${encodeURIComponent(conversationId)}`
       : "/app/messages", { scroll: false });
   };
+
+  const loadMoreConversations = async () => {
+    const cursor = conversations.data.nextCursor;
+    if (!cursor || conversationPaging.pending) return;
+    setConversationPaging({ pending: true, error: false });
+    try {
+      const page = await getConversationsForMutation(cursor);
+      queryClient.setQueryData<ConversationList>(["messages", "conversations"], (current) => ({
+        items: appendUniquePageItems(current?.items ?? [], page.items),
+        nextCursor: page.nextCursor
+      }));
+      setConversationPaging({ pending: false, error: false });
+    } catch {
+      setConversationPaging({ pending: false, error: true });
+    }
+  };
+
+  const loadEarlierMessages = async () => {
+    const conversationId = selected?.id;
+    const cursor = messages.data?.nextCursor;
+    if (!conversationId || !cursor || (messagePaging.conversationId === conversationId && messagePaging.pending)) {
+      return;
+    }
+    setMessagePaging({ conversationId, pending: true, error: false });
+    try {
+      const page = await getConversationMessagesForMutation(conversationId, cursor);
+      queryClient.setQueryData<MessagePage>(
+        ["messages", "conversation", conversationId],
+        (current) => ({
+          items: prependUniquePageItems(current?.items ?? [], page.items),
+          nextCursor: page.nextCursor
+        })
+      );
+      setMessagePaging({ conversationId, pending: false, error: false });
+    } catch {
+      setMessagePaging({ conversationId, pending: false, error: true });
+    }
+  };
+
+  const selectedMessagePaging = messagePaging.conversationId === selected?.id
+    ? messagePaging
+    : { conversationId: selected?.id ?? null, pending: false, error: false };
 
   return (
     <section className="grid min-h-[68vh] gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
@@ -90,6 +147,14 @@ export function MessagesWorkspace(input: {
         )) : (
           <div className="p-4"><EmptyState title="No conversations yet">New conversations and requests appear here.</EmptyState></div>
         )}
+        {conversations.data.nextCursor ? (
+          <div className="grid gap-2 p-4">
+            <button className="secondary-button justify-self-center" disabled={conversationPaging.pending} onClick={() => void loadMoreConversations()} type="button">
+              {conversationPaging.pending ? "Loading…" : "Load more conversations"}
+            </button>
+            {conversationPaging.error ? <p className="text-center text-sm text-(--danger)" role="alert">Older conversations could not be loaded. Try again.</p> : null}
+          </div>
+        ) : null}
       </Card>
 
       <Card className={!selected ? "hidden lg:block" : "block"}>
@@ -105,17 +170,36 @@ export function MessagesWorkspace(input: {
               </div>
             </div>
             <ConversationStateActions conversation={selected} messagesVisible={messages.isSuccess} />
-            <CommercialInteractionsPanel conversation={selected} />
+            <CommercialInteractionsPanel conversation={selected} key={selected.id} />
             <div aria-live="polite" className="grid max-h-[52vh] min-h-56 gap-3 overflow-y-auto p-4">
               {messages.isLoading ? <p className="text-sm text-(--muted)">Loading messages…</p> : null}
               {messages.isError ? <EmptyState title="Conversation unavailable">Messages could not be loaded. Try again before treating the thread as read.</EmptyState> : null}
+              {messages.data?.nextCursor ? (
+                <button className="secondary-button justify-self-center" disabled={selectedMessagePaging.pending} onClick={() => void loadEarlierMessages()} type="button">
+                  {selectedMessagePaging.pending ? "Loading…" : "Load earlier messages"}
+                </button>
+              ) : null}
+              {selectedMessagePaging.error ? <p className="text-center text-sm text-(--danger)" role="alert">Earlier messages could not be loaded. Try again.</p> : null}
               {messages.data?.items.length ? messages.data.items.map((message) => (
-                <MessageBubble conversationId={selected.id} key={message.id} message={message} onReply={setReplyTo} />
+                <MessageBubble
+                  conversationId={selected.id}
+                  key={message.id}
+                  message={message}
+                  onReply={(next) => setReply({ conversationId: selected.id, message: next })}
+                />
               )) : !messages.isLoading && !messages.isError ? (
                 <EmptyState title="No visible messages yet">Send a respectful introduction to begin.</EmptyState>
               ) : null}
             </div>
-            <MessageComposer conversation={selected} initialSharedContentItemId={input.initialSharedContentItemId} onClearReply={() => setReplyTo(null)} onTyping={ephemeral.sendTyping} replyTo={replyTo} />
+            <MessageComposer
+              actorUserId={input.actorUserId}
+              conversation={selected}
+              initialSharedContentItemId={input.initialSharedContentItemId}
+              key={selected.id}
+              onClearReply={() => setReply(null)}
+              onTyping={ephemeral.sendTyping}
+              replyTo={replyTo}
+            />
           </>
         ) : (
           <div className="p-4"><EmptyState title="Select a conversation">Choose a conversation from your inbox.</EmptyState></div>
@@ -130,9 +214,12 @@ function MessageBubble({ conversationId, message, onReply }: { conversationId: s
   const toggleReaction = async (key: "like" | "love" | "laugh" | "support") => {
     const reacted = message.reactions.some((reaction) => reaction.key === key && reaction.reacted);
     const updated = await updateMessageReaction(conversationId, message.id, key, !reacted);
-    queryClient.setQueryData<{ items: Message[] }>(
+    queryClient.setQueryData<MessagePage>(
       ["messages", "conversation", conversationId],
-      (current) => ({ items: (current?.items ?? []).map((item) => item.id === updated.id ? updated : item) })
+      (current) => ({
+        items: (current?.items ?? []).map((item) => item.id === updated.id ? updated : item),
+        nextCursor: current?.nextCursor ?? null
+      })
     );
   };
 

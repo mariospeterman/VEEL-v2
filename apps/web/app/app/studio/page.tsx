@@ -6,7 +6,7 @@ import {
   queryAnalytics,
   type AnalyticsQueryRequest
 } from "@/api-client";
-import { formatAssetAmount } from "@/format-asset-amount";
+import { formatAtomicAssetAmount } from "@/format-asset-amount";
 import { requireAppAccess } from "@/supabase/route-guard";
 import type { Route } from "next";
 import { redirect } from "next/navigation";
@@ -78,6 +78,11 @@ export default async function StudioPage({
   ]);
   const capabilities = access.ok ? new Set(access.data.currentTier.capabilities) : new Set<string>();
   const hasStudio = capabilities.has("advanced_analytics");
+  const confirmedEarnings = dashboard.ok
+    ? dashboard.data.earnings.assets
+        .map((asset) => formatAtomicAssetAmount(asset.creatorEarningsAtomic, asset.currency))
+        .join(" · ") || "No earnings yet"
+    : "Unavailable";
 
   return (
     <AppShell>
@@ -103,7 +108,7 @@ export default async function StudioPage({
         {dashboard.ok ? (
           <section className="grid gap-4" id="overview">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard label="Confirmed earnings" value={formatAssetAmount(dashboard.data.earnings.creatorEarningsMinor, dashboard.data.earnings.currency)} />
+              <MetricCard label="Confirmed earnings" value={confirmedEarnings} />
               <MetricCard label="Confirmed sales" value={String(dashboard.data.earnings.confirmedPaymentCount)} />
               <MetricCard label="Creator readiness" value={`${dashboard.data.readiness.readinessScore}%`} />
               <MetricCard label="Studio plan" value={access.ok ? access.data.currentTier.label : "Unavailable"} />

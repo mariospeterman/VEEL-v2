@@ -78,7 +78,7 @@ export function PrivacyControls({ initial }: { initial: PrivacySettings }) {
         </div>
         {privacy.dataRequests.length > 0 ? <ul className="mt-4 grid gap-2 text-sm">{privacy.dataRequests.map((request) => <li className="flex items-center justify-between gap-3 rounded bg-(--background) px-3 py-2" key={request.id}><span>{request.type === "export" ? "Data export" : "Account deletion"}</span><span className="text-(--muted)">{requestStateLabel(request.state)}</span></li>)}</ul> : null}
       </div>
-      <a className="secondary-button w-fit" href="/mutuals">Manage Mutuals privacy</a>
+      <a className="secondary-button w-fit" href="/mutuals">View Mutuals connections</a>
       {notice ? <p aria-live="polite" className="text-sm text-(--muted)">{notice}</p> : null}
     </div>
   );

@@ -188,6 +188,17 @@ test("renders the canonical protected app home shell through /app", async ({ con
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
+test("keeps search, notifications, and wallet reachable from the phone shell", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  const shortcuts = page.getByRole("navigation", { name: "Mobile account shortcuts" });
+  await expect(shortcuts.getByRole("link", { name: "Search" })).toBeVisible();
+  await expect(shortcuts.getByRole("link", { name: "Notifications" })).toBeVisible();
+  await expect(shortcuts.getByRole("link", { name: "Wallet" })).toBeVisible();
+});
+
 test("exposes one keyboard-addressable main target without blocking accessibility violations", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
@@ -489,6 +500,21 @@ test("selects a requested conversation and keeps the inbox within the viewport",
     scrollWidth: document.documentElement.scrollWidth
   }));
   expect(layout.scrollWidth).toBe(layout.clientWidth);
+});
+
+test("returns from a phone conversation to the inbox without reopening the first thread", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/app/messages?conversation=${secondConversationId}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 45_000
+  });
+
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/messages$/);
+  await expect(page.getByRole("button", { name: /Studio team/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Production notes/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Production notes" })).toHaveCount(0);
 });
 
 test("does not clear unread state when conversation messages fail to load", async ({ context, page }) => {
@@ -1067,7 +1093,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   }
 
   if (method === "GET" && url.pathname === "/v1/messages/conversations") {
-    sendJson(response, 200, { items: conversations() });
+    sendJson(response, 200, { items: conversations(), nextCursor: null });
     return;
   }
 
@@ -1075,7 +1101,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     method === "GET" &&
     /^\/v1\/messages\/conversations\/[0-9a-f-]+\/commercial-interactions$/.test(url.pathname)
   ) {
-    sendJson(response, 200, { mediaOffers: [], creatorRequests: [] });
+    sendJson(response, 200, { mediaOffers: [], creatorRequests: [], nextCursor: null });
     return;
   }
 
@@ -1162,7 +1188,13 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       hashtags: [{ slug: "studio", displayName: "Studio", state: "active" }],
       events: [],
       liveRooms: [liveRoom()],
-      nextCursor: null
+      nextCursors: {
+        content: null,
+        creators: null,
+        hashtags: null,
+        events: null,
+        liveRooms: null
+      }
     });
     return;
   }
