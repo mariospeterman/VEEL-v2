@@ -38,6 +38,7 @@ import {
   verifyPaymentReadyAccess
 } from "./payment-route-shared.js";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
+import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
 import { defaultPaymentCommercialPolicy } from "./payment-commercial-policy.js";
 
 export async function registerPaymentIntentRoutes(
@@ -505,12 +506,20 @@ export async function registerPaymentIntentRoutes(
         await options.paymentRepository.recordSubmission({
           supabaseUserId: access.supabaseUserId,
           paymentIntentId: intent.id,
+          idempotencyKey,
           signature: body.signature,
           settlement
         });
 
         return reply.code(202).send();
       } catch (error) {
+        if (error instanceof MutationCommandIdempotencyConflictError) {
+          return reply.code(409).send({
+            code: "conflict",
+            message: "Idempotency key was already used for a different payment submission"
+          });
+        }
+
         if (error instanceof PaymentRepositoryConfigurationError) {
           request.log.warn({ error }, "Payment submission failed");
           return reply.code(503).send({

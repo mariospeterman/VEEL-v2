@@ -1,6 +1,27 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { z } from "zod";
-export { parsePublicWebEnv, publicWebEnvSchema, type PublicWebEnv } from "./public.js";
+import { assertCompatibleSolanaEnvironment, solanaChainForCluster } from "./public.js";
+export {
+  assertCompatibleSolanaEnvironment,
+  parsePublicWebEnv,
+  publicWebEnvSchema,
+  solanaChainForCluster,
+  type PublicWebEnv,
+  type SolanaChain,
+  type SolanaCluster
+} from "./public.js";
+export {
+  WebPushSubscriptionValidationError,
+  isPublicInternetAddress,
+  normalizeWebPushSubscription,
+  resolveWebPushHostname,
+  validateWebPushSubscription,
+  type ValidatedWebPushSubscription,
+  type WebPushDnsResolver,
+  type WebPushResolvedAddress,
+  type WebPushSubscriptionMaterial,
+  type WebPushValidationCode
+} from "./web-push.js";
 
 const emptyToUndefined = (value: unknown) => (value === "" ? undefined : value);
 const optionalStringSchema = z.preprocess(emptyToUndefined, z.string().optional());
@@ -20,7 +41,7 @@ const booleanSchema = (defaultValue: boolean) =>
 
 export const nodeEnvSchema = z.enum(["development", "test", "production"]).default("development");
 
-export const serverEnvSchema = z.object({
+const serverEnvObjectSchema = z.object({
   NODE_ENV: nodeEnvSchema,
   API_URL: z.string().url().default("http://localhost:4000"),
   WEB_URL: z.string().url().default("http://localhost:3000"),
@@ -38,10 +59,15 @@ export const serverEnvSchema = z.object({
   REALTIME_JWT_TTL_SECONDS: z.coerce.number().int().min(60).max(900).default(300),
   PROFILE_AVATAR_BUCKET: z.string().default("profile-avatars"),
   DATABASE_URL: optionalStringSchema,
-  PRIVY_APP_SECRET: optionalStringSchema,
-  PRIVY_JWKS_ENDPOINT: optionalUrlSchema,
   SOLANA_CLUSTER: z.enum(["devnet", "mainnet-beta"]).default("devnet"),
-  SOLANA_NETWORK: z.enum(["solana:devnet", "solana:mainnet"]).default("solana:devnet"),
+  SOLANA_NETWORK: z.preprocess(
+    emptyToUndefined,
+    z.enum(["solana:devnet", "solana:mainnet"]).optional()
+  ),
+  NEXT_PUBLIC_SOLANA_CHAIN: z.preprocess(
+    emptyToUndefined,
+    z.enum(["solana:devnet", "solana:mainnet"]).optional()
+  ),
   SOLANA_RPC_URL: z.string().url().default("https://api.devnet.solana.com"),
   SOLANA_WS_URL: optionalUrlSchema,
   PAYMENT_DEFAULT_ASSET: z.enum(["SOL", "USDC"]).default("SOL"),
@@ -75,7 +101,10 @@ export const serverEnvSchema = z.object({
   SUBSCRIPTIONS_SOLANA_PROGRAM_ID: z
     .string()
     .default("De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44"),
-  SUBSCRIPTIONS_SOLANA_NETWORK: z.enum(["devnet", "mainnet-beta"]).default("devnet"),
+  SUBSCRIPTIONS_SOLANA_NETWORK: z.preprocess(
+    emptyToUndefined,
+    z.enum(["devnet", "mainnet-beta"]).optional()
+  ),
   SUBSCRIPTIONS_SOLANA_RPC_URL: optionalUrlSchema,
   SUBSCRIPTIONS_SUPPORTED_MINTS: optionalStringSchema,
   SUBSCRIPTIONS_DEFAULT_MINT: optionalStringSchema,
@@ -85,7 +114,10 @@ export const serverEnvSchema = z.object({
   SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION: booleanSchema(true),
   HELIUS_API_KEY: optionalStringSchema,
   HELIUS_WEBHOOK_SECRET: optionalStringSchema,
-  HELIUS_CLUSTER: z.enum(["devnet", "mainnet-beta"]).default("devnet"),
+  HELIUS_CLUSTER: z.preprocess(
+    emptyToUndefined,
+    z.enum(["devnet", "mainnet-beta"]).optional()
+  ),
   HELIUS_API_BASE_URL: optionalUrlSchema,
   HELIUS_RPC_URL: optionalUrlSchema,
   HELIUS_WEBHOOK_CLUSTER: z.preprocess(emptyToUndefined, z.enum(["devnet", "mainnet-beta"]).optional()),
@@ -108,6 +140,7 @@ export const serverEnvSchema = z.object({
   BUNNY_STORAGE_API_ENDPOINT: z.string().url().default("https://storage.bunnycdn.com"),
   BUNNY_STORAGE_PULL_ZONE_URL: optionalUrlSchema,
   BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY: optionalStringSchema,
+  BUNNY_STORAGE_DELIVERY_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(3_600).default(300),
   BUNNY_SHIELD_API_KEY: optionalStringSchema,
   BUNNY_SHIELD_ZONE_ID: optionalStringSchema,
   BUNNY_SHIELD_UPLOAD_COVERAGE: z
@@ -205,6 +238,35 @@ export const serverEnvSchema = z.object({
   MCP_TEST_FORBIDDEN_TOOL: optionalStringSchema,
   MCP_TEST_CONNECTION_ID: optionalStringSchema
 });
+
+export const serverEnvSchema = serverEnvObjectSchema
+  .superRefine((env, context) => {
+    try {
+      assertCompatibleSolanaEnvironment(env, env.SOLANA_CLUSTER);
+    } catch (error) {
+      context.addIssue({
+        code: "custom",
+        message: error instanceof Error ? error.message : "Contradictory Solana environment",
+        path: ["SOLANA_CLUSTER"]
+      });
+    }
+    if (
+      env.SOLANA_CLUSTER === "mainnet-beta" &&
+      env.SOLANA_RPC_URL === "https://api.devnet.solana.com"
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "SOLANA_RPC_URL must explicitly select an approved mainnet RPC",
+        path: ["SOLANA_RPC_URL"]
+      });
+    }
+  })
+  .transform((env) => ({
+    ...env,
+    SOLANA_NETWORK: solanaChainForCluster(env.SOLANA_CLUSTER),
+    HELIUS_CLUSTER: env.SOLANA_CLUSTER,
+    SUBSCRIPTIONS_SOLANA_NETWORK: env.SOLANA_CLUSTER
+  }));
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 

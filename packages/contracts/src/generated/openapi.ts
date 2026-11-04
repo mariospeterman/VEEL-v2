@@ -2074,7 +2074,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Platform and creator subscription plans */
+        /** Bounded platform subscription plan catalog; creator offers are selected on creator profiles */
         get: operations["listSubscriptionPlans"];
         put?: never;
         post?: never;
@@ -2161,7 +2161,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Current platform and creator subscriptions */
+        /** Bounded current or historical platform and creator subscriptions */
         get: operations["listSubscriptions"];
         put?: never;
         post?: never;
@@ -3790,7 +3790,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/webhooks/age/{provider}": {
+    "/v1/webhooks/age/sumsub": {
         parameters: {
             query?: never;
             header?: never;
@@ -3799,8 +3799,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Age/KYC provider webhook */
-        post: operations["receiveAgeWebhook"];
+        /** Receive a raw-body authenticated Sumsub age webhook */
+        post: operations["receiveSumsubAgeWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/webhooks/age/yoti": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive a body-signature authenticated Yoti age notification */
+        post: operations["receiveYotiAgeWebhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3896,12 +3913,23 @@ export interface components {
         AnalyticsMetricPoint: {
             /** Format: date */
             bucketDate: string | null;
+            value: null;
+            numerator: null;
+            denominator: null;
+            /** @description Null whenever minimum-cohort privacy suppression applies. */
+            sampleSize: null;
+            /** @constant */
+            privacyDecision: "suppressed_minimum_cohort";
+        } | {
+            /** Format: date */
+            bucketDate: string | null;
             value: components["schemas"]["AnalyticsScalar"] | null;
             numerator: string | null;
             denominator: string | null;
+            /** @description Released decimal cohort size. */
             sampleSize: string;
-            /** @enum {string} */
-            privacyDecision: "released" | "suppressed_minimum_cohort";
+            /** @constant */
+            privacyDecision: "released";
         };
         AnalyticsMetricResult: {
             metricKey: components["schemas"]["AnalyticsMetricKey"];
@@ -4008,13 +4036,14 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "unauthorized" | "forbidden" | "not_found" | "validation_failed" | "rate_limited" | "conflict" | "idempotency_conflict" | "provider_unavailable" | "service_unavailable" | "recent_authentication_required" | "payment_not_confirmed" | "webhook_signature_invalid";
+        ErrorCode: "unauthorized" | "forbidden" | "not_found" | "validation_failed" | "rate_limited" | "conflict" | "idempotency_conflict" | "provider_unavailable" | "service_unavailable" | "internal_server_error" | "recent_authentication_required" | "payment_not_confirmed" | "webhook_signature_invalid";
         ErrorResponse: {
             code: components["schemas"]["ErrorCode"];
             message: string;
             details?: {
                 [key: string]: unknown;
             };
+            requestId?: string;
         };
         /** @enum {string} */
         ProductType: "tip" | "support" | "content_unlock" | "paid_message" | "live_pass" | "event_access_pass" | "creator_subscription" | "platform_subscription";
@@ -4334,18 +4363,26 @@ export interface components {
             memberships: boolean;
         };
         CreatorEarningsSummary: {
+            assets: components["schemas"]["CreatorAssetEarningsSummary"][];
+            confirmedPaymentCount: number;
+        };
+        CreatorAssetEarningsSummary: {
             currency: components["schemas"]["Currency"];
-            creatorEarningsMinor: number;
-            platformFeesMinor: number;
-            referralCommissionsMinor: number;
+            creatorEarningsAtomic: string;
+            platformFeesAtomic: string;
+            referralCommissionsAtomic: string;
             confirmedPaymentCount: number;
         };
         CreatorProductSummary: {
             productType: components["schemas"]["ProductType"];
             enabled: boolean;
             confirmedPaymentCount: number;
-            amountMinor: number;
+            assets: components["schemas"]["CreatorProductAssetSummary"][];
+        };
+        CreatorProductAssetSummary: {
             currency: components["schemas"]["Currency"];
+            amountAtomic: string;
+            confirmedPaymentCount: number;
         };
         UpdateProfileRequest: {
             handle: string;
@@ -4485,8 +4522,14 @@ export interface components {
             provider: "web_push";
             /** @enum {string} */
             platform: "desktop" | "ios" | "android" | "mobile_web";
+            /**
+             * Format: uri
+             * @description Canonical HTTPS endpoint issued by a supported browser push service; server DNS and egress policy is authoritative.
+             */
             endpoint: string;
+            /** @description Canonical unpadded base64url P-256 uncompressed public key (65 bytes). */
             p256dh: string;
+            /** @description Canonical unpadded base64url Web Push authentication secret (16 bytes). */
             auth: string;
             userAgent?: string | null;
         };
@@ -4528,7 +4571,15 @@ export interface components {
             hashtags: components["schemas"]["Hashtag"][];
             events: components["schemas"]["Event"][];
             liveRooms: components["schemas"]["LiveRoom"][];
-            nextCursor?: string | null;
+            nextCursors: components["schemas"]["DiscoverCursorSet"];
+        };
+        /** @description Independent opaque continuations for each ordered search group; cursors are group-bound and non-interchangeable, and live-room continuation follows immutable created-at plus ID order. */
+        DiscoverCursorSet: {
+            content: string | null;
+            creators: string | null;
+            hashtags: string | null;
+            events: string | null;
+            liveRooms: string | null;
         };
         Hashtag: {
             slug: string;
@@ -4586,6 +4637,7 @@ export interface components {
             playback?: components["schemas"]["PlaybackResource"];
             /** Format: uri */
             posterUrl?: string | null;
+            imageDelivery?: components["schemas"]["ImageDeliveryResource"];
             /** @enum {string|null} */
             mimeType?: "image/jpeg" | "image/png" | "image/webp" | "image/avif" | "video/mp4" | "video/quicktime" | "video/webm" | null;
             widthPixels?: number | null;
@@ -4604,6 +4656,18 @@ export interface components {
             provenanceReviewState?: "not_required" | "pending" | "confirmed" | "rejected";
             /** @enum {string} */
             machineReadableMarkingState?: "unavailable" | "pending" | "present" | "invalid";
+        };
+        /** @description Authorized, short-lived private image delivery capability. URLs must never be persisted or logged. */
+        ImageDeliveryResource: {
+            /** Format: uri */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            variants: {
+                widthPixels: number;
+                /** Format: uri */
+                url: string;
+            }[];
         };
         ImageAssetUploadResult: {
             /** Format: uuid */
@@ -4798,7 +4862,8 @@ export interface components {
             provider: "bunny" | "livepeer" | "none";
             /** @enum {string|null} */
             resourceType?: "embed" | "hls" | "direct" | null;
-            jwt?: string | null;
+            /** @description Short-lived viewer-scoped Livepeer capability returned only in authorized responses; never log or persist it. */
+            readonly jwt?: string | null;
             /** Format: date-time */
             expiresAt?: string | null;
             /** @enum {string|null} */
@@ -4995,6 +5060,8 @@ export interface components {
             contentId: string;
             fileName: string;
             mimeType: string;
+            fileSizeBytes: number;
+            checksumSha256: string;
         };
         UploadSession: {
             /** Format: uri */
@@ -5300,6 +5367,8 @@ export interface components {
         UpdateStructuredCreatorRequestRequest: {
             /** @enum {string} */
             action: "accept" | "decline" | "propose_terms" | "accept_terms" | "mark_delivered" | "request_remediation" | "complete" | "cancel";
+            /** @description Required for accept */
+            expectedTermsRevision?: number;
             agreedAmountMinor?: number | null;
             expectedDeliveryDays?: number | null;
             clarificationRule?: string | null;
@@ -5323,6 +5392,7 @@ export interface components {
             expectedDeliveryDays?: number | null;
             clarificationRule: string;
             cancellationRule: string;
+            termsRevision: number;
             /** @enum {string} */
             state: "proposed" | "terms_proposed" | "accepted" | "declined" | "payment_pending" | "active" | "delivered" | "remediation" | "completed" | "cancelled" | "expired";
             /** Format: uuid */
@@ -5345,6 +5415,7 @@ export interface components {
         ConversationCommercialInteractions: {
             mediaOffers: components["schemas"]["CreatorMediaOffer"][];
             creatorRequests: components["schemas"]["StructuredCreatorRequest"][];
+            nextCursor: string | null;
         };
         Message: {
             /** Format: uuid */
@@ -5383,7 +5454,7 @@ export interface components {
         };
         MessagePage: {
             items: components["schemas"]["Message"][];
-            nextCursor?: string | null;
+            nextCursor: string | null;
         };
         CreatePaymentIntentRequest: {
             /** @enum {string} */
@@ -5476,12 +5547,12 @@ export interface components {
             id: string;
             session_key: string;
             reference_id?: string;
-            /** @enum {string} */
-            state: "COMPLETE" | "FAIL" | "ERROR";
-            method?: string;
+            /** @description Yoti currently sends COMPLETE */
+            state: string;
+            method: string;
             age?: number;
-            timestamp?: number;
-            sequence_number?: number;
+            timestamp: number;
+            sequence_number: number;
             signature: string;
         };
         TransactionRequest: {
@@ -5607,6 +5678,8 @@ export interface components {
         ReferralActivity: {
             /** Format: uuid */
             id: string;
+            /** @enum {string} */
+            activityType: "share" | "commission";
             token: string;
             /** @enum {string} */
             targetType: "content" | "profile" | "event";
@@ -5617,11 +5690,16 @@ export interface components {
             state: string;
             /** Format: date-time */
             createdAt: string;
-            commissionAmountMinor?: number | null;
+            commissionAmountMinor: number | null;
             currency?: components["schemas"]["Currency"];
+        };
+        ReferralActivityPage: {
+            items: components["schemas"]["ReferralActivity"][];
+            nextCursor: string | null;
         };
         SubscriptionPlanPage: {
             items: components["schemas"]["SubscriptionPlan"][];
+            nextCursor: string | null;
         };
         /** @enum {string} */
         PlatformTierKey: "free_verified" | "veel_plus" | "veel_ultra" | "veel_studio" | "enterprise";
@@ -5675,6 +5753,7 @@ export interface components {
         };
         SubscriptionPage: {
             items: components["schemas"]["Subscription"][];
+            nextCursor: string | null;
         };
         SubscriptionPlan: {
             id: string;
@@ -5741,7 +5820,8 @@ export interface components {
             programId?: string | null;
             planPda?: string | null;
             subscriptionPda?: string | null;
-            failureReason?: string | null;
+            /** @enum {string|null} */
+            failureReason: "insufficient_funds" | "authorization_revoked" | "provider_unavailable" | "setup_mismatch" | null;
         };
         SubscriptionAuthorizationIntent: {
             /** Format: uuid */
@@ -5873,7 +5953,10 @@ export interface components {
             displayName: string;
             avatarUrl?: string | null;
             title: string;
-            /** @enum {string} */
+            /**
+             * @description Derived presentation category for Mutuals; it is not a persisted content column.
+             * @enum {string}
+             */
             mediaKind: "image" | "video" | "live" | "replay";
             posterUrl?: string | null;
             /** Format: date-time */
@@ -6449,7 +6532,7 @@ export interface components {
             amountMinor: number;
             currency: components["schemas"]["Currency"];
             /** @enum {string} */
-            state: "pending" | "transaction_requested" | "submitted" | "confirmed" | "failed" | "expired";
+            state: "pending" | "transaction_requested" | "submitted" | "confirming" | "confirmed" | "settled" | "failed" | "expired" | "cancelled";
             /** Format: uuid */
             userId: string;
             /** Format: uuid */
@@ -6709,7 +6792,13 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
-            userId: string;
+            userId: string | null;
+            /** @enum {string} */
+            subjectType: "user" | "organization" | "organization_person" | "performer";
+            /** Format: uuid */
+            subjectId: string;
+            /** @enum {string} */
+            purpose: "age_access" | "adult_publisher_eligibility" | "performer_eligibility" | "creator_kyc" | "payout_kyc" | "org_kyb" | "ubo_kyc" | "enterprise_review";
             provider: string;
             providerReference: string;
             /** @enum {string} */
@@ -6737,10 +6826,22 @@ export interface components {
             /** Format: uuid */
             actorUserId: string;
             /** @enum {string} */
-            scope: "user_self_service" | "creator_helper" | "admin_ops";
+            transport: "assistant" | "mcp";
+            /** Format: uuid */
+            connectionId: string | null;
+            /** @enum {string} */
+            scope: "user_self_service" | "creator_helper" | "admin_ops" | "creator" | "admin";
             /** @enum {string} */
             state: "active" | "expired" | "revoked";
             allowedToolCount: number;
+            clientName: string | null;
+            /** @enum {string|null} */
+            clientType: "claude" | "claude_code" | "cursor" | "openai" | "custom" | "internal" | null;
+            /** @enum {string|null} */
+            authMode: "scoped_token" | "oauth" | null;
+            grantedScopes: string[];
+            /** Format: date-time */
+            lastUsedAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -6752,14 +6853,22 @@ export interface components {
             /** Format: uuid */
             sessionId: string;
             /** Format: uuid */
+            connectionId: string | null;
+            /** Format: uuid */
             actorUserId: string;
             /** @enum {string} */
-            scope: "user_self_service" | "creator_helper" | "admin_ops";
-            toolName: components["schemas"]["AiToolName"];
+            transport: "assistant" | "mcp";
             /** @enum {string} */
-            state: "prepared" | "executed" | "blocked" | "failed";
+            scope: "user_self_service" | "creator_helper" | "admin_ops" | "creator" | "admin";
+            toolName: string;
+            toolVersion: string | null;
+            /** @enum {string} */
+            state: "prepared" | "executed" | "blocked" | "allowed" | "denied" | "failed";
             /** @enum {string} */
             confirmationState: "not_required" | "required" | "confirmed" | "rejected";
+            /** @enum {string|null} */
+            riskLevel: "read" | "draft" | "request" | null;
+            requiredScopes: string[];
             /** @enum {string|null} */
             subjectType?: "content" | "event" | "payment" | "provider" | "support_case" | "report" | "user" | "none" | null;
             subjectId?: string | null;
@@ -7164,6 +7273,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description Sanitized unexpected server error */
+        InternalServerError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description Session state */
         SessionState: {
             headers: {
@@ -7504,7 +7622,7 @@ export interface components {
             content: {
                 "application/json": {
                     items: components["schemas"]["LiveRoom"][];
-                    nextCursor?: string | null;
+                    nextCursor: string | null;
                 };
             };
         };
@@ -7651,6 +7769,7 @@ export interface components {
             content: {
                 "application/json": {
                     items: components["schemas"]["Conversation"][];
+                    nextCursor: string | null;
                 };
             };
         };
@@ -7787,6 +7906,15 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["RefundDisputeRequestPage"];
+            };
+        };
+        /** @description Referral shares and individual commission activity */
+        ReferralActivityPage: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ReferralActivityPage"];
             };
         };
         /** @description Subscription plans */
@@ -8611,6 +8739,7 @@ export interface components {
             content: {
                 "application/json": {
                     items: components["schemas"]["AdminFeatureFlag"][];
+                    nextCursor: string | null;
                 };
             };
         };
@@ -8632,13 +8761,32 @@ export interface components {
         RequiredIdempotencyKey: string;
         /** @description Optional idempotency key for non-critical replay-safe requests. */
         OptionalIdempotencyKey: string;
-        /** @description Provider-specific signature or shared-secret header normalized by the adapter. */
-        WebhookSignature: string;
+        /** @description Canonical actor rendered by the current message page; prevents a stale browser tab from sending after an account switch. */
+        ExpectedMessageActorId: string;
+        /** @description HMAC hex digest of the exact raw request body. */
+        SumsubPayloadDigest: string;
+        /** @description Sumsub-declared HMAC algorithm; unknown or missing values fail closed. */
+        SumsubPayloadDigestAlgorithm: "HMAC_SHA1_HEX" | "HMAC_SHA256_HEX" | "HMAC_SHA512_HEX";
         /** @description Required for Livepeer callbacks; contains the provider timestamp and one or more v1 HMAC signatures. */
         LivepeerSignature: string;
         /** @description Required for Bunny callbacks. Provider-specific verification remains authoritative in the backend adapter. */
         BunnySignature: string;
         Cursor: string;
+        /** @description Optional canonical subscription scope filter. */
+        SubscriptionScopeFilter: "platform" | "creator";
+        /** @description Active includes authorization and renewal states; history includes terminal states. */
+        SubscriptionViewFilter: "active" | "history";
+        /** @description Opaque scope-bound content continuation cursor. It cannot be reused for another result group. */
+        DiscoverContentCursor: string;
+        /** @description Opaque scope-bound creator continuation cursor. It cannot be reused for another result group. */
+        DiscoverCreatorCursor: string;
+        /** @description Opaque scope-bound hashtag continuation cursor. It cannot be reused for another result group. */
+        DiscoverHashtagCursor: string;
+        /** @description Opaque scope-bound event continuation cursor. It cannot be reused for another result group. */
+        DiscoverEventCursor: string;
+        /** @description Opaque scope-bound live-room continuation cursor. It cannot be reused for another result group. */
+        DiscoverLiveCursor: string;
+        RefundCursor: string;
         SearchQuery: string;
         FeedMode: "recommended" | "following";
         FeedSurface: "home" | "bits" | "moments";
@@ -8676,7 +8824,6 @@ export interface components {
         Slug: string;
         Handle: string;
         MediaProvider: "bunny" | "livepeer";
-        AgeProvider: "didit" | "yoti" | "sumsub" | "veriff" | "persona";
         VerificationProvider: "sumsub" | "didit" | "persona" | "veriff";
     };
     requestBodies: {
@@ -9074,11 +9221,14 @@ export interface components {
                 };
             };
         };
-        AgeWebhookPayload: {
+        SumsubAgeWebhook: {
             content: {
-                "application/json": components["schemas"]["SumsubAgeWebhookPayload"] | components["schemas"]["YotiAgeWebhookPayload"] | {
-                    [key: string]: unknown;
-                };
+                "application/json": components["schemas"]["SumsubAgeWebhookPayload"];
+            };
+        };
+        YotiAgeWebhook: {
+            content: {
+                "application/json": components["schemas"]["YotiAgeWebhookPayload"];
             };
         };
     };
@@ -9779,7 +9929,16 @@ export interface operations {
         parameters: {
             query?: {
                 q?: components["parameters"]["SearchQuery"];
-                cursor?: components["parameters"]["Cursor"];
+                /** @description Opaque scope-bound content continuation cursor. It cannot be reused for another result group. */
+                contentCursor?: components["parameters"]["DiscoverContentCursor"];
+                /** @description Opaque scope-bound creator continuation cursor. It cannot be reused for another result group. */
+                creatorCursor?: components["parameters"]["DiscoverCreatorCursor"];
+                /** @description Opaque scope-bound hashtag continuation cursor. It cannot be reused for another result group. */
+                hashtagCursor?: components["parameters"]["DiscoverHashtagCursor"];
+                /** @description Opaque scope-bound event continuation cursor. It cannot be reused for another result group. */
+                eventCursor?: components["parameters"]["DiscoverEventCursor"];
+                /** @description Opaque scope-bound live-room continuation cursor. It cannot be reused for another result group. */
+                liveCursor?: components["parameters"]["DiscoverLiveCursor"];
             };
             header?: never;
             path?: never;
@@ -9788,6 +9947,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["DiscoverPage"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };
@@ -9805,6 +9965,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["HashtagPage"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };
@@ -9812,7 +9973,8 @@ export interface operations {
     getDiscoverHashtag: {
         parameters: {
             query?: {
-                cursor?: components["parameters"]["Cursor"];
+                /** @description Opaque scope-bound content continuation cursor. It cannot be reused for another result group. */
+                contentCursor?: components["parameters"]["DiscoverContentCursor"];
             };
             header?: never;
             path: {
@@ -9823,6 +9985,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["DiscoverPage"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };
@@ -9840,6 +10003,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["CreatorPage"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };
@@ -9857,6 +10021,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["EventPage"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };
@@ -9873,6 +10038,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["LiveRoomPage"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
         };
@@ -10195,6 +10361,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -10265,7 +10432,6 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -10926,7 +11092,9 @@ export interface operations {
     };
     listMyLiveRooms: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11400,7 +11568,9 @@ export interface operations {
     };
     listConversations: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11503,7 +11673,9 @@ export interface operations {
     };
     listConversationMessages: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
             header?: never;
             path: {
                 conversationId: components["parameters"]["ConversationId"];
@@ -11525,6 +11697,8 @@ export interface operations {
             header: {
                 /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
                 "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+                /** @description Canonical actor rendered by the current message page; prevents a stale browser tab from sending after an account switch. */
+                "X-WeVid-Expected-Actor-Id": components["parameters"]["ExpectedMessageActorId"];
             };
             path: {
                 conversationId: components["parameters"]["ConversationId"];
@@ -11545,7 +11719,9 @@ export interface operations {
     };
     listConversationCommercialInteractions: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
             header?: never;
             path: {
                 conversationId: components["parameters"]["ConversationId"];
@@ -11944,13 +12120,16 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["ActivityPage"];
+            200: components["responses"]["ReferralActivityPage"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listRefundDisputeRequests: {
         parameters: {
             query?: {
-                cursor?: components["parameters"]["Cursor"];
+                cursor?: components["parameters"]["RefundCursor"];
             };
             header?: never;
             path?: never;
@@ -11959,7 +12138,10 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["RefundDisputeRequestPage"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
         };
     };
     createRefundDisputeRequest: {
@@ -11977,12 +12159,18 @@ export interface operations {
             201: components["responses"]["RefundDisputeRequest"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            500: components["responses"]["InternalServerError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listSubscriptionPlans: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11990,6 +12178,10 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["SubscriptionPlanPage"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getMyCreatorMembershipOffer: {
@@ -12113,7 +12305,13 @@ export interface operations {
     };
     listSubscriptions: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+                /** @description Optional canonical subscription scope filter. */
+                scope?: components["parameters"]["SubscriptionScopeFilter"];
+                /** @description Active includes authorization and renewal states; history includes terminal states. */
+                view?: components["parameters"]["SubscriptionViewFilter"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -12121,6 +12319,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["SubscriptionPage"];
+            400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             503: components["responses"]["ServiceUnavailable"];
@@ -12166,6 +12365,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -12409,6 +12609,7 @@ export interface operations {
         requestBody?: never;
         responses: {
             200: components["responses"]["ActivityPage"];
+            400: components["responses"]["ValidationFailed"];
         };
     };
     getPaymentActivity: {
@@ -12464,7 +12665,10 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["ActivityPage"];
+            200: components["responses"]["ReferralActivityPage"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getAiCapabilities: {
@@ -12494,6 +12698,7 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateAiSession"];
         responses: {
             201: components["responses"]["AiSession"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     createAiToolCall: {
@@ -12511,6 +12716,7 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateAiToolCall"];
         responses: {
             201: components["responses"]["AiToolCall"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listMcpTools: {
@@ -13776,7 +13982,9 @@ export interface operations {
     };
     listAdminFeatureFlags: {
         parameters: {
-            query?: never;
+            query?: {
+                cursor?: components["parameters"]["Cursor"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -13829,21 +14037,36 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
-    receiveAgeWebhook: {
+    receiveSumsubAgeWebhook: {
         parameters: {
             query?: never;
             header: {
-                /** @description Provider-specific signature or shared-secret header normalized by the adapter. */
-                "X-Veel-Webhook-Signature": components["parameters"]["WebhookSignature"];
+                /** @description HMAC hex digest of the exact raw request body. */
+                "X-Payload-Digest": components["parameters"]["SumsubPayloadDigest"];
+                /** @description Sumsub-declared HMAC algorithm; unknown or missing values fail closed. */
+                "X-Payload-Digest-Alg": components["parameters"]["SumsubPayloadDigestAlgorithm"];
             };
-            path: {
-                provider: components["parameters"]["AgeProvider"];
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody: components["requestBodies"]["AgeWebhookPayload"];
+        requestBody: components["requestBodies"]["SumsubAgeWebhook"];
         responses: {
             202: components["responses"]["WebhookReceipt"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    receiveYotiAgeWebhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["YotiAgeWebhook"];
+        responses: {
+            200: components["responses"]["WebhookReceipt"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             503: components["responses"]["ServiceUnavailable"];

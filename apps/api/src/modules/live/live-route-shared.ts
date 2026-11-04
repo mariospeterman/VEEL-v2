@@ -181,7 +181,11 @@ export async function withSignedLivePlayback(input: {
     provider: "livepeer"
   };
 
-  if (response.accessState !== "allowed" || !input.room.providerPlaybackId) {
+  if (
+    response.accessState !== "allowed" ||
+    !["approved", "monitoring"].includes(response.safetyState) ||
+    !input.room.providerPlaybackId
+  ) {
     return {
       ...response,
       playback: blockedPlayback

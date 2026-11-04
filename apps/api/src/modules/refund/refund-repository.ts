@@ -2,8 +2,14 @@ import { randomUUID } from "node:crypto";
 import {
   resolvePostgresClient,
   type PostgresSql,
+  type PostgresTransaction,
   withPostgresTransaction
 } from "../../shared/postgres.js";
+import {
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
+  keysetPage
+} from "../../shared/keyset-pagination.js";
 import type { RefundDisputeRequest, RefundRepository } from "./types.js";
 
 export class RefundRepositoryConfigurationError extends Error {
@@ -39,6 +45,7 @@ interface RefundDisputeRow {
 }
 
 const pageSize = 20;
+const refundCursorScope = "GET /v1/refunds/requests";
 
 export function createPostgresRefundRepository(database?: string | PostgresSql): RefundRepository {
   if (!database) {
@@ -56,6 +63,7 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
 
   return {
     async listRequests(input) {
+      const cursor = decodeTimestampIdCursor(refundCursorScope, input.cursor);
       const rows = await sql<RefundDisputeRow[]>`
         with target_user as (
           select id
@@ -87,64 +95,56 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
           from refund_remediation_evidence rre
           where rre.refund_dispute_id = rd.id
         ) evidence on true
-        where (${input.cursor ?? null}::timestamptz is null or rd.created_at < ${input.cursor ?? null}::timestamptz)
-        order by rd.created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or (
+            ${cursor.id}::uuid is null
+            and rd.created_at <= ${cursor.timestamp}::timestamptz
+          )
+          or (
+            ${cursor.id}::uuid is not null
+            and (rd.created_at, rd.id) < (${cursor.timestamp}::timestamptz, ${cursor.id}::uuid)
+          )
+        )
+        order by rd.created_at desc, rd.id desc
         limit ${pageSize + 1}
       `;
 
-      const visibleRows = rows.slice(0, pageSize);
-      const extraRow = rows[pageSize];
-
-      return {
-        items: visibleRows.map(toRefundDisputeRequest),
-        nextCursor: extraRow ? extraRow.created_at.toISOString() : null
-      };
+      return keysetPage(rows, pageSize, toRefundDisputeRequest, (row) =>
+        encodeTimestampIdCursor(refundCursorScope, row.created_at, row.id)
+      );
     },
     async createRequest(input) {
-      const rows = await withPostgresTransaction(sql, async (transaction) => {
+      const row = await withPostgresTransaction(sql, async (transaction) => {
+        const actorRows = await transaction<{ id: string }[]>`
+          select id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}
+          limit 1
+        `;
+        const actor = actorRows[0];
+        if (!actor) return null;
+
+        await transaction`
+          select pg_advisory_xact_lock(
+            hashtextextended(${`refund-request:${actor.id}:${input.idempotencyKey}`}, 0)
+          )
+        `;
+
+        const existing = (await findRefundRequest(
+          transaction,
+          actor.id,
+          input.idempotencyKey
+        ))[0];
+        if (existing) return assertMatchingRequestHash(existing, input.requestHash);
+
         const insertedRows = await transaction<RefundDisputeRow[]>`
-          with target_user as (
-            select id
-            from users
-            where supabase_user_id = ${input.supabaseUserId}
-            limit 1
-          ),
-          existing_request as (
-            select
-              rd.id,
-              rd.payment_intent_id,
-              rd.entitlement_id,
-              rd.reporter_user_id,
-              rd.kind,
-              rd.requested_action,
-              rd.state,
-              rd.resolution,
-              rd.custody_boundary,
-              coalesce(evidence.remediation_evidence_count, 0)::text as remediation_evidence_count,
-              evidence.latest_remediation_evidence_at,
-              rd.request_hash,
-              rd.created_at,
-              rd.updated_at,
-              rd.resolved_at
-            from refunds_and_disputes rd
-            join target_user tu on tu.id = rd.reporter_user_id
-            left join lateral (
-              select
-                count(*) as remediation_evidence_count,
-                max(rre.created_at) as latest_remediation_evidence_at
-              from refund_remediation_evidence rre
-              where rre.refund_dispute_id = rd.id
-            ) evidence on true
-            where rd.idempotency_key = ${input.idempotencyKey}::text
-            limit 1
-          ),
-          owned_payment_intent as (
+          with owned_payment_intent as (
             select pi.id, pi.user_id, e.id as entitlement_id
             from payment_intents pi
-            join target_user tu on tu.id = pi.user_id
             left join entitlements e on e.payment_intent_id = pi.id
             where pi.id = ${input.body.paymentIntentId}::uuid
-              and not exists (select 1 from existing_request)
+              and pi.user_id = ${actor.id}::uuid
             limit 1
           ),
           inserted_request as (
@@ -170,6 +170,8 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
               ${input.idempotencyKey}::text,
               ${input.requestHash}::text
             from owned_payment_intent
+            where true
+            on conflict (reporter_user_id, idempotency_key) do nothing
             returning
               id,
               payment_intent_id,
@@ -198,7 +200,7 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
             )
             select
               gen_random_uuid(),
-              target_user.id,
+              ${actor.id}::uuid,
               'refund_dispute',
               inserted_request.id,
               'refund_dispute_requested',
@@ -211,7 +213,6 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
                 'custodyBoundary', inserted_request.custody_boundary
               )
             from inserted_request
-            cross join target_user
             returning id
           )
           select
@@ -232,35 +233,22 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
             resolved_at
           from inserted_request
           where exists (select 1 from audit_insert)
-          union all
-          select
-            id,
-            payment_intent_id,
-            entitlement_id,
-            reporter_user_id,
-            kind,
-            requested_action,
-            state,
-            resolution,
-            custody_boundary,
-            remediation_evidence_count,
-            latest_remediation_evidence_at,
-            request_hash,
-            created_at,
-            updated_at,
-            resolved_at
-          from existing_request
           limit 1
         `;
 
-        return insertedRows;
+        if (insertedRows[0]) return insertedRows[0];
+
+        // ON CONFLICT can wait for a transaction that did not take the scoped advisory lock.
+        // This fresh statement receives a new READ COMMITTED snapshot and replays its winner.
+        const winner = (await findRefundRequest(
+          transaction,
+          actor.id,
+          input.idempotencyKey
+        ))[0];
+        return winner ? assertMatchingRequestHash(winner, input.requestHash) : null;
       });
 
-      if (rows[0]?.request_hash && rows[0].request_hash !== input.requestHash) {
-        throw new RefundIdempotencyConflictError();
-      }
-
-      return rows[0] ? toRefundDisputeRequest(rows[0]) : null;
+      return row ? toRefundDisputeRequest(row) : null;
     },
     async close() {
       if (ownsClient) {
@@ -268,6 +256,47 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
       }
     }
   };
+}
+
+function findRefundRequest(
+  transaction: PostgresTransaction,
+  reporterUserId: string,
+  idempotencyKey: string
+): Promise<RefundDisputeRow[]> {
+  return transaction<RefundDisputeRow[]>`
+    select
+      rd.id,
+      rd.payment_intent_id,
+      rd.entitlement_id,
+      rd.reporter_user_id,
+      rd.kind,
+      rd.requested_action,
+      rd.state,
+      rd.resolution,
+      rd.custody_boundary,
+      coalesce(evidence.remediation_evidence_count, 0)::text as remediation_evidence_count,
+      evidence.latest_remediation_evidence_at,
+      rd.request_hash,
+      rd.created_at,
+      rd.updated_at,
+      rd.resolved_at
+    from refunds_and_disputes rd
+    left join lateral (
+      select
+        count(*) as remediation_evidence_count,
+        max(rre.created_at) as latest_remediation_evidence_at
+      from refund_remediation_evidence rre
+      where rre.refund_dispute_id = rd.id
+    ) evidence on true
+    where rd.reporter_user_id = ${reporterUserId}::uuid
+      and rd.idempotency_key = ${idempotencyKey}::text
+    limit 1
+  `;
+}
+
+function assertMatchingRequestHash(row: RefundDisputeRow, requestHash: string): RefundDisputeRow {
+  if (row.request_hash !== requestHash) throw new RefundIdempotencyConflictError();
+  return row;
 }
 
 export function toRefundDisputeRequest(row: RefundDisputeRow): RefundDisputeRequest {

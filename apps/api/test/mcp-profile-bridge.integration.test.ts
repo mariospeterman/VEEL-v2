@@ -7,17 +7,14 @@ import {
 import { createPostgresContentRepository } from "../src/modules/content/content-repository.js";
 import { createPostgresMcpRepository } from "../src/modules/mcp/mcp-repository.js";
 import { createPostgresClient } from "../src/shared/postgres.js";
+import { guardedIntegrationDatabaseUrl } from "./integration-database.js";
 
 const enabled = ["1", "true"].includes(process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS ?? "");
 const describeIntegration = enabled ? describe : describe.skip;
 
 describeIntegration("MCP profile bridge against migrated Postgres", () => {
   it("creates a valid scoped connection and records one minimized origin for an owned private draft", async () => {
-    const databaseUrl = process.env.API_INTEGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
-    const databaseHost = safeDatabaseHost(databaseUrl);
-    if (!databaseUrl || !["127.0.0.1", "localhost"].includes(databaseHost)) {
-      throw new Error("A loopback API_INTEGRATION_DATABASE_URL is required");
-    }
+    const databaseUrl = guardedIntegrationDatabaseUrl();
 
     const sql = createPostgresClient(databaseUrl);
     const contentRepository = createPostgresContentRepository(sql);
@@ -1031,11 +1028,3 @@ describeIntegration("MCP profile bridge against migrated Postgres", () => {
     }
   }, 30_000);
 });
-
-function safeDatabaseHost(databaseUrl: string | undefined): string {
-  try {
-    return databaseUrl ? new URL(databaseUrl).hostname : "";
-  } catch {
-    return "";
-  }
-}

@@ -14,6 +14,12 @@ describe("content update repository", () => {
       if (query.includes("select id from users where supabase_user_id")) {
         return Promise.resolve([{ id: "00000000-0000-4000-8000-000000000001" }]);
       }
+      if (query.includes("select request_hash, response_body from idempotency_keys")) {
+        return Promise.resolve([{
+          request_hash: "published-safety-edit-request-hash",
+          response_body: null
+        }]);
+      }
       if (query.includes("with actor as")) {
         return Promise.resolve([{
           id: "00000000-0000-4000-8000-000000000040",
@@ -29,6 +35,7 @@ describe("content update repository", () => {
       }
       return Promise.resolve([]);
     }) as unknown as PostgresTransaction;
+    transaction.json = ((value: unknown) => value) as PostgresTransaction["json"];
     const sql = {
       begin: vi.fn(async (work: (tx: PostgresTransaction) => Promise<unknown>) =>
         work(transaction))
@@ -39,6 +46,7 @@ describe("content update repository", () => {
       supabaseUserId: "00000000-0000-4000-8000-000000000001",
       contentId: "00000000-0000-4000-8000-000000000040",
       idempotencyKey: "published-safety-edit-1",
+      requestHash: "published-safety-edit-request-hash",
       captionProvided: false,
       bodyTextProvided: false,
       nsfwLabel: "adult",

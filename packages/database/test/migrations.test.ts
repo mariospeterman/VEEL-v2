@@ -9,6 +9,220 @@ const migrationsDir = join(packageRoot, "migrations");
 const readMigration = (fileName: string) => readFileSync(join(migrationsDir, fileName), "utf8");
 
 describe("database migrations", () => {
+  it("bounds feed ranking snapshots and keeps them server-only", () => {
+    const sql = readMigration("0129_bounded_feed_ranking_sessions.sql");
+    const downSql = readMigration("0129_bounded_feed_ranking_sessions.down.sql");
+
+    expect(sql).toContain("create table feed_ranking_sessions");
+    expect(sql).toContain("cardinality(ranked_content_ids) between 0 and 512");
+    expect(sql).toContain("expires_at <= as_of + interval '30 minutes'");
+    expect(sql).toContain("content_items_feed_session_candidate_idx");
+    expect(sql).toContain("enable row level security");
+    expect(sql).toContain(
+      "revoke all on table feed_ranking_sessions from public, anon, authenticated"
+    );
+    expect(sql).not.toMatch(/\b(payment_intent_id|settlement_id|wallet_id|amount_atomic)\b/i);
+    expect(downSql).toContain("drop table if exists feed_ranking_sessions");
+    expect(downSql).toContain("drop index if exists content_items_feed_session_candidate_idx");
+  });
+
+  it("persists lifelong actor/action/target/body/version mutation receipts server-side", () => {
+    const sql = readMigration("0128_mutation_command_receipts.sql");
+    const downSql = readMigration("0128_mutation_command_receipts.down.sql");
+
+    expect(sql).toContain("create table mutation_command_receipts");
+    expect(sql).toContain("unique (actor_user_id, action, idempotency_key)");
+    expect(sql).toContain("target_type text not null");
+    expect(sql).toContain("target_id text not null");
+    expect(sql).toContain("request_version integer not null");
+    expect(sql).toContain("request_body_hash text not null");
+    expect(sql).toContain("response_body jsonb not null");
+    expect(sql).toContain("enable row level security");
+    expect(sql).toContain(
+      "revoke all on table mutation_command_receipts from public, anon, authenticated"
+    );
+    expect(sql).not.toMatch(
+      /expires_at|raw_payload\s+jsonb|request_body\s+jsonb|\b(secret|private_key)\s+(text|jsonb)/i
+    );
+    expect(downSql).toContain(
+      "0128 rollback refused because lifelong mutation command receipts exist"
+    );
+    expect(downSql).toContain("drop table if exists mutation_command_receipts");
+  });
+
+  it("persists minimized MCP tool versions and indexes complete admin projections", () => {
+    const sql = readMigration("0127_admin_operations_projection_authority.sql");
+    const downSql = readMigration("0127_admin_operations_projection_authority.down.sql");
+
+    expect(sql).toContain("add column tool_version text");
+    expect(sql).toContain("mcp_tool_calls_tool_version_check");
+    expect(sql).toContain("feature_flags_updated_key_idx");
+    expect(sql).toContain("reports_open_state_idx");
+    expect(sql).not.toMatch(/input_redacted|output_redacted|token_hash|raw_payload/);
+    expect(downSql).toContain(
+      "0127 rollback refused because persisted MCP tool-version audit facts would be erased"
+    );
+    expect(downSql).toContain("drop column if exists tool_version");
+  });
+
+  it("snapshots playback assets and makes telemetry retention reconstruction-aware", () => {
+    const sql = readMigration("0126_analytics_projection_retention_hardening.sql");
+    const downSql = readMigration("0126_analytics_projection_retention_hardening.down.sql");
+
+    expect(sql).toContain("add column media_asset_id uuid references media_assets(id)");
+    expect(sql).toContain("set media_asset_id = content.release_media_asset_id");
+    expect(sql).toContain("analytics_profile_open_expiry_idx");
+    expect(sql).toContain("analytics_offer_impression_expiry_idx");
+    expect(sql).toContain("analytics_onboarding_expiry_idx");
+    expect(sql).toContain("create table analytics_raw_retention_boundaries");
+    expect(sql).toContain("revoke all on table analytics_raw_retention_boundaries from public, anon, authenticated");
+    expect(downSql).toContain("drop column if exists media_asset_id");
+  });
+
+  it("reserves provider video creation before side effects and keeps the operation server-only", () => {
+    const sql = readMigration("0123_media_upload_operation_hardening.sql");
+    const downSql = readMigration("0123_media_upload_operation_hardening.down.sql");
+
+    expect(sql).toContain("create table media_upload_operations");
+    expect(sql).toContain("unique (actor_user_id, idempotency_key)");
+    expect(sql).toContain("media_upload_operations_provider_asset_uidx");
+    expect(sql).toContain("'provider_creation_claimed'");
+    expect(sql).toContain("'compensation_pending'");
+    expect(sql).toContain("enable row level security");
+    expect(sql).toContain("revoke all on table media_upload_operations from public, anon, authenticated");
+    expect(sql).not.toMatch(/file_name|provider_payload|upload_signature|api_key|credential/);
+    expect(downSql).toContain("0123 rollback refused because durable provider upload state exists");
+  });
+
+  it("persists verification handoff and monotonic provider decision facts", () => {
+    const sql = readMigration("0122_verification_lifecycle_hardening.sql");
+    const downSql = readMigration("0122_verification_lifecycle_hardening.down.sql");
+
+    expect(sql).toContain("provider_external_user_id text");
+    expect(sql).toContain("launch_state text not null default 'ready'");
+    expect(sql).toContain("request_key text");
+    expect(sql).toContain("request_hash text");
+    expect(sql).toContain("provider_event_at timestamptz");
+    expect(sql).toContain("correlation_id text");
+    expect(sql).toContain("occurred_at timestamptz");
+    expect(sql).toContain("verification_sessions_request_key_idx");
+    expect(sql).toContain("verification_events_unmatched_reference_idx");
+    expect(downSql).toContain("drop column if exists provider_external_user_id");
+  });
+
+  it("enforces one atomic OAuth token redemption per authorization code", () => {
+    const sql = readMigration("0125_mcp_oauth_atomic_redemption.sql");
+    const downSql = readMigration("0125_mcp_oauth_atomic_redemption.down.sql");
+
+    expect(sql).toContain("group by code_id");
+    expect(sql).toContain("having count(*) > 1");
+    expect(sql).toContain("oauth_access_tokens_code_id_unique unique (code_id)");
+    expect(downSql).toContain("drop constraint if exists oauth_access_tokens_code_id_unique");
+  });
+
+  it("binds creator-request acceptance to a monotonic exact-terms revision", () => {
+    const sql = readMigration("0124_structured_creator_request_terms_revision.sql");
+    const downSql = readMigration("0124_structured_creator_request_terms_revision.down.sql");
+
+    expect(sql).toContain("add column terms_revision integer not null default 1");
+    expect(sql).toContain("check (terms_revision > 0)");
+    expect(sql).toContain("Monotonic exact-terms revision");
+    expect(downSql).toContain("drop column if exists terms_revision");
+  });
+
+  it("fences push delivery by account and subscription generation", () => {
+    const sql = readMigration("0121_notification_push_delivery_hardening.sql");
+    const downSql = readMigration("0121_notification_push_delivery_hardening.down.sql");
+
+    expect(sql).toContain("subscription_generation bigint not null default 1");
+    expect(sql).toContain("device_subscription_generation bigint");
+    expect(sql).toContain("dispatch_started_at timestamptz");
+    expect(sql).toContain("attempt.user_id <> device.user_id");
+    expect(sql).toContain("attempt.user_id <> notification.user_id");
+    expect(sql).toContain("unique (notification_id, device_id, device_subscription_generation)");
+    expect(sql).toContain("'notification.device.register'");
+    expect(sql).toContain("'notification.device.revoke'");
+    expect(downSql).toContain("0121 rollback refused because subscription-generation delivery state exists");
+    expect(downSql).toContain("subscription_generation <> 1");
+  });
+
+  it("removes browser-direct authority from server-owned data", () => {
+    const sql = readMigration("0120_data_api_server_authority.sql");
+    const downSql = readMigration("0120_data_api_server_authority.down.sql");
+    const serverOwnedTables = [
+      "identity_verifications",
+      "tax_profiles",
+      "tax_profile_versions",
+      "seller_of_record_determinations",
+      "jurisdiction_tax_rules",
+      "product_tax_matrix",
+      "buyer_location_evidence",
+      "vat_determinations",
+      "receipts",
+      "receipt_lines",
+      "platform_fee_statements",
+      "vat_invoices",
+      "vat_invoice_lines",
+      "tax_adjustments",
+      "compliance_ledger_entries",
+      "dac7_reports",
+      "dac7_report_lines",
+      "carf_reports",
+      "carf_report_lines",
+      "compliance_review_queue",
+      "compliance_exports",
+      "referral_programs",
+      "partner_campaigns",
+      "partner_contracts",
+      "referral_abuse_flags",
+      "tier_waivers",
+      "organizations",
+      "user_social_counts",
+      "content_engagement_counters",
+      "comments",
+      "content_items",
+      "media_assets",
+      "content_access_rules",
+      "content_hashtags",
+      "media_safety_cases",
+      "comment_reactions",
+      "comment_mentions"
+    ];
+
+    for (const table of serverOwnedTables) {
+      expect(sql).toMatch(new RegExp(`\\b${table}\\b`));
+    }
+    expect(sql).toContain("from public, anon, authenticated");
+    expect(sql).toContain("alter default privileges in schema public");
+    expect(sql).toContain("drop policy if exists organizations_select_member_or_staff");
+    expect(sql).toContain(
+      "revoke execute on function private.current_app_user_id() from public, anon"
+    );
+    expect(sql).toContain(
+      "grant execute on function private.realtime_topic_can_receive(text, text) to authenticated"
+    );
+    expect(sql).not.toMatch(/create policy|grant\s+select|disable row level security/i);
+    expect(downSql).not.toMatch(/^\s*(grant|create policy)\b/im);
+  });
+
+  it("uses valid guarded publication rollback syntax", () => {
+    const downSql = readMigration("0039_realtime_projection_publication.down.sql");
+
+    expect(downSql).toContain("from pg_publication_tables");
+    expect(downSql).toContain("execute format('alter publication supabase_realtime drop table public.%I'");
+    expect(downSql).not.toMatch(/alter publication[^;]+drop table if exists/i);
+  });
+
+  it("refuses to erase Moment expiry semantics during a schema rollback", () => {
+    const downSql = readMigration("0117_moments_and_scheduled_publication.down.sql");
+
+    expect(downSql).toContain("where distribution_mode = 'moment'");
+    expect(downSql).toContain("0117 rollback requires retained Moment content and expiry evidence");
+    expect(downSql.indexOf("where distribution_mode = 'moment'")).toBeLessThan(
+      downSql.indexOf("drop column if exists expires_at")
+    );
+  });
+
   it("extends landing analytics without allowing rollback to erase journey facts", () => {
     const sql = readMigration("0118_landing_convergence_analytics.sql");
     const downSql = readMigration("0118_landing_convergence_analytics.down.sql");
@@ -1176,6 +1390,18 @@ describe("database migrations", () => {
     expect(downSql).toContain("alter table app_sessions rename to wallet_auth_sessions");
     expect(sql).not.toContain("'privy'");
     expect(sql).not.toMatch(/email\s*=|raw_payload|private_key|seed_phrase|mnemonic/i);
+  });
+
+  it("binds recovery exchanges to live provider sessions and a per-user revocation epoch", () => {
+    const sql = readMigration("0119_recovery_session_revocation_boundary.sql");
+    const downSql = readMigration("0119_recovery_session_revocation_boundary.down.sql");
+
+    expect(sql).toContain("recovery_authentication_valid_after timestamptz not null default now()");
+    expect(sql).toContain("add column provider_session_id uuid");
+    expect(sql).toContain("authentication_method = 'supabase_recovery'");
+    expect(sql).toContain("provider_session_id is not null or revoked_at is not null");
+    expect(downSql).toContain("Cannot remove the recovery revocation boundary");
+    expect(downSql).toContain("errcode = '55000'");
   });
 
   it("makes Launch 06 consent, creator readiness, and scarce inventory fail closed", () => {

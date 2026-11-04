@@ -589,74 +589,74 @@ export function createPostgresMcpRepository(database?: string | PostgresSql): Mc
 
       return rows[0] ? toOAuthAuthorizationRequest(rows[0]) : null;
     },
-    async findOAuthAuthorizationCodeByHash(input) {
-      const rows = await sql<OAuthAuthorizationCodeRow[]>`
-        select
-          code.id,
-          code.oauth_client_id,
-          client.client_id as public_client_id,
-          code.connection_id,
-          u.supabase_user_id,
-          code.role_type,
-          code.redirect_uri,
-          code.code_challenge,
-          code.code_challenge_method,
-          code.resource,
-          code.audience,
-          code.scopes,
-          code.expires_at,
-          code.used_at
-        from oauth_authorization_codes code
-        join oauth_clients client on client.id = code.oauth_client_id
-        join users u on u.id = code.actor_user_id
-        where code.code_hash = ${input.codeHash}
-        limit 1
-      `;
+    async exchangeOAuthAuthorizationCode(input) {
+      return withPostgresTransaction(sql, async (tx) => {
+        const rows = await tx<{ expires_at: Date | string; scopes: McpScope[] }[]>`
+          with consumed as (
+            update oauth_authorization_codes code
+            set used_at = now()
+            from oauth_clients client, oauth_authorization_requests auth_request, mcp_connections connection
+            where code.code_hash = ${input.codeHash}
+              and code.used_at is null
+              and code.expires_at > now()
+              and code.code_challenge_method = 'S256'
+              and code.code_challenge = ${input.codeChallenge}
+              and code.redirect_uri = ${input.redirectUri}
+              and code.resource = ${input.resource}
+              and code.audience = ${input.resource}
+              and client.id = code.oauth_client_id
+              and client.client_id = ${input.clientId}
+              and client.status = 'active'
+              and code.scopes <@ client.allowed_scopes
+              and auth_request.id = code.authorization_request_id
+              and auth_request.status = 'approved'
+              and connection.id = code.connection_id
+              and connection.state = 'active'
+              and connection.expires_at > now()
+            returning code.*
+          ), request_marked as (
+            update oauth_authorization_requests auth_request
+            set status = 'exchanged'
+            from consumed
+            where auth_request.id = consumed.authorization_request_id
+              and auth_request.status = 'approved'
+            returning auth_request.id
+          )
+          insert into oauth_access_tokens (
+            id,
+            token_hash,
+            code_id,
+            oauth_client_id,
+            actor_user_id,
+            connection_id,
+            role_type,
+            resource,
+            audience,
+            scopes,
+            expires_at
+          )
+          select
+            ${randomUUID()},
+            ${input.tokenHash},
+            code.id,
+            code.oauth_client_id,
+            code.actor_user_id,
+            code.connection_id,
+            code.role_type,
+            code.resource,
+            code.audience,
+            code.scopes,
+            least(${input.expiresAt}, connection.expires_at)
+          from consumed code
+          join request_marked on request_marked.id = code.authorization_request_id
+          join mcp_connections connection on connection.id = code.connection_id
+          where ${input.expiresAt} > now()
+          returning expires_at, scopes
+        `;
 
-      return rows[0] ? toOAuthAuthorizationCode(rows[0]) : null;
-    },
-    async markOAuthAuthorizationCodeUsed(input) {
-      await sql`
-        update oauth_authorization_codes
-        set used_at = coalesce(used_at, now())
-        where id = ${input.codeId}
-      `;
-    },
-    async issueOAuthAccessToken(input) {
-      const rows = await sql<{ expires_at: Date | string; scopes: McpScope[] }[]>`
-        insert into oauth_access_tokens (
-          id,
-          token_hash,
-          code_id,
-          oauth_client_id,
-          actor_user_id,
-          connection_id,
-          role_type,
-          resource,
-          audience,
-          scopes,
-          expires_at
-        )
-        select
-          ${randomUUID()},
-          ${input.tokenHash},
-          code.id,
-          code.oauth_client_id,
-          code.actor_user_id,
-          code.connection_id,
-          code.role_type,
-          code.resource,
-          code.audience,
-          code.scopes,
-          ${input.expiresAt}
-        from oauth_authorization_codes code
-        where code.id = ${input.codeId}
-        returning expires_at, scopes
-      `;
-
-      const row = rows[0];
-      if (!row) throw new McpRepositoryConfigurationError();
-      return { expiresAt: toIsoString(row.expires_at), scopes: row.scopes };
+        const row = rows[0];
+        return row ? { expiresAt: toIsoString(row.expires_at), scopes: row.scopes } : null;
+      });
     },
     async findConnectionByOAuthAccessTokenHash(input) {
       const rows = await sql<OAuthAccessTokenRow[]>`
@@ -770,6 +770,7 @@ export function createPostgresMcpRepository(database?: string | PostgresSql): Mc
           connection_id,
           actor_user_id,
           tool_name,
+          tool_version,
           state,
           risk_level,
           required_scopes,
@@ -784,6 +785,7 @@ export function createPostgresMcpRepository(database?: string | PostgresSql): Mc
           ${input.connectionId},
           u.id,
           ${input.toolName},
+          ${input.toolVersion},
           ${input.state},
           ${input.riskLevel},
           ${input.requiredScopes},
@@ -837,13 +839,7 @@ function createUnavailableMcpRepository(): McpRepository {
     async denyOAuthAuthorizationRequest() {
       throw new McpRepositoryConfigurationError();
     },
-    async findOAuthAuthorizationCodeByHash() {
-      throw new McpRepositoryConfigurationError();
-    },
-    async markOAuthAuthorizationCodeUsed() {
-      throw new McpRepositoryConfigurationError();
-    },
-    async issueOAuthAccessToken() {
+    async exchangeOAuthAuthorizationCode() {
       throw new McpRepositoryConfigurationError();
     },
     async findConnectionByOAuthAccessTokenHash() {

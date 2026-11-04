@@ -14,6 +14,7 @@ import {
   isStaleFeedCursorError
 } from "./content-feed-cursor.js";
 import { hashIdempotencyPayload, readIdempotencyKey } from "../../shared/idempotency.js";
+import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
 import { validateEventDraft } from "../event/event-route-shared.js";
 import type {
   CreateContentRequest,
@@ -244,7 +245,7 @@ export async function registerContentCoreRoutes(
       if (isStaleFeedCursorError(error)) {
         return reply.code(409).send({
           code: "feed_cursor_stale",
-          message: "Feed ranking changed; restart from the first page"
+          message: "Feed session expired; restart from the first page"
         });
       }
 
@@ -357,7 +358,7 @@ export async function registerContentCoreRoutes(
         bodyTextProvided: Boolean(body && "bodyText" in body),
         expectedCompositionRevision: body?.expectedCompositionRevision,
         assetOrder: body?.assetOrder,
-        requestHash: body && ("bodyText" in body || "assetOrder" in body) ? hashIdempotencyPayload(body) : undefined,
+        requestHash: hashIdempotencyPayload({ contentId: params.contentId, body }),
         visibility: body?.visibility,
         distributionMode: body?.distributionMode,
         scheduledFor: body && "scheduledFor" in body ? body.scheduledFor ?? null : undefined,
@@ -464,7 +465,14 @@ export async function registerContentCoreRoutes(
     }
 
     try {
-      const ownedContent = await options.contentRepository.findOwnedContentForUpload({
+      if (!options.contentRepository.findOwnedContentForPublication) {
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Content storage is not configured"
+        });
+      }
+
+      const ownedContent = await options.contentRepository.findOwnedContentForPublication({
         supabaseUserId: access.supabaseUserId,
         contentId: params.contentId
       });
@@ -497,6 +505,7 @@ export async function registerContentCoreRoutes(
         supabaseUserId: access.supabaseUserId,
         contentId: params.contentId,
         idempotencyKey,
+        requestHash: hashIdempotencyPayload({ contentId: params.contentId, body }),
         scheduledFor: body.scheduledFor ?? null,
         scheduledForProvided: "scheduledFor" in body
       });
@@ -510,6 +519,12 @@ export async function registerContentCoreRoutes(
 
       return reply.code(200).send(content);
     } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Idempotency key was already used for a different publish command"
+        });
+      }
       if (error instanceof ContentPublishConflictError) {
         return reply.code(409).send({
           code: "conflict",

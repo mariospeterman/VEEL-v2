@@ -61,6 +61,7 @@ export async function registerApiRoutes(
     referralRepository,
     refundRepository,
     notificationRepository,
+    webPushDnsResolver,
     organizationRepository,
     subscriptionRepository,
     subscriptionAuthorizationVerifier,
@@ -139,7 +140,10 @@ export async function registerApiRoutes(
     sessionRepository,
     ageRepository,
     walletRepository,
-    discoverRepository
+    discoverRepository,
+    mediaUploadProvider,
+    liveProvider,
+    subscriptionRepository
   });
   await registerEventRoutes(app, {
     authVerifier,
@@ -206,6 +210,7 @@ export async function registerApiRoutes(
   await registerNotificationRoutes(app, {
     authVerifier,
     notificationRepository,
+    webPushDnsResolver,
     vapidPublicKey: app.config.WEB_PUSH_VAPID_PUBLIC_KEY
   });
   await registerOrganizationRoutes(app, {

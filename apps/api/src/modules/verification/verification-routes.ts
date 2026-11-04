@@ -149,6 +149,7 @@ export async function registerVerificationRoutes(
       });
     }
 
+    let reservedSessionId: string | null = null;
     try {
       const organizationId = typeof body?.organizationId === "string" ? body.organizationId : null;
       if (purpose === "org_kyb") {
@@ -172,25 +173,65 @@ export async function registerVerificationRoutes(
       }
       const termsAcceptedAt = purpose === "adult_publisher_eligibility" ? new Date() : null;
       const policyVersion = purpose === "adult_publisher_eligibility" ? adultPublisherPolicyVersion : null;
+      const supportsDurableHandoff = Boolean(
+        options.verificationRepository.reservePendingSession &&
+        options.verificationRepository.selectPendingSessionProvider &&
+        options.verificationRepository.completePendingSession
+      );
+      const reservation = supportsDurableHandoff
+        ? await options.verificationRepository.reservePendingSession?.({
+            supabaseUserId: verifiedSession.supabaseUserId,
+            purpose: purpose as "adult_publisher_eligibility" | "creator_kyc" | "org_kyb",
+            organizationId,
+            idempotencyKey,
+            requestHash: createHash("sha256").update(JSON.stringify({
+              purpose,
+              providerPreference,
+              organizationId,
+              source,
+              policyVersion
+            })).digest("hex"),
+            policyVersion,
+            termsAcceptedAt
+          })
+        : null;
+      reservedSessionId = reservation?.id ?? null;
       const providerSession = await options.verificationProviderWaterfall.createSession({
         supabaseUserId: verifiedSession.supabaseUserId,
         purpose,
         providerPreference,
         organizationId,
         idempotencyKey,
+        subjectReference: reservation?.subjectReference ?? null,
         callbackUrl: verificationCallbackUrl(app.config.WEB_URL, purpose),
         webhookBaseUrl: `${app.config.API_URL}/v1/webhooks/verification`,
         policyVersion,
-        termsAcceptedAt
+        termsAcceptedAt,
+        ...(reservation
+          ? { onProviderSelected: async (selection) => {
+              await options.verificationRepository.selectPendingSessionProvider!({
+                sessionId: reservation.id,
+                selection
+              });
+            } }
+          : {})
       });
-      const sessionId = await options.verificationRepository.createPendingSession({
-        supabaseUserId: verifiedSession.supabaseUserId,
-        purpose: purpose as "adult_publisher_eligibility" | "creator_kyc" | "org_kyb",
-        organizationId,
-        providerSession,
-        policyVersion,
-        termsAcceptedAt
-      });
+      const sessionId = reservation
+        ? reservation.id
+        : await options.verificationRepository.createPendingSession({
+            supabaseUserId: verifiedSession.supabaseUserId,
+            purpose: purpose as "adult_publisher_eligibility" | "creator_kyc" | "org_kyb",
+            organizationId,
+            providerSession,
+            policyVersion,
+            termsAcceptedAt
+          });
+      if (reservation) {
+        await options.verificationRepository.completePendingSession?.({
+          sessionId: reservation.id,
+          providerSession
+        });
+      }
 
       if (isMockVerificationProviderReference(app.config, providerSession.providerReference)) {
         await options.verificationRepository.updateVerificationFromWebhook({
@@ -214,6 +255,20 @@ export async function registerVerificationRoutes(
         purpose
       });
     } catch (error) {
+      if (reservedSessionId && options.verificationRepository.failPendingSession) {
+        await options.verificationRepository.failPendingSession({
+          sessionId: reservedSessionId,
+          reason: error instanceof Error ? error.name : "provider_session_failed"
+        }).catch(() => undefined);
+      }
+      if (error instanceof Error && ["IDEMPOTENCY_KEY_REUSED", "VERIFICATION_SESSION_ALREADY_RESERVED"].includes(error.message)) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: error.message === "IDEMPOTENCY_KEY_REUSED"
+            ? "Idempotency-Key was already used with different verification input"
+            : "This verification session request has already been reserved"
+        });
+      }
       if (
         error instanceof VerificationProviderUnavailableError ||
         error instanceof VerificationProviderHttpError

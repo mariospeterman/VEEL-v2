@@ -12,6 +12,7 @@ export type PaymentConfirmationEmailOutcome =
   | {
       state: "failed";
       failureCode: string;
+      retryable: boolean;
     };
 
 export interface QueuedPaymentConfirmationEmail {
@@ -141,27 +142,38 @@ export function createResendPaymentConfirmationEmailProvider(
         };
       }
 
-      const response = await fetchImpl("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${options.apiKey}`,
-          "content-type": "application/json",
-          "idempotency-key": `payment-confirmation:${input.deliveryId}`
-        },
-        body: JSON.stringify({
-          from: options.from,
-          to: [input.to],
-          ...(options.replyTo ? { reply_to: options.replyTo } : {}),
-          subject: `WeVid receipt ${input.receiptNumber}`,
-          text: plainTextConfirmation(input, options.webUrl),
-          html: htmlConfirmation(input, options.webUrl)
-        })
-      });
-
-      if (!response.ok) {
+      let response: Response;
+      try {
+        response = await fetchImpl("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${options.apiKey}`,
+            "content-type": "application/json",
+            "idempotency-key": `payment-confirmation:${input.deliveryId}`
+          },
+          body: JSON.stringify({
+            from: options.from,
+            to: [input.to],
+            ...(options.replyTo ? { reply_to: options.replyTo } : {}),
+            subject: `WeVid receipt ${input.receiptNumber}`,
+            text: plainTextConfirmation(input, options.webUrl),
+            html: htmlConfirmation(input, options.webUrl)
+          })
+        });
+      } catch {
         return {
           state: "failed",
-          failureCode: `resend_http_${response.status}`
+          failureCode: "resend_transport_error",
+          retryable: true
+        };
+      }
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { name?: unknown };
+        const failure = classifyResendFailure(response.status, body.name);
+        return {
+          state: "failed",
+          ...failure
         };
       }
 
@@ -198,7 +210,7 @@ export function createPostgresPaymentConfirmationEmailRepository(
   return {
     async leaseDueConfirmations(input) {
       const states = input.includeProviderNotConfigured
-        ? ["queued", "provider_not_configured"]
+        ? ["queued", "failed", "provider_not_configured"]
         : ["queued"];
 
       return sql.begin(async (transaction) => {
@@ -210,12 +222,41 @@ export function createPostgresPaymentConfirmationEmailRepository(
             lease_token = null,
             leased_until = null,
             updated_at = now()
-          where state in ('queued', 'processing', 'provider_not_configured', 'failed')
+          where channel = 'email'
+            and state in ('queued', 'processing', 'provider_not_configured', 'failed')
             and attempt_count >= ${input.maxAttempts}
             and (state <> 'processing' or leased_until is null or leased_until <= ${input.now})
         `;
 
         const rows = await transaction<PaymentConfirmationEmailRow[]>`
+          with candidate as (
+            select
+              due.id,
+              auth_user.email::text as recipient_email
+            from payment_confirmation_deliveries due
+            join user_provider_identities identity
+              on identity.user_id = due.user_id
+             and identity.provider = 'supabase'
+             and identity.status = 'active'
+            join auth.users auth_user
+              on auth_user.id = identity.provider_subject::uuid
+            where due.channel = 'email'
+              and nullif(btrim(auth_user.email), '') is not null
+              and (
+                (due.state in ${transaction(states)} and due.next_attempt_at <= ${input.now})
+                or (due.state = 'processing' and (due.leased_until is null or due.leased_until <= ${input.now}))
+              )
+              and due.attempt_count < ${input.maxAttempts}
+            order by
+              case
+                when due.state = 'processing' then coalesce(due.leased_until, '-infinity'::timestamptz)
+                else due.next_attempt_at
+              end,
+              due.created_at,
+              due.id
+            limit ${input.limit}
+            for update of due skip locked
+          )
           update payment_confirmation_deliveries delivery
           set
             state = 'processing',
@@ -225,25 +266,8 @@ export function createPostgresPaymentConfirmationEmailRepository(
             attempt_count = delivery.attempt_count + 1,
             failure_code = null,
             updated_at = now()
-          from (
-            select due.id
-            from payment_confirmation_deliveries due
-            where due.channel = 'email'
-              and (
-                (due.state in ${transaction(states)} and due.next_attempt_at <= ${input.now})
-                or (due.state = 'processing' and (due.leased_until is null or due.leased_until <= ${input.now}))
-              )
-              and due.attempt_count < ${input.maxAttempts}
-            order by due.created_at asc
-            limit ${input.limit}
-            for update skip locked
-          ) due,
-          users app_user,
-          auth.users auth_user
-          where delivery.id = due.id
-            and app_user.id = delivery.user_id
-            and auth_user.id = app_user.supabase_user_id
-            and auth_user.email is not null
+          from candidate
+          where delivery.id = candidate.id
           returning
             delivery.id as delivery_id,
             delivery.lease_token,
@@ -251,7 +275,7 @@ export function createPostgresPaymentConfirmationEmailRepository(
             delivery.payment_intent_id,
             delivery.receipt_id,
             delivery.user_id,
-            auth_user.email as recipient_email,
+            candidate.recipient_email,
             delivery.payload->>'receiptNumber' as receipt_number,
             delivery.payload->>'productType' as product_type,
             (delivery.payload->>'amountMinor')::bigint as amount_minor,
@@ -305,7 +329,12 @@ export function createPostgresPaymentConfirmationEmailRepository(
       await sql`
         update payment_confirmation_deliveries
         set
-          state = case when attempt_count >= ${input.maxAttempts} then 'dead_letter' else ${input.outcome.state} end,
+          state = case
+            when ${input.outcome.state === "failed" && !input.outcome.retryable}
+              or attempt_count >= ${input.maxAttempts}
+              then 'dead_letter'
+            else ${input.outcome.state}
+          end,
           failure_code = ${input.outcome.failureCode},
           next_attempt_at = ${input.now} + make_interval(
             secs => least(3600, 30 * power(2, least(attempt_count, 7)))::integer
@@ -322,6 +351,23 @@ export function createPostgresPaymentConfirmationEmailRepository(
     async close() {
       await sql.end();
     }
+  };
+}
+
+export function classifyResendFailure(
+  status: number,
+  providerName: unknown
+): { failureCode: string; retryable: boolean } {
+  const name = typeof providerName === "string" ? providerName : null;
+  if (name === "concurrent_idempotent_requests" || name === "resource_locked") {
+    return { failureCode: `resend_${name}`, retryable: true };
+  }
+  if (name === "invalid_idempotent_request") {
+    return { failureCode: `resend_${name}`, retryable: false };
+  }
+  return {
+    failureCode: `resend_http_${status}`,
+    retryable: status === 408 || status === 425 || status === 429 || status >= 500
   };
 }
 

@@ -46,4 +46,22 @@ describe("canonical staff authorization registry", () => {
     expect(permissions).toContain("admin.staff.read");
     expect(permissions).not.toContain("admin.not_registered");
   });
+
+  it("keeps platform analytics access limited to roles with the canonical read permission", () => {
+    expect(staffRoles.filter((role) => rolePermissions[role].includes("admin.analytics.read"))).toEqual([
+      "owner",
+      "admin",
+      "finance",
+      "ops",
+      "creator_success",
+      "readonly_auditor"
+    ]);
+    expect(staffRoles.filter((role) => !rolePermissions[role].includes("admin.analytics.read"))).toEqual([
+      "trust_safety",
+      "support",
+      "event_ops",
+      "ai_ops",
+      "compliance"
+    ]);
+  });
 });

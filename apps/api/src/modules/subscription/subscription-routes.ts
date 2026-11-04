@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
+import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
+import { KeysetPaginationCursorError } from "../../shared/keyset-pagination.js";
 import { calculateSettlementSplit } from "../payment/payment-amounts.js";
 import { assertSolanaAddress, SolanaPaymentConfigurationError } from "../payment/solana-payment.js";
 import {
@@ -70,13 +72,20 @@ export async function registerSubscriptionRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
+    const query = request.query as { cursor?: string };
     try {
       const page = await options.subscriptionRepository.listPlans({
-        supabaseUserId: access.supabaseUserId
+        supabaseUserId: access.supabaseUserId,
+        limit: 20,
+        ...(query.cursor ? { cursor: query.cursor } : {})
       });
 
       return reply.code(200).send(page);
     } catch (error) {
+      if (error instanceof KeysetPaginationCursorError) {
+        return reply.code(400).send(validationResponse(error.message));
+      }
+
       if (error instanceof SubscriptionRepositoryConfigurationError) {
         request.log.warn({ error }, "Subscription plan lookup failed");
         return reply.code(503).send(serviceUnavailableResponse("Subscriptions are not configured"));
@@ -93,13 +102,33 @@ export async function registerSubscriptionRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
+    const query = request.query as {
+      cursor?: string;
+      scope?: string;
+      view?: string;
+    };
+    if (query.scope && query.scope !== "platform" && query.scope !== "creator") {
+      return reply.code(400).send(validationResponse("scope must be platform or creator"));
+    }
+    if (query.view && query.view !== "active" && query.view !== "history") {
+      return reply.code(400).send(validationResponse("view must be active or history"));
+    }
+
     try {
       const page = await options.subscriptionRepository.listSubscriptions({
-        supabaseUserId: access.supabaseUserId
+        supabaseUserId: access.supabaseUserId,
+        limit: 20,
+        view: query.view === "history" ? "history" : "active",
+        ...(query.cursor ? { cursor: query.cursor } : {}),
+        ...(query.scope ? { scope: query.scope as "platform" | "creator" } : {})
       });
 
       return reply.code(200).send(page);
     } catch (error) {
+      if (error instanceof KeysetPaginationCursorError) {
+        return reply.code(400).send(validationResponse(error.message));
+      }
+
       if (error instanceof SubscriptionRepositoryConfigurationError) {
         request.log.warn({ error }, "Subscription list lookup failed");
         return reply.code(503).send(serviceUnavailableResponse("Subscriptions are not configured"));
@@ -358,6 +387,12 @@ export async function registerSubscriptionRoutes(
 
       return reply.code(202).send(subscription);
     } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send(
+          conflictResponse("Idempotency key was already used for a different authorization submission")
+        );
+      }
+
       if (error instanceof SubscriptionRepositoryConfigurationError) {
         request.log.warn({ error }, "Subscription authorization submission failed");
         return reply.code(503).send(serviceUnavailableResponse("Subscriptions are not configured"));

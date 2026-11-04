@@ -163,6 +163,14 @@ export function createPostgresMediaAssetCleanupRepository(
         `;
         const asset = updated[0];
         if (!asset) return;
+        if (succeeded) {
+          await transaction`
+            update media_upload_operations
+            set state = 'compensated', updated_at = now()
+            where media_asset_id = ${input.cleanup.mediaAssetId}
+              and state = 'compensation_pending'
+          `;
+        }
         const action = succeeded
           ? "content_media_asset_cleanup_completed"
           : "content_media_asset_cleanup_retry";

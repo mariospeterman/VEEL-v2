@@ -68,8 +68,25 @@ export function toSubscription(row: SubscriptionRow): Subscription {
     programId: row.program_id,
     planPda: row.plan_pda,
     subscriptionPda: row.subscription_pda,
-    failureReason: null
+    failureReason: sanitizeSubscriptionFailureReason(row.failure_reason)
   };
+}
+
+export function sanitizeSubscriptionFailureReason(
+  value: string | null | undefined
+): Subscription["failureReason"] {
+  if (!value) return null;
+
+  if (/insufficient_(?:allowance|funds|balance)/.test(value)) {
+    return "insufficient_funds";
+  }
+  if (/(?:delegation|authorization).*(?:revoked|unavailable)|(?:revoked|cancelled)/.test(value)) {
+    return "authorization_revoked";
+  }
+  if (/(?:rpc|provider|network|reconciliation).*(?:unavailable|failed|missing|not_configured)/.test(value)) {
+    return "provider_unavailable";
+  }
+  return "setup_mismatch";
 }
 
 export function toAuthorizationIntentResponse(input: {

@@ -39,7 +39,6 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
         "LIVEPEER_API_KEY",
         "LIVEPEER_WEBHOOK_SECRET",
         "LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY",
-        "PRIVY_APP_SECRET",
         "COINBASE_CDP_API_KEY_SECRET",
         "SUMSUB_SECRET_KEY",
         "SUMSUB_WEBHOOK_SECRET",
@@ -77,16 +76,29 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
       });
     }
     const statusCode = (error as { statusCode?: unknown }).statusCode;
-    if (typeof statusCode === "number" && statusCode >= 400 && statusCode <= 599) {
-      if ((error as { code?: unknown }).code === "rate_limited") {
-        return reply.code(statusCode).send({
+    if (typeof statusCode === "number" && statusCode >= 400 && statusCode < 500) {
+      if ((error as { code?: unknown }).code === "rate_limited" || statusCode === 429) {
+        return reply.code(429).send({
           code: "rate_limited",
           message: "Too many requests"
         });
       }
-      return reply.code(statusCode).send(error);
+      const safeClientError = clientErrorResponse(statusCode);
+      return reply.code(statusCode).send(safeClientError);
     }
-    return reply.send(error);
+    request.log.error(
+      {
+        requestId: request.id,
+        errorType: safeErrorToken(error instanceof Error ? error.name : undefined),
+        errorStatusCode: typeof statusCode === "number" ? statusCode : undefined
+      },
+      "Unhandled API error"
+    );
+    return reply.code(500).send({
+      code: "internal_server_error",
+      message: "An unexpected server error occurred",
+      requestId: request.id
+    });
   });
   await app.register(helmet, {
     contentSecurityPolicy: {
@@ -166,6 +178,27 @@ export async function buildApi(options: BuildApiOptions = {}): Promise<FastifyIn
   await app.register(openApiPlugin);
 
   return app;
+}
+
+function clientErrorResponse(statusCode: number): { code: string; message: string } {
+  switch (statusCode) {
+    case 401:
+      return { code: "unauthorized", message: "Unauthorized" };
+    case 403:
+      return { code: "forbidden", message: "Forbidden" };
+    case 404:
+      return { code: "not_found", message: "Resource not found" };
+    case 409:
+      return { code: "conflict", message: "Request conflicts with current state" };
+    default:
+      return { code: "validation_failed", message: "Request could not be processed" };
+  }
+}
+
+function safeErrorToken(value: unknown): string {
+  return typeof value === "string" && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(value)
+    ? value
+    : "Error";
 }
 
 function allowedWebOrigins(webUrl: string, nodeEnv: "development" | "test" | "production") {

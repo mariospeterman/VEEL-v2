@@ -11,6 +11,7 @@ describe("content publish repository", () => {
       const query = strings.join("?");
       queries.push(query);
       if (query.includes("for update")) return Promise.resolve([{ id: "content-id" }]);
+      if (query.includes("from mutation_command_receipts")) return Promise.resolve([]);
       if (query.includes("with actor as")) return Promise.resolve([]);
       return Promise.resolve([{
         state: "ready",
@@ -27,7 +28,8 @@ describe("content publish repository", () => {
     await expect(repository.publishOwnedContent!({
       supabaseUserId: "00000000-0000-4000-8000-000000000001",
       contentId: "00000000-0000-4000-8000-000000000040",
-      idempotencyKey: "test"
+      idempotencyKey: "test",
+      requestHash: "test-request-hash"
     })).rejects.toBeInstanceOf(ContentPublishConflictError);
 
     const publishQuery = queries.find((query) => query.includes("with actor as"));

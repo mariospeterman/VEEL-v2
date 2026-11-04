@@ -196,7 +196,11 @@ export interface LiveRepository {
   findRoom(input: FindLiveRoomInput): Promise<StoredLiveRoom | null>;
   findOwnedRoom(input: FindOwnedLiveRoomInput): Promise<StoredLiveRoom | null>;
   findOwnedRoomByIdempotency(input: FindOwnedLiveRoomByIdempotencyInput): Promise<StoredLiveRoom | null>;
-  listOwnedRooms(input: { supabaseUserId: string }): Promise<{ items: StoredLiveRoom[]; nextCursor: null }>;
+  listOwnedRooms(input: {
+    supabaseUserId: string;
+    cursor?: string;
+    limit: number;
+  }): Promise<{ items: StoredLiveRoom[]; nextCursor: string | null }>;
   revealHostConnection(input: {
     supabaseUserId: string;
     roomId: string;

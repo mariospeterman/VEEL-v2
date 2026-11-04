@@ -100,8 +100,18 @@ export interface SubscriptionRepository {
     sequence: number;
     playedSeconds: number;
   }): Promise<PlatformPlaybackSession | null>;
-  listPlans(input: { supabaseUserId: string }): Promise<SubscriptionPlanPage>;
-  listSubscriptions(input: { supabaseUserId: string }): Promise<SubscriptionPage>;
+  listPlans(input: {
+    supabaseUserId: string;
+    cursor?: string;
+    limit: number;
+  }): Promise<SubscriptionPlanPage>;
+  listSubscriptions(input: {
+    supabaseUserId: string;
+    cursor?: string;
+    limit: number;
+    scope?: "platform" | "creator";
+    view: "active" | "history";
+  }): Promise<SubscriptionPage>;
   getCreatorOffer(input: { supabaseUserId: string }): Promise<SubscriptionPlan | null>;
   upsertCreatorOffer(input: {
     supabaseUserId: string;

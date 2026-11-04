@@ -32,6 +32,13 @@ export class PerformerRepositoryConfigurationError extends Error {
   }
 }
 
+export class PerformerIdempotencyConflictError extends Error {
+  constructor() {
+    super("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST");
+    this.name = "PerformerIdempotencyConflictError";
+  }
+}
+
 export function createPostgresPerformerRepository(database?: string | PostgresSql): PerformerRepository {
   if (!database) {
     const unavailable = async () => { throw new PerformerRepositoryConfigurationError(); };
@@ -79,15 +86,31 @@ export function createPostgresPerformerRepository(database?: string | PostgresSq
         if (!scope) return { rows: [], invitationCreated: false };
 
         await transaction`select pg_advisory_xact_lock(hashtextextended(${`${scope.owner_user_id}:${input.idempotencyKey}`}, 0))`;
-        const existingRows = await transaction<{ id: string }[]>`
-          select id from performer_consent_requests
-          where requested_by_user_id = ${scope.owner_user_id}
-            and idempotency_key = ${input.idempotencyKey}
+        const existingRows = await transaction<{
+          id: string;
+          content_item_id: string;
+          content_revision: number;
+          allowed_uses: PerformerAllowedUse[];
+          subject_kind: string;
+          display_label: string;
+          handle: string | null;
+        }[]>`
+          select pcr.id, pcr.content_item_id, pcr.content_revision, pcr.allowed_uses,
+            ps.subject_kind, ps.display_label, linked_profile.handle
+          from performer_consent_requests pcr
+          join performer_subjects ps on ps.id = pcr.performer_subject_id
+          left join profiles linked_profile on linked_profile.user_id = ps.linked_user_id
+          where pcr.requested_by_user_id = ${scope.owner_user_id}
+            and pcr.idempotency_key = ${input.idempotencyKey}
           limit 1
         `;
-        if (existingRows[0]) {
+        const existing = existingRows[0];
+        if (existing) {
+          if (!samePerformerCommand(existing, input, scope.content_revision)) {
+            throw new PerformerIdempotencyConflictError();
+          }
           return {
-            rows: await selectRequestById(transaction, existingRows[0].id),
+            rows: await selectRequestById(transaction, existing.id),
             invitationCreated: false
           };
         }
@@ -354,6 +377,36 @@ async function respond(transaction: PostgresTransaction, input: {
     where id = ${request.id}
   `;
   return selectRequestById(transaction, request.id);
+}
+
+export function samePerformerCommand(
+  existing: {
+    content_item_id: string;
+    content_revision: number;
+    allowed_uses: PerformerAllowedUse[];
+    subject_kind: string;
+    display_label: string;
+    handle: string | null;
+  },
+  input: {
+    contentId: string;
+    performerHandle?: string | null;
+    externalLabel?: string | null;
+    allowedUses: PerformerAllowedUse[];
+  },
+  contentRevision: number
+): boolean {
+  if (existing.content_item_id !== input.contentId || existing.content_revision !== contentRevision) {
+    return false;
+  }
+  const existingUses = [...existing.allowed_uses].sort();
+  const requestedUses = [...input.allowedUses].sort();
+  if (JSON.stringify(existingUses) !== JSON.stringify(requestedUses)) return false;
+  if (input.performerHandle) {
+    return existing.subject_kind === "wevid_user" &&
+      existing.handle?.toLowerCase() === input.performerHandle.toLowerCase();
+  }
+  return existing.subject_kind === "external_invitee" && existing.display_label === input.externalLabel;
 }
 
 function requestSelect() {

@@ -1,11 +1,15 @@
 import type postgres from "postgres";
 import type { AdminRepository } from "./types.js";
-import { isStaffRole, permissionsForRoles, type AdminPermission, type StaffRole } from "./admin-permissions.js";
+import type { AdminPermission } from "./admin-permissions.js";
+import { countOpenReports } from "./admin-report-authority.js";
+import { resolveActiveStaffAccess } from "./admin-staff-access.js";
 import {
   CountRow,
   NotificationHealthRow,
   WorkerQueueHealthRow,
   AdminUserRow,
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
   pageSize,
   page,
   toCounts,
@@ -18,30 +22,7 @@ export function createAccessRepository(
   sql: postgres.Sql
 ): Pick<AdminRepository, "hasAdminAccess" | "hasAdminPermission" | "getStaffAccess" | "getOpsSummary" | "getNotificationHealth" | "retryDeadLetterJob" | "listUsers" | "getUser"> {
   async function getStaffAccess(supabaseUserId: string) {
-    const rows = await sql<{ user_id: string; roles: string[]; permissions: string[] }[]>`
-      select
-        u.id as user_id,
-        coalesce(array_agg(distinct sm.role::text) filter (where sm.role is not null), array[]::text[]) as roles,
-        coalesce(array_agg(distinct sp.permission_key) filter (
-          where sp.permission_key is not null and sp.revoked_at is null
-        ), array[]::text[]) as permissions
-      from users u
-      join staff_memberships sm
-        on sm.user_id = u.id and sm.state = 'active'
-      left join staff_permissions sp on sp.user_id = u.id and sp.scope = 'global'
-      where u.supabase_user_id = ${supabaseUserId}
-        and u.state = 'active'
-      group by u.id
-    `;
-    const row = rows[0];
-    if (!row) return null;
-    const roles = row.roles.filter(isStaffRole) as StaffRole[];
-    if (!roles.length) return null;
-    return {
-      userId: row.user_id,
-      roles: [...roles].sort(),
-      permissions: permissionsForRoles(roles, row.permissions)
-    };
+    return resolveActiveStaffAccess(sql, { supabaseUserId });
   }
 
   return {
@@ -65,7 +46,7 @@ export function createAccessRepository(
         enterpriseAllocationRows,
         creatorMediaOfferRows,
         structuredCreatorRequestRows,
-        reportRows,
+        openReportCount,
         workerQueueRows
       ] = await Promise.all([
         sql<CountRow[]>`
@@ -155,9 +136,7 @@ export function createAccessRepository(
             count(*) filter (where state in ('declined', 'remediation', 'cancelled', 'expired')) as failed
           from structured_creator_requests
         `,
-        sql<{ open_reports: string | number }[]>`
-          select 0 as open_reports
-        `,
+        countOpenReports(sql),
         sql<WorkerQueueHealthRow[]>`
           select
             'subscription_collections'::text as name,
@@ -246,7 +225,7 @@ export function createAccessRepository(
         providerHealth: providerCounts.failed > 0 ? "degraded" : "ok",
         queueHealth,
         workerQueues,
-        openReports: Number(reportRows[0]?.open_reports ?? 0),
+        openReports: openReportCount,
         paymentCounts: toCounts(paymentRows[0]),
         unlockCounts: toCounts(unlockRows[0]),
         providerEventCounts: providerCounts,
@@ -412,6 +391,8 @@ export function createAccessRepository(
       }
     },
     async listUsers(input) {
+      const cursorScope = "GET /v1/admin/users";
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<AdminUserRow[]>`
         select
           u.id,
@@ -444,17 +425,28 @@ export function createAccessRepository(
           order by w.is_primary desc, w.created_at desc
           limit 1
         ) primary_wallet on true
-        where (${input.cursor ?? null}::timestamptz is null or u.created_at < ${input.cursor ?? null}::timestamptz)
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or u.created_at < ${cursor.timestamp}::timestamptz
+          or (
+            u.created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or u.id < ${cursor.id}::uuid)
+          )
+        )
           and (
             ${input.query ?? null}::text is null
             or p.handle ilike '%' || ${input.query ?? ""} || '%'
             or u.id::text = ${input.query ?? ""}
           )
-        order by u.created_at desc
+        order by u.created_at desc, u.id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toAdminUser);
+      return page(
+        rows,
+        toAdminUser,
+        (row) => encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async getUser(input) {
       const rows = await sql<AdminUserRow[]>`

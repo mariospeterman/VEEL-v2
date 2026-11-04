@@ -27,6 +27,7 @@ function liveRoomRow(overrides: Partial<LiveRoomRow> = {}): LiveRoomRow {
     id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa51",
     title: "Safe live room",
     state: "live",
+    created_at: new Date("2026-11-04T12:00:00.000Z"),
     access_rule: "public",
     creator_user_id: "00000000-0000-4000-8000-000000000010",
     creator_handle: "creator",

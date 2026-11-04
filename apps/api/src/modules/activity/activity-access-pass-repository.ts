@@ -1,8 +1,16 @@
 import type postgres from "postgres";
+import {
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
+  keysetPage
+} from "../../shared/keyset-pagination.js";
 import { type AccessPassRow, toAccessPass } from "./activity-repository-mappers.js";
 import type { ListActivityInput } from "./types.js";
 
+const accessPassCursorScope = "GET /v1/activity/access-passes";
+
 export async function listAccessPasses(sql: postgres.Sql, input: ListActivityInput) {
+  const cursor = decodeTimestampIdCursor(accessPassCursorScope, input.cursor);
   const rows = await sql<AccessPassRow[]>`
     with target_user as (
       select id
@@ -22,15 +30,22 @@ export async function listAccessPasses(sql: postgres.Sql, input: ListActivityInp
       te.created_at
     from event_access_passes te
     join target_user tu on tu.id = te.holder_user_id
-    where (${input.cursor ?? null}::timestamptz is null or te.created_at < ${input.cursor ?? null}::timestamptz)
-    order by te.created_at desc
+    where (
+      ${cursor.timestamp}::timestamptz is null
+      or (
+        ${cursor.id}::uuid is null
+        and te.created_at <= ${cursor.timestamp}::timestamptz
+      )
+      or (
+        ${cursor.id}::uuid is not null
+        and (te.created_at, te.id) < (${cursor.timestamp}::timestamptz, ${cursor.id}::uuid)
+      )
+    )
+    order by te.created_at desc, te.id desc
     limit ${input.limit + 1}
   `;
-  const pageRows = rows.slice(0, input.limit);
-  const extraRow = rows[input.limit];
 
-  return {
-    items: pageRows.map(toAccessPass),
-    nextCursor: extraRow ? extraRow.created_at.toISOString() : null
-  };
+  return keysetPage(rows, input.limit, toAccessPass, (row) =>
+    encodeTimestampIdCursor(accessPassCursorScope, row.created_at, row.id)
+  );
 }

@@ -44,11 +44,11 @@ export function createPostgresDiscoverRepository(database?: string | PostgresSql
   return {
     async search(input) {
       const [content, creators, hashtags, events, liveRooms] = await Promise.all([
-        listContent(sql, input),
-        listCreators(sql, input),
-        listHashtags(sql, input),
-        listEvents(sql, input),
-        listLive(sql, input)
+        listContent(sql, { ...input, cursor: input.cursors?.content }),
+        listCreators(sql, { ...input, cursor: input.cursors?.creators }),
+        listHashtags(sql, { ...input, cursor: input.cursors?.hashtags }),
+        listEvents(sql, { ...input, cursor: input.cursors?.events }),
+        listLive(sql, { ...input, cursor: input.cursors?.liveRooms })
       ]);
 
       return {
@@ -57,7 +57,13 @@ export function createPostgresDiscoverRepository(database?: string | PostgresSql
         hashtags: hashtags.items,
         events: events.items,
         liveRooms: liveRooms.items,
-        nextCursor: content.nextCursor
+        nextCursors: {
+          content: content.nextCursor,
+          creators: creators.nextCursor,
+          hashtags: hashtags.nextCursor,
+          events: events.nextCursor,
+          liveRooms: liveRooms.nextCursor
+        }
       };
     },
     async listHashtags(input) {
@@ -73,7 +79,13 @@ export function createPostgresDiscoverRepository(database?: string | PostgresSql
         hashtags: hashtags.items.filter((hashtag) => hashtag.slug === input.slug),
         events: [],
         liveRooms: [],
-        nextCursor: hashtagContent.nextCursor
+        nextCursors: {
+          content: hashtagContent.nextCursor,
+          creators: null,
+          hashtags: null,
+          events: null,
+          liveRooms: null
+        }
       };
     },
     async listCreators(input) {

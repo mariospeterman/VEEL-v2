@@ -27,6 +27,7 @@ export interface PlanRow {
 
 export interface SubscriptionRow {
   id: string;
+  created_at: Date;
   scope: Subscription["scope"];
   plan_id: string;
   state: Subscription["state"];
@@ -46,6 +47,7 @@ export interface SubscriptionRow {
   period_seconds: number | null;
   plan_pda: string | null;
   subscription_pda: string | null;
+  failure_reason: string | null;
   merchant_wallet: string | null;
   creator_user_id: string | null;
   creator_handle: string | null;

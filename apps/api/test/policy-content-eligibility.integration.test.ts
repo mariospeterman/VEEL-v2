@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { createPostgresClient } from "../src/shared/postgres";
 import { createPostgresSubscriptionCollectionRepository } from "../../worker/src/subscription-collections";
+import { guardedIntegrationDatabaseUrl } from "./integration-database.js";
 
 const enabled = ["1", "true"].includes(
   process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS ?? ""
@@ -10,13 +11,13 @@ const describeIntegration = enabled ? describe : describe.skip;
 
 describeIntegration("canonical policy and content eligibility against Postgres", () => {
   it("resolves risk-based KYC and applies one viewer-relative content gate", async () => {
-    const databaseUrl = process.env.API_INTEGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
-    const databaseHost = safeDatabaseHost(databaseUrl);
-    if (!databaseUrl || !["127.0.0.1", "localhost"].includes(databaseHost)) {
-      throw new Error("A loopback API_INTEGRATION_DATABASE_URL is required");
-    }
+    const databaseUrl = guardedIntegrationDatabaseUrl();
 
     const sql = createPostgresClient(databaseUrl);
+    const policyLock = await sql.reserve();
+    await policyLock`
+      select pg_advisory_lock(hashtextextended('wevid-integration:recipient-monetisation-policy', 0))
+    `;
     const creatorId = randomUUID();
     const viewerId = randomUUID();
     const safeContentId = randomUUID();
@@ -550,6 +551,7 @@ describeIntegration("canonical policy and content eligibility against Postgres",
       `;
       expect(hidden).toEqual([]);
     } finally {
+      try {
       await sql`
         update recipient_monetisation_policies
         set kyc_mode = ${policySnapshot[0]?.kyc_mode ?? "risk_based"},
@@ -592,15 +594,16 @@ describeIntegration("canonical policy and content eligibility against Postgres",
       await sql`delete from wallets where id = ${creatorWalletId}`;
       await sql`delete from profiles where user_id = ${creatorId}`;
       await sql`delete from users where id in (${viewerId}, ${creatorId})`;
-      await sql.end({ timeout: 5 });
+      } finally {
+        try {
+          await policyLock`
+            select pg_advisory_unlock(hashtextextended('wevid-integration:recipient-monetisation-policy', 0))
+          `;
+        } finally {
+          policyLock.release();
+          await sql.end({ timeout: 5 });
+        }
+      }
     }
   });
 });
-
-function safeDatabaseHost(databaseUrl: string | undefined): string {
-  try {
-    return databaseUrl ? new URL(databaseUrl).hostname : "";
-  } catch {
-    return "";
-  }
-}

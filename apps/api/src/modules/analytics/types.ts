@@ -46,7 +46,7 @@ export interface AnalyticsMetricPoint {
   value: AnalyticsScalar | null;
   numerator: string | null;
   denominator: string | null;
-  sampleSize: string;
+  sampleSize: string | null;
   privacyDecision: "released" | "suppressed_minimum_cohort";
 }
 
@@ -154,6 +154,14 @@ export interface AnalyticsRepository {
   }): Promise<AnalyticsRawPoint[]>;
   getWatermark(): Promise<{ definitionVersion: number; dataThrough: Date; state: string } | null>;
   recordSuppression(input: { metricKey: string; scopeType: AnalyticsScope["type"] }): Promise<void>;
+  recordPlatformQueryAccess(input: {
+    actorUserId: string;
+    purposeCode: string;
+    metricKeys: string[];
+    window: AnalyticsWindow;
+    comparisonWindow: AnalyticsWindow | null;
+    dimensions: AnalyticsDimensions;
+  }): Promise<void>;
   getProjectionHealth(now?: Date): Promise<AnalyticsProjectionHealth>;
   enqueueProjectionJob(input: {
     actorUserId: string;

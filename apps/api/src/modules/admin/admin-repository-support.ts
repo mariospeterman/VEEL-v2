@@ -1,8 +1,15 @@
 import type postgres from "postgres";
+import {
+  executeWithMutationCommandReceipt,
+  resolveMutationActorBySupabaseUserId
+} from "../../shared/mutation-command-receipt.js";
+import { withPostgresTransaction } from "../../shared/postgres.js";
 import type { AdminRepository } from "./types.js";
 import {
   SupportCaseRow,
   SupportPolicyRow,
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
   pageSize,
   page,
   toSupportCase,
@@ -14,6 +21,8 @@ export function createSupportRepository(
 ): Pick<AdminRepository, "listSupportCases" | "updateSupportCase" | "listSupportPolicies" | "updateSupportPolicy"> {
   return {
     async listSupportCases(input) {
+      const cursorScope = "GET /v1/admin/support/cases";
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<SupportCaseRow[]>`
         select
           id,
@@ -29,22 +38,44 @@ export function createSupportRepository(
           updated_at,
           closed_at
         from support_cases
-        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
-        order by created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or created_at < ${cursor.timestamp}::timestamptz
+          or (
+            created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
+        order by created_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toSupportCase);
+      return page(
+        rows,
+        toSupportCase,
+        (row) => encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async updateSupportCase(input) {
-      const rows = await sql.begin(async (transaction) => {
-        const updatedRows = await transaction<SupportCaseRow[]>`
-          with actor as (
-            select id
-            from users
-            where supabase_user_id = ${input.supabaseUserId}
-            limit 1
-          ),
+      return withPostgresTransaction(sql, async (transaction) => {
+        const actorUserId = await resolveMutationActorBySupabaseUserId(
+          transaction,
+          input.supabaseUserId
+        );
+        if (!actorUserId) return null;
+
+        return executeWithMutationCommandReceipt(transaction, {
+          actorUserId,
+          action: "admin.support_case.update",
+          targetType: "support_case",
+          targetId: input.supportCaseId,
+          idempotencyKey: input.idempotencyKey,
+          requestVersion: 1,
+          requestBody: input.body,
+          responseStatus: 200
+        }, async () => {
+          const updatedRows = await transaction<SupportCaseRow[]>`
+          with
           current_case as (
             select id, state
             from support_cases
@@ -88,19 +119,18 @@ export function createSupportRepository(
             )
             select
               gen_random_uuid(),
-              actor.id,
+              ${actorUserId}::uuid,
               'support_case',
               updated_case.id,
               'support_case_updated',
               jsonb_build_object(
-                'reason', ${input.body.reason},
-                'idempotencyKey', ${input.idempotencyKey},
+                'reason', ${input.body.reason}::text,
+                'idempotencyKey', ${input.idempotencyKey}::text,
                 'previousState', updated_case.previous_state,
                 'newState', updated_case.state,
                 'organizationId', updated_case.organization_id
               )
             from updated_case
-            cross join actor
             returning id
           )
           select
@@ -120,12 +150,13 @@ export function createSupportRepository(
           where exists (select 1 from audit_insert)
         `;
 
-        return updatedRows;
+          return updatedRows[0] ? toSupportCase(updatedRows[0]) : null;
+        });
       });
-
-      return rows[0] ? toSupportCase(rows[0]) : null;
     },
     async listSupportPolicies(input) {
+      const cursorScope = "GET /v1/admin/support/policies";
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<SupportPolicyRow[]>`
         select
           id,
@@ -138,22 +169,44 @@ export function createSupportRepository(
           created_at,
           updated_at
         from organization_support_policies
-        where (${input.cursor ?? null}::timestamptz is null or updated_at < ${input.cursor ?? null}::timestamptz)
-        order by updated_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or updated_at < ${cursor.timestamp}::timestamptz
+          or (
+            updated_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
+        order by updated_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toSupportPolicy);
+      return page(
+        rows,
+        toSupportPolicy,
+        (row) => encodeTimestampIdCursor(cursorScope, row.updated_at, row.id)
+      );
     },
     async updateSupportPolicy(input) {
-      const rows = await sql.begin(async (transaction) => {
-        const updatedRows = await transaction<SupportPolicyRow[]>`
-          with actor as (
-            select id
-            from users
-            where supabase_user_id = ${input.supabaseUserId}
-            limit 1
-          ),
+      return withPostgresTransaction(sql, async (transaction) => {
+        const actorUserId = await resolveMutationActorBySupabaseUserId(
+          transaction,
+          input.supabaseUserId
+        );
+        if (!actorUserId) return null;
+
+        return executeWithMutationCommandReceipt(transaction, {
+          actorUserId,
+          action: "admin.support_policy.update",
+          targetType: "support_policy",
+          targetId: input.supportPolicyId,
+          idempotencyKey: input.idempotencyKey,
+          requestVersion: 1,
+          requestBody: input.body,
+          responseStatus: 200
+        }, async () => {
+          const updatedRows = await transaction<SupportPolicyRow[]>`
+          with
           current_policy as (
             select id, support_state, sla_tier, state
             from organization_support_policies
@@ -195,13 +248,13 @@ export function createSupportRepository(
             )
             select
               gen_random_uuid(),
-              actor.id,
+              ${actorUserId}::uuid,
               'organization_support_policy',
               updated_policy.id,
               'organization_support_policy_updated',
               jsonb_build_object(
-                'reason', ${input.body.reason},
-                'idempotencyKey', ${input.idempotencyKey},
+                'reason', ${input.body.reason}::text,
+                'idempotencyKey', ${input.idempotencyKey}::text,
                 'organizationId', updated_policy.organization_id,
                 'previousSupportState', updated_policy.previous_support_state,
                 'newSupportState', updated_policy.support_state,
@@ -212,7 +265,6 @@ export function createSupportRepository(
                 'moneyBoundary', updated_policy.money_boundary
               )
             from updated_policy
-            cross join actor
             returning id
           )
           select
@@ -229,10 +281,9 @@ export function createSupportRepository(
           where exists (select 1 from audit_insert)
         `;
 
-        return updatedRows;
+          return updatedRows[0] ? toSupportPolicy(updatedRows[0]) : null;
+        });
       });
-
-      return rows[0] ? toSupportPolicy(rows[0]) : null;
     },
   };
 }

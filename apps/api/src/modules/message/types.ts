@@ -19,11 +19,18 @@ export type UpdateStructuredCreatorRequestRequest = components["schemas"]["Updat
 
 export interface ListConversationsInput {
   supabaseUserId: string;
+  cursor?: string;
+  limit: number;
 }
 
 export interface ConversationInput {
   supabaseUserId: string;
   conversationId: string;
+}
+
+export interface PaginatedConversationInput extends ConversationInput {
+  cursor?: string;
+  limit: number;
 }
 
 export interface CreateMessageInput extends ConversationInput {
@@ -119,14 +126,14 @@ export interface ConversationPrice {
 }
 
 export interface MessageRepository {
-  listConversations(input: ListConversationsInput): Promise<{ items: Conversation[] }>;
-  listMessages(input: ConversationInput): Promise<MessagePage | null>;
+  listConversations(input: ListConversationsInput): Promise<{ items: Conversation[]; nextCursor: string | null }>;
+  listMessages(input: PaginatedConversationInput): Promise<MessagePage | null>;
   createDirectConversation(input: CreateDirectConversationInput): Promise<Conversation | null>;
   respondToMessageRequest(input: RespondToMessageRequestInput): Promise<Conversation | null>;
   markConversationRead(input: MarkConversationReadInput): Promise<ConversationReadState | null>;
   updateConversationMute(input: UpdateConversationMuteInput): Promise<Conversation | null>;
   updateMessageReaction(input: UpdateMessageReactionInput): Promise<Message | null>;
-  listCommercialInteractions(input: ConversationInput): Promise<ConversationCommercialInteractions | null>;
+  listCommercialInteractions(input: PaginatedConversationInput): Promise<ConversationCommercialInteractions | null>;
   createCreatorMediaOffer(input: CreateCreatorMediaOfferInput): Promise<CreatorMediaOffer | null>;
   updateCreatorMediaOffer(input: UpdateCreatorMediaOfferInput): Promise<CreatorMediaOffer | null>;
   findCreatorMediaOfferPaymentAuthority(input: ConversationInput & { offerId: string }): Promise<CommercialPaymentAuthority | null>;

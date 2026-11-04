@@ -1,4 +1,9 @@
 import { randomUUID } from "node:crypto";
+import {
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
+  keysetPage
+} from "../../shared/keyset-pagination.js";
 import { resolvePostgresClient, type PostgresSql, type PostgresTransaction } from "../../shared/postgres.js";
 import type {
   OrganizationDashboard,
@@ -55,6 +60,7 @@ interface OrganizationMemberRow {
 }
 
 type OrganizationKybState = NonNullable<OrganizationDashboard["organization"]["kybState"]> | null;
+export const organizationDashboardCursorScope = "GET /v1/organizations";
 
 export function createPostgresOrganizationRepository(database?: string | PostgresSql): OrganizationRepository {
   if (!database) {
@@ -73,6 +79,7 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
 
   return {
     async listMyDashboards(input) {
+      const cursor = decodeTimestampIdCursor(organizationDashboardCursorScope, input.cursor);
       const rows = await sql<OrganizationDashboardRow[]>`
         with target_user as (
           select id
@@ -144,12 +151,28 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
         left join active_enterprise_entitlements aee on aee.organization_id = o.id
         left join latest_org_kyb lok on lok.organization_id = o.id
         where om.state in ('active', 'invited')
-          and (${input.cursor ?? null}::timestamptz is null or o.created_at < ${input.cursor ?? null}::timestamptz)
-        order by o.created_at desc
+          and (
+            ${cursor.timestamp}::timestamptz is null
+            or (
+              ${cursor.id}::uuid is null
+              and o.created_at <= ${cursor.timestamp}::timestamptz
+            )
+            or (
+              ${cursor.id}::uuid is not null
+              and (o.created_at, o.id) < (${cursor.timestamp}::timestamptz, ${cursor.id}::uuid)
+            )
+          )
+        order by o.created_at desc, o.id desc
         limit ${input.limit + 1}
       `;
 
-      return toDashboardPage(rows, input.limit);
+      return toDashboardPage(rows, input.limit, (row) =>
+        encodeTimestampIdCursor(
+          organizationDashboardCursorScope,
+          row.created_at,
+          row.organization_id
+        )
+      );
     },
     async listMembers(input) {
       const authorized = await sql<Array<{ allowed: boolean }>>`
@@ -313,8 +336,8 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
           tx, actor.actor_id, "organization_member_update", input.idempotencyKey, input.requestHash
         );
         if (replayMembershipId) return selectOrganizationMemberById(tx, replayMembershipId, input.supabaseUserId);
-        const targets = await tx<Array<{ id: string; role: string; user_id: string }>>`
-          select id, role, user_id from organization_memberships
+        const targets = await tx<Array<{ id: string; role: string; state: string; user_id: string }>>`
+          select id, role, state, user_id from organization_memberships
           where id = ${input.membershipId} and organization_id = ${input.organizationId}
           for update
         `;
@@ -322,6 +345,7 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
         if (!target || target.role === "owner" || target.user_id === actor.actor_id) {
           throw new OrganizationStateConflictError("Owner membership cannot be changed through team-role controls");
         }
+        assertOwnerMembershipTransition(target.state, input.state);
         await tx`
           update organization_memberships
           set role = ${input.role}, state = ${input.state},
@@ -337,6 +361,7 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
           metadata: {
             organizationId: input.organizationId,
             previousRole: target.role,
+            previousState: target.state,
             role: input.role,
             state: input.state
           }
@@ -359,6 +384,14 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
       }
     }
   };
+}
+
+export function assertOwnerMembershipTransition(currentState: string, requestedState: string): void {
+  if (currentState === "invited" && requestedState === "active") {
+    throw new OrganizationStateConflictError(
+      "An invitation can only be activated by the invited member"
+    );
+  }
 }
 
 function selectOrganizationMembers(
@@ -486,14 +519,12 @@ function mapOrganizationMember(row: OrganizationMemberRow): OrganizationMemberRe
   };
 }
 
-function toDashboardPage(rows: OrganizationDashboardRow[], limit: number): OrganizationDashboardPage {
-  const visibleRows = rows.slice(0, limit);
-  const extraRow = rows[limit];
-
-  return {
-    items: visibleRows.map(toDashboard),
-    nextCursor: extraRow ? extraRow.created_at.toISOString() : null
-  };
+function toDashboardPage(
+  rows: OrganizationDashboardRow[],
+  limit: number,
+  encodeCursor: (row: OrganizationDashboardRow) => string
+): OrganizationDashboardPage {
+  return keysetPage(rows, limit, toDashboard, encodeCursor);
 }
 
 function toDashboard(row: OrganizationDashboardRow): OrganizationDashboard {

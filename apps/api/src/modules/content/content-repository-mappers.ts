@@ -1,6 +1,12 @@
 import type { ContentItem, Entitlement } from "./types.js";
 import type { ContentRow, PlaybackProjectionRow } from "./content-repository-rows.js";
 
+const privateImageProviderReferences = new WeakMap<object, string>();
+
+export function privateImageProviderAssetId(asset: object): string | null {
+  return privateImageProviderReferences.get(asset) ?? null;
+}
+
 export function toContentItem(
   row: ContentRow,
   posterUrl: string | null,
@@ -33,8 +39,8 @@ export function toContentItem(
     ...(Array.isArray(row.media_assets)
       ? {
           mediaAssets: row.media_assets.map((asset) => {
-            const { playbackUrl, providerPlayable, ...publicAsset } = asset;
-            return {
+            const { playbackUrl, providerPlayable, providerAssetId, ...publicAsset } = asset;
+            const projectedAsset = {
               ...publicAsset,
               posterUrl: fullCompositionAllowed ? (asset.posterUrl ?? null) : null,
               ...(asset.kind === "video"
@@ -47,6 +53,16 @@ export function toContentItem(
                   }
                 : {})
             };
+            if (
+              fullCompositionAllowed &&
+              projectedAsset.kind === "image" &&
+              projectedAsset.provider === "bunny" &&
+              providerPlayable &&
+              providerAssetId
+            ) {
+              privateImageProviderReferences.set(projectedAsset, providerAssetId);
+            }
+            return projectedAsset;
           })
         }
       : {}),

@@ -98,6 +98,9 @@ function createUnavailableContentRepository(): PostgresContentRepository {
     async findOwnedContentForUpload() {
       throw new ContentRepositoryConfigurationError();
     },
+    async findOwnedContentForPublication() {
+      throw new ContentRepositoryConfigurationError();
+    },
     async findMediaAssetByProviderAsset() {
       throw new ContentRepositoryConfigurationError();
     },

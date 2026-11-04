@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
+import {
+  resolvePostgresClient,
+  withPostgresTransaction,
+  type PostgresSql
+} from "../../shared/postgres.js";
 import type { PaymentEvidenceRepository } from "./types.js";
 import { PaymentRepositoryConfigurationError } from "./payment-repository-errors.js";
 import { PaymentIntentRow, toStoredPaymentIntent } from "./payment-intent-mapper.js";
@@ -26,54 +30,53 @@ export function createPostgresPaymentEvidenceRepository(
   return {
     async recordSolanaProviderEvent(input) {
       const receiptKey = input.providerEventId;
-      const insertedReceipts = await sql<{ id: string }[]>`
-        insert into provider_webhook_receipts (
-          id,
-          provider,
-          webhook_type,
-          signature_hash,
-          idempotency_key
-        )
-        values (
-          ${randomUUID()},
-          'helius',
-          'solana-indexer',
-          ${input.authorizationHash},
-          ${receiptKey}
-        )
-        on conflict (provider, webhook_type, idempotency_key) do nothing
-        returning id
-      `;
+      return withPostgresTransaction(sql, async (transaction) => {
+        const insertedReceipts = await transaction<{ id: string }[]>`
+          insert into provider_webhook_receipts (
+            id,
+            provider,
+            webhook_type,
+            signature_hash,
+            idempotency_key
+          )
+          values (
+            ${randomUUID()},
+            'helius',
+            'solana-indexer',
+            ${input.authorizationHash},
+            ${receiptKey}
+          )
+          on conflict (provider, webhook_type, idempotency_key) do nothing
+          returning id
+        `;
 
-      if (insertedReceipts.length === 0) {
-        return false;
-      }
+        const insertedEvents = await transaction<{ id: string }[]>`
+          insert into provider_events (
+            id,
+            provider,
+            provider_event_id,
+            event_type,
+            normalized_state,
+            replay_payload
+          )
+          values (
+            ${randomUUID()},
+            'helius',
+            ${input.providerEventId},
+            ${input.eventType},
+            'pending',
+            ${transaction.json({
+              kind: "solana_payment",
+              signature: input.signature,
+              referenceAddresses: input.referenceAddresses
+            })}
+          )
+          on conflict (provider, provider_event_id) do nothing
+          returning id
+        `;
 
-      await sql`
-        insert into provider_events (
-          id,
-          provider,
-          provider_event_id,
-          event_type,
-          normalized_state,
-          replay_payload
-        )
-        values (
-          ${randomUUID()},
-          'helius',
-          ${input.providerEventId},
-          ${input.eventType},
-          'pending',
-          ${sql.json({
-            kind: "solana_payment",
-            signature: input.signature,
-            referenceAddresses: input.referenceAddresses
-          })}
-        )
-        on conflict (provider, provider_event_id) do nothing
-      `;
-
-      return true;
+        return insertedReceipts.length > 0 || insertedEvents.length > 0;
+      });
     },
 
     async findIntentByReference(input) {

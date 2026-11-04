@@ -28,6 +28,8 @@ export interface NormalizedAgeWebhook {
   provider: AgeProvider;
   providerEventId: string;
   providerReference: string;
+  providerSubjectReference?: string | null;
+  providerCorrelationId?: string | null;
   eventType: string;
   state: Extract<AgeState, "pending" | "verified" | "failed">;
   signatureHash: string | null;
@@ -67,7 +69,7 @@ function normalizeSumsubWebhook(input: {
   }
 
   const digest = headerValue(input.headers["x-payload-digest"]);
-  const digestAlg = headerValue(input.headers["x-payload-digest-alg"]) ?? "HMAC_SHA256_HEX";
+  const digestAlg = headerValue(input.headers["x-payload-digest-alg"]);
 
   if (!digest || !verifySumsubDigest({ digest, digestAlg, rawBody: input.rawBody, secret })) {
     throw new AgeWebhookSignatureError("sumsub");
@@ -75,10 +77,10 @@ function normalizeSumsubWebhook(input: {
 
   const body = objectBody(input.body);
   const eventType = stringValue(body.type);
-  const providerEventId = firstStringValue(body.correlationId, body.applicantId);
+  const providerEventId = `sumsub:${sha256Hex(input.rawBody)}`;
   const providerReference = firstStringValue(body.applicantId, body.externalUserId);
 
-  if (!eventType || !providerEventId || !providerReference) {
+  if (!eventType || !providerReference) {
     throw new AgeWebhookValidationError("Sumsub webhook is missing required event identifiers");
   }
 
@@ -89,6 +91,8 @@ function normalizeSumsubWebhook(input: {
     provider: "sumsub",
     providerEventId,
     providerReference,
+    providerSubjectReference: stringValue(body.externalUserId),
+    providerCorrelationId: stringValue(body.correlationId),
     eventType,
     state,
     signatureHash: sha256Hex(digest),
@@ -131,6 +135,7 @@ function normalizeYotiWebhook(input: {
     provider: "yoti",
     providerEventId,
     providerReference,
+    providerSubjectReference: stringValue(body.reference_id),
     eventType,
     state: mapYotiState(stateValue),
     signatureHash: sha256Hex(signature),
@@ -141,25 +146,30 @@ function normalizeYotiWebhook(input: {
 
 function verifySumsubDigest(input: {
   digest: string;
-  digestAlg: string;
+  digestAlg: string | null;
   rawBody: Buffer;
   secret: string;
 }): boolean {
   const algorithm = sumsubDigestAlgorithm(input.digestAlg);
+  if (!algorithm) return false;
   const expected = createHmac(algorithm, input.secret).update(input.rawBody).digest("hex");
   return secureEqualHex(expected, input.digest);
 }
 
-function sumsubDigestAlgorithm(digestAlg: string): "sha1" | "sha256" | "sha512" {
+function sumsubDigestAlgorithm(digestAlg: string | null): "sha1" | "sha256" | "sha512" | null {
   if (digestAlg === "HMAC_SHA1_HEX") {
     return "sha1";
+  }
+
+  if (digestAlg === "HMAC_SHA256_HEX") {
+    return "sha256";
   }
 
   if (digestAlg === "HMAC_SHA512_HEX") {
     return "sha512";
   }
 
-  return "sha256";
+  return null;
 }
 
 function verifyYotiSignature(publicKeyPath: string, body: Record<string, unknown>, signature: string): boolean {
@@ -262,7 +272,7 @@ function parseProviderDate(value: string | null): Date | null {
 }
 
 
-function sha256Hex(value: string): string {
+function sha256Hex(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
 

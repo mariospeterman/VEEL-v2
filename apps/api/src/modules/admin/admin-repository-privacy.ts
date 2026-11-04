@@ -1,8 +1,15 @@
 import type postgres from "postgres";
+import {
+  executeWithMutationCommandReceipt,
+  resolveMutationActorBySupabaseUserId
+} from "../../shared/mutation-command-receipt.js";
+import { withPostgresTransaction } from "../../shared/postgres.js";
 import type { AdminRepository } from "./types.js";
 import {
   RefundDisputeRow,
   DataRequestRow,
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
   pageSize,
   page,
   toRefundDispute,
@@ -14,6 +21,8 @@ export function createPrivacyRepository(
 ): Pick<AdminRepository, "listRefundDisputes" | "updateRefundDispute" | "listDataRequests" | "updateDataRequest"> {
   return {
     async listRefundDisputes(input) {
+      const cursorScope = "GET /v1/admin/refunds/disputes";
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<RefundDisputeRow[]>`
         select
           id,
@@ -38,23 +47,45 @@ export function createPrivacyRepository(
           from refund_remediation_evidence rre
           where rre.refund_dispute_id = refunds_and_disputes.id
         ) evidence on true
-        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
-        order by created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or refunds_and_disputes.created_at < ${cursor.timestamp}::timestamptz
+          or (
+            refunds_and_disputes.created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or refunds_and_disputes.id < ${cursor.id}::uuid)
+          )
+        )
+        order by refunds_and_disputes.created_at desc, refunds_and_disputes.id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toRefundDispute);
+      return page(
+        rows,
+        toRefundDispute,
+        (row) => encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async updateRefundDispute(input) {
       const evidence = input.body.remediationEvidence;
-      const rows = await sql.begin(async (transaction) => {
-        const updatedRows = await transaction<RefundDisputeRow[]>`
-          with actor as (
-            select id
-            from users
-            where supabase_user_id = ${input.supabaseUserId}
-            limit 1
-          ),
+      return withPostgresTransaction(sql, async (transaction) => {
+        const actorUserId = await resolveMutationActorBySupabaseUserId(
+          transaction,
+          input.supabaseUserId
+        );
+        if (!actorUserId) return null;
+
+        return executeWithMutationCommandReceipt(transaction, {
+          actorUserId,
+          action: "admin.refund_dispute.update",
+          targetType: "refund_dispute",
+          targetId: input.refundDisputeId,
+          idempotencyKey: input.idempotencyKey,
+          requestVersion: 1,
+          requestBody: input.body,
+          responseStatus: 200
+        }, async () => {
+          const updatedRows = await transaction<RefundDisputeRow[]>`
+          with
           current_request as (
             select id, payment_intent_id, state, resolution
             from refunds_and_disputes
@@ -100,13 +131,13 @@ export function createPrivacyRepository(
             )
             select
               gen_random_uuid(),
-              actor.id,
+              ${actorUserId}::uuid,
               'refund_dispute',
               updated_request.id,
               'refund_dispute_updated',
               jsonb_build_object(
-                'reason', ${input.body.reason},
-                'idempotencyKey', ${input.idempotencyKey},
+                'reason', ${input.body.reason}::text,
+                'idempotencyKey', ${input.idempotencyKey}::text,
                 'paymentIntentId', updated_request.payment_intent_id,
                 'entitlementId', updated_request.entitlement_id,
                 'previousState', updated_request.previous_state,
@@ -116,7 +147,6 @@ export function createPrivacyRepository(
                 'custodyBoundary', updated_request.custody_boundary
               )
             from updated_request
-            cross join actor
             returning id
           ),
           evidence_insert as (
@@ -139,7 +169,7 @@ export function createPrivacyRepository(
               gen_random_uuid(),
               updated_request.id,
               updated_request.payment_intent_id,
-              actor.id,
+              ${actorUserId}::uuid,
               ${evidence?.evidenceType ?? null}::text,
               ${evidence?.evidenceSource ?? null}::text,
               ${evidence?.externalReference ?? null}::text,
@@ -150,7 +180,6 @@ export function createPrivacyRepository(
               ${evidence?.notes ?? null}::text,
               ${input.idempotencyKey}
             from updated_request
-            cross join actor
             where ${evidence ? true : false}
             on conflict (refund_dispute_id, idempotency_key) do nothing
             returning id, created_at
@@ -185,12 +214,13 @@ export function createPrivacyRepository(
           where exists (select 1 from audit_insert)
         `;
 
-        return updatedRows;
+          return updatedRows[0] ? toRefundDispute(updatedRows[0]) : null;
+        });
       });
-
-      return rows[0] ? toRefundDispute(rows[0]) : null;
     },
     async listDataRequests(input) {
+      const cursorScope = "GET /v1/admin/data-requests";
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<DataRequestRow[]>`
         select
           id,
@@ -202,22 +232,44 @@ export function createPrivacyRepository(
           updated_at,
           completed_at
         from data_requests
-        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
-        order by created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or created_at < ${cursor.timestamp}::timestamptz
+          or (
+            created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
+        order by created_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toDataRequest);
+      return page(
+        rows,
+        toDataRequest,
+        (row) => encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async updateDataRequest(input) {
-      const rows = await sql.begin(async (transaction) => {
-        const updatedRows = await transaction<DataRequestRow[]>`
-          with actor as (
-            select id
-            from users
-            where supabase_user_id = ${input.supabaseUserId}
-            limit 1
-          ),
+      return withPostgresTransaction(sql, async (transaction) => {
+        const actorUserId = await resolveMutationActorBySupabaseUserId(
+          transaction,
+          input.supabaseUserId
+        );
+        if (!actorUserId) return null;
+
+        return executeWithMutationCommandReceipt(transaction, {
+          actorUserId,
+          action: "admin.data_request.update",
+          targetType: "data_request",
+          targetId: input.dataRequestId,
+          idempotencyKey: input.idempotencyKey,
+          requestVersion: 1,
+          requestBody: input.body,
+          responseStatus: 200
+        }, async () => {
+          const updatedRows = await transaction<DataRequestRow[]>`
+          with
           current_request as (
             select id, state
             from data_requests
@@ -258,20 +310,19 @@ export function createPrivacyRepository(
             )
             select
               gen_random_uuid(),
-              actor.id,
+              ${actorUserId}::uuid,
               'data_request',
               updated_request.id,
               'data_request_updated',
               jsonb_build_object(
-                'reason', ${input.body.reason},
-                'idempotencyKey', ${input.idempotencyKey},
+                'reason', ${input.body.reason}::text,
+                'idempotencyKey', ${input.idempotencyKey}::text,
                 'requesterUserId', updated_request.requester_user_id,
                 'previousState', updated_request.previous_state,
                 'newState', updated_request.state,
                 'privacyBoundary', updated_request.privacy_boundary
               )
             from updated_request
-            cross join actor
             returning id
           )
           select
@@ -287,10 +338,9 @@ export function createPrivacyRepository(
           where exists (select 1 from audit_insert)
         `;
 
-        return updatedRows;
+          return updatedRows[0] ? toDataRequest(updatedRows[0]) : null;
+        });
       });
-
-      return rows[0] ? toDataRequest(rows[0]) : null;
     },
   };
 }

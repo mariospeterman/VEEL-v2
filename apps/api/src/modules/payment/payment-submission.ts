@@ -1,5 +1,9 @@
 import type postgres from "postgres";
 import { withPostgresTransaction } from "../../shared/postgres.js";
+import {
+  executeWithMutationCommandReceipt,
+  resolveMutationActorBySupabaseUserId
+} from "../../shared/mutation-command-receipt.js";
 import type { RecordPaymentSubmissionInput, StoredPaymentIntent } from "./types.js";
 import { grantContentUnlockEntitlement, grantLivePassEntitlement } from "./payment-entitlement-settlement.js";
 import { grantEventAccessPassEntitlement } from "./payment-event-access-pass-settlement.js";
@@ -24,6 +28,39 @@ export async function recordPaymentSubmission(
   input: RecordPaymentSubmissionInput
 ): Promise<void> {
   await withPostgresTransaction(sql, async (transaction) => {
+    if (input.idempotencyKey) {
+      const actorUserId = await resolveMutationActorBySupabaseUserId(
+        transaction,
+        input.supabaseUserId
+      );
+      if (!actorUserId) {
+        throw new PaymentSubmissionWriteConflictError();
+      }
+
+      await executeWithMutationCommandReceipt(transaction, {
+        actorUserId,
+        action: "payment.submission.submit",
+        targetType: "payment_intent",
+        targetId: input.paymentIntentId,
+        idempotencyKey: input.idempotencyKey,
+        requestVersion: 1,
+        requestBody: { signature: input.signature },
+        responseStatus: 202
+      }, async () => {
+        await applyPaymentSubmission(transaction, input);
+        return { accepted: true };
+      });
+      return;
+    }
+
+    await applyPaymentSubmission(transaction, input);
+  });
+}
+
+async function applyPaymentSubmission(
+  transaction: postgres.TransactionSql,
+  input: RecordPaymentSubmissionInput
+): Promise<void> {
     const nextState = input.settlement.confirmed ? "confirmed" : "submitted";
     const rows = await transaction<{
       payment_intent_id: string;
@@ -187,5 +224,4 @@ export async function recordPaymentSubmission(
     }
 
     await insertSettlementAttempt(transaction, input);
-  });
 }

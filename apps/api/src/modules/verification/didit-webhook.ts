@@ -9,20 +9,30 @@ export function verifyDiditV3Webhook(input: {
   now?: Date;
 }): string | null {
   const signature = headerValue(input.headers["x-signature-v2"]);
-  const timestamp = headerValue(input.headers["x-timestamp"]);
-  if (!signature || !timestamp) return null;
-
-  const timestampSeconds = Number.parseInt(timestamp, 10);
-  const nowSeconds = Math.floor((input.now ?? new Date()).getTime() / 1000);
-  if (!Number.isFinite(timestampSeconds) || Math.abs(nowSeconds - timestampSeconds) > DIDIT_WEBHOOK_TOLERANCE_SECONDS) {
-    return null;
-  }
+  const timestampHeader = headerValue(input.headers["x-timestamp"]);
+  if (!signature || !timestampHeader) return null;
 
   const expected = createHmac("sha256", input.secret)
     .update(canonicalDiditJson(input.body), "utf8")
     .digest("hex");
 
-  return secureEqualHex(expected, signature) ? signature : null;
+  if (!secureEqualHex(expected, signature)) return null;
+
+  // Didit V3's documented envelope includes a Unix dispatch timestamp and
+  // X-Signature-V2 authenticates the complete canonical body. Never derive
+  // freshness from the independently replaceable X-Timestamp header alone.
+  const signedTimestamp = signedBodyTimestamp(input.body);
+  const headerTimestamp = strictUnixSeconds(timestampHeader);
+  if (signedTimestamp === null || headerTimestamp === null || signedTimestamp !== headerTimestamp) {
+    return null;
+  }
+
+  const nowSeconds = Math.floor((input.now ?? new Date()).getTime() / 1000);
+  if (Math.abs(nowSeconds - signedTimestamp) > DIDIT_WEBHOOK_TOLERANCE_SECONDS) {
+    return null;
+  }
+
+  return signature;
 }
 
 export function canonicalDiditJson(value: unknown): string {
@@ -42,7 +52,22 @@ function headerValue(value: string | string[] | undefined): string | null {
   return Array.isArray(value) ? value[0] ?? null : value ?? null;
 }
 
+function signedBodyTimestamp(body: unknown): number | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const timestamp = (body as Record<string, unknown>).timestamp;
+  return typeof timestamp === "number" && Number.isSafeInteger(timestamp) && timestamp >= 0
+    ? timestamp
+    : null;
+}
+
+function strictUnixSeconds(value: string): number | null {
+  if (!/^[0-9]{1,16}$/.test(value)) return null;
+  const timestamp = Number(value);
+  return Number.isSafeInteger(timestamp) ? timestamp : null;
+}
+
 function secureEqualHex(left: string, right: string): boolean {
+  if (!/^[a-f0-9]{64}$/i.test(left) || !/^[a-f0-9]{64}$/i.test(right)) return false;
   const leftBuffer = Buffer.from(left, "hex");
   const rightBuffer = Buffer.from(right, "hex");
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);

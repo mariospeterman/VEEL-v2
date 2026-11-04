@@ -1,4 +1,5 @@
 import type { AccessPassPage, ActivityItem, ActivityPage, WalletTransaction } from "./types.js";
+import { keysetPage } from "../../shared/keyset-pagination.js";
 
 export interface ActivityRow {
   id: string;
@@ -53,14 +54,12 @@ export interface AccessPassRow {
   created_at: Date;
 }
 
-export function toActivityPage(rows: ActivityRow[], limit: number) {
-  const pageRows = rows.slice(0, limit);
-  const extraRow = rows[limit];
-
-  return {
-    items: pageRows.map(toActivityItem),
-    nextCursor: extraRow ? extraRow.created_at.toISOString() : null
-  };
+export function toActivityPage(
+  rows: ActivityRow[],
+  limit: number,
+  encodeCursor: (row: ActivityRow) => string
+) {
+  return keysetPage(rows, limit, toActivityItem, encodeCursor);
 }
 
 export function normalizeActivityPage(page: ActivityPage): ActivityPage {

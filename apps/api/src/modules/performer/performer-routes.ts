@@ -5,7 +5,10 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { ApplicationSessionVerifier } from "../session/types.js";
 import { VerificationProviderUnavailableError } from "../verification/verification-provider-adapters.js";
 import type { VerificationProviderWaterfall } from "../verification/types.js";
-import { PerformerRepositoryConfigurationError } from "./performer-repository.js";
+import {
+  PerformerIdempotencyConflictError,
+  PerformerRepositoryConfigurationError
+} from "./performer-repository.js";
 import type { PerformerAllowedUse, PerformerRepository } from "./types.js";
 
 interface PerformerRouteOptions {
@@ -62,7 +65,7 @@ export async function registerPerformerRoutes(app: FastifyInstance, options: Per
         contentId,
         performerHandle,
         externalLabel,
-        allowedUses,
+        allowedUses: [...allowedUses].sort(),
         invitationTokenHash: rawToken ? tokenHash(rawToken) : null,
         invitationExpiresAt: rawToken ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000) : null,
         idempotencyKey
@@ -171,6 +174,12 @@ function performerError(request: FastifyRequest, reply: FastifyReply, error: unk
   if (error instanceof PerformerRepositoryConfigurationError) {
     request.log.warn({ error }, "Performer consent repository unavailable");
     return reply.code(503).send({ code: "service_unavailable", message: "Performer consent is temporarily unavailable" });
+  }
+  if (error instanceof PerformerIdempotencyConflictError) {
+    return reply.code(409).send({
+      code: "idempotency_conflict",
+      message: "Idempotency key was already used for a different performer request"
+    });
   }
   throw error;
 }

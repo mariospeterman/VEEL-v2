@@ -4,6 +4,7 @@ import { mutationRateLimit } from "../../shared/rate-limits.js";
 import { adminListInput, requireAdminAccess, requireAdminMutation } from "./admin-route-auth.js";
 import { validateDataRequestAction, validateRefundDisputeAction, validateSupportCaseAction, validateSupportPolicyAction } from "./admin-route-validators.js";
 import type { AdminDataRequestActionRequest, AdminRefundDisputeActionRequest, AdminSupportCaseActionRequest, AdminSupportPolicyActionRequest } from "./types.js";
+import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
 
 export function registerAdminReviewRoutes(
   app: FastifyInstance,
@@ -35,12 +36,20 @@ export function registerAdminReviewRoutes(
     );
     if (!mutation) return reply;
 
-    const supportCase = await options.adminRepository.updateSupportCase({
-      supabaseUserId: mutation.supabaseUserId,
-      supportCaseId,
-      body: mutation.body,
-      idempotencyKey: mutation.idempotencyKey
-    });
+    let supportCase;
+    try {
+      supportCase = await options.adminRepository.updateSupportCase({
+        supabaseUserId: mutation.supabaseUserId,
+        supportCaseId,
+        body: mutation.body,
+        idempotencyKey: mutation.idempotencyKey
+      });
+    } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send(idempotencyConflictResponse());
+      }
+      throw error;
+    }
 
     if (!supportCase) {
       return reply.code(404).send({
@@ -78,12 +87,20 @@ export function registerAdminReviewRoutes(
     );
     if (!mutation) return reply;
 
-    const supportPolicy = await options.adminRepository.updateSupportPolicy({
-      supabaseUserId: mutation.supabaseUserId,
-      supportPolicyId,
-      body: mutation.body,
-      idempotencyKey: mutation.idempotencyKey
-    });
+    let supportPolicy;
+    try {
+      supportPolicy = await options.adminRepository.updateSupportPolicy({
+        supabaseUserId: mutation.supabaseUserId,
+        supportPolicyId,
+        body: mutation.body,
+        idempotencyKey: mutation.idempotencyKey
+      });
+    } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send(idempotencyConflictResponse());
+      }
+      throw error;
+    }
 
     if (!supportPolicy) {
       return reply.code(404).send({
@@ -121,12 +138,20 @@ export function registerAdminReviewRoutes(
     );
     if (!mutation) return reply;
 
-    const dispute = await options.adminRepository.updateRefundDispute({
-      supabaseUserId: mutation.supabaseUserId,
-      refundDisputeId,
-      body: mutation.body,
-      idempotencyKey: mutation.idempotencyKey
-    });
+    let dispute;
+    try {
+      dispute = await options.adminRepository.updateRefundDispute({
+        supabaseUserId: mutation.supabaseUserId,
+        refundDisputeId,
+        body: mutation.body,
+        idempotencyKey: mutation.idempotencyKey
+      });
+    } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send(idempotencyConflictResponse());
+      }
+      throw error;
+    }
 
     if (!dispute) {
       return reply.code(404).send({
@@ -164,12 +189,20 @@ export function registerAdminReviewRoutes(
     );
     if (!mutation) return reply;
 
-    const dataRequest = await options.adminRepository.updateDataRequest({
-      supabaseUserId: mutation.supabaseUserId,
-      dataRequestId,
-      body: mutation.body,
-      idempotencyKey: mutation.idempotencyKey
-    });
+    let dataRequest;
+    try {
+      dataRequest = await options.adminRepository.updateDataRequest({
+        supabaseUserId: mutation.supabaseUserId,
+        dataRequestId,
+        body: mutation.body,
+        idempotencyKey: mutation.idempotencyKey
+      });
+    } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send(idempotencyConflictResponse());
+      }
+      throw error;
+    }
 
     if (!dataRequest) {
       return reply.code(404).send({
@@ -180,5 +213,11 @@ export function registerAdminReviewRoutes(
 
     return reply.code(200).send(dataRequest);
   });
+}
 
+function idempotencyConflictResponse(): { code: "conflict"; message: string } {
+  return {
+    code: "conflict",
+    message: "Idempotency key was already used for a different admin mutation"
+  };
 }

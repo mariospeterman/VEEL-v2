@@ -14,6 +14,7 @@ import type {
   FeedSurface,
   MediaUploadProviderAdapter
 } from "./types.js";
+import { privateImageProviderAssetId } from "./content-repository-mappers.js";
 
 export interface RegisterContentRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
@@ -135,6 +136,7 @@ export async function withSignedPlayback(input: {
 }): Promise<components["schemas"]["ContentItem"]> {
   const { content, mediaUploadProvider } = input;
   type PlaybackResource = NonNullable<components["schemas"]["ContentItem"]["playback"]>;
+  const fullCompositionAllowed = ["free", "unlocked", "subscribed"].includes(content.accessState);
   let blockReason: PlaybackResource["blockReason"] | undefined;
 
   const potentiallyAccounted =
@@ -179,6 +181,9 @@ export async function withSignedPlayback(input: {
     attachUsage: boolean
   ): PlaybackResource | undefined => {
     if (!playback || playback.state !== "full") return playback;
+    if (!fullCompositionAllowed) {
+      return { state: "blocked", url: null, provider: playback.provider };
+    }
     if (playback.provider === "livepeer") {
       return { state: "blocked", url: null, provider: "livepeer" };
     }
@@ -210,12 +215,37 @@ export async function withSignedPlayback(input: {
 
   const playback = sign(content.playback, true);
   const mediaAssets = content.mediaAssets?.map((asset) => {
-    if (!asset.playback) return asset;
-    return { ...asset, playback: sign(asset.playback, false)! };
+    const withPlayback = asset.playback
+      ? { ...asset, playback: sign(asset.playback, false)! }
+      : asset;
+    if (asset.kind !== "image") return withPlayback;
+
+    const providerAssetId = privateImageProviderAssetId(asset);
+    if (
+      !fullCompositionAllowed ||
+      !providerAssetId ||
+      !mediaUploadProvider.createImageDeliveryResource
+    ) {
+      return { ...withPlayback, posterUrl: null };
+    }
+    try {
+      const imageDelivery = mediaUploadProvider.createImageDeliveryResource({ providerAssetId });
+      return { ...withPlayback, posterUrl: imageDelivery.url, imageDelivery };
+    } catch {
+      return { ...withPlayback, posterUrl: null };
+    }
   });
+  const signedImagePoster = mediaAssets
+    ?.find((asset) => asset.kind === "image" && asset.isCover && asset.posterUrl)
+    ?.posterUrl
+    ?? mediaAssets?.find((asset) => asset.kind === "image" && asset.posterUrl)?.posterUrl;
 
   return {
     ...content,
+    ...(!fullCompositionAllowed && content.accessState !== "teaser" ? { posterUrl: null } : {}),
+    ...(["image", "carousel"].includes(content.mediaType)
+      ? { posterUrl: signedImagePoster ?? null }
+      : {}),
     ...(playback ? { playback } : {}),
     ...(mediaAssets ? { mediaAssets } : {})
   };

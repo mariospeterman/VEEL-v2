@@ -57,6 +57,7 @@ export function createSubscriptionCancellationRepositoryMethods(
             and s.state in ('authorization_pending', 'active', 'renewal_pending', 'grace_period')
           returning
             s.id,
+            s.created_at,
             s.scope,
             s.plan_id,
             s.state,
@@ -76,6 +77,7 @@ export function createSubscriptionCancellationRepositoryMethods(
             s.period_seconds,
             s.plan_pda,
             s.subscription_pda,
+            s.failure_reason,
             s.merchant_wallet,
             s.creator_user_id,
             p.handle as creator_handle,
@@ -99,6 +101,7 @@ export function createSubscriptionCancellationRepositoryMethods(
               and s.state in ('authorization_pending', 'active', 'renewal_pending', 'grace_period')
             returning
               s.id,
+              s.created_at,
               s.scope,
               s.plan_id,
               s.state,
@@ -118,6 +121,7 @@ export function createSubscriptionCancellationRepositoryMethods(
               s.period_seconds,
               s.plan_pda,
               s.subscription_pda,
+              s.failure_reason,
               s.merchant_wallet,
               s.creator_user_id,
               null::text as creator_handle,

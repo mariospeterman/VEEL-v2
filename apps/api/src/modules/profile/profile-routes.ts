@@ -9,6 +9,7 @@ import {
   CreatorOnboardingTermsRequiredError,
   CreatorOnboardingWalletConflictError,
   ProfileHandleConflictError,
+  ProfileIdempotencyConflictError,
   ProfileRepositoryConfigurationError
 } from "./profile-repository.js";
 import type {
@@ -17,7 +18,7 @@ import type {
   UpdateProfileRequest
 } from "./types.js";
 import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
-import { readIdempotentMutationRequest } from "../../shared/idempotency.js";
+import { readIdempotencyKey, readIdempotentMutationRequest } from "../../shared/idempotency.js";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 
 interface RegisterProfileRoutesOptions {
@@ -256,7 +257,8 @@ export async function registerProfileRoutes(
       return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
     }
 
-    if (!request.headers["idempotency-key"]) {
+    const idempotencyKey = readIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send({
         code: "validation_failed",
         message: "Idempotency-Key header is required"
@@ -280,6 +282,7 @@ export async function registerProfileRoutes(
 
     try {
       const user = await options.profileRepository.upsertMyProfile(verifiedSession.userId, {
+        idempotencyKey,
         handle: updateProfile.handle.toLowerCase(),
         ...(Object.hasOwn(updateProfile, "displayName") ? { displayName: updateProfile.displayName } : {}),
         ...(Object.hasOwn(updateProfile, "avatarUrl") ? { avatarUrl: updateProfile.avatarUrl } : {}),
@@ -294,6 +297,13 @@ export async function registerProfileRoutes(
         return reply.code(409).send({
           code: "conflict",
           message: "Profile handle is already in use"
+        });
+      }
+
+      if (error instanceof ProfileIdempotencyConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Idempotency key was already used for a different profile update"
         });
       }
 

@@ -186,30 +186,7 @@ export async function verifySolanaTransfer(
     };
   }
 
-  const hasCreatorTransfer = instructions.some((instruction) =>
-    isMatchingTransfer(instruction, input, {
-      sourceWallet: input.buyerWallet ?? null,
-      destinationWallet: input.creatorWallet,
-      amountMinor: input.creatorAmountMinor
-    })
-  );
-  const hasEnterpriseTransfer =
-    input.enterpriseManagementAmountMinor === 0 ||
-    hasExpectedEnterpriseTransfer(instructions, input);
-  const hasPlatformFeeTransfer =
-    input.platformFeeAmountMinor === 0 ||
-    instructions.some((instruction) =>
-      isMatchingTransfer(instruction, input, {
-        sourceWallet: input.buyerWallet ?? null,
-        destinationWallet: input.platformFeeWallet,
-        amountMinor: input.platformFeeAmountMinor
-      })
-    );
-  const hasReferralTransfer =
-    input.referralAmountMinor === 0 ||
-    hasExpectedReferralTransfer(instructions, input);
-
-  return hasCreatorTransfer && hasEnterpriseTransfer && hasPlatformFeeTransfer && hasReferralTransfer
+  return hasExpectedSplitTransfers(instructions, input)
     ? {
         confirmed: true,
         blockTime
@@ -220,39 +197,82 @@ export async function verifySolanaTransfer(
       };
 }
 
-function hasExpectedEnterpriseTransfer(
+type ExpectedTransfer = {
+  sourceWallet?: string | null;
+  destinationWallet: string;
+  amountMinor: number;
+};
+
+function hasExpectedSplitTransfers(
   instructions: Array<ParsedInstruction | PartiallyDecodedInstruction>,
   input: PaymentSettlementInput
 ): boolean {
-  if (!input.enterpriseWallet) {
+  const expectedTransfers = expectedSplitTransfers(input);
+  if (!expectedTransfers) {
     return false;
   }
 
-  return instructions.some((instruction) =>
-    isMatchingTransfer(instruction, input, {
-      sourceWallet: input.buyerWallet ?? null,
-      destinationWallet: input.enterpriseWallet as string,
-      amountMinor: input.enterpriseManagementAmountMinor
-    })
-  );
+  const consumedInstructionIndexes = new Set<number>();
+  for (const expectedTransfer of expectedTransfers) {
+    const matchingInstructionIndex = instructions.findIndex(
+      (instruction, instructionIndex) =>
+        !consumedInstructionIndexes.has(instructionIndex) &&
+        isMatchingTransfer(instruction, input, expectedTransfer)
+    );
+
+    if (matchingInstructionIndex === -1) {
+      return false;
+    }
+
+    consumedInstructionIndexes.add(matchingInstructionIndex);
+  }
+
+  return true;
 }
 
-function hasExpectedReferralTransfer(
-  instructions: Array<ParsedInstruction | PartiallyDecodedInstruction>,
+function expectedSplitTransfers(
   input: PaymentSettlementInput
-): boolean {
-  if (!input.referralWallet) {
-    return false;
+): ExpectedTransfer[] | null {
+  const sourceWallet = input.buyerWallet ?? null;
+  const transfers: ExpectedTransfer[] = [
+    {
+      sourceWallet,
+      destinationWallet: input.creatorWallet,
+      amountMinor: input.creatorAmountMinor
+    }
+  ];
+
+  if (input.enterpriseManagementAmountMinor > 0) {
+    if (!input.enterpriseWallet) {
+      return null;
+    }
+    transfers.push({
+      sourceWallet,
+      destinationWallet: input.enterpriseWallet,
+      amountMinor: input.enterpriseManagementAmountMinor
+    });
   }
 
-  const referralWallet = input.referralWallet;
-  return instructions.some((instruction) =>
-    isMatchingTransfer(instruction, input, {
-      sourceWallet: input.buyerWallet ?? null,
-      destinationWallet: referralWallet,
+  if (input.platformFeeAmountMinor > 0) {
+    transfers.push({
+      sourceWallet,
+      destinationWallet: input.platformFeeWallet,
+      amountMinor: input.platformFeeAmountMinor
+    });
+  }
+
+  if (input.referralAmountMinor > 0) {
+    if (!input.referralWallet) {
+      return null;
+    }
+    transfers.push({
+      sourceWallet,
+      destinationWallet: input.referralWallet,
       amountMinor: input.referralAmountMinor
-    })
-  );
+    });
+  }
+
+  return transfers;
 }
 
 export function assertSolanaAddress(address: string): void {

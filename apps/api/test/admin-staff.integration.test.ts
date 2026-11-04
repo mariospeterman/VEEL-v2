@@ -5,17 +5,14 @@ import {
   createPostgresAdminRepository
 } from "../src/modules/admin/admin-repository";
 import { createPostgresClient } from "../src/shared/postgres";
+import { guardedIntegrationDatabaseUrl } from "./integration-database.js";
 
 const enabled = ["1", "true"].includes(process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS ?? "");
 const describeIntegration = enabled ? describe : describe.skip;
 
 describeIntegration("staff RBAC and lifecycle against migrated Postgres", () => {
   it("enforces role boundaries, consent, last-owner protection, audit and session revocation", async () => {
-    const databaseUrl = process.env.API_INTEGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
-    const host = safeHost(databaseUrl);
-    if (!databaseUrl || !["127.0.0.1", "localhost"].includes(host)) {
-      throw new Error("A loopback API_INTEGRATION_DATABASE_URL is required");
-    }
+    const databaseUrl = guardedIntegrationDatabaseUrl();
 
     const sql = createPostgresClient(databaseUrl);
     const repository = createPostgresAdminRepository(databaseUrl);
@@ -210,12 +207,129 @@ describeIntegration("staff RBAC and lifecycle against migrated Postgres", () => 
       await sql.end({ timeout: 5 });
     }
   });
-});
 
-function safeHost(databaseUrl: string | undefined) {
-  try {
-    return databaseUrl ? new URL(databaseUrl).hostname : "";
-  } catch {
-    return "";
-  }
-}
+  it("parses and stably paginates joined live-room admin projections", async () => {
+    const databaseUrl = guardedIntegrationDatabaseUrl();
+    const sql = createPostgresClient(databaseUrl);
+    const repository = createPostgresAdminRepository(databaseUrl);
+    const creatorUserId = randomUUID();
+    const roomIds = Array.from({ length: 52 }, () => randomUUID());
+    const roomIdSet = new Set<string>(roomIds);
+    const suffix = creatorUserId.replaceAll("-", "").slice(0, 8);
+
+    try {
+      await sql`
+        insert into users (id, supabase_user_id, state)
+        values (${creatorUserId}::uuid, ${creatorUserId}::uuid, 'active')
+      `;
+      await sql`
+        insert into profiles (user_id, handle, display_name, visibility)
+        values (${creatorUserId}::uuid, ${`live_admin_${suffix}`}, 'Live admin fixture', 'private')
+      `;
+
+      for (const [index, roomId] of roomIds.entries()) {
+        await sql`
+          insert into live_rooms (
+            id, creator_user_id, title, provider_stream_id, idempotency_key,
+            request_hash, created_at, updated_at
+          ) values (
+            ${roomId}::uuid,
+            ${creatorUserId}::uuid,
+            ${`Admin live fixture ${index}`},
+            ${`admin-live-${suffix}-${index}`},
+            ${`admin-live-${suffix}-${index}`},
+            ${String(index).padStart(64, "0")},
+            '2099-01-01T00:00:00.000Z'::timestamptz,
+            '2099-01-01T00:00:00.000Z'::timestamptz
+          )
+        `;
+      }
+
+      const first = await repository.listLiveRooms({});
+      expect(first.items.filter((room) => room.creatorUserId === creatorUserId)).toHaveLength(50);
+      expect(first.nextCursor).not.toBeNull();
+      if (!first.nextCursor) throw new Error("Expected a second admin live-room page");
+
+      const second = await repository.listLiveRooms({ cursor: first.nextCursor });
+      const returnedFixtureIds = [...first.items, ...second.items]
+        .map((room) => room.id)
+        .filter((roomId) => roomIdSet.has(roomId));
+
+      expect(new Set(returnedFixtureIds)).toEqual(roomIdSet);
+      expect(returnedFixtureIds).toHaveLength(52);
+    } finally {
+      await sql`delete from live_rooms where creator_user_id = ${creatorUserId}::uuid`;
+      await sql`delete from profiles where user_id = ${creatorUserId}::uuid`;
+      await sql`delete from users where id = ${creatorUserId}::uuid`;
+      await repository.close?.();
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("serializes organization owner removals and preserves one active owner", async () => {
+    const databaseUrl = guardedIntegrationDatabaseUrl();
+    const sql = createPostgresClient(databaseUrl);
+    const repository = createPostgresAdminRepository(databaseUrl);
+    const actorUserId = randomUUID();
+    const ownerUserIds = [randomUUID(), randomUUID()] as const;
+    const organizationId = randomUUID();
+    const membershipIds = [randomUUID(), randomUUID()] as const;
+
+    try {
+      await sql`
+        insert into users (id, supabase_user_id, state) values
+          (${actorUserId}::uuid, ${actorUserId}::uuid, 'active'),
+          (${ownerUserIds[0]}::uuid, ${ownerUserIds[0]}::uuid, 'active'),
+          (${ownerUserIds[1]}::uuid, ${ownerUserIds[1]}::uuid, 'active')
+      `;
+      await sql`
+        insert into organizations (id, name, state, plan, kyb_state)
+        values (${organizationId}::uuid, ${`Owner concurrency ${organizationId}`}, 'active', 'enterprise', 'verified')
+      `;
+      await sql`
+        insert into organization_memberships (
+          id, organization_id, user_id, role, state, invited_by_user_id, joined_at
+        ) values
+          (${membershipIds[0]}::uuid, ${organizationId}::uuid, ${ownerUserIds[0]}::uuid, 'owner', 'active', ${actorUserId}::uuid, now()),
+          (${membershipIds[1]}::uuid, ${organizationId}::uuid, ${ownerUserIds[1]}::uuid, 'owner', 'active', ${actorUserId}::uuid, now())
+      `;
+
+      const removals = await Promise.allSettled(membershipIds.map((membershipId, index) =>
+        repository.updateOrganizationMember({
+          supabaseUserId: actorUserId,
+          organizationId,
+          membershipId,
+          body: {
+            role: "member",
+            state: "removed",
+            reason: `Concurrent owner removal ${index}`
+          },
+          idempotencyKey: `owner-removal-${index}`,
+          requestHash: String(index + 1).repeat(64)
+        })
+      ));
+
+      expect(removals.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const rejection = removals.find((result) => result.status === "rejected");
+      expect(rejection?.status === "rejected" ? rejection.reason : null)
+        .toBeInstanceOf(AdminRepositoryStateConflictError);
+
+      const activeOwners = await sql<Array<{ count: number }>>`
+        select count(*)::int as count
+        from organization_memberships
+        where organization_id = ${organizationId}::uuid
+          and role = 'owner'
+          and state = 'active'
+      `;
+      expect(activeOwners[0]?.count).toBe(1);
+    } finally {
+      await sql`delete from audit_events where actor_user_id = ${actorUserId}::uuid`;
+      await sql`delete from enterprise_action_receipts where organization_id = ${organizationId}::uuid`;
+      await sql`delete from organization_memberships where organization_id = ${organizationId}::uuid`;
+      await sql`delete from organizations where id = ${organizationId}::uuid`;
+      await sql`delete from users where id = any(${[actorUserId, ...ownerUserIds]}::uuid[])`;
+      await repository.close?.();
+      await sql.end({ timeout: 5 });
+    }
+  });
+});

@@ -83,11 +83,20 @@ export interface CreateVerificationSessionInput {
   webhookBaseUrl: string;
   policyVersion?: string | null;
   termsAcceptedAt?: Date | null;
+  onProviderSelected?: (selection: VerificationProviderSelection) => Promise<void>;
+}
+
+export interface VerificationProviderSelection {
+  provider: Extract<VerificationProvider, "sumsub" | "didit" | "yoti" | "persona" | "veriff">;
+  method: VerificationMethod;
+  assuranceLevel: VerificationRecordResource["assuranceLevel"];
+  reusable: boolean;
 }
 
 export interface VerificationProviderSession {
   provider: VerificationProvider;
   providerReference: string;
+  providerExternalUserId?: string | null;
   providerSessionId?: string | null;
   providerApplicantId?: string | null;
   providerInquiryId?: string | null;
@@ -107,6 +116,8 @@ export interface NormalizedVerificationWebhook {
   provider: VerificationProvider;
   providerEventId: string;
   providerReference: string;
+  providerSubjectReference?: string | null;
+  providerCorrelationId?: string | null;
   eventType: string;
   status: "pending" | "valid" | "invalid" | "blocked";
   signatureHash: string | null;
@@ -153,6 +164,27 @@ export interface VerificationRepository {
     policyVersion?: string | null;
     termsAcceptedAt?: Date | null;
   }): Promise<string>;
+  reservePendingSession?(input: {
+    supabaseUserId: string;
+    purpose: Extract<
+      VerificationPurpose,
+      "age_access" | "adult_publisher_eligibility" | "creator_kyc" | "org_kyb"
+    >;
+    organizationId?: string | null;
+    idempotencyKey: string;
+    requestHash: string;
+    policyVersion?: string | null;
+    termsAcceptedAt?: Date | null;
+  }): Promise<{ id: string; subjectReference: string }>;
+  selectPendingSessionProvider?(input: {
+    sessionId: string;
+    selection: VerificationProviderSelection;
+  }): Promise<void>;
+  completePendingSession?(input: {
+    sessionId: string;
+    providerSession: VerificationProviderSession;
+  }): Promise<void>;
+  failPendingSession?(input: { sessionId: string; reason: string }): Promise<void>;
   applyProviderWebhook(input: NormalizedVerificationWebhook & {
     payloadHash: string;
   }): Promise<"applied" | "duplicate" | "unmatched">;

@@ -1,5 +1,6 @@
 import type { FastifyRateLimitStoreCtor } from "@fastify/rate-limit";
 import type { FastifyInstance } from "fastify";
+import type { WebPushDnsResolver } from "@veel/config";
 import { createPostgresAnalyticsRepository } from "./modules/analytics/analytics-repository.js";
 import type { AnalyticsRepository } from "./modules/analytics/types.js";
 import { createPostgresAdminRepository } from "./modules/admin/admin-repository.js";
@@ -117,6 +118,7 @@ export interface BuildApiOptions {
   referralRepository?: ReferralRepository;
   refundRepository?: RefundRepository;
   notificationRepository?: NotificationRepository;
+  webPushDnsResolver?: WebPushDnsResolver;
   organizationRepository?: OrganizationRepository;
   subscriptionRepository?: SubscriptionRepository;
   subscriptionAuthorizationVerifier?: SubscriptionAuthorizationVerifier;
@@ -161,6 +163,7 @@ export interface ApiDependencies {
   referralRepository: ReferralRepository;
   refundRepository: RefundRepository;
   notificationRepository: NotificationRepository;
+  webPushDnsResolver: WebPushDnsResolver | undefined;
   organizationRepository: OrganizationRepository;
   subscriptionRepository: SubscriptionRepository;
   subscriptionAuthorizationVerifier: SubscriptionAuthorizationVerifier;
@@ -244,6 +247,7 @@ export function createApiDependencies(
       createPostgresNotificationRepository(postgresClient, {
         encryptionKey: app.config.NOTIFICATION_DEVICE_ENCRYPTION_KEY
       }),
+    webPushDnsResolver: options.webPushDnsResolver,
     organizationRepository:
       options.organizationRepository ?? createPostgresOrganizationRepository(postgresClient),
     subscriptionRepository:

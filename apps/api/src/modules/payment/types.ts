@@ -77,6 +77,7 @@ export interface RecordCheckoutPayerInput extends FindCheckoutPaymentIntentInput
 export interface RecordPaymentSubmissionInput {
   supabaseUserId: string;
   paymentIntentId: string;
+  idempotencyKey?: string;
   signature: string;
   settlement: PaymentSettlementResult;
   writeGuard?: {

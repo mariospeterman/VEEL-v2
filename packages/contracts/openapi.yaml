@@ -554,9 +554,14 @@ paths:
       summary: Search content, creators, hashtags, events, and live rooms
       parameters:
         - $ref: "#/components/parameters/SearchQuery"
-        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/DiscoverContentCursor"
+        - $ref: "#/components/parameters/DiscoverCreatorCursor"
+        - $ref: "#/components/parameters/DiscoverHashtagCursor"
+        - $ref: "#/components/parameters/DiscoverEventCursor"
+        - $ref: "#/components/parameters/DiscoverLiveCursor"
       responses:
         "200": { $ref: "#/components/responses/DiscoverPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /v1/discover/hashtags:
@@ -569,6 +574,7 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/HashtagPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /v1/discover/hashtags/{slug}:
@@ -578,9 +584,10 @@ paths:
       summary: Hashtag landing page and associated media
       parameters:
         - $ref: "#/components/parameters/Slug"
-        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/DiscoverContentCursor"
       responses:
         "200": { $ref: "#/components/responses/DiscoverPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /v1/discover/creators:
@@ -593,6 +600,7 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/CreatorPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /v1/discover/events:
@@ -605,6 +613,7 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/EventPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /v1/discover/live:
@@ -616,6 +625,7 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/LiveRoomPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
   /v1/feed/preferences:
@@ -843,6 +853,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/{contentId}/poll-votes:
     post:
@@ -899,7 +910,6 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/{contentId}/performers:
     get:
@@ -942,7 +952,7 @@ paths:
                 required: [request, invitationUrl]
                 properties:
                   request: { $ref: "#/components/schemas/PerformerConsentRequest" }
-                  invitationUrl: { type: string, format: uri, nullable: true }
+                  invitationUrl: { type: [string, "null"], format: uri }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1388,6 +1398,8 @@ paths:
       operationId: listMyLiveRooms
       tags: [Live]
       summary: List creator-owned live rooms without host credentials
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/LiveRoomPage" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -1730,6 +1742,8 @@ paths:
       operationId: listConversations
       tags: [Messages]
       summary: Conversation list
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/ConversationList" }
     post:
@@ -1808,6 +1822,7 @@ paths:
       summary: List participant-visible conversation messages
       parameters:
         - $ref: "#/components/parameters/ConversationId"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/MessagePage" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -1821,6 +1836,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/ConversationId"
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
+        - $ref: "#/components/parameters/ExpectedMessageActorId"
       requestBody:
         $ref: "#/components/requestBodies/CreateMessage"
       responses:
@@ -1839,6 +1855,7 @@ paths:
       summary: List creator media offers and structured creator requests for an accepted conversation
       parameters:
         - $ref: "#/components/parameters/ConversationId"
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/ConversationCommercialInteractions" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -2132,17 +2149,23 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
-        "200": { $ref: "#/components/responses/ActivityPage" }
+        "200": { $ref: "#/components/responses/ReferralActivityPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/refunds/requests:
     get:
       operationId: listRefundDisputeRequests
       tags: [Refunds]
       summary: Current user's refund and dispute requests
       parameters:
-        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/RefundCursor"
       responses:
         "200": { $ref: "#/components/responses/RefundDisputeRequestPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
     post:
       operationId: createRefundDisputeRequest
       tags: [Refunds]
@@ -2155,14 +2178,24 @@ paths:
         "201": { $ref: "#/components/responses/RefundDisputeRequest" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalServerError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/subscriptions/plans:
     get:
       operationId: listSubscriptionPlans
       tags: [Subscriptions]
-      summary: Platform and creator subscription plans
+      summary: Bounded platform subscription plan catalog; creator offers are selected on creator profiles
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/SubscriptionPlanPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/subscriptions/creator-offer:
     get:
       operationId: getMyCreatorMembershipOffer
@@ -2252,9 +2285,14 @@ paths:
     get:
       operationId: listSubscriptions
       tags: [Subscriptions]
-      summary: Current platform and creator subscriptions
+      summary: Bounded current or historical platform and creator subscriptions
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/SubscriptionScopeFilter"
+        - $ref: "#/components/parameters/SubscriptionViewFilter"
       responses:
         "200": { $ref: "#/components/responses/SubscriptionPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -2291,6 +2329,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/subscriptions/authorizations/{authorizationIntentId}/transaction:
     get:
@@ -2458,6 +2497,7 @@ paths:
         - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/ActivityPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
   /v1/activity/payments:
     get:
       operationId: getPaymentActivity
@@ -2493,7 +2533,10 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Cursor"
       responses:
-        "200": { $ref: "#/components/responses/ActivityPage" }
+        "200": { $ref: "#/components/responses/ReferralActivityPage" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /v1/ai/capabilities:
     get:
       operationId: getAiCapabilities
@@ -2514,6 +2557,7 @@ paths:
         $ref: "#/components/requestBodies/CreateAiSession"
       responses:
         "201": { $ref: "#/components/responses/AiSession" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/ai/sessions/{aiSessionId}/tool-calls:
     post:
       operationId: createAiToolCall
@@ -2526,6 +2570,7 @@ paths:
         $ref: "#/components/requestBodies/CreateAiToolCall"
       responses:
         "201": { $ref: "#/components/responses/AiToolCall" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/mcp/tools:
     get:
       operationId: listMcpTools
@@ -3423,6 +3468,8 @@ paths:
       operationId: listAdminFeatureFlags
       tags: [Admin]
       summary: Feature flag and policy override list
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
       responses:
         "200": { $ref: "#/components/responses/AdminFeatureFlagPage" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -3458,19 +3505,32 @@ paths:
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
-  /v1/webhooks/age/{provider}:
+  /v1/webhooks/age/sumsub:
     post:
-      operationId: receiveAgeWebhook
+      operationId: receiveSumsubAgeWebhook
       tags: [Webhooks]
-      summary: Age/KYC provider webhook
+      summary: Receive a raw-body authenticated Sumsub age webhook
       security: []
       parameters:
-        - $ref: "#/components/parameters/AgeProvider"
-        - $ref: "#/components/parameters/WebhookSignature"
+        - $ref: "#/components/parameters/SumsubPayloadDigest"
+        - $ref: "#/components/parameters/SumsubPayloadDigestAlgorithm"
       requestBody:
-        $ref: "#/components/requestBodies/AgeWebhookPayload"
+        $ref: "#/components/requestBodies/SumsubAgeWebhook"
       responses:
         "202": { $ref: "#/components/responses/WebhookReceipt" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/webhooks/age/yoti:
+    post:
+      operationId: receiveYotiAgeWebhook
+      tags: [Webhooks]
+      summary: Receive a body-signature authenticated Yoti age notification
+      security: []
+      requestBody:
+        $ref: "#/components/requestBodies/YotiAgeWebhook"
+      responses:
+        "200": { $ref: "#/components/responses/WebhookReceipt" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -3501,12 +3561,26 @@ components:
       required: false
       schema: { type: string, minLength: 12, maxLength: 128 }
       description: Optional idempotency key for non-critical replay-safe requests.
-    WebhookSignature:
-      name: X-Veel-Webhook-Signature
+    ExpectedMessageActorId:
+      name: X-WeVid-Expected-Actor-Id
       in: header
       required: true
-      schema: { type: string }
-      description: Provider-specific signature or shared-secret header normalized by the adapter.
+      schema: { type: string, format: uuid }
+      description: Canonical actor rendered by the current message page; prevents a stale browser tab from sending after an account switch.
+    SumsubPayloadDigest:
+      name: X-Payload-Digest
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64}|[0-9a-fA-F]{128})$"
+      description: HMAC hex digest of the exact raw request body.
+    SumsubPayloadDigestAlgorithm:
+      name: X-Payload-Digest-Alg
+      in: header
+      required: true
+      schema: { type: string, enum: [HMAC_SHA1_HEX, HMAC_SHA256_HEX, HMAC_SHA512_HEX] }
+      description: Sumsub-declared HMAC algorithm; unknown or missing values fail closed.
     LivepeerSignature:
       name: Livepeer-Signature
       in: header
@@ -3520,6 +3594,45 @@ components:
       schema: { type: string }
       description: Required for Bunny callbacks. Provider-specific verification remains authoritative in the backend adapter.
     Cursor:
+      name: cursor
+      in: query
+      schema: { type: string, maxLength: 512 }
+    SubscriptionScopeFilter:
+      name: scope
+      in: query
+      schema: { type: string, enum: [platform, creator] }
+      description: Optional canonical subscription scope filter.
+    SubscriptionViewFilter:
+      name: view
+      in: query
+      schema: { type: string, enum: [active, history], default: active }
+      description: Active includes authorization and renewal states; history includes terminal states.
+    DiscoverContentCursor:
+      name: contentCursor
+      in: query
+      schema: { type: string, minLength: 1, maxLength: 512 }
+      description: Opaque scope-bound content continuation cursor. It cannot be reused for another result group.
+    DiscoverCreatorCursor:
+      name: creatorCursor
+      in: query
+      schema: { type: string, minLength: 1, maxLength: 512 }
+      description: Opaque scope-bound creator continuation cursor. It cannot be reused for another result group.
+    DiscoverHashtagCursor:
+      name: hashtagCursor
+      in: query
+      schema: { type: string, minLength: 1, maxLength: 512 }
+      description: Opaque scope-bound hashtag continuation cursor. It cannot be reused for another result group.
+    DiscoverEventCursor:
+      name: eventCursor
+      in: query
+      schema: { type: string, minLength: 1, maxLength: 512 }
+      description: Opaque scope-bound event continuation cursor. It cannot be reused for another result group.
+    DiscoverLiveCursor:
+      name: liveCursor
+      in: query
+      schema: { type: string, minLength: 1, maxLength: 512 }
+      description: Opaque scope-bound live-room continuation cursor. It cannot be reused for another result group.
+    RefundCursor:
       name: cursor
       in: query
       schema: { type: string, maxLength: 512 }
@@ -3581,11 +3694,6 @@ components:
       in: path
       required: true
       schema: { type: string, enum: [bunny, livepeer] }
-    AgeProvider:
-      name: provider
-      in: path
-      required: true
-      schema: { type: string, enum: [didit, yoti, sumsub, veriff, persona] }
     VerificationProvider:
       name: provider
       in: path
@@ -3682,16 +3790,8 @@ components:
     AdminPaymentCommercialPolicyPatch: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminPaymentCommercialPolicyPatchRequest" } } } }
     AdminLiveRoomSuspension: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/AdminLiveRoomSuspensionRequest" } } } }
     WebhookPayload: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
-    AgeWebhookPayload:
-      required: true
-      content:
-        application/json:
-          schema:
-            oneOf:
-              - $ref: "#/components/schemas/SumsubAgeWebhookPayload"
-              - $ref: "#/components/schemas/YotiAgeWebhookPayload"
-              - type: object
-                additionalProperties: true
+    SumsubAgeWebhook: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/SumsubAgeWebhookPayload" } } } }
+    YotiAgeWebhook: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/YotiAgeWebhookPayload" } } } }
   responses:
     Accepted: { description: Accepted }
     HealthStatus: { description: Sanitized service health status, content: { application/json: { schema: { $ref: "#/components/schemas/HealthStatus" } } } }
@@ -3705,6 +3805,7 @@ components:
     RateLimited: { description: Rate limited, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     NotImplemented: { description: Not implemented, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     ServiceUnavailable: { description: Service unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    InternalServerError: { description: Sanitized unexpected server error, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     SessionState: { description: Session state, content: { application/json: { schema: { $ref: "#/components/schemas/SessionState" } } } }
     AgeSession: { description: Age assurance session, content: { application/json: { schema: { $ref: "#/components/schemas/AgeSession" } } } }
     AgeStatus: { description: Age state, content: { application/json: { schema: { $ref: "#/components/schemas/AgeStatus" } } } }
@@ -3725,8 +3826,8 @@ components:
     CreatorOnboarding: { description: Creator onboarding readiness, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorOnboarding" } } } }
     FeedPage: { description: Feed page, content: { application/json: { schema: { $ref: "#/components/schemas/FeedPage" } } } }
     DiscoverPage: { description: Discover results, content: { application/json: { schema: { $ref: "#/components/schemas/DiscoverPage" } } } }
-    HashtagPage: { description: Hashtag results, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Hashtag" } }, nextCursor: { type: string, nullable: true } } } } } }
-    CreatorPage: { description: Creator results, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/User" } }, nextCursor: { type: string, nullable: true } } } } } }
+    HashtagPage: { description: Hashtag results, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Hashtag" } }, nextCursor: { type: [string, "null"] } } } } } }
+    CreatorPage: { description: Creator results, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/User" } }, nextCursor: { type: [string, "null"] } } } } } }
     FeedPreferences: { description: Feed preferences, content: { application/json: { schema: { $ref: "#/components/schemas/FeedPreferences" } } } }
     NotificationPage: { description: Notifications, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPage" } } } }
     Notification: { description: Notification, content: { application/json: { schema: { $ref: "#/components/schemas/Notification" } } } }
@@ -3741,7 +3842,7 @@ components:
     UploadSession: { description: Safe upload session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
     ProfileAvatarUpload: { description: Uploaded profile avatar URL, content: { application/json: { schema: { $ref: "#/components/schemas/ProfileAvatarUpload" } } } }
     LiveRoom: { description: Live room, content: { application/json: { schema: { $ref: "#/components/schemas/LiveRoom" } } } }
-    LiveRoomPage: { description: Live rooms, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/LiveRoom" } }, nextCursor: { type: string, nullable: true } } } } } }
+    LiveRoomPage: { description: Live rooms, content: { application/json: { schema: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: "#/components/schemas/LiveRoom" } }, nextCursor: { type: [string, "null"] } } } } } }
     HostConnection: { description: Masked host connection, content: { application/json: { schema: { $ref: "#/components/schemas/HostConnection" } } } }
     RevealedHostConnection: { description: One-response creator-only OBS credentials, content: { application/json: { schema: { $ref: "#/components/schemas/RevealedHostConnection" } } } }
     LiveChatPage: { description: Live chat messages, content: { application/json: { schema: { $ref: "#/components/schemas/LiveChatPage" } } } }
@@ -3757,7 +3858,7 @@ components:
     PrivacySettings: { description: Self-service privacy state, content: { application/json: { schema: { $ref: "#/components/schemas/PrivacySettings" } } } }
     DataRequest: { description: Account data request, content: { application/json: { schema: { $ref: "#/components/schemas/DataRequest" } } } }
     FollowState: { description: Canonical follow relationship and aggregate counts, content: { application/json: { schema: { $ref: "#/components/schemas/FollowState" } } } }
-    ConversationList: { description: Conversations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Conversation" } } } } } } }
+    ConversationList: { description: Conversations, content: { application/json: { schema: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: "#/components/schemas/Conversation" } }, nextCursor: { type: [string, "null"] } } } } } }
     Conversation: { description: Direct or matched conversation, content: { application/json: { schema: { $ref: "#/components/schemas/Conversation" } } } }
     ConversationReadState: { description: Participant read cursor state, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationReadState" } } } }
     MessagePage: { description: Messages, content: { application/json: { schema: { $ref: "#/components/schemas/MessagePage" } } } }
@@ -3773,6 +3874,7 @@ components:
     ReferralToken: { description: Referral token, content: { application/json: { schema: { $ref: "#/components/schemas/ReferralToken" } } } }
     RefundDisputeRequest: { description: Refund or dispute request, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequest" } } } }
     RefundDisputeRequestPage: { description: Refund or dispute requests, content: { application/json: { schema: { $ref: "#/components/schemas/RefundDisputeRequestPage" } } } }
+    ReferralActivityPage: { description: Referral shares and individual commission activity, content: { application/json: { schema: { $ref: "#/components/schemas/ReferralActivityPage" } } } }
     SubscriptionPlanPage: { description: Subscription plans, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlanPage" } } } }
     SubscriptionPlan: { description: Subscription plan, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionPlan" } } } }
     PlatformAccess: { description: Current platform tier and catalog, content: { application/json: { schema: { $ref: "#/components/schemas/PlatformAccess" } } } }
@@ -3782,7 +3884,7 @@ components:
     SubscriptionAuthorizationIntent: { description: Subscription authorization intent, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionAuthorizationIntent" } } } }
     SubscriptionAuthorizationTransaction: { description: Unsigned recurring-delegation setup transaction, content: { application/json: { schema: { $ref: "#/components/schemas/SubscriptionAuthorizationTransaction" } } } }
     Event: { description: Event, content: { application/json: { schema: { $ref: "#/components/schemas/Event" } } } }
-    EventPage: { description: Events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Event" } }, nextCursor: { type: string, nullable: true } } } } } }
+    EventPage: { description: Events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/Event" } }, nextCursor: { type: [string, "null"] } } } } } }
     AccessPassIntent: { description: Event Access Pass intent, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPassIntent" } } } }
     AccessPassRequest: { description: Event Access Pass request, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPassRequest" } } } }
     AccessPass: { description: Event Access Pass, content: { application/json: { schema: { $ref: "#/components/schemas/AccessPass" } } } }
@@ -3816,46 +3918,46 @@ components:
     AdminOpsSummary: { description: Admin ops summary, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOpsSummary" } } } }
     AdminNotificationHealth: { description: Admin notification health, content: { application/json: { schema: { $ref: "#/components/schemas/AdminNotificationHealth" } } } }
     AdminUser: { description: Admin user, content: { application/json: { schema: { $ref: "#/components/schemas/AdminUser" } } } }
-    AdminUserPage: { description: Admin users, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminUserPage: { description: Admin users, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUser" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminContentItem: { description: Admin content item, content: { application/json: { schema: { $ref: "#/components/schemas/AdminContentItem" } } } }
-    AdminContentPage: { description: Admin content queue, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminContentItem" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminContentPage: { description: Admin content queue, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminContentItem" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminReport: { description: Admin report, content: { application/json: { schema: { $ref: "#/components/schemas/AdminReport" } } } }
-    AdminReportPage: { description: Admin reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReport" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminPaymentIntentPage: { description: Admin payment intents, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminPaymentIntent" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminReportPage: { description: Admin reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReport" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminPaymentIntentPage: { description: Admin payment intents, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminPaymentIntent" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminPaymentCommercialPolicy: { description: Audited backend payment policy override, content: { application/json: { schema: { $ref: "#/components/schemas/AdminPaymentCommercialPolicy" } } } }
     AdminPaymentCommercialPolicyPage: { description: Audited backend payment policy overrides, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminPaymentCommercialPolicy" } } } } } } }
-    AdminUnlockPage: { description: Admin unlocks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUnlock" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminProviderEventPage: { description: Admin provider events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminProviderEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminUnlockPage: { description: Admin unlocks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminUnlock" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminProviderEventPage: { description: Admin provider events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminProviderEvent" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminSupportCase: { description: Admin support case, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportCase" } } } }
-    AdminSupportCasePage: { description: Admin support cases, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminSupportCase" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminSupportCasePage: { description: Admin support cases, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminSupportCase" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminSupportPolicy: { description: Admin support policy, content: { application/json: { schema: { $ref: "#/components/schemas/AdminSupportPolicy" } } } }
-    AdminSupportPolicyPage: { description: Admin support policies, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminSupportPolicy" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminSupportPolicyPage: { description: Admin support policies, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminSupportPolicy" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminRefundDispute: { description: Admin refund or dispute record, content: { application/json: { schema: { $ref: "#/components/schemas/AdminRefundDispute" } } } }
-    AdminRefundDisputePage: { description: Admin refund or dispute records, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminRefundDispute" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminRefundDisputePage: { description: Admin refund or dispute records, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminRefundDispute" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminDataRequest: { description: Admin data request, content: { application/json: { schema: { $ref: "#/components/schemas/AdminDataRequest" } } } }
-    AdminDataRequestPage: { description: Admin data requests, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminDataRequest" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminDataRequestPage: { description: Admin data requests, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminDataRequest" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminMutualsSafety: { description: Admin Mutuals safety, content: { application/json: { schema: { $ref: "#/components/schemas/AdminMutualsSafety" } } } }
-    AdminLiveRoomPage: { description: Admin live room provider projections, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminLiveRoom" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminMediaAssetPage: { description: Admin media provider projections, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminMediaAsset" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminAgeCheckPage: { description: Admin age assurance checks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminAgeCheck" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminIdentityCheckPage: { description: Admin identity, KYC, and KYB checks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminIdentityCheck" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminAiSessionPage: { description: Admin AI sessions, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminAiSession" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminAiToolCallPage: { description: Admin AI tool calls, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminAiToolCall" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminComplianceLedgerPage: { description: Admin compliance ledger entries, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceLedgerEntry" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminComplianceReportPage: { description: Admin compliance reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceReport" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminVatDeterminationPage: { description: Admin VAT determinations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminVatDetermination" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminReceiptPage: { description: Admin receipts, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReceipt" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminInvoicePage: { description: Admin VAT invoices, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminInvoice" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminReferralProgramPage: { description: Admin referral programs, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReferralProgram" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminPartnerCampaignPage: { description: Admin partner campaigns, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminPartnerCampaign" } }, nextCursor: { type: string, nullable: true } } } } } }
-    AdminTierWaiverPage: { description: Admin tier waivers, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminTierWaiver" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminLiveRoomPage: { description: Admin live room provider projections, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminLiveRoom" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminMediaAssetPage: { description: Admin media provider projections, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminMediaAsset" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminAgeCheckPage: { description: Admin age assurance checks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminAgeCheck" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminIdentityCheckPage: { description: Admin identity, KYC, and KYB checks, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminIdentityCheck" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminAiSessionPage: { description: Admin AI sessions, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminAiSession" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminAiToolCallPage: { description: Admin AI tool calls, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminAiToolCall" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminComplianceLedgerPage: { description: Admin compliance ledger entries, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceLedgerEntry" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminComplianceReportPage: { description: Admin compliance reports, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminComplianceReport" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminVatDeterminationPage: { description: Admin VAT determinations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminVatDetermination" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminReceiptPage: { description: Admin receipts, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReceipt" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminInvoicePage: { description: Admin VAT invoices, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminInvoice" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminReferralProgramPage: { description: Admin referral programs, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminReferralProgram" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminPartnerCampaignPage: { description: Admin partner campaigns, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminPartnerCampaign" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AdminTierWaiverPage: { description: Admin tier waivers, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminTierWaiver" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminOrganization: { description: Admin organization, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganization" } } } }
-    AdminOrganizationPage: { description: Admin organizations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminOrganization" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminOrganizationPage: { description: Admin organizations, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminOrganization" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminOrganizationMember: { description: Admin organization member, content: { application/json: { schema: { $ref: "#/components/schemas/AdminOrganizationMember" } } } }
-    AdminOrganizationMemberPage: { description: Admin organization members, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminOrganizationMember" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminOrganizationMemberPage: { description: Admin organization members, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminOrganizationMember" } }, nextCursor: { type: [string, "null"] } } } } } }
     AdminFeatureFlag: { description: Admin feature flag, content: { application/json: { schema: { $ref: "#/components/schemas/AdminFeatureFlag" } } } }
-    AdminFeatureFlagPage: { description: Admin feature flags, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminFeatureFlag" } } } } } } }
-    AuditEventPage: { description: Audit events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEvent" } }, nextCursor: { type: string, nullable: true } } } } } }
+    AdminFeatureFlagPage: { description: Admin feature flags, content: { application/json: { schema: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: "#/components/schemas/AdminFeatureFlag" } }, nextCursor: { type: [string, "null"] } } } } } }
+    AuditEventPage: { description: Audit events, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: "#/components/schemas/AuditEvent" } }, nextCursor: { type: [string, "null"] } } } } } }
   schemas:
     AnalyticsMetricKey:
       type: string
@@ -4011,25 +4113,41 @@ components:
         - { type: number }
         - { type: string, pattern: "^[0-9]+$" }
     AnalyticsMetricPoint:
-      type: object
-      additionalProperties: false
-      required: [bucketDate, value, numerator, denominator, sampleSize, privacyDecision]
-      properties:
-        bucketDate: { type: string, format: date, nullable: true }
-        value:
-          oneOf:
-            - { $ref: "#/components/schemas/AnalyticsScalar" }
-            - { type: "null" }
-        numerator:
-          oneOf:
-            - { type: string, pattern: "^[0-9]+$" }
-            - { type: "null" }
-        denominator:
-          oneOf:
-            - { type: string, pattern: "^[0-9]+$" }
-            - { type: "null" }
-        sampleSize: { type: string, pattern: "^[0-9]+$" }
-        privacyDecision: { type: string, enum: [released, suppressed_minimum_cohort] }
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [bucketDate, value, numerator, denominator, sampleSize, privacyDecision]
+          properties:
+            bucketDate: { type: [string, "null"], format: date }
+            value: { type: "null" }
+            numerator: { type: "null" }
+            denominator: { type: "null" }
+            sampleSize:
+              description: Null whenever minimum-cohort privacy suppression applies.
+              type: "null"
+            privacyDecision: { const: suppressed_minimum_cohort }
+        - type: object
+          additionalProperties: false
+          required: [bucketDate, value, numerator, denominator, sampleSize, privacyDecision]
+          properties:
+            bucketDate: { type: [string, "null"], format: date }
+            value:
+              oneOf:
+                - { $ref: "#/components/schemas/AnalyticsScalar" }
+                - { type: "null" }
+            numerator:
+              oneOf:
+                - { type: string, pattern: "^[0-9]+$" }
+                - { type: "null" }
+            denominator:
+              oneOf:
+                - { type: string, pattern: "^[0-9]+$" }
+                - { type: "null" }
+            sampleSize:
+              description: Released decimal cohort size.
+              type: string
+              pattern: "^[0-9]+$"
+            privacyDecision: { const: released }
     AnalyticsMetricResult:
       type: object
       additionalProperties: false
@@ -4047,7 +4165,7 @@ components:
           oneOf:
             - { $ref: "#/components/schemas/AnalyticsScalar" }
             - { type: "null" }
-        deltaPercent: { type: number, nullable: true }
+        deltaPercent: { type: [number, "null"] }
     AnalyticsInsight:
       type: object
       additionalProperties: false
@@ -4075,7 +4193,7 @@ components:
             - { type: "null" }
         granularity: { type: string, enum: [day, total] }
         timezone: { type: string, enum: [UTC] }
-        dataThrough: { type: string, format: date-time, nullable: true }
+        dataThrough: { type: [string, "null"], format: date-time }
         generatedAt: { type: string, format: date-time }
         freshness: { type: string, enum: [fresh, stale, unavailable] }
         metrics:
@@ -4092,14 +4210,14 @@ components:
         projectionKey: { type: string, const: analytics_core }
         definitionVersion: { type: integer, minimum: 1 }
         state: { type: string, enum: [healthy, stale, reconciling, failed, unavailable] }
-        dataThrough: { type: string, format: date-time, nullable: true }
-        lagSeconds: { type: integer, minimum: 0, nullable: true }
+        dataThrough: { type: [string, "null"], format: date-time }
+        lagSeconds: { type: [integer, "null"], minimum: 0 }
         queuedJobCount: { type: integer, minimum: 0 }
         leasedJobCount: { type: integer, minimum: 0 }
         retryJobCount: { type: integer, minimum: 0 }
         deadLetterJobCount: { type: integer, minimum: 0 }
-        latestReconciliationState: { type: string, enum: [matched, mismatch, failed], nullable: true }
-        latestReconciliationVariance: { type: integer, nullable: true }
+        latestReconciliationState: { type: [string, "null"], enum: [matched, mismatch, failed, null] }
+        latestReconciliationVariance: { type: [integer, "null"] }
         suppressionCountToday: { type: integer, minimum: 0 }
     AnalyticsProjectionJobRequest:
       type: object
@@ -4149,7 +4267,7 @@ components:
               message: { type: string }
     ErrorCode:
       type: string
-      enum: [unauthorized, forbidden, not_found, validation_failed, rate_limited, conflict, idempotency_conflict, provider_unavailable, service_unavailable, recent_authentication_required, payment_not_confirmed, webhook_signature_invalid]
+      enum: [unauthorized, forbidden, not_found, validation_failed, rate_limited, conflict, idempotency_conflict, provider_unavailable, service_unavailable, internal_server_error, recent_authentication_required, payment_not_confirmed, webhook_signature_invalid]
     ErrorResponse:
       type: object
       required: [code, message]
@@ -4157,6 +4275,7 @@ components:
         code: { $ref: "#/components/schemas/ErrorCode" }
         message: { type: string }
         details: { type: object, additionalProperties: true }
+        requestId: { type: string }
     ProductType:
       type: string
       enum: [tip, support, content_unlock, paid_message, live_pass, event_access_pass, creator_subscription, platform_subscription]
@@ -4189,14 +4308,14 @@ components:
       required: [state]
       properties:
         state: { $ref: "#/components/schemas/AgeState" }
-        provider: { type: string, nullable: true }
+        provider: { type: [string, "null"] }
     CreateVerificationSessionRequest:
       type: object
       required: [purpose]
       properties:
         purpose: { type: string, enum: [adult_publisher_eligibility, creator_kyc, org_kyb] }
         providerPreference: { type: string, enum: [provider_first, sumsub, didit, persona, veriff], default: provider_first }
-        organizationId: { type: string, format: uuid, nullable: true }
+        organizationId: { type: [string, "null"], format: uuid }
         source: { type: string, enum: [create, earnings, organization], default: create }
         adultPublisherTermsAccepted: { type: boolean, default: false }
     VerificationSession:
@@ -4227,8 +4346,8 @@ components:
         provider: { type: string }
         method: { type: string }
         assuranceLevel: { type: string }
-        verifiedAt: { type: string, format: date-time, nullable: true }
-        expiresAt: { type: string, format: date-time, nullable: true }
+        verifiedAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
         reusable: { type: boolean }
     VerificationStatus:
       type: object
@@ -4383,7 +4502,7 @@ components:
         walletAddress: { type: string }
         state: { type: string, enum: [created, completed, failed, expired, canceled] }
         createdAt: { type: string, format: date-time }
-        expiresAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: [string, "null"], format: date-time }
     User:
       type: object
       required: [id, handle, displayName, badges]
@@ -4391,15 +4510,15 @@ components:
         id: { type: string, format: uuid }
         handle: { type: string }
         displayName: { type: string }
-        avatarUrl: { type: string, format: uri, nullable: true }
+        avatarUrl: { type: [string, "null"], format: uri }
         badges: { type: array, items: { $ref: "#/components/schemas/UserBadge" } }
     CreatorProfile:
       type: object
       required: [user, stats, monetisation, recentContent]
       properties:
         user: { $ref: "#/components/schemas/User" }
-        bio: { type: string, nullable: true }
-        locationLabel: { type: string, nullable: true }
+        bio: { type: [string, "null"] }
+        locationLabel: { type: [string, "null"] }
         links:
           type: array
           maxItems: 5
@@ -4426,9 +4545,9 @@ components:
         paidMessagesEnabled: { type: boolean }
         subscriptionsEnabled: { type: boolean }
         membershipOffer:
-          nullable: true
-          allOf:
+          anyOf:
             - $ref: "#/components/schemas/SubscriptionPlan"
+            - type: "null"
     CreatorMonetisationDashboard:
       type: object
       required: [creator, readiness, earnings, products, recentActivity]
@@ -4449,7 +4568,7 @@ components:
         recipientWalletState: { type: string, enum: [missing, linked] }
         readinessScore: { type: integer, minimum: 0, maximum: 100 }
         canMonetize: { type: boolean }
-        nextAction: { type: string, nullable: true }
+        nextAction: { type: [string, "null"] }
         policyBoundary: { type: string, enum: [creator_records_only_no_balances_payout_queue_or_social_priority] }
         blockedReasons: { type: array, items: { type: string } }
     CreatorOnboarding:
@@ -4459,7 +4578,7 @@ components:
         state: { type: string, enum: [ready, action_required, review_required, blocked] }
         canStartEarning: { type: boolean }
         readinessScore: { type: integer, minimum: 0, maximum: 100 }
-        nextAction: { type: string, nullable: true }
+        nextAction: { type: [string, "null"] }
         policyBoundary: { type: string, enum: [creator_records_only_no_balances_payout_queue_or_social_priority] }
         configuration: { $ref: "#/components/schemas/CreatorOnboardingConfiguration" }
         steps: { type: array, items: { $ref: "#/components/schemas/CreatorOnboardingStep" } }
@@ -4467,8 +4586,8 @@ components:
       type: object
       required: [recipientWalletId, earningsTermsVersion, products]
       properties:
-        recipientWalletId: { type: string, format: uuid, nullable: true }
-        earningsTermsVersion: { type: string, enum: [wevid-creator-earnings-v1], nullable: true }
+        recipientWalletId: { type: [string, "null"], format: uuid }
+        earningsTermsVersion: { type: [string, "null"], enum: [wevid-creator-earnings-v1, null] }
         products: { $ref: "#/components/schemas/CreatorProductSelection" }
     CreatorOnboardingStep:
       type: object
@@ -4480,7 +4599,7 @@ components:
         label: { type: string }
         state: { type: string, enum: [complete, action_required, review_required, blocked, not_required] }
         required: { type: boolean }
-        actionHref: { type: string, nullable: true }
+        actionHref: { type: [string, "null"] }
     UpdateCreatorOnboardingRequest:
       type: object
       additionalProperties: false
@@ -4502,22 +4621,38 @@ components:
         memberships: { type: boolean }
     CreatorEarningsSummary:
       type: object
-      required: [currency, creatorEarningsMinor, platformFeesMinor, referralCommissionsMinor, confirmedPaymentCount]
+      required: [assets, confirmedPaymentCount]
+      properties:
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/CreatorAssetEarningsSummary" }
+        confirmedPaymentCount: { type: integer }
+    CreatorAssetEarningsSummary:
+      type: object
+      required: [currency, creatorEarningsAtomic, platformFeesAtomic, referralCommissionsAtomic, confirmedPaymentCount]
       properties:
         currency: { $ref: "#/components/schemas/Currency" }
-        creatorEarningsMinor: { type: integer }
-        platformFeesMinor: { type: integer }
-        referralCommissionsMinor: { type: integer }
+        creatorEarningsAtomic: { type: string, pattern: "^[0-9]+$" }
+        platformFeesAtomic: { type: string, pattern: "^[0-9]+$" }
+        referralCommissionsAtomic: { type: string, pattern: "^[0-9]+$" }
         confirmedPaymentCount: { type: integer }
     CreatorProductSummary:
       type: object
-      required: [productType, enabled, confirmedPaymentCount, amountMinor, currency]
+      required: [productType, enabled, confirmedPaymentCount, assets]
       properties:
         productType: { $ref: "#/components/schemas/ProductType" }
         enabled: { type: boolean }
         confirmedPaymentCount: { type: integer }
-        amountMinor: { type: integer }
+        assets:
+          type: array
+          items: { $ref: "#/components/schemas/CreatorProductAssetSummary" }
+    CreatorProductAssetSummary:
+      type: object
+      required: [currency, amountAtomic, confirmedPaymentCount]
+      properties:
         currency: { $ref: "#/components/schemas/Currency" }
+        amountAtomic: { type: string, pattern: "^[0-9]+$" }
+        confirmedPaymentCount: { type: integer }
     UpdateProfileRequest:
       type: object
       additionalProperties: false
@@ -4525,7 +4660,7 @@ components:
       properties:
         handle: { type: string, pattern: "^[a-z0-9_]{2,32}$" }
         displayName: { type: string, minLength: 1, maxLength: 80 }
-        avatarUrl: { type: string, format: uri, nullable: true, maxLength: 2048 }
+        avatarUrl: { type: [string, "null"], format: uri, maxLength: 2048 }
         bio: { type: string, maxLength: 500 }
         locationLabel: { type: string, maxLength: 120 }
         links:
@@ -4617,18 +4752,17 @@ components:
               provider_incident
             ]
         title: { type: string }
-        body: { type: string, nullable: true }
-        actionUrl: { type: string, nullable: true }
+        body: { type: [string, "null"] }
+        actionUrl: { type: [string, "null"] }
         state: { type: string, enum: [unread, read, archived] }
         relatedResource:
-          type: object
-          nullable: true
+          type: [object, "null"]
           required: [type, id]
           properties:
             type: { type: string, enum: [content, live_room, message, payment, membership, event, mutual, wallet, creator_setup, studio_setup, safety_case, provider, none] }
-            id: { type: string, nullable: true }
+            id: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
-        readAt: { type: string, format: date-time, nullable: true }
+        readAt: { type: [string, "null"], format: date-time }
     NotificationPage:
       type: object
       required: [items]
@@ -4636,7 +4770,7 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/Notification" }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     NotificationPreferences:
       type: object
       required: [messagesEnabled, engagementEnabled, liveEnabled, paymentsEnabled, membershipsEnabled, eventAccessEnabled, mutualsEnabled, safetyEnabled, walletEnabled, creatorSetupEnabled, studioSetupEnabled, pushEnabled]
@@ -4653,7 +4787,7 @@ components:
         creatorSetupEnabled: { type: boolean }
         studioSetupEnabled: { type: boolean }
         pushEnabled: { type: boolean }
-        updatedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: [string, "null"], format: date-time }
     RealtimeAccessToken:
       type: object
       required: [token, expiresAt, accountTopic]
@@ -4691,17 +4825,32 @@ components:
       required: [enabled, vapidPublicKey]
       properties:
         enabled: { type: boolean }
-        vapidPublicKey: { type: string, nullable: true }
+        vapidPublicKey: { type: [string, "null"] }
     RegisterNotificationDeviceRequest:
       type: object
       required: [provider, platform, endpoint, p256dh, auth]
       properties:
         provider: { type: string, enum: [web_push] }
         platform: { type: string, enum: [desktop, ios, android, mobile_web] }
-        endpoint: { type: string, minLength: 12, maxLength: 2048 }
-        p256dh: { type: string, minLength: 12, maxLength: 512 }
-        auth: { type: string, minLength: 8, maxLength: 512 }
-        userAgent: { type: string, maxLength: 512, nullable: true }
+        endpoint:
+          type: string
+          format: uri
+          minLength: 12
+          maxLength: 2048
+          description: Canonical HTTPS endpoint issued by a supported browser push service; server DNS and egress policy is authoritative.
+        p256dh:
+          type: string
+          minLength: 87
+          maxLength: 87
+          pattern: '^[A-Za-z0-9_-]{87}$'
+          description: Canonical unpadded base64url P-256 uncompressed public key (65 bytes).
+        auth:
+          type: string
+          minLength: 22
+          maxLength: 22
+          pattern: '^[A-Za-z0-9_-]{22}$'
+          description: Canonical unpadded base64url Web Push authentication secret (16 bytes).
+        userAgent: { type: [string, "null"], maxLength: 512 }
     NotificationDevice:
       type: object
       required: [id, provider, platform, state, createdAt]
@@ -4711,34 +4860,46 @@ components:
         platform: { type: string, enum: [desktop, ios, android, mobile_web] }
         state: { type: string, enum: [active, revoked] }
         createdAt: { type: string, format: date-time }
-        lastSeenAt: { type: string, format: date-time, nullable: true }
+        lastSeenAt: { type: [string, "null"], format: date-time }
     WalletState:
       type: object
       required: [connected, chain]
       properties:
         connected: { type: boolean }
         chain: { type: string, enum: [solana_devnet, solana_mainnet] }
-        address: { type: string, nullable: true }
+        address: { type: [string, "null"] }
     FeedPage:
       type: object
       required: [items, mode, surface, rankingVersion, generatedAt]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/ContentItem" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
         mode: { type: string, enum: [recommended, following] }
         surface: { type: string, enum: [home, bits, moments] }
         rankingVersion: { type: string, enum: [deterministic_v1] }
         generatedAt: { type: string, format: date-time }
     DiscoverPage:
       type: object
-      required: [content, creators, hashtags, events, liveRooms]
+      additionalProperties: false
+      required: [content, creators, hashtags, events, liveRooms, nextCursors]
       properties:
         content: { type: array, items: { $ref: "#/components/schemas/ContentItem" } }
         creators: { type: array, items: { $ref: "#/components/schemas/User" } }
         hashtags: { type: array, items: { $ref: "#/components/schemas/Hashtag" } }
         events: { type: array, items: { $ref: "#/components/schemas/Event" } }
         liveRooms: { type: array, items: { $ref: "#/components/schemas/LiveRoom" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursors: { $ref: "#/components/schemas/DiscoverCursorSet" }
+    DiscoverCursorSet:
+      type: object
+      additionalProperties: false
+      required: [content, creators, hashtags, events, liveRooms]
+      description: Independent opaque continuations for each ordered search group; cursors are group-bound and non-interchangeable, and live-room continuation follows immutable created-at plus ID order.
+      properties:
+        content: { type: [string, "null"], maxLength: 512 }
+        creators: { type: [string, "null"], maxLength: 512 }
+        hashtags: { type: [string, "null"], maxLength: 512 }
+        events: { type: [string, "null"], maxLength: 512 }
+        liveRooms: { type: [string, "null"], maxLength: 512 }
     Hashtag:
       type: object
       required: [slug, displayName, state]
@@ -4754,20 +4915,20 @@ components:
         creator: { $ref: "#/components/schemas/User" }
         mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
         distributionMode: { type: string, enum: [post, moment], default: post }
-        expiresAt: { type: string, format: date-time, nullable: true }
-        scheduledFor: { type: string, format: date-time, nullable: true }
-        caption: { type: string, nullable: true }
-        bodyText: { type: string, minLength: 1, maxLength: 10000, nullable: true }
+        expiresAt: { type: [string, "null"], format: date-time }
+        scheduledFor: { type: [string, "null"], format: date-time }
+        caption: { type: [string, "null"] }
+        bodyText: { type: [string, "null"], minLength: 1, maxLength: 10000 }
         compositionRevision: { type: integer, minimum: 1 }
         mediaAssets:
           type: array
           maxItems: 10
           items: { $ref: "#/components/schemas/ContentMediaAsset" }
         poll:
-          allOf:
+          anyOf:
             - $ref: "#/components/schemas/ContentPoll"
-          nullable: true
-        posterUrl: { type: string, format: uri, nullable: true }
+            - type: "null"
+        posterUrl: { type: [string, "null"], format: uri }
         playback: { $ref: "#/components/schemas/PlaybackResource" }
         accessState: { type: string, enum: [free, teaser, locked, unlocked, subscribed, pass_required] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
@@ -4793,20 +4954,37 @@ components:
         provider: { type: string, enum: [bunny, livepeer] }
         providerState: { type: string }
         playback: { $ref: "#/components/schemas/PlaybackResource" }
-        posterUrl: { type: string, format: uri, nullable: true }
-        mimeType: { type: string, enum: [image/jpeg, image/png, image/webp, image/avif, video/mp4, video/quicktime, video/webm], nullable: true }
-        widthPixels: { type: integer, minimum: 1, maximum: 16384, nullable: true }
-        heightPixels: { type: integer, minimum: 1, maximum: 16384, nullable: true }
-        durationMs: { type: integer, minimum: 0, nullable: true }
-        altText: { type: string, minLength: 1, maxLength: 1000, nullable: true }
+        posterUrl: { type: [string, "null"], format: uri }
+        imageDelivery: { $ref: "#/components/schemas/ImageDeliveryResource" }
+        mimeType: { type: [string, "null"], enum: [image/jpeg, image/png, image/webp, image/avif, video/mp4, video/quicktime, video/webm, null] }
+        widthPixels: { type: [integer, "null"], minimum: 1, maximum: 16384 }
+        heightPixels: { type: [integer, "null"], minimum: 1, maximum: 16384 }
+        durationMs: { type: [integer, "null"], minimum: 0 }
+        altText: { type: [string, "null"], minLength: 1, maxLength: 1000 }
         requiredForRelease: { type: boolean }
         isCover: { type: boolean }
-        focalPointX: { type: number, minimum: 0, maximum: 1, nullable: true }
-        focalPointY: { type: number, minimum: 0, maximum: 1, nullable: true }
+        focalPointX: { type: [number, "null"], minimum: 0, maximum: 1 }
+        focalPointY: { type: [number, "null"], minimum: 0, maximum: 1 }
         originClassification: { type: string, enum: [human_created, ai_assisted, ai_generated, materially_ai_manipulated] }
         visibleLabelState: { type: string, enum: [none, ai_assisted, ai_generated, manipulated] }
         provenanceReviewState: { type: string, enum: [not_required, pending, confirmed, rejected] }
         machineReadableMarkingState: { type: string, enum: [unavailable, pending, present, invalid] }
+    ImageDeliveryResource:
+      type: object
+      readOnly: true
+      required: [url, expiresAt, variants]
+      description: Authorized, short-lived private image delivery capability. URLs must never be persisted or logged.
+      properties:
+        url: { type: string, format: uri }
+        expiresAt: { type: string, format: date-time }
+        variants:
+          type: array
+          items:
+            type: object
+            required: [widthPixels, url]
+            properties:
+              widthPixels: { type: integer, minimum: 1, maximum: 16384 }
+              url: { type: string, format: uri }
     ImageAssetUploadResult:
       type: object
       required: [mediaAssetId, kind, mimeType, widthPixels, heightPixels, releaseState]
@@ -4823,7 +5001,7 @@ components:
       required: [expectedCompositionRevision]
       properties:
         expectedCompositionRevision: { type: integer, minimum: 1 }
-        altText: { type: string, minLength: 1, maxLength: 1000, nullable: true }
+        altText: { type: [string, "null"], minLength: 1, maxLength: 1000 }
         originClassification:
           type: string
           enum: [human_created, ai_assisted, ai_generated, materially_ai_manipulated]
@@ -4855,9 +5033,9 @@ components:
         providerState: { type: string, enum: [stored_private, upload_pending] }
         provenanceReviewState: { type: string, enum: [pending] }
         upload:
-          allOf:
+          anyOf:
             - $ref: "#/components/schemas/UploadSession"
-          nullable: true
+            - type: "null"
     RetireContentMediaAssetRequest:
       type: object
       additionalProperties: false
@@ -4893,8 +5071,8 @@ components:
           items: { $ref: "#/components/schemas/ContentPollOption" }
         state: { type: string, enum: [open, closed, cancelled] }
         totalVoteCount: { type: integer, minimum: 0 }
-        closesAt: { type: string, format: date-time, nullable: true }
-        viewerOptionId: { type: string, format: uuid, nullable: true }
+        closesAt: { type: [string, "null"], format: date-time }
+        viewerOptionId: { type: [string, "null"], format: uuid }
     ContentPollDraft:
       type: object
       required: [question, options]
@@ -4905,7 +5083,7 @@ components:
           minItems: 2
           maxItems: 4
           items: { type: string, minLength: 1, maxLength: 200 }
-        closesAt: { type: string, format: date-time, nullable: true }
+        closesAt: { type: [string, "null"], format: date-time }
     VoteOnContentPollRequest:
       type: object
       additionalProperties: false
@@ -4927,7 +5105,7 @@ components:
         id: { type: string, format: uuid }
         contentId: { type: string, format: uuid }
         contentRevision: { type: integer, minimum: 1 }
-        contentCaption: { type: string, nullable: true }
+        contentCaption: { type: [string, "null"] }
         mediaType: { type: string }
         rating: { type: string, enum: [adult, explicit] }
         performerLabel: { type: string }
@@ -4939,7 +5117,7 @@ components:
           minItems: 1
           uniqueItems: true
           items: { $ref: "#/components/schemas/PerformerAllowedUse" }
-        expiresAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: [string, "null"], format: date-time }
     CreatePerformerConsentRequest:
       type: object
       required: [allowedUses]
@@ -4982,7 +5160,7 @@ components:
         enterpriseEntitlementReady: { type: boolean }
         settlementWalletReady: { type: boolean }
         viewerRole: { type: string, enum: [creator, organization_member] }
-        organizationRole: { type: string, enum: [owner, admin, member, viewer], nullable: true }
+        organizationRole: { type: [string, "null"], enum: [owner, admin, member, viewer, null] }
         availableActions:
           type: array
           uniqueItems: true
@@ -5000,7 +5178,7 @@ components:
           uniqueItems: true
           items: { $ref: "#/components/schemas/ManagedCreatorPermission" }
         enterpriseManagementShareBps: { type: integer, minimum: 0, maximum: 9999 }
-        settlementWalletId: { type: string, format: uuid, nullable: true }
+        settlementWalletId: { type: [string, "null"], format: uuid }
     ManagedCreatorAgreementTerms:
       type: object
       required: [permissions, enterpriseManagementShareBps]
@@ -5045,12 +5223,15 @@ components:
       required: [state, url, provider]
       properties:
         state: { type: string, enum: [not_ready, teaser, full, blocked] }
-        url: { type: string, format: uri, nullable: true }
+        url: { type: [string, "null"], format: uri }
         provider: { type: string, enum: [bunny, livepeer, none] }
-        resourceType: { type: string, enum: [embed, hls, direct], nullable: true }
-        jwt: { type: string, nullable: true, writeOnly: true }
-        expiresAt: { type: string, format: date-time, nullable: true }
-        blockReason: { type: string, enum: [entitlement_required, allowance_exhausted, provider_unavailable, replay_under_review, room_suspended, stream_ended], nullable: true }
+        resourceType: { type: [string, "null"], enum: [embed, hls, direct, null] }
+        jwt:
+          type: [string, "null"]
+          readOnly: true
+          description: Short-lived viewer-scoped Livepeer capability returned only in authorized responses; never log or persist it.
+        expiresAt: { type: [string, "null"], format: date-time }
+        blockReason: { type: [string, "null"], enum: [entitlement_required, allowance_exhausted, provider_unavailable, replay_under_review, room_suspended, stream_ended, null] }
         usage: { $ref: "#/components/schemas/PlaybackUsageContext" }
     PlaybackUsageContext:
       type: object
@@ -5073,7 +5254,7 @@ components:
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }
         contentSafetyPolicyAccepted: { type: boolean }
-        scheduledFor: { type: string, format: date-time, nullable: true }
+        scheduledFor: { type: [string, "null"], format: date-time }
         eventDraft: { $ref: "#/components/schemas/EventDraft" }
     UpdateContentRequest:
       type: object
@@ -5091,18 +5272,18 @@ components:
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }
         contentSafetyPolicyAccepted: { type: boolean }
-        teaserStartMs: { type: integer, nullable: true }
-        teaserEndMs: { type: integer, nullable: true }
-        thumbnailFrameMs: { type: integer, nullable: true }
+        teaserStartMs: { type: [integer, "null"] }
+        teaserEndMs: { type: [integer, "null"] }
+        thumbnailFrameMs: { type: [integer, "null"] }
         eventDraft: { $ref: "#/components/schemas/EventDraft" }
         distributionMode: { type: string, enum: [post, moment] }
-        scheduledFor: { type: string, format: date-time, nullable: true }
+        scheduledFor: { type: [string, "null"], format: date-time }
     PublishContentRequest:
       type: object
       required: [confirmation]
       properties:
         confirmation: { type: string, enum: [submit_for_review] }
-        scheduledFor: { type: string, format: date-time, nullable: true }
+        scheduledFor: { type: [string, "null"], format: date-time }
     CreatorMediaItem:
       type: object
       required: [id, mediaType, visibility, publicationState, reviewState, createdAt, updatedAt]
@@ -5110,16 +5291,16 @@ components:
         id: { type: string, format: uuid }
         mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
         distributionMode: { type: string, enum: [post, moment], default: post }
-        expiresAt: { type: string, format: date-time, nullable: true }
-        scheduledFor: { type: string, format: date-time, nullable: true }
-        caption: { type: string, nullable: true }
-        posterUrl: { type: string, format: uri, nullable: true }
+        expiresAt: { type: [string, "null"], format: date-time }
+        scheduledFor: { type: [string, "null"], format: date-time }
+        caption: { type: [string, "null"] }
+        posterUrl: { type: [string, "null"], format: uri }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
         publicationState:
           type: string
           enum: [draft, upload_pending, processing, in_review, scheduled, changes_requested, rejected, appeal_pending, published, blocked]
         reviewState: { type: string }
-        reviewMessage: { type: string, nullable: true }
+        reviewMessage: { type: [string, "null"] }
         compositionRevision: { type: integer, minimum: 1 }
         provenanceAssets:
           type: array
@@ -5142,7 +5323,7 @@ components:
       required: [items, nextCursor]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/CreatorMediaItem" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     CreateMediaModerationAppealRequest:
       type: object
       required: [reason]
@@ -5190,25 +5371,25 @@ components:
       properties:
         id: { type: string, format: uuid }
         label: { type: string, minLength: 1, maxLength: 80 }
-        priceMinor: { type: integer, nullable: true }
+        priceMinor: { type: [integer, "null"] }
         currency: { $ref: "#/components/schemas/Currency" }
         capacity: { type: integer, minimum: 1 }
         remaining: { type: integer, minimum: 0 }
         state: { type: string, enum: [active, paused, sold_out] }
-        saleStartsAt: { type: string, format: date-time, nullable: true }
-        saleEndsAt: { type: string, format: date-time, nullable: true }
-        perUserLimit: { type: integer, minimum: 1, maximum: 20, nullable: true }
+        saleStartsAt: { type: [string, "null"], format: date-time }
+        saleEndsAt: { type: [string, "null"], format: date-time }
+        perUserLimit: { type: [integer, "null"], minimum: 1, maximum: 20 }
     EventAccessPassTypeDraft:
       type: object
       required: [label, currency, capacity]
       properties:
         label: { type: string, minLength: 1, maxLength: 80 }
-        priceMinor: { type: integer, nullable: true }
+        priceMinor: { type: [integer, "null"] }
         currency: { $ref: "#/components/schemas/Currency" }
         capacity: { type: integer, minimum: 1 }
-        saleStartsAt: { type: string, format: date-time, nullable: true }
-        saleEndsAt: { type: string, format: date-time, nullable: true }
-        perUserLimit: { type: integer, minimum: 1, maximum: 20, nullable: true }
+        saleStartsAt: { type: [string, "null"], format: date-time }
+        saleEndsAt: { type: [string, "null"], format: date-time }
+        perUserLimit: { type: [integer, "null"], minimum: 1, maximum: 20 }
     EventLocationDraft:
       type: object
       required: [type]
@@ -5221,11 +5402,14 @@ components:
         providerPlaceId: { type: string }
     CreateUploadRequest:
       type: object
-      required: [contentId, fileName, mimeType]
+      additionalProperties: false
+      required: [contentId, fileName, mimeType, fileSizeBytes, checksumSha256]
       properties:
         contentId: { type: string, format: uuid }
-        fileName: { type: string }
+        fileName: { type: string, minLength: 1, maxLength: 255 }
         mimeType: { type: string }
+        fileSizeBytes: { type: integer, minimum: 1, maximum: 5368709120 }
+        checksumSha256: { type: string, pattern: "^[a-f0-9]{64}$" }
     UploadSession:
       type: object
       required: [uploadUrl, provider, mediaAssetId, expiresAt]
@@ -5259,13 +5443,13 @@ components:
         accessMode: { type: string, enum: [public, profile_members, paid_event] }
         accessState: { type: string, enum: [allowed, membership_required, event_access_required] }
         playback: { $ref: "#/components/schemas/PlaybackResource" }
-        previewSecondsRemaining: { type: integer, nullable: true }
+        previewSecondsRemaining: { type: [integer, "null"] }
         eventAccess:
           oneOf:
             - $ref: "#/components/schemas/LiveEventAccessOffer"
             - type: "null"
         chat: { $ref: "#/components/schemas/LiveChatState" }
-        replayContentId: { type: string, format: uuid, nullable: true }
+        replayContentId: { type: [string, "null"], format: uuid }
     LiveEventAccessOffer:
       type: object
       required: [amountMinor, currency, replayWindowHours, membersIncluded]
@@ -5310,7 +5494,7 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/LiveChatMessage" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     LiveChatMessage:
       type: object
       required: [id, roomId, author, body, createdAt]
@@ -5334,7 +5518,7 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Comment" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     Comment:
       type: object
       required: [id, author, body, moderationState, parentCommentId, liked, likeCount, replyCount, mentions, createdAt]
@@ -5343,7 +5527,7 @@ components:
         author: { $ref: "#/components/schemas/User" }
         body: { type: string }
         moderationState: { type: string, enum: [visible, pending_review, hidden, removed] }
-        parentCommentId: { type: string, format: uuid, nullable: true }
+        parentCommentId: { type: [string, "null"], format: uuid }
         liked: { type: boolean }
         likeCount: { type: integer, minimum: 0 }
         replyCount: { type: integer, minimum: 0 }
@@ -5354,7 +5538,7 @@ components:
       required: [body]
       properties:
         body: { type: string, minLength: 1, maxLength: 2000 }
-        parentCommentId: { type: string, format: uuid, nullable: true }
+        parentCommentId: { type: [string, "null"], format: uuid }
     CommentReactionState:
       type: object
       required: [commentId, liked, likeCount]
@@ -5375,7 +5559,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         mode: { type: string, enum: [internal_message, external_referral_link, copy_link] }
-        url: { type: string, format: uri, nullable: true }
+        url: { type: [string, "null"], format: uri }
     CreateReportRequest:
       type: object
       required: [subjectType, subjectId, reason]
@@ -5417,14 +5601,14 @@ components:
         type: { type: string, enum: [export, delete] }
         state: { type: string, enum: [requested, verifying, processing, completed, rejected] }
         createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time, nullable: true }
-        completedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: [string, "null"], format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
     CreateDataRequestRequest:
       type: object
       required: [type]
       properties:
         type: { type: string, enum: [export, delete] }
-        reason: { type: string, minLength: 3, maxLength: 500, nullable: true }
+        reason: { type: [string, "null"], minLength: 3, maxLength: 500 }
     Conversation:
       type: object
       required: [id, type, title, unreadCount, counterpart, requestState, requestRole, canSend, muted]
@@ -5467,8 +5651,8 @@ components:
       required: [body]
       properties:
         body: { type: string, minLength: 1, maxLength: 4000 }
-        replyToMessageId: { type: string, format: uuid, nullable: true }
-        sharedContentItemId: { type: string, format: uuid, nullable: true }
+        replyToMessageId: { type: [string, "null"], format: uuid }
+        sharedContentItemId: { type: [string, "null"], format: uuid }
         attachmentContentItemIds:
           type: array
           maxItems: 4
@@ -5481,7 +5665,7 @@ components:
       properties:
         contentItemId: { type: string, format: uuid }
         title: { type: string, minLength: 1, maxLength: 120 }
-        description: { type: string, minLength: 1, maxLength: 1000, nullable: true }
+        description: { type: [string, "null"], minLength: 1, maxLength: 1000 }
         amountMinor: { type: integer, minimum: 1, maximum: 9007199254740991 }
         currency: { $ref: "#/components/schemas/Currency" }
         expiresAt: { type: string, format: date-time }
@@ -5502,13 +5686,13 @@ components:
         contentItemId: { type: string, format: uuid }
         contentRevision: { type: integer, minimum: 1 }
         title: { type: string }
-        description: { type: string, nullable: true }
+        description: { type: [string, "null"] }
         amountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
         state: { type: string, enum: [offered, accepted, declined, withdrawn, expired, purchased, remediation] }
-        paymentIntentId: { type: string, format: uuid, nullable: true }
+        paymentIntentId: { type: [string, "null"], format: uuid }
         expiresAt: { type: string, format: date-time }
-        purchasedAt: { type: string, format: date-time, nullable: true }
+        purchasedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     CreateStructuredCreatorRequestRequest:
@@ -5519,9 +5703,9 @@ components:
         creatorUserId: { type: string, format: uuid }
         deliverable: { type: string, minLength: 3, maxLength: 1000 }
         permittedCategory: { type: string, enum: [photo, video, audio, written, other_safe] }
-        proposedAmountMinor: { type: integer, minimum: 1, maximum: 9007199254740991, nullable: true }
+        proposedAmountMinor: { type: [integer, "null"], minimum: 1, maximum: 9007199254740991 }
         currency: { $ref: "#/components/schemas/Currency" }
-        expectedDeliveryDays: { type: integer, minimum: 1, maximum: 90, nullable: true }
+        expectedDeliveryDays: { type: [integer, "null"], minimum: 1, maximum: 90 }
         clarificationRule: { type: string, minLength: 3, maxLength: 500 }
         cancellationRule: { type: string, minLength: 3, maxLength: 500 }
         expiresAt: { type: string, format: date-time }
@@ -5531,13 +5715,14 @@ components:
       required: [action]
       properties:
         action: { type: string, enum: [accept, decline, propose_terms, accept_terms, mark_delivered, request_remediation, complete, cancel] }
-        agreedAmountMinor: { type: integer, minimum: 1, maximum: 9007199254740991, nullable: true }
-        expectedDeliveryDays: { type: integer, minimum: 1, maximum: 90, nullable: true }
-        clarificationRule: { type: string, minLength: 3, maxLength: 500, nullable: true }
-        cancellationRule: { type: string, minLength: 3, maxLength: 500, nullable: true }
+        expectedTermsRevision: { type: integer, minimum: 1, description: Required for accept, propose_terms, and accept_terms; the command is rejected unless this is the current locked terms revision. }
+        agreedAmountMinor: { type: [integer, "null"], minimum: 1, maximum: 9007199254740991 }
+        expectedDeliveryDays: { type: [integer, "null"], minimum: 1, maximum: 90 }
+        clarificationRule: { type: [string, "null"], minLength: 3, maxLength: 500 }
+        cancellationRule: { type: [string, "null"], minLength: 3, maxLength: 500 }
     StructuredCreatorRequest:
       type: object
-      required: [id, conversationId, requesterUserId, creatorUserId, deliverable, permittedCategory, currency, clarificationRule, cancellationRule, state, expiresAt, createdAt, updatedAt]
+      required: [id, conversationId, requesterUserId, creatorUserId, deliverable, permittedCategory, currency, clarificationRule, cancellationRule, termsRevision, state, expiresAt, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         conversationId: { type: string, format: uuid }
@@ -5545,27 +5730,29 @@ components:
         creatorUserId: { type: string, format: uuid }
         deliverable: { type: string }
         permittedCategory: { type: string, enum: [photo, video, audio, written, other_safe] }
-        proposedAmountMinor: { type: integer, nullable: true }
-        agreedAmountMinor: { type: integer, nullable: true }
+        proposedAmountMinor: { type: [integer, "null"] }
+        agreedAmountMinor: { type: [integer, "null"] }
         currency: { $ref: "#/components/schemas/Currency" }
-        expectedDeliveryDays: { type: integer, nullable: true }
+        expectedDeliveryDays: { type: [integer, "null"] }
         clarificationRule: { type: string }
         cancellationRule: { type: string }
+        termsRevision: { type: integer, minimum: 1 }
         state: { type: string, enum: [proposed, terms_proposed, accepted, declined, payment_pending, active, delivered, remediation, completed, cancelled, expired] }
-        paymentIntentId: { type: string, format: uuid, nullable: true }
+        paymentIntentId: { type: [string, "null"], format: uuid }
         expiresAt: { type: string, format: date-time }
-        acceptedAt: { type: string, format: date-time, nullable: true }
-        activatedAt: { type: string, format: date-time, nullable: true }
-        deliveredAt: { type: string, format: date-time, nullable: true }
-        completedAt: { type: string, format: date-time, nullable: true }
+        acceptedAt: { type: [string, "null"], format: date-time }
+        activatedAt: { type: [string, "null"], format: date-time }
+        deliveredAt: { type: [string, "null"], format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
     ConversationCommercialInteractions:
       type: object
-      required: [mediaOffers, creatorRequests]
+      required: [mediaOffers, creatorRequests, nextCursor]
       properties:
         mediaOffers: { type: array, items: { $ref: "#/components/schemas/CreatorMediaOffer" } }
         creatorRequests: { type: array, items: { $ref: "#/components/schemas/StructuredCreatorRequest" } }
+        nextCursor: { type: [string, "null"] }
     Message:
       type: object
       required: [id, conversationId, sender, body, deliveryState, reactions, createdAt]
@@ -5575,9 +5762,9 @@ components:
         sender: { $ref: "#/components/schemas/User" }
         body: { type: string }
         deliveryState: { type: string, enum: [visible, pending_payment] }
-        paymentIntentId: { type: string, format: uuid, nullable: true }
-        replyToMessageId: { type: string, format: uuid, nullable: true }
-        sharedContentItemId: { type: string, format: uuid, nullable: true }
+        paymentIntentId: { type: [string, "null"], format: uuid }
+        replyToMessageId: { type: [string, "null"], format: uuid }
+        sharedContentItemId: { type: [string, "null"], format: uuid }
         attachments:
           type: array
           maxItems: 4
@@ -5607,25 +5794,25 @@ components:
         createdAt: { type: string, format: date-time }
     MessagePage:
       type: object
-      required: [items]
+      required: [items, nextCursor]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Message" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     CreatePaymentIntentRequest:
       type: object
       required: [productType, targetId]
       properties:
         productType: { type: string, enum: [support] }
         targetId: { type: string, format: uuid }
-        amountMinor: { type: integer, minimum: 1, maximum: 9007199254740991, nullable: true }
+        amountMinor: { type: [integer, "null"], minimum: 1, maximum: 9007199254740991 }
         currency: { $ref: "#/components/schemas/Currency" }
-        referralToken: { type: string, nullable: true }
+        referralToken: { type: [string, "null"] }
     PaymentIntentRefundPolicy:
       type: object
       required: [withdrawalWaiverRequired, withdrawalWaiverAcceptedAt, withdrawalWaiverVersion, termsVersion, durableConfirmationRequired, refundValueBasis]
       properties:
         withdrawalWaiverRequired: { type: boolean }
-        withdrawalWaiverAcceptedAt: { type: string, format: date-time, nullable: true }
+        withdrawalWaiverAcceptedAt: { type: [string, "null"], format: date-time }
         withdrawalWaiverVersion: { type: string }
         termsVersion: { type: string }
         durableConfirmationRequired: { type: boolean }
@@ -5706,12 +5893,12 @@ components:
             reviewRejectType: { type: string }
     YotiAgeWebhookPayload:
       type: object
-      required: [id, session_key, state, signature]
+      required: [id, session_key, state, method, timestamp, sequence_number, signature]
       properties:
         id: { type: string }
         session_key: { type: string }
         reference_id: { type: string }
-        state: { type: string, enum: [COMPLETE, FAIL, ERROR] }
+        state: { type: string, minLength: 1, description: Yoti currently sends COMPLETE, FAIL, or ERROR; unknown future states normalize to pending. }
         method: { type: string }
         age: { type: integer }
         timestamp: { type: integer }
@@ -5758,7 +5945,7 @@ components:
         productType: { $ref: "#/components/schemas/ProductType" }
         state: { type: string, enum: [active, expired, revoked] }
         grantedAt: { type: string, format: date-time }
-        expiresAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: [string, "null"], format: date-time }
     ContentUnlockIntent:
       type: object
       required: [state, contentId]
@@ -5783,6 +5970,7 @@ components:
         eligibility: { type: string, enum: [external_share, partner_campaign, not_commissionable] }
     CreateRefundDisputeRequest:
       type: object
+      additionalProperties: false
       required: [paymentIntentId, kind, requestedAction, reason]
       properties:
         paymentIntentId: { type: string, format: uuid }
@@ -5798,18 +5986,18 @@ components:
       properties:
         id: { type: string, format: uuid }
         paymentIntentId: { type: string, format: uuid }
-        entitlementId: { type: string, format: uuid, nullable: true }
+        entitlementId: { type: [string, "null"], format: uuid }
         reporterUserId: { type: string, format: uuid }
         kind: { type: string, enum: [refund_request, dispute, access_issue] }
         requestedAction: { type: string, enum: [review_only, creator_refund, revoke_access, replacement_access] }
         state: { $ref: "#/components/schemas/RefundDisputeState" }
-        resolution: { type: string, nullable: true }
+        resolution: { type: [string, "null"] }
         custodyBoundary: { type: string, enum: [no_platform_custody_no_payout_queue] }
         remediationEvidenceCount: { type: integer, minimum: 0 }
-        latestRemediationEvidenceAt: { type: string, format: date-time, nullable: true }
+        latestRemediationEvidenceAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time, nullable: true }
-        resolvedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: [string, "null"], format: date-time }
+        resolvedAt: { type: [string, "null"], format: date-time }
     RefundRemediationEvidenceInput:
       type: object
       required: [evidenceType, evidenceSource, notes]
@@ -5835,25 +6023,33 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/RefundDisputeRequest" }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     ReferralActivity:
       type: object
-      required: [id, token, targetType, targetId, eligibility, state, createdAt]
+      required: [id, activityType, token, targetType, targetId, eligibility, state, createdAt, commissionAmountMinor]
       properties:
         id: { type: string, format: uuid }
+        activityType: { type: string, enum: [share, commission] }
         token: { type: string }
         targetType: { type: string, enum: [content, profile, event] }
         targetId: { type: string, format: uuid }
         eligibility: { type: string, enum: [external_share, partner_campaign, not_commissionable] }
         state: { type: string }
         createdAt: { type: string, format: date-time }
-        commissionAmountMinor: { type: integer, nullable: true }
+        commissionAmountMinor: { type: [integer, "null"] }
         currency: { $ref: "#/components/schemas/Currency" }
+    ReferralActivityPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ReferralActivity" } }
+        nextCursor: { type: [string, "null"] }
     SubscriptionPlanPage:
       type: object
-      required: [items]
+      required: [items, nextCursor]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/SubscriptionPlan" } }
+        nextCursor: { type: [string, "null"] }
     PlatformTierKey:
       type: string
       enum: [free_verified, veel_plus, veel_ultra, veel_studio, enterprise]
@@ -5864,12 +6060,12 @@ components:
         key: { $ref: "#/components/schemas/PlatformTierKey" }
         label: { type: string }
         rank: { type: integer }
-        monthlyPriceMinor: { type: integer, nullable: true }
-        currency: { type: string, enum: [USDC], nullable: true }
-        publicMediaAllowanceSeconds: { type: integer, nullable: true }
+        monthlyPriceMinor: { type: [integer, "null"] }
+        currency: { type: [string, "null"], enum: [USDC, null] }
+        publicMediaAllowanceSeconds: { type: [integer, "null"] }
         capabilities: { type: array, items: { type: string } }
         purchaseState: { type: string, enum: [included, available, unavailable, contact_sales] }
-        subscriptionPlanId: { type: string, nullable: true }
+        subscriptionPlanId: { type: [string, "null"] }
     PlatformUsage:
       type: object
       required: [windowStartsAt, windowEndsAt, publicMediaSeconds, remainingPublicMediaSeconds, limitReached]
@@ -5877,7 +6073,7 @@ components:
         windowStartsAt: { type: string, format: date-time }
         windowEndsAt: { type: string, format: date-time }
         publicMediaSeconds: { type: integer }
-        remainingPublicMediaSeconds: { type: integer, nullable: true }
+        remainingPublicMediaSeconds: { type: [integer, "null"] }
         limitReached: { type: boolean }
     PlatformAccess:
       type: object
@@ -5914,9 +6110,10 @@ components:
         usage: { $ref: "#/components/schemas/PlatformUsage" }
     SubscriptionPage:
       type: object
-      required: [items]
+      required: [items, nextCursor]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Subscription" } }
+        nextCursor: { type: [string, "null"] }
     SubscriptionPlan:
       type: object
       required: [id, scope, label, description, benefits, amountMinor, currency, periodDays, billingMode, providerState, provider]
@@ -5925,7 +6122,7 @@ components:
         scope: { type: string, enum: [platform, creator] }
         creator: { $ref: "#/components/schemas/User" }
         label: { type: string }
-        description: { type: string, nullable: true }
+        description: { type: [string, "null"] }
         benefits: { type: array, maxItems: 8, items: { type: string } }
         amountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
@@ -5933,11 +6130,11 @@ components:
         billingMode: { type: string, enum: [manual_solana_pay, delegated_solana_subscription] }
         providerState: { type: string, enum: [staging_required, launch_approved, disabled] }
         provider: { type: string, enum: [official_solana_subscription_program, mock_subscription_provider_dev_only] }
-        tokenMint: { type: string, nullable: true }
-        tokenProgram: { type: string, enum: [spl_token, token_2022], nullable: true }
-        programId: { type: string, nullable: true }
-        planPda: { type: string, nullable: true }
-        merchantWallet: { type: string, nullable: true }
+        tokenMint: { type: [string, "null"] }
+        tokenProgram: { type: [string, "null"], enum: [spl_token, token_2022, null] }
+        programId: { type: [string, "null"] }
+        planPda: { type: [string, "null"] }
+        merchantWallet: { type: [string, "null"] }
         amountAtomic: { type: integer }
         periodSeconds: { type: integer }
     UpsertCreatorMembershipOfferRequest:
@@ -5947,7 +6144,7 @@ components:
       properties:
         label: { type: string, minLength: 2, maxLength: 80 }
         amountMinor: { type: integer, minimum: 100, maximum: 100000 }
-        description: { type: string, maxLength: 500, nullable: true }
+        description: { type: [string, "null"], maxLength: 500 }
         benefits:
           type: array
           maxItems: 8
@@ -5960,7 +6157,7 @@ components:
         creatorUserId: { type: string, format: uuid }
     Subscription:
       type: object
-      required: [id, scope, planId, state, renewalMode]
+      required: [id, scope, planId, state, renewalMode, failureReason]
       properties:
         id: { type: string, format: uuid }
         scope: { type: string, enum: [platform, creator] }
@@ -5968,20 +6165,22 @@ components:
         creator: { $ref: "#/components/schemas/User" }
         state: { type: string, enum: [authorization_pending, active, renewal_pending, grace_period, cancelled, suspended, expired, revoked] }
         renewalMode: { type: string, enum: [manual_solana_pay, delegated_solana_subscription] }
-        currentPeriodEndsAt: { type: string, format: date-time, nullable: true }
-        nextCollectionAt: { type: string, format: date-time, nullable: true }
-        cancelledAt: { type: string, format: date-time, nullable: true }
-        revokedAt: { type: string, format: date-time, nullable: true }
-        authorityAddress: { type: string, nullable: true }
-        delegationAddress: { type: string, nullable: true }
-        subscriberWallet: { type: string, nullable: true }
-        subscriberTokenAccount: { type: string, nullable: true }
-        tokenMint: { type: string, nullable: true }
-        provider: { type: string, nullable: true }
-        programId: { type: string, nullable: true }
-        planPda: { type: string, nullable: true }
-        subscriptionPda: { type: string, nullable: true }
-        failureReason: { type: string, nullable: true }
+        currentPeriodEndsAt: { type: [string, "null"], format: date-time }
+        nextCollectionAt: { type: [string, "null"], format: date-time }
+        cancelledAt: { type: [string, "null"], format: date-time }
+        revokedAt: { type: [string, "null"], format: date-time }
+        authorityAddress: { type: [string, "null"] }
+        delegationAddress: { type: [string, "null"] }
+        subscriberWallet: { type: [string, "null"] }
+        subscriberTokenAccount: { type: [string, "null"] }
+        tokenMint: { type: [string, "null"] }
+        provider: { type: [string, "null"] }
+        programId: { type: [string, "null"] }
+        planPda: { type: [string, "null"] }
+        subscriptionPda: { type: [string, "null"] }
+        failureReason:
+          type: [string, "null"]
+          enum: [insufficient_funds, authorization_revoked, provider_unavailable, setup_mismatch, null]
     SubscriptionAuthorizationIntent:
       type: object
       required: [id, subscription, authorizationMode, setupReference, providerReadiness]
@@ -5990,7 +6189,7 @@ components:
         subscription: { $ref: "#/components/schemas/Subscription" }
         authorizationMode: { type: string, enum: [delegated_solana_subscription] }
         setupReference: { type: string, format: uuid }
-        transactionRequestUrl: { type: string, format: uri, nullable: true }
+        transactionRequestUrl: { type: [string, "null"], format: uri }
         expiresAt: { type: string, format: date-time }
         providerReadiness:
           type: object
@@ -6022,9 +6221,9 @@ components:
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
-        description: { type: string, nullable: true }
+        description: { type: [string, "null"] }
         startsAt: { type: string, format: date-time }
-        endsAt: { type: string, format: date-time, nullable: true }
+        endsAt: { type: [string, "null"], format: date-time }
         accessRule: { type: string, enum: [public_sale, private_apply] }
         location: { $ref: "#/components/schemas/EventLocationDraft" }
         state: { type: string, enum: [draft, published, sold_out, cancelled, completed] }
@@ -6071,17 +6270,17 @@ components:
         eventId: { type: string, format: uuid }
         accessPassTypeId: { type: string, format: uuid }
         holderUserId: { type: string, format: uuid }
-        paymentIntentId: { type: string, format: uuid, nullable: true }
+        paymentIntentId: { type: [string, "null"], format: uuid }
         state: { type: string, enum: [active, checked_in, revoked, expired] }
         qrToken: { type: string }
-        checkedInAt: { type: string, format: date-time, nullable: true }
+        checkedInAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     AccessPassPage:
       type: object
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/AccessPass" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     ActivateMutualsRequest:
       type: object
       required: [consentVersion]
@@ -6097,7 +6296,7 @@ components:
       required: [enabled, consentVersion, activeMatchLimit, visibleOnMedia, safetyState, createdAt, updatedAt]
       properties:
         enabled: { type: boolean }
-        consentVersion: { type: string, nullable: true }
+        consentVersion: { type: [string, "null"] }
         activeMatchLimit: { type: integer }
         visibleOnMedia: { type: boolean }
         safetyState: { type: string, enum: [clear, limited, blocked] }
@@ -6111,17 +6310,20 @@ components:
         creatorUserId: { type: string, format: uuid }
         handle: { type: string }
         displayName: { type: string }
-        avatarUrl: { type: string, nullable: true }
+        avatarUrl: { type: [string, "null"] }
         title: { type: string }
-        mediaKind: { type: string, enum: [image, video, live, replay] }
-        posterUrl: { type: string, nullable: true }
+        mediaKind:
+          type: string
+          enum: [image, video, live, replay]
+          description: Derived presentation category for Mutuals; it is not a persisted content column.
+        posterUrl: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
     MutualsFeedPage:
       type: object
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/MutualsFeedItem" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     MutualsInterestRequest:
       type: object
       required: [targetUserId, contentId, action]
@@ -6136,7 +6338,7 @@ components:
         interestId: { type: string, format: uuid }
         action: { type: string, enum: [yes, not_interested] }
         mutualCreated: { type: boolean }
-        mutualId: { type: string, format: uuid, nullable: true }
+        mutualId: { type: [string, "null"], format: uuid }
         mutual: { $ref: "#/components/schemas/Mutual" }
     Mutual:
       type: object
@@ -6145,24 +6347,24 @@ components:
         id: { type: string, format: uuid }
         userAId: { type: string, format: uuid }
         userBId: { type: string, format: uuid }
-        sourceContentId: { type: string, format: uuid, nullable: true }
-        conversationId: { type: string, format: uuid, nullable: true }
+        sourceContentId: { type: [string, "null"], format: uuid }
+        conversationId: { type: [string, "null"], format: uuid }
         state: { type: string, enum: [active, stale, archived, blocked, reported, expired] }
-        staleAt: { type: string, format: date-time, nullable: true }
-        expiresAt: { type: string, format: date-time, nullable: true }
+        staleAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     MutualsPage:
       type: object
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Mutual" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     ActivityPage:
       type: object
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/ActivityItem" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     ActivityItem:
       type: object
       required: [id, kind, title, state, createdAt]
@@ -6172,31 +6374,30 @@ components:
         title: { type: string }
         state: { type: string }
         productType: { $ref: "#/components/schemas/ProductType" }
-        targetId: { type: string, format: uuid, nullable: true }
-        amountMinor: { type: integer, nullable: true }
+        targetId: { type: [string, "null"], format: uuid }
+        amountMinor: { type: [integer, "null"] }
         currency: { $ref: "#/components/schemas/Currency" }
-        paymentIntentId: { type: string, format: uuid, nullable: true }
-        signature: { type: string, nullable: true }
-        referenceAddress: { type: string, nullable: true }
-        receiptId: { type: string, format: uuid, nullable: true }
-        receiptNumber: { type: string, nullable: true }
-        receiptState: { type: string, nullable: true }
-        inAppConfirmationState: { type: string, nullable: true }
-        emailConfirmationState: { type: string, nullable: true }
+        paymentIntentId: { type: [string, "null"], format: uuid }
+        signature: { type: [string, "null"] }
+        referenceAddress: { type: [string, "null"] }
+        receiptId: { type: [string, "null"], format: uuid }
+        receiptNumber: { type: [string, "null"] }
+        receiptState: { type: [string, "null"] }
+        inAppConfirmationState: { type: [string, "null"] }
+        emailConfirmationState: { type: [string, "null"] }
         withdrawalRightStatus:
-          type: string
-          enum: [not_applicable, waived_after_immediate_access, review_required]
-          nullable: true
+          type: [string, "null"]
+          enum: [not_applicable, waived_after_immediate_access, review_required, null]
         supportReviewAvailable: { type: boolean }
-        latestRefundRequestState: { type: string, nullable: true }
+        latestRefundRequestState: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
-        confirmedAt: { type: string, format: date-time, nullable: true }
+        confirmedAt: { type: [string, "null"], format: date-time }
     WalletTransactionPage:
       type: object
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/WalletTransaction" } }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     WalletTransaction:
       type: object
       required: [id, chain, direction, amountMinor, currency, state, source, createdAt]
@@ -6208,13 +6409,13 @@ components:
         currency: { $ref: "#/components/schemas/Currency" }
         state: { type: string, enum: [submitted, confirmed, failed] }
         source: { type: string, enum: [payment_intent, subscription_collection, manual_adjustment] }
-        paymentIntentId: { type: string, format: uuid, nullable: true }
-        walletId: { type: string, format: uuid, nullable: true }
-        signature: { type: string, nullable: true }
-        referenceAddress: { type: string, nullable: true }
+        paymentIntentId: { type: [string, "null"], format: uuid }
+        walletId: { type: [string, "null"], format: uuid }
+        signature: { type: [string, "null"] }
+        referenceAddress: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
-        submittedAt: { type: string, format: date-time, nullable: true }
-        confirmedAt: { type: string, format: date-time, nullable: true }
+        submittedAt: { type: [string, "null"], format: date-time }
+        confirmedAt: { type: [string, "null"], format: date-time }
     CreateAiSessionRequest:
       type: object
       required: [scope]
@@ -6275,12 +6476,11 @@ components:
         outputSummary: { type: string }
         result: { type: object, additionalProperties: true }
         affectedResource:
-          type: object
-          nullable: true
+          type: [object, "null"]
           required: [type, id]
           properties:
             type: { type: string, enum: [content, event, payment, provider, support_case, report, user, none] }
-            id: { type: string, nullable: true }
+            id: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
     AiSessionScope:
       type: string
@@ -6381,13 +6581,13 @@ components:
         authMode: { $ref: "#/components/schemas/McpAuthMode" }
         roleType: { $ref: "#/components/schemas/McpRoleType" }
         state: { type: string, enum: [active, revoked, expired] }
-        tokenHint: { type: string, nullable: true }
+        tokenHint: { type: [string, "null"] }
         scopes:
           type: array
           items: { $ref: "#/components/schemas/McpScope" }
         expiresAt: { type: string, format: date-time }
-        lastUsedAt: { type: string, format: date-time, nullable: true }
-        revokedAt: { type: string, format: date-time, nullable: true }
+        lastUsedAt: { type: [string, "null"], format: date-time }
+        revokedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     CreatedMcpConnection:
       allOf:
@@ -6403,7 +6603,7 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/McpConnection" }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     McpOAuthProtectedResourceMetadata:
       type: object
       required: [resource, authorization_servers, bearer_methods_supported, scopes_supported]
@@ -6504,7 +6704,7 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/OrganizationDashboard" }
-        nextCursor: { type: string, nullable: true }
+        nextCursor: { type: [string, "null"] }
     OrganizationMember:
       type: object
       required: [id, organizationId, userId, handle, role, state, joinedAt, createdAt, isCurrentUser]
@@ -6513,11 +6713,11 @@ components:
         organizationId: { type: string, format: uuid }
         userId: { type: string, format: uuid }
         handle: { type: string }
-        displayName: { type: string, nullable: true }
+        displayName: { type: [string, "null"] }
         role: { type: string, enum: [owner, admin, member, viewer] }
         state: { type: string, enum: [invited, active, suspended, removed] }
-        invitedByUserId: { type: string, format: uuid, nullable: true }
-        joinedAt: { type: string, format: date-time, nullable: true }
+        invitedByUserId: { type: [string, "null"], format: uuid }
+        joinedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         isCurrentUser: { type: boolean }
     InviteOrganizationMemberRequest:
@@ -6546,16 +6746,16 @@ components:
         name: { type: string }
         state: { type: string, enum: [pending_kyb, active, suspended, archived] }
         plan: { type: string, enum: [enterprise] }
-        kybState: { type: string, enum: [not_started, pending, verified, rejected], nullable: true }
+        kybState: { type: [string, "null"], enum: [not_started, pending, verified, rejected, null] }
         role: { type: string, enum: [owner, admin, member, viewer] }
         membershipState: { type: string, enum: [invited, active, suspended, removed] }
         createdAt: { type: string, format: date-time }
-        joinedAt: { type: string, format: date-time, nullable: true }
+        joinedAt: { type: [string, "null"], format: date-time }
     OrganizationGovernance:
       type: object
       required: [kybState, memberCount, activeMemberCount, tierWaiverState, supportState]
       properties:
-        kybState: { type: string, enum: [not_started, pending, verified, rejected], nullable: true }
+        kybState: { type: [string, "null"], enum: [not_started, pending, verified, rejected, null] }
         memberCount: { type: integer }
         activeMemberCount: { type: integer }
         tierWaiverState: { type: string, enum: [none, active, expired, revoked] }
@@ -6688,7 +6888,7 @@ components:
         state: { type: string, enum: [pending, accepted, declined, expired, revoked] }
         invitedByUserId: { type: string, format: uuid }
         expiresAt: { type: string, format: date-time }
-        respondedAt: { type: string, format: date-time, nullable: true }
+        respondedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     StaffInvitationPage:
       type: object
@@ -6760,7 +6960,7 @@ components:
         processingCount: { type: integer }
         failedCount: { type: integer }
         deadLetterCount: { type: integer }
-        oldestPendingAt: { type: string, format: date-time, nullable: true }
+        oldestPendingAt: { type: [string, "null"], format: date-time }
     AdminNotificationHealth:
       type: object
       required:
@@ -6796,9 +6996,9 @@ components:
         deadLetterDeliveryCount: { type: integer }
         skippedDeliveryCount: { type: integer }
         revokedDeliveryCount: { type: integer }
-        latestNotificationAt: { type: string, format: date-time, nullable: true }
-        latestDeviceSeenAt: { type: string, format: date-time, nullable: true }
-        latestDeliveryAt: { type: string, format: date-time, nullable: true }
+        latestNotificationAt: { type: [string, "null"], format: date-time }
+        latestDeviceSeenAt: { type: [string, "null"], format: date-time }
+        latestDeliveryAt: { type: [string, "null"], format: date-time }
     AdminStateCounts:
       type: object
       required: [total, pending, submitted, confirmed, failed]
@@ -6842,16 +7042,16 @@ components:
         productType: { $ref: "#/components/schemas/ProductType" }
         amountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
-        state: { type: string, enum: [pending, transaction_requested, submitted, confirmed, failed, expired] }
+        state: { type: string, enum: [pending, transaction_requested, submitted, confirming, confirmed, settled, failed, expired, cancelled] }
         userId: { type: string, format: uuid }
         targetId: { type: string, format: uuid }
         referenceAddress: { type: string }
-        submittedSignature: { type: string, nullable: true }
-        confirmedSignature: { type: string, nullable: true }
+        submittedSignature: { type: [string, "null"] }
+        confirmedSignature: { type: [string, "null"] }
         settlementAttemptCount: { type: integer }
-        entitlementId: { type: string, format: uuid, nullable: true }
+        entitlementId: { type: [string, "null"], format: uuid }
         createdAt: { type: string, format: date-time }
-        confirmedAt: { type: string, format: date-time, nullable: true }
+        confirmedAt: { type: [string, "null"], format: date-time }
     AdminPaymentCommercialPolicy:
       type: object
       required: [id, productType, currency, minimumAmountMinor, platformFeeBps, referralShareOfPlatformFeeBps, quoteTtlSeconds, state, revision, reason, updatedAt]
@@ -6876,10 +7076,10 @@ components:
         targetType: { type: string, enum: [content, live_room, event, message, creator] }
         targetId: { type: string, format: uuid }
         productType: { $ref: "#/components/schemas/ProductType" }
-        paymentIntentId: { type: string, format: uuid, nullable: true }
+        paymentIntentId: { type: [string, "null"], format: uuid }
         state: { type: string, enum: [active, expired, revoked] }
         grantedAt: { type: string, format: date-time }
-        expiresAt: { type: string, format: date-time, nullable: true }
+        expiresAt: { type: [string, "null"], format: date-time }
     AdminProviderEvent:
       type: object
       required: [id, provider, eventType, state, receivedAt]
@@ -6889,28 +7089,28 @@ components:
         eventType: { type: string }
         state: { type: string }
         receivedAt: { type: string, format: date-time }
-        processedAt: { type: string, format: date-time, nullable: true }
-        latestReplayRequestId: { type: string, format: uuid, nullable: true }
-        latestReplayState: { type: string, enum: [queued, processing, replayed, failed, dead_letter, cancelled], nullable: true }
-        latestReplayFailureCode: { type: string, nullable: true }
-        latestReplayRequestedAt: { type: string, format: date-time, nullable: true }
-        latestReplayProcessedAt: { type: string, format: date-time, nullable: true }
+        processedAt: { type: [string, "null"], format: date-time }
+        latestReplayRequestId: { type: [string, "null"], format: uuid }
+        latestReplayState: { type: [string, "null"], enum: [queued, processing, replayed, failed, dead_letter, cancelled, null] }
+        latestReplayFailureCode: { type: [string, "null"] }
+        latestReplayRequestedAt: { type: [string, "null"], format: date-time }
+        latestReplayProcessedAt: { type: [string, "null"], format: date-time }
     AdminSupportCase:
       type: object
       required: [id, category, state, priority, subjectType, createdAt]
       properties:
         id: { type: string, format: uuid }
-        organizationId: { type: string, format: uuid, nullable: true }
-        requesterUserId: { type: string, format: uuid, nullable: true }
-        assignedStaffUserId: { type: string, format: uuid, nullable: true }
+        organizationId: { type: [string, "null"], format: uuid }
+        requesterUserId: { type: [string, "null"], format: uuid }
+        assignedStaffUserId: { type: [string, "null"], format: uuid }
         category: { type: string, enum: [account, payment, access, safety, compliance, organization, technical] }
         state: { type: string, enum: [open, pending_user, pending_internal, resolved, closed] }
         priority: { type: string, enum: [standard, priority, enterprise_review] }
         subjectType: { type: string }
-        subjectId: { type: string, format: uuid, nullable: true }
+        subjectId: { type: [string, "null"], format: uuid }
         createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time, nullable: true }
-        closedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: [string, "null"], format: date-time }
+        closedAt: { type: [string, "null"], format: date-time }
     AdminSupportPolicy:
       type: object
       required: [id, organizationId, supportState, slaTier, state, moneyBoundary, createdAt, updatedAt]
@@ -6920,7 +7120,7 @@ components:
         supportState: { type: string, enum: [standard, priority, enterprise_review] }
         slaTier: { type: string, enum: [standard, priority, enterprise_review] }
         state: { type: string, enum: [active, paused, review_required] }
-        policyReason: { type: string, nullable: true }
+        policyReason: { type: [string, "null"] }
         moneyBoundary: { type: string, enum: [software_sla_only_no_social_priority] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -6930,18 +7130,18 @@ components:
       properties:
         id: { type: string, format: uuid }
         paymentIntentId: { type: string, format: uuid }
-        entitlementId: { type: string, format: uuid, nullable: true }
+        entitlementId: { type: [string, "null"], format: uuid }
         reporterUserId: { type: string, format: uuid }
         kind: { type: string, enum: [refund_request, dispute, access_issue] }
         requestedAction: { type: string, enum: [review_only, creator_refund, revoke_access, replacement_access] }
         state: { $ref: "#/components/schemas/RefundDisputeState" }
-        resolution: { type: string, nullable: true }
+        resolution: { type: [string, "null"] }
         custodyBoundary: { type: string, enum: [no_platform_custody_no_payout_queue] }
         remediationEvidenceCount: { type: integer, minimum: 0 }
-        latestRemediationEvidenceAt: { type: string, format: date-time, nullable: true }
+        latestRemediationEvidenceAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time, nullable: true }
-        resolvedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: [string, "null"], format: date-time }
+        resolvedAt: { type: [string, "null"], format: date-time }
     AdminDataRequest:
       type: object
       required: [id, requesterUserId, type, state, privacyBoundary, createdAt, updatedAt]
@@ -6952,8 +7152,8 @@ components:
         state: { type: string, enum: [requested, verifying, processing, completed, rejected] }
         privacyBoundary: { type: string, enum: [sanitized_identity_minimized_no_raw_exports] }
         createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time, nullable: true }
-        completedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: [string, "null"], format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
     AdminMutualsSafety:
       type: object
       required: [openReports, activeMutuals, staleMutuals, socialMoneyBoundary]
@@ -6970,27 +7170,27 @@ components:
         creatorUserId: { type: string, format: uuid }
         title: { type: string }
         provider: { type: string, enum: [livepeer] }
-        providerStreamId: { type: string, nullable: true }
-        providerPlaybackId: { type: string, nullable: true }
+        providerStreamId: { type: [string, "null"] }
+        providerPlaybackId: { type: [string, "null"] }
         providerState: { type: string }
         state: { type: string, enum: [scheduled, waiting, live, suspended, ended, replay_ready] }
         accessMode: { type: string, enum: [public, profile_members, paid_event] }
-        eventPriceMinor: { type: integer, nullable: true }
+        eventPriceMinor: { type: [integer, "null"] }
         currency: { $ref: "#/components/schemas/Currency" }
         membersOnlyChat: { type: boolean }
         membersIncludedInPaidEvent: { type: boolean }
         replayWindowHours: { type: integer }
         hasPlaybackUrl: { type: boolean }
         hasHostStreamKey: { type: boolean }
-        monitoringState: { type: string, enum: [monitoring_pending, target_connected, monitoring, held, suspended, ended], nullable: true }
+        monitoringState: { type: [string, "null"], enum: [monitoring_pending, target_connected, monitoring, held, suspended, ended, null] }
         monitoringHealthy: { type: boolean }
-        monitoringHeartbeatExpiresAt: { type: string, format: date-time, nullable: true }
-        monitoringHoldReasonCode: { type: string, nullable: true }
+        monitoringHeartbeatExpiresAt: { type: [string, "null"], format: date-time }
+        monitoringHoldReasonCode: { type: [string, "null"] }
         pendingProviderAction: { type: boolean }
-        startsAt: { type: string, format: date-time, nullable: true }
-        endedAt: { type: string, format: date-time, nullable: true }
+        startsAt: { type: [string, "null"], format: date-time }
+        endedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: [string, "null"], format: date-time }
     AdminLiveRoomSuspensionRequest:
       type: object
       required: [suspended, reason]
@@ -7004,17 +7204,17 @@ components:
         id: { type: string, format: uuid }
         contentItemId: { type: string, format: uuid }
         assetKind: { type: string, enum: [image, video] }
-        position: { type: integer, minimum: 0, maximum: 9, nullable: true }
+        position: { type: [integer, "null"], minimum: 0, maximum: 9 }
         provider: { type: string, enum: [bunny, livepeer] }
         providerAssetId: { type: string }
         providerState: { type: string }
         providerPlayable: { type: boolean }
         hasPlaybackUrl: { type: boolean }
-        readyAt: { type: string, format: date-time, nullable: true }
-        providerCheckedAt: { type: string, format: date-time, nullable: true }
-        retiredAt: { type: string, format: date-time, nullable: true }
+        readyAt: { type: [string, "null"], format: date-time }
+        providerCheckedAt: { type: [string, "null"], format: date-time }
+        retiredAt: { type: [string, "null"], format: date-time }
         providerCleanupState: { type: string, enum: [not_required, pending, retry, completed] }
-        providerCleanupErrorCode: { type: string, nullable: true }
+        providerCleanupErrorCode: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
     AdminAgeCheck:
       type: object
@@ -7025,57 +7225,76 @@ components:
         provider: { type: string }
         providerReference: { type: string }
         state: { $ref: "#/components/schemas/AgeState" }
-        jurisdiction: { type: string, nullable: true }
-        rule: { type: string, nullable: true }
+        jurisdiction: { type: [string, "null"] }
+        rule: { type: [string, "null"] }
         hasProviderReference: { type: boolean }
         privacyBoundary: { type: string, enum: [sanitized_age_state_no_raw_identity_payloads] }
-        verifiedAt: { type: string, format: date-time, nullable: true }
-        expiresAt: { type: string, format: date-time, nullable: true }
+        verifiedAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     AdminIdentityCheck:
       type: object
-      required: [id, userId, provider, providerReference, verificationType, state, hasProviderReference, hasLegalNameHash, privacyBoundary, createdAt]
+      required: [id, userId, subjectType, subjectId, purpose, provider, providerReference, verificationType, state, hasProviderReference, hasLegalNameHash, privacyBoundary, createdAt]
       properties:
         id: { type: string, format: uuid }
-        userId: { type: string, format: uuid }
+        userId: { type: [string, "null"], format: uuid }
+        subjectType: { type: string, enum: [user, organization, organization_person, performer] }
+        subjectId: { type: string, format: uuid }
+        purpose: { type: string, enum: [age_access, adult_publisher_eligibility, performer_eligibility, creator_kyc, payout_kyc, org_kyb, ubo_kyc, enterprise_review] }
         provider: { type: string }
         providerReference: { type: string }
         verificationType: { type: string, enum: [age, identity, liveness, wallet_ownership, kyc, kyb] }
         state: { type: string, enum: [pending, verified, failed, expired, cancelled] }
-        countryCode: { type: string, nullable: true }
-        documentType: { type: string, nullable: true }
-        livenessState: { type: string, nullable: true }
-        walletOwnershipState: { type: string, nullable: true }
+        countryCode: { type: [string, "null"] }
+        documentType: { type: [string, "null"] }
+        livenessState: { type: [string, "null"] }
+        walletOwnershipState: { type: [string, "null"] }
         hasProviderReference: { type: boolean }
         hasLegalNameHash: { type: boolean }
         privacyBoundary: { type: string, enum: [sanitized_identity_minimized_no_raw_documents_or_pii] }
-        verifiedAt: { type: string, format: date-time, nullable: true }
-        expiresAt: { type: string, format: date-time, nullable: true }
+        verifiedAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
     AdminAiSession:
       type: object
-      required: [id, actorUserId, scope, state, allowedToolCount, createdAt, expiresAt]
+      required: [id, actorUserId, transport, connectionId, scope, state, allowedToolCount, clientName, clientType, authMode, grantedScopes, lastUsedAt, createdAt, expiresAt]
       properties:
         id: { type: string, format: uuid }
         actorUserId: { type: string, format: uuid }
-        scope: { type: string, enum: [user_self_service, creator_helper, admin_ops] }
+        transport: { type: string, enum: [assistant, mcp] }
+        connectionId: { type: [string, "null"], format: uuid }
+        scope: { type: string, enum: [user_self_service, creator_helper, admin_ops, creator, admin] }
         state: { type: string, enum: [active, expired, revoked] }
         allowedToolCount: { type: integer, minimum: 0 }
+        clientName: { type: [string, "null"] }
+        clientType: { type: [string, "null"], enum: [claude, claude_code, cursor, openai, custom, internal, null] }
+        authMode: { type: [string, "null"], enum: [scoped_token, oauth, null] }
+        grantedScopes:
+          type: array
+          items: { type: string }
+        lastUsedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         expiresAt: { type: string, format: date-time }
     AdminAiToolCall:
       type: object
-      required: [id, sessionId, actorUserId, scope, toolName, state, confirmationState, inputSummary, outputSummary, redactionBoundary, createdAt]
+      required: [id, sessionId, connectionId, actorUserId, transport, scope, toolName, toolVersion, state, confirmationState, riskLevel, requiredScopes, inputSummary, outputSummary, redactionBoundary, createdAt]
       properties:
         id: { type: string, format: uuid }
         sessionId: { type: string, format: uuid }
+        connectionId: { type: [string, "null"], format: uuid }
         actorUserId: { type: string, format: uuid }
-        scope: { type: string, enum: [user_self_service, creator_helper, admin_ops] }
-        toolName: { $ref: "#/components/schemas/AiToolName" }
-        state: { type: string, enum: [prepared, executed, blocked, failed] }
+        transport: { type: string, enum: [assistant, mcp] }
+        scope: { type: string, enum: [user_self_service, creator_helper, admin_ops, creator, admin] }
+        toolName: { type: string, minLength: 1, maxLength: 160 }
+        toolVersion: { type: [string, "null"], pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        state: { type: string, enum: [prepared, executed, blocked, allowed, denied, failed] }
         confirmationState: { type: string, enum: [not_required, required, confirmed, rejected] }
-        subjectType: { type: string, enum: [content, event, payment, provider, support_case, report, user, none], nullable: true }
-        subjectId: { type: string, nullable: true }
+        riskLevel: { type: [string, "null"], enum: [read, draft, request, null] }
+        requiredScopes:
+          type: array
+          items: { type: string }
+        subjectType: { type: [string, "null"], enum: [content, event, payment, provider, support_case, report, user, none, null] }
+        subjectId: { type: [string, "null"] }
         inputSummary: { type: string }
         outputSummary: { type: string }
         redactionBoundary: { type: string, enum: [summaries_only_no_tool_payloads_or_secrets] }
@@ -7088,26 +7307,26 @@ components:
         eventType: { type: string, enum: [payment_settled, refund_recorded, entitlement_granted, fee_recorded, referral_commission_recorded, tax_adjusted] }
         productType: { type: string, enum: [support, content_unlock, paid_message, live_pass, event_access_pass, membership, platform_plus, platform_studio, enterprise, platform_fee, referral_commission] }
         settlementModel: { type: string, enum: [user_to_creator_split, user_to_platform, platform_fee_only, referral_commission_only] }
-        sellerUserId: { type: string, format: uuid, nullable: true }
-        buyerUserId: { type: string, format: uuid, nullable: true }
-        paymentIntentId: { type: string, format: uuid, nullable: true }
-        entitlementId: { type: string, format: uuid, nullable: true }
-        receiptId: { type: string, format: uuid, nullable: true }
-        invoiceId: { type: string, format: uuid, nullable: true }
+        sellerUserId: { type: [string, "null"], format: uuid }
+        buyerUserId: { type: [string, "null"], format: uuid }
+        paymentIntentId: { type: [string, "null"], format: uuid }
+        entitlementId: { type: [string, "null"], format: uuid }
+        receiptId: { type: [string, "null"], format: uuid }
+        invoiceId: { type: [string, "null"], format: uuid }
         grossAmountMinor: { type: integer }
-        platformFeeMinor: { type: integer, nullable: true }
-        creatorNetAmountMinor: { type: integer, nullable: true }
-        taxAmountMinor: { type: integer, nullable: true }
+        platformFeeMinor: { type: [integer, "null"] }
+        creatorNetAmountMinor: { type: [integer, "null"] }
+        taxAmountMinor: { type: [integer, "null"] }
         currency: { $ref: "#/components/schemas/Currency" }
         fiatCurrency: { type: string, minLength: 3, maxLength: 3 }
-        fxRate: { type: string, nullable: true }
-        sellerCountry: { type: string, nullable: true }
-        buyerCountry: { type: string, nullable: true }
+        fxRate: { type: [string, "null"] }
+        sellerCountry: { type: [string, "null"] }
+        buyerCountry: { type: [string, "null"] }
         sellerOfRecord: { type: string, enum: [creator, veel, enterprise_merchant, undetermined] }
         vatStatus: { type: string, enum: [not_applicable, pending, reverse_charge, taxable, exempt, out_of_scope, review_required] }
         dac7Reportable: { type: boolean }
         carfReportable: { type: boolean }
-        immutableHash: { type: string, nullable: true }
+        immutableHash: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
     AdminComplianceReport:
       type: object
@@ -7118,11 +7337,11 @@ components:
         reportingYear: { type: integer }
         state: { type: string, enum: [draft, collecting, ready_for_review, exported, filed, blocked] }
         lineCount: { type: integer }
-        jurisdiction: { type: string, nullable: true }
-        exportId: { type: string, format: uuid, nullable: true }
-        carfReportingRequired: { type: boolean, nullable: true }
+        jurisdiction: { type: [string, "null"] }
+        exportId: { type: [string, "null"], format: uuid }
+        carfReportingRequired: { type: [boolean, "null"] }
         createdAt: { type: string, format: date-time }
-        exportedAt: { type: string, format: date-time, nullable: true }
+        exportedAt: { type: [string, "null"], format: date-time }
     AdminVatDetermination:
       type: object
       required: [id, productType, sellerOfRecord, buyerCountry, sellerCountry, vatStatus, createdAt]
@@ -7130,14 +7349,14 @@ components:
         id: { type: string, format: uuid }
         productType: { type: string, enum: [support, content_unlock, paid_message, live_pass, event_access_pass, membership, platform_plus, platform_studio, enterprise, platform_fee, referral_commission] }
         sellerOfRecord: { type: string, enum: [creator, veel, enterprise_merchant, undetermined] }
-        buyerCountry: { type: string, nullable: true }
-        sellerCountry: { type: string, nullable: true }
-        buyerVatId: { type: string, nullable: true }
-        viesStatus: { type: string, enum: [not_checked, valid, invalid, unavailable], nullable: true }
-        placeOfSupply: { type: string, nullable: true }
+        buyerCountry: { type: [string, "null"] }
+        sellerCountry: { type: [string, "null"] }
+        buyerVatId: { type: [string, "null"] }
+        viesStatus: { type: [string, "null"], enum: [not_checked, valid, invalid, unavailable, null] }
+        placeOfSupply: { type: [string, "null"] }
         vatStatus: { type: string, enum: [not_applicable, pending, reverse_charge, taxable, exempt, out_of_scope, review_required] }
-        vatRateBps: { type: integer, nullable: true }
-        vatAmountMinor: { type: integer, nullable: true }
+        vatRateBps: { type: [integer, "null"] }
+        vatAmountMinor: { type: [integer, "null"] }
         reviewState: { type: string, enum: [clear, needs_review, resolved] }
         createdAt: { type: string, format: date-time }
     AdminReceipt:
@@ -7147,9 +7366,9 @@ components:
         id: { type: string, format: uuid }
         receiptNumber: { type: string }
         productType: { type: string, enum: [support, content_unlock, paid_message, live_pass, event_access_pass, membership, platform_plus, platform_studio, enterprise, platform_fee, referral_commission] }
-        buyerUserId: { type: string, format: uuid, nullable: true }
-        sellerUserId: { type: string, format: uuid, nullable: true }
-        paymentIntentId: { type: string, format: uuid, nullable: true }
+        buyerUserId: { type: [string, "null"], format: uuid }
+        sellerUserId: { type: [string, "null"], format: uuid }
+        paymentIntentId: { type: [string, "null"], format: uuid }
         grossAmountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
         state: { type: string, enum: [issued, voided, corrected] }
@@ -7161,8 +7380,8 @@ components:
         id: { type: string, format: uuid }
         invoiceNumber: { type: string }
         sellerOfRecord: { type: string, enum: [creator, veel, enterprise_merchant, undetermined] }
-        buyerUserId: { type: string, format: uuid, nullable: true }
-        sellerUserId: { type: string, format: uuid, nullable: true }
+        buyerUserId: { type: [string, "null"], format: uuid }
+        sellerUserId: { type: [string, "null"], format: uuid }
         totalAmountMinor: { type: integer }
         vatAmountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
@@ -7186,7 +7405,7 @@ components:
         name: { type: string }
         partnerName: { type: string }
         state: { type: string, enum: [draft, active, paused, archived] }
-        contractId: { type: string, format: uuid, nullable: true }
+        contractId: { type: [string, "null"], format: uuid }
         createdAt: { type: string, format: date-time }
     AdminTierWaiver:
       type: object
@@ -7198,7 +7417,7 @@ components:
         tierKey: { $ref: "#/components/schemas/PlatformTierKey" }
         state: { type: string, enum: [active, expired, revoked] }
         startsAt: { type: string, format: date-time }
-        endsAt: { type: string, format: date-time, nullable: true }
+        endsAt: { type: [string, "null"], format: date-time }
     AdminOrganization:
       type: object
       required: [id, name, state, plan, createdAt]
@@ -7207,7 +7426,7 @@ components:
         name: { type: string }
         state: { type: string, enum: [pending_kyb, active, suspended, archived] }
         plan: { type: string, enum: [enterprise] }
-        kybState: { type: string, enum: [not_started, pending, verified, rejected], nullable: true }
+        kybState: { type: [string, "null"], enum: [not_started, pending, verified, rejected, null] }
         createdAt: { type: string, format: date-time }
     AdminOrganizationMember:
       type: object
@@ -7218,10 +7437,10 @@ components:
         userId: { type: string, format: uuid }
         role: { type: string, enum: [owner, admin, member, viewer] }
         state: { type: string, enum: [invited, active, suspended, removed] }
-        invitedByUserId: { type: string, format: uuid, nullable: true }
-        joinedAt: { type: string, format: date-time, nullable: true }
+        invitedByUserId: { type: [string, "null"], format: uuid }
+        joinedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: [string, "null"], format: date-time }
     AdminFeatureFlag:
       type: object
       required: [key, value, category, policyBoundary, state, updatedAt]

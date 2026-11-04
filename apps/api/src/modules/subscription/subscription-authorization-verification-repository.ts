@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { executeWithMutationCommandReceipt } from "../../shared/mutation-command-receipt.js";
 import type { SubscriptionPlan, SubscriptionRepository } from "./types.js";
 import { SubscriptionRepositoryConfigurationError } from "./subscription-errors.js";
 import type { SubscriptionRow } from "./subscription-repository-rows.js";
@@ -65,7 +66,7 @@ export async function findAuthorizationVerificationContext(
     join users u on u.id = s.subscriber_user_id
     where sai.id = ${input.authorizationIntentId}
       and u.supabase_user_id = ${input.supabaseUserId}
-      and sai.state in ('created', 'submitted')
+      and sai.state in ('created', 'submitted', 'verified')
     limit 1
   `;
   const row = rows[0];
@@ -136,8 +137,18 @@ export async function submitAuthorization(
     throw new SubscriptionRepositoryConfigurationError();
   }
 
-  return sql.begin(async (transaction) => {
-    const rows = await transaction<
+  return sql.begin(async (transaction) =>
+    executeWithMutationCommandReceipt(transaction, {
+      actorUserId: actor.id,
+      action: "subscription.authorization.submit",
+      targetType: "subscription_authorization_intent",
+      targetId: input.authorizationIntentId,
+      idempotencyKey: input.idempotencyKey,
+      requestVersion: 1,
+      requestBody: { signature: input.body.signature },
+      responseStatus: 202
+    }, async () => {
+      const rows = await transaction<
       (SubscriptionRow & {
         authorization_intent_id: string;
         plan_period_days: number;
@@ -148,7 +159,7 @@ export async function submitAuthorization(
         plan_allocation_amount_atomic: string | number;
         plan_currency: SubscriptionPlan["currency"];
       })[]
-    >`
+      >`
       update subscription_authorization_intents sai
       set
         state = case when ${input.verification.verified} then 'verified' else 'submitted' end,
@@ -166,6 +177,7 @@ export async function submitAuthorization(
         and sai.state in ('created', 'submitted')
       returning
         s.id,
+        s.created_at,
         s.scope,
         s.plan_id,
         s.state,
@@ -184,6 +196,7 @@ export async function submitAuthorization(
         s.period_seconds,
         s.plan_pda,
         s.subscription_pda,
+        s.failure_reason,
         s.merchant_wallet,
         s.creator_user_id,
         p.handle as creator_handle,
@@ -198,32 +211,33 @@ export async function submitAuthorization(
         sp.allocation_amount_atomic as plan_allocation_amount_atomic,
         sp.currency as plan_currency
     `;
-    const row = rows[0];
+      const row = rows[0];
 
-    if (!row) {
-      return null;
-    }
-
-    await activateSubscriptionAfterVerification(transaction, row, input);
-    const subscription = await findSubscriptionById(transaction, {
-      supabaseUserId: input.supabaseUserId,
-      subscriptionId: row.id
-    });
-
-    await insertSubscriptionEvent(transaction, {
-      subscriptionId: row.id,
-      actorUserId: actor.id,
-      action: input.verification.verified
-        ? "subscription.authorization_verified"
-        : "subscription.authorization_submitted",
-      authorizationIntentId: row.authorization_intent_id,
-      metadata: {
-        failureCode: input.verification.failureCode ?? null
+      if (!row) {
+        return null;
       }
-    });
 
-    return subscription;
-  });
+      await activateSubscriptionAfterVerification(transaction, row, input);
+      const subscription = await findSubscriptionById(transaction, {
+        supabaseUserId: input.supabaseUserId,
+        subscriptionId: row.id
+      });
+
+      await insertSubscriptionEvent(transaction, {
+        subscriptionId: row.id,
+        actorUserId: actor.id,
+        action: input.verification.verified
+          ? "subscription.authorization_verified"
+          : "subscription.authorization_submitted",
+        authorizationIntentId: row.authorization_intent_id,
+        metadata: {
+          failureCode: input.verification.failureCode ?? null
+        }
+      });
+
+      return subscription;
+    })
+  );
 }
 
 async function activateSubscriptionAfterVerification(

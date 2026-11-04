@@ -1,4 +1,9 @@
 import type postgres from "postgres";
+import {
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
+  keysetPage
+} from "../../shared/keyset-pagination.js";
 import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import type { MutualsRepository } from "./types.js";
 import { MutualsRepositoryConfigurationError } from "./mutuals-errors.js";
@@ -14,6 +19,9 @@ export {
   MutualsIdempotencyConflictError,
   MutualsRepositoryConfigurationError
 } from "./mutuals-errors.js";
+
+export const mutualsFeedCursorScope = "GET /v1/mutuals/feed";
+export const mutualsListCursorScope = "GET /v1/mutuals";
 
 export function createPostgresMutualsRepository(database?: string | PostgresSql): MutualsRepository {
   if (!database) {
@@ -95,6 +103,7 @@ export function createPostgresMutualsRepository(database?: string | PostgresSql)
       return rows[0] ? toMutualsProfile(rows[0]) : null;
     },
     async listFeed(input) {
+      const cursor = decodeTimestampIdCursor(mutualsFeedCursorScope, input.cursor);
       const rows = await sql<MutualsFeedRow[]>`
         with actor as (
           select u.id
@@ -111,25 +120,46 @@ export function createPostgresMutualsRepository(database?: string | PostgresSql)
           p.handle,
           p.display_name,
           p.avatar_url,
-          ci.caption as title,
-          ci.media_kind,
-          ma.poster_url,
+          coalesce(nullif(btrim(ci.caption), ''), p.display_name, p.handle) as title,
+          ci.media_type,
+          selected_asset.asset_kind as cover_asset_kind,
+          selected_asset.poster_url,
           ci.created_at
         from content_items ci
+        join private.eligible_content((select id from actor), null) eligible
+          on eligible.content_item_id = ci.id
         join mutual_profiles creator_mutuals
           on creator_mutuals.user_id = ci.creator_user_id
           and creator_mutuals.enabled = true
           and creator_mutuals.visible_on_media = true
           and creator_mutuals.safety_state = 'clear'
         join profiles p on p.user_id = ci.creator_user_id
-        left join media_assets ma on ma.content_item_id = ci.id
+        join lateral (
+          select ma.asset_kind, ma.poster_url
+          from media_assets ma
+          where ma.content_item_id = ci.id
+            and ma.retired_at is null
+          order by
+            (ma.id = ci.release_media_asset_id) desc,
+            ma.is_cover desc,
+            ma.position asc,
+            ma.created_at asc
+          limit 1
+        ) selected_asset on true
         where exists (select 1 from actor)
-          and ci.state = 'ready'
-          and ci.publish_state = 'published'
-          and ci.moderation_state = 'approved'
-          and ci.visibility = 'public'
+          and ci.media_type in ('bit', 'clip', 'image', 'vod', 'live_replay', 'carousel')
           and ci.creator_user_id <> (select id from actor)
-          and (${input.cursor ?? null}::timestamptz is null or ci.created_at < ${input.cursor ?? null}::timestamptz)
+          and (
+            ${cursor.timestamp}::timestamptz is null
+            or (
+              ${cursor.id}::uuid is null
+              and ci.created_at <= ${cursor.timestamp}::timestamptz
+            )
+            or (
+              ${cursor.id}::uuid is not null
+              and (ci.created_at, ci.id) < (${cursor.timestamp}::timestamptz, ${cursor.id}::uuid)
+            )
+          )
           and not exists (
             select 1
             from mutual_interests mi
@@ -137,7 +167,7 @@ export function createPostgresMutualsRepository(database?: string | PostgresSql)
               and mi.target_user_id = ci.creator_user_id
               and (mi.content_item_id = ci.id or mi.content_item_id is null)
           )
-        order by ci.created_at desc
+        order by ci.created_at desc, ci.id desc
         limit ${input.limit + 1}
       `;
 
@@ -146,16 +176,13 @@ export function createPostgresMutualsRepository(database?: string | PostgresSql)
         if (!active) return null;
       }
 
-      const pageRows = rows.slice(0, input.limit);
-      const extraRow = rows[input.limit];
-
-      return {
-        items: pageRows.map(toMutualsFeedItem),
-        nextCursor: extraRow ? extraRow.created_at.toISOString() : null
-      };
+      return keysetPage(rows, input.limit, toMutualsFeedItem, (row) =>
+        encodeTimestampIdCursor(mutualsFeedCursorScope, row.created_at, row.content_id)
+      );
     },
     ...createMutualsInterestRepositoryMethods(sql),
     async listMutuals(input) {
+      const cursor = decodeTimestampIdCursor(mutualsListCursorScope, input.cursor);
       const rows = await sql<MutualRow[]>`
         with actor as (
           select id
@@ -176,18 +203,29 @@ export function createPostgresMutualsRepository(database?: string | PostgresSql)
         from mutuals
         where (user_a_id = (select id from actor) or user_b_id = (select id from actor))
           and state in ('active', 'stale')
-          and (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
-        order by created_at desc
+          and not exists (
+            select 1 from blocks b
+            where (b.blocker_user_id = user_a_id and b.blocked_user_id = user_b_id)
+               or (b.blocker_user_id = user_b_id and b.blocked_user_id = user_a_id)
+          )
+          and (
+            ${cursor.timestamp}::timestamptz is null
+            or (
+              ${cursor.id}::uuid is null
+              and created_at <= ${cursor.timestamp}::timestamptz
+            )
+            or (
+              ${cursor.id}::uuid is not null
+              and (created_at, id) < (${cursor.timestamp}::timestamptz, ${cursor.id}::uuid)
+            )
+          )
+        order by created_at desc, id desc
         limit ${input.limit + 1}
       `;
 
-      const pageRows = rows.slice(0, input.limit);
-      const extraRow = rows[input.limit];
-
-      return {
-        items: pageRows.map(toMutual),
-        nextCursor: extraRow ? extraRow.created_at.toISOString() : null
-      };
+      return keysetPage(rows, input.limit, toMutual, (row) =>
+        encodeTimestampIdCursor(mutualsListCursorScope, row.created_at, row.id)
+      );
     },
     async archiveMutual(input) {
       const rows = await sql<MutualRow[]>`

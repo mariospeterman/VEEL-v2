@@ -3,7 +3,7 @@ import type { EngagementRepository } from "./types.js";
 import { EngagementRepositoryConfigurationError } from "./engagement-errors.js";
 import { toPreferences } from "./engagement-repository-mappers.js";
 import type { PreferencesRow } from "./engagement-repository-rows.js";
-import { insertAudit, preferencesSelectSql } from "./engagement-repository-sql.js";
+import { insertAudit } from "./engagement-repository-sql.js";
 
 type EngagementPreferencesRepositoryMethods = Pick<
   EngagementRepository,
@@ -48,37 +48,33 @@ export function createEngagementPreferencesRepositoryMethods(
       return toPreferences(rows[0]);
     },
     async updateFeedPreferences(input) {
-      const rows = await sql<PreferencesRow[]>`
-        with actor as (
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        ),
-        upserted as (
+      return sql.begin(async (transaction) => {
+        const actorRows = await transaction<{ id: string }[]>`
+          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+        `;
+        const actor = actorRows[0];
+        if (!actor) return toPreferences(undefined);
+        await transaction`
           insert into viewer_feed_preferences (
             user_id,
             default_feed_mode,
             nsfw_preference,
             updated_at
           )
-          select
-            actor.id,
+          values (
+            ${actor.id},
             coalesce(${input.body.defaultMode ?? null}, 'recommended'),
             coalesce(${input.body.nsfwPreference ?? null}, 'both'),
             now()
-          from actor
+          )
           on conflict (user_id) do update
           set
             default_feed_mode = coalesce(${input.body.defaultMode ?? null}, viewer_feed_preferences.default_feed_mode),
             nsfw_preference = coalesce(${input.body.nsfwPreference ?? null}, viewer_feed_preferences.nsfw_preference),
             updated_at = now()
-          returning user_id, default_feed_mode, nsfw_preference
-        )
-        ${preferencesSelectSql(sql, "upserted")}
-      `;
-
-      return toPreferences(rows[0]);
+        `;
+        return toPreferences((await selectPreferencesForUser(transaction, actor.id))[0]);
+      });
     },
     async resetFeedRecommendations(input) {
       await sql.begin(async (transaction) => {
@@ -105,60 +101,70 @@ export function createEngagementPreferencesRepositoryMethods(
       });
     },
     async hideCreator(input) {
-      const rows = await sql<PreferencesRow[]>`
-        with actor as (
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        ),
-        inserted as (
+      return sql.begin(async (transaction) => {
+        const actorRows = await transaction<{ id: string }[]>`
+          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+        `;
+        const actor = actorRows[0];
+        if (!actor) return toPreferences(undefined);
+        await transaction`
           insert into viewer_hidden_creators (user_id, creator_user_id, idempotency_key)
-          select actor.id, ${input.creatorUserId}, ${input.idempotencyKey}
-          from actor
+          values (${actor.id}, ${input.creatorUserId}, ${input.idempotencyKey})
           on conflict (user_id, creator_user_id) do update
           set idempotency_key = viewer_hidden_creators.idempotency_key
-          returning user_id
-        ),
-        ensured_preferences as (
-          insert into viewer_feed_preferences (user_id)
-          select user_id
-          from inserted
+        `;
+        await transaction`
+          insert into viewer_feed_preferences (user_id) values (${actor.id})
           on conflict (user_id) do nothing
-          returning user_id
-        )
-        ${preferencesSelectSql(sql, "inserted")}
-      `;
-
-      return toPreferences(rows[0]);
+        `;
+        return toPreferences((await selectPreferencesForUser(transaction, actor.id))[0]);
+      });
     },
     async hideTopic(input) {
-      const rows = await sql<PreferencesRow[]>`
-        with actor as (
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        ),
-        inserted as (
+      return sql.begin(async (transaction) => {
+        const actorRows = await transaction<{ id: string }[]>`
+          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+        `;
+        const actor = actorRows[0];
+        if (!actor) return toPreferences(undefined);
+        await transaction`
           insert into viewer_hidden_topics (user_id, topic, idempotency_key)
-          select actor.id, lower(${input.topic}), ${input.idempotencyKey}
-          from actor
+          values (${actor.id}, lower(${input.topic}), ${input.idempotencyKey})
           on conflict (user_id, topic) do update
           set idempotency_key = viewer_hidden_topics.idempotency_key
-          returning user_id
-        ),
-        ensured_preferences as (
-          insert into viewer_feed_preferences (user_id)
-          select user_id
-          from inserted
+        `;
+        await transaction`
+          insert into viewer_feed_preferences (user_id) values (${actor.id})
           on conflict (user_id) do nothing
-          returning user_id
-        )
-        ${preferencesSelectSql(sql, "inserted")}
-      `;
-
-      return toPreferences(rows[0]);
+        `;
+        return toPreferences((await selectPreferencesForUser(transaction, actor.id))[0]);
+      });
     }
   };
+}
+
+function selectPreferencesForUser(
+  sql: postgres.Sql | postgres.TransactionSql,
+  userId: string
+): Promise<PreferencesRow[]> {
+  return sql<PreferencesRow[]>`
+    select
+      vfp.default_feed_mode,
+      vfp.nsfw_preference,
+      coalesce(
+        array_agg(distinct vhc.creator_user_id::text)
+          filter (where vhc.creator_user_id is not null),
+        array[]::text[]
+      ) as hidden_creator_ids,
+      coalesce(
+        array_agg(distinct vht.topic)
+          filter (where vht.topic is not null),
+        array[]::text[]
+      ) as hidden_topics
+    from viewer_feed_preferences vfp
+    left join viewer_hidden_creators vhc on vhc.user_id = vfp.user_id
+    left join viewer_hidden_topics vht on vht.user_id = vfp.user_id
+    where vfp.user_id = ${userId}
+    group by vfp.user_id, vfp.default_feed_mode, vfp.nsfw_preference
+  `;
 }

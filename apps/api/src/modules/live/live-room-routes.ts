@@ -149,10 +149,13 @@ export async function registerLiveRoomRoutes(
   app.get("/v1/live/rooms/mine", { schema: contractRouteSchema("listMyLiveRooms") }, async (request, reply) => {
     const access = await verifyLiveReadyAccess(request, options);
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
+    const cursor = readLiveRoomCursor(request.query);
 
     try {
       const page = await options.liveRepository.listOwnedRooms({
-        supabaseUserId: access.supabaseUserId
+        supabaseUserId: access.supabaseUserId,
+        limit: 20,
+        ...(cursor ? { cursor } : {})
       });
       return reply.code(200).send({
         items: page.items.map(toLiveRoomResponse),
@@ -395,6 +398,12 @@ export async function registerLiveRoomRoutes(
       throw error;
     }
   });
+}
+
+function readLiveRoomCursor(query: unknown): string | undefined {
+  if (!query || typeof query !== "object" || !("cursor" in query)) return undefined;
+  const cursor = (query as { cursor?: unknown }).cursor;
+  return typeof cursor === "string" && cursor.length > 0 ? cursor : undefined;
 }
 
 async function containUnattachedProviderRoom(

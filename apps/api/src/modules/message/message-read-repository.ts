@@ -1,17 +1,24 @@
 import type postgres from "postgres";
 import {
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor
+} from "../../shared/keyset-pagination.js";
+import {
   type ConversationRow,
   type MessageRow,
   messageSelectSql,
   toConversation,
   toMessage
 } from "./message-repository-mappers.js";
-import type { ConversationInput, ListConversationsInput } from "./types.js";
+import type { ListConversationsInput, PaginatedConversationInput } from "./types.js";
+
+const conversationCursorScope = "messages:conversations";
 
 export async function listConversations(
   sql: postgres.ISql,
   input: ListConversationsInput
 ) {
+  const cursor = decodeTimestampIdCursor(conversationCursorScope, input.cursor);
   const rows = await sql<ConversationRow[]>`
     with actor as (
       select id
@@ -48,6 +55,7 @@ export async function listConversations(
       last_sender_profile.handle as last_sender_handle,
       last_sender_profile.display_name as last_sender_display_name,
       last_sender_profile.avatar_url as last_sender_avatar_url
+      , coalesce(last_message.created_at, c.created_at) as sort_at
     from conversation_members own_member
     join conversations c on c.id = own_member.conversation_id
     left join conversation_members other_member
@@ -75,11 +83,23 @@ export async function listConversations(
         and (own_member.last_read_at is null or m_unread.created_at > own_member.last_read_at)
     ) unread on true
     where own_member.user_id = (select id from actor)
-    order by coalesce(last_message.created_at, c.created_at) desc
+      and (
+        ${cursor.timestamp}::timestamptz is null
+        or (coalesce(last_message.created_at, c.created_at), c.id) <
+          (${cursor.timestamp}::timestamptz, coalesce(${cursor.id}::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
+      )
+    order by coalesce(last_message.created_at, c.created_at) desc, c.id desc
+    limit ${input.limit + 1}
   `;
 
+  const pageRows = rows.slice(0, input.limit);
+  const lastVisible = rows.length > input.limit ? pageRows.at(-1) : undefined;
+
   return {
-    items: rows.map(toConversation)
+    items: pageRows.map(toConversation),
+    nextCursor: lastVisible
+      ? encodeTimestampIdCursor(conversationCursorScope, lastVisible.sort_at, lastVisible.id)
+      : null
   };
 }
 
@@ -149,23 +169,36 @@ export async function readConversationByUserId(
   return rows[0] ? toConversation(rows[0]) : null;
 }
 
-export async function listMessages(sql: postgres.Sql, input: ConversationInput) {
+export async function listMessages(sql: postgres.Sql, input: PaginatedConversationInput) {
   const participantId = await findParticipantId(sql, input.supabaseUserId, input.conversationId);
 
   if (!participantId) {
     return null;
   }
 
+  const cursorScope = `messages:conversation:${input.conversationId}`;
+  const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
   const rows = await sql<MessageRow[]>`
     ${messageSelectSql(sql, participantId)}
     where m.conversation_id = ${input.conversationId}
       and m.delivery_state = 'visible'
-    order by m.created_at desc
-    limit 50
+      and (
+        ${cursor.timestamp}::timestamptz is null
+        or (m.created_at, m.id) <
+          (${cursor.timestamp}::timestamptz, coalesce(${cursor.id}::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid))
+      )
+    order by m.created_at desc, m.id desc
+    limit ${input.limit + 1}
   `;
 
+  const pageRows = rows.slice(0, input.limit);
+  const lastVisible = rows.length > input.limit ? pageRows.at(-1) : undefined;
+
   return {
-    items: rows.reverse().map(toMessage)
+    items: pageRows.reverse().map(toMessage),
+    nextCursor: lastVisible
+      ? encodeTimestampIdCursor(cursorScope, lastVisible.created_at, lastVisible.id)
+      : null
   };
 }
 

@@ -6,26 +6,20 @@ import {
 } from "../src/modules/content/content-feed-cursor.js";
 
 describe("content feed compound cursor", () => {
-  it("round trips the frozen ranking snapshot and stable tuple", () => {
+  it("round trips the bounded ranking session and last delivered position", () => {
     const cursor = encodeFeedCursor({
       mode: "recommended",
       surface: "home",
-      asOf: "2026-08-15T10:00:00.000Z",
-      rankingRevision: "0123456789abcdef0123456789abcdef",
-      score: 418,
-      createdAt: "2026-08-14T09:30:00.000Z",
-      id: "00000000-0000-4000-8000-000000000040"
+      sessionId: "00000000-0000-4000-8000-000000000040",
+      position: 20
     });
 
     expect(decodeFeedCursor(cursor)).toEqual({
-      version: 1,
+      version: 2,
       mode: "recommended",
       surface: "home",
-      asOf: "2026-08-15T10:00:00.000Z",
-      rankingRevision: "0123456789abcdef0123456789abcdef",
-      score: 418,
-      createdAt: "2026-08-14T09:30:00.000Z",
-      id: "00000000-0000-4000-8000-000000000040"
+      sessionId: "00000000-0000-4000-8000-000000000040",
+      position: 20
     });
   });
 
@@ -37,19 +31,16 @@ describe("content feed compound cursor", () => {
   );
 
   it.each([
-    { score: 2_147_483_648 },
-    { createdAt: "2026-08-16T10:00:00.000Z" },
-    { asOf: "9999-08-15T10:00:00.000Z" },
-    { rankingRevision: "not-a-ranking-fingerprint" }
-  ])("rejects an unsafe tuple %#", (override) => {
+    { position: 0 },
+    { position: 513 },
+    { position: 1.5 },
+    { sessionId: "not-a-session-id" }
+  ])("rejects an unsafe session cursor %#", (override) => {
     const cursor = encodeFeedCursor({
       mode: "recommended",
       surface: "home",
-      asOf: "2026-08-15T10:00:00.000Z",
-      rankingRevision: "0123456789abcdef0123456789abcdef",
-      score: 418,
-      createdAt: "2026-08-14T09:30:00.000Z",
-      id: "00000000-0000-4000-8000-000000000040",
+      sessionId: "00000000-0000-4000-8000-000000000040",
+      position: 20,
       ...override
     });
     expect(() => decodeFeedCursor(cursor)).toThrow(InvalidFeedCursorError);

@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createECDH, randomBytes } from "node:crypto";
+import { EventEmitter } from "node:events";
+import webPush from "web-push";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildWorkerRuntime,
   runAnalyticsProjectionTick,
@@ -29,7 +32,10 @@ import type {
   NotificationDeliveryProvider,
   NotificationDeliveryRepository
 } from "../src/notification-delivery";
-import { createWebPushNotificationDeliveryProvider } from "../src/notification-delivery";
+import {
+  createWebPushNotificationDeliveryProvider,
+  sendBoundedWebPushRequest
+} from "../src/notification-delivery";
 import type {
   PaymentConfirmationEmailOutcome,
   PaymentConfirmationEmailProvider,
@@ -37,6 +43,7 @@ import type {
   QueuedPaymentConfirmationEmail
 } from "../src/payment-confirmation-email";
 import {
+  classifyResendFailure,
   createResendPaymentConfirmationEmailProvider,
   createUnconfiguredPaymentConfirmationEmailProvider
 } from "../src/payment-confirmation-email";
@@ -53,23 +60,13 @@ import type {
   SubscriptionCollectionProvider,
   SubscriptionCollectionRepository
 } from "../src/subscription-collections";
-import type {
-  AnalyticsProjectionJob,
-  AnalyticsProjectionOutcome,
-  AnalyticsProjectionRepository
+import {
+  analyticsIncrementalWindows,
+  buildAnalyticsReconciliationEvidence,
+  type AnalyticsProjectionJob,
+  type AnalyticsProjectionOutcome,
+  type AnalyticsProjectionRepository
 } from "../src/analytics-projections";
-
-const webPushMock = vi.hoisted(() => ({
-  sendNotification: vi.fn()
-}));
-
-vi.mock("web-push", () => ({
-  default: webPushMock
-}));
-
-beforeEach(() => {
-  webPushMock.sendNotification.mockReset();
-});
 
 describe("buildWorkerRuntime", () => {
   it("registers recurring subscription queues", () => {
@@ -263,13 +260,49 @@ describe("runAnalyticsProjectionTick", () => {
     expect(repository.outcomes).toEqual([expect.objectContaining({ state: "completed" })]);
   });
 
+  it("enqueues current-day minute work and a bounded prior-day late-fact window", () => {
+    expect(analyticsIncrementalWindows(new Date("2026-11-04T14:37:22.000Z"))).toEqual([
+      {
+        reason: "incremental",
+        idempotencyKey: "incremental:2026-11-04T14:37",
+        windowStartsOn: "2026-11-04",
+        windowEndsOn: "2026-11-04"
+      },
+      {
+        reason: "late_fact",
+        idempotencyKey: "late-fact:2026-11-04T14",
+        windowStartsOn: "2026-11-03",
+        windowEndsOn: "2026-11-03"
+      }
+    ]);
+  });
+
+  it("does not let equal and opposite per-source variances reconcile as matched", () => {
+    const evidence = buildAnalyticsReconciliationEvidence({
+      sourceImpressions: 10,
+      projectedImpressions: 9,
+      projectedViewerImpressions: 11
+    }, 2, new Date("2026-11-04T14:37:00.000Z"));
+
+    expect(evidence).toMatchObject({
+      sourceRowCount: 20,
+      projectedRowCount: 20,
+      varianceCount: 2,
+      details: {
+        varianceCreatorImpressions: -1,
+        varianceViewerImpressions: 1,
+        netVariance: 0
+      }
+    });
+  });
+
   it("surfaces source-to-projection variance instead of treating it as matched", async () => {
     const repository = repositoryFixture({
       async projectWindow() {
         return {
           sourceRowCount: 5,
           projectedRowCount: 4,
-          varianceCount: -1,
+          varianceCount: 1,
           projectedTableRowCount: 3,
           dataThrough: new Date("2026-08-23T23:59:59.999Z"),
           details: { sourceImpressions: 5, projectedImpressions: 4 }
@@ -284,7 +317,7 @@ describe("runAnalyticsProjectionTick", () => {
     expect(repository.outcomes).toEqual([
       expect.objectContaining({
         state: "completed",
-        evidence: expect.objectContaining({ varianceCount: -1 })
+        evidence: expect.objectContaining({ varianceCount: 1 })
       })
     ]);
   });
@@ -609,7 +642,8 @@ describe("runNotificationDeliveryTick", () => {
       leased: 1,
       delivered: 1,
       failed: 0,
-      revoked: 0
+      revoked: 0,
+      skipped: 0
     });
     expect(provider.inputs[0]).toMatchObject({
       notificationId: "notification-1",
@@ -685,56 +719,92 @@ describe("runNotificationDeliveryTick", () => {
 });
 
 describe("createWebPushNotificationDeliveryProvider", () => {
-  it("sends sanitized notification payloads through VAPID web push", async () => {
-    webPushMock.sendNotification.mockResolvedValueOnce({ statusCode: 201, body: "", headers: {} });
+  it("sends only a fixed refresh hint through the bounded VAPID transport", async () => {
+    const requestSender = vi.fn(async () => undefined);
     const provider = createWebPushNotificationDeliveryProvider({
       vapidSubject: "mailto:ops@example.com",
       vapidPublicKey: "public-vapid-key",
-      vapidPrivateKey: "private-vapid-key"
+      vapidPrivateKey: "private-vapid-key",
+      requestSender
     });
 
     const outcome = await provider.deliver(notificationDeliveryFixture());
 
     expect(outcome).toEqual({ state: "delivered" });
-    expect(webPushMock.sendNotification).toHaveBeenCalledWith(
-      {
+    expect(requestSender).toHaveBeenCalledWith({
+      subscription: {
         endpoint: "https://push.example/subscription",
-        keys: {
-          p256dh: "p256dh-key",
-          auth: "auth-secret"
-        }
+        p256dh: "p256dh-key",
+        auth: "auth-secret"
       },
-      JSON.stringify({
-        notificationId: "notification-1",
-        title: "Wallet action required",
-        body: "Connect a wallet to use this feature.",
-        actionUrl: "/wallet"
-      }),
-      {
-        TTL: 3600,
-        timeout: 10_000,
-        urgency: "normal",
-        vapidDetails: {
-          subject: "mailto:ops@example.com",
-          publicKey: "public-vapid-key",
-          privateKey: "private-vapid-key"
-        }
-      }
-    );
+      payload: JSON.stringify({ type: "notification_refresh", version: 1 }),
+      vapidSubject: "mailto:ops@example.com",
+      vapidPublicKey: "public-vapid-key",
+      vapidPrivateKey: "private-vapid-key",
+      ttlSeconds: 3600,
+      timeoutMs: 10_000
+    });
   });
 
   it("revokes browser devices when the push service returns gone", async () => {
-    webPushMock.sendNotification.mockRejectedValueOnce({ statusCode: 410 });
+    const requestSender = vi.fn(async () => {
+      throw { statusCode: 410 };
+    });
     const provider = createWebPushNotificationDeliveryProvider({
       vapidSubject: "mailto:ops@example.com",
       vapidPublicKey: "public-vapid-key",
-      vapidPrivateKey: "private-vapid-key"
+      vapidPrivateKey: "private-vapid-key",
+      requestSender
     });
 
     await expect(provider.deliver(notificationDeliveryFixture())).resolves.toEqual({
       state: "revoked",
       failureCode: "push_subscription_gone"
     });
+  });
+
+  it("enforces one total deadline on a stalled pinned HTTPS request", async () => {
+    const request = new EventEmitter() as EventEmitter & {
+      destroy(error: Error): void;
+      end(): void;
+      write(body: Buffer): void;
+    };
+    request.write = vi.fn();
+    request.end = vi.fn();
+    request.destroy = vi.fn((error: Error) => request.emit("error", error));
+    const requestFactory = vi.fn(() => request) as unknown as typeof import("node:https").request;
+    const p256dh = createECDH("prime256v1").generateKeys().toString("base64url");
+    const vapid = webPush.generateVAPIDKeys();
+
+    await expect(
+      sendBoundedWebPushRequest(
+        {
+          subscription: {
+            endpoint: "https://fcm.googleapis.com/fcm/send/browser-token",
+            p256dh,
+            auth: randomBytes(16).toString("base64url")
+          },
+          payload: JSON.stringify({ type: "notification_refresh", version: 1 }),
+          vapidSubject: "mailto:ops@example.com",
+          vapidPublicKey: vapid.publicKey,
+          vapidPrivateKey: vapid.privateKey,
+          ttlSeconds: 3600,
+          timeoutMs: 250,
+          resolver: async () => [{ address: "8.8.8.8", family: 4 }]
+        },
+        { requestFactory }
+      )
+    ).rejects.toThrow("web_push_total_deadline_exceeded");
+    expect(requestFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: false,
+        hostname: "fcm.googleapis.com",
+        maxHeaderSize: 8 * 1024,
+        port: 443,
+        servername: "fcm.googleapis.com"
+      }),
+      expect.any(Function)
+    );
   });
 });
 
@@ -848,6 +918,34 @@ describe("createResendPaymentConfirmationEmailProvider", () => {
     );
     const requestInit = fetchImpl.mock.calls[0]?.at(1);
     expect(JSON.stringify(requestInit)).not.toMatch(/privateKey|serviceRole|rawPayload/i);
+  });
+
+  it.each([
+    [400, "validation_error", false, "resend_http_400"],
+    [409, "resource_locked", true, "resend_resource_locked"],
+    [409, "concurrent_idempotent_requests", true, "resend_concurrent_idempotent_requests"],
+    [422, "invalid_idempotent_request", false, "resend_invalid_idempotent_request"],
+    [429, "rate_limit_exceeded", true, "resend_http_429"],
+    [503, "application_error", true, "resend_http_503"]
+  ])("classifies Resend HTTP %s/%s without persisting provider detail", (status, name, retryable, failureCode) => {
+    expect(classifyResendFailure(status, name)).toEqual({ retryable, failureCode });
+  });
+
+  it("returns a retryable redacted failure when the Resend transport throws", async () => {
+    const provider = createResendPaymentConfirmationEmailProvider({
+      apiKey: "resend-api-key",
+      from: "Veel Receipts <receipts@example.test>",
+      webUrl: "https://veel.example.test",
+      fetchImpl: vi.fn(async () => {
+        throw new Error("provider body containing private diagnostics");
+      })
+    });
+
+    await expect(provider.send(paymentConfirmationEmailFixture())).resolves.toEqual({
+      state: "failed",
+      failureCode: "resend_transport_error",
+      retryable: true
+    });
   });
 });
 
@@ -1279,9 +1377,7 @@ function notificationDeliveryFixture(
     deviceId: overrides.deviceId ?? "device-1",
     userId: overrides.userId ?? "user-1",
     provider: overrides.provider ?? "web_push",
-    title: overrides.title ?? "Wallet action required",
-    body: overrides.body ?? "Connect a wallet to use this feature.",
-    actionUrl: overrides.actionUrl ?? "/wallet",
+    deviceSubscriptionGeneration: overrides.deviceSubscriptionGeneration ?? 1,
     endpoint: overrides.endpoint ?? "https://push.example/subscription",
     p256dh: overrides.p256dh ?? "p256dh-key",
     auth: overrides.auth ?? "auth-secret"
@@ -1326,6 +1422,11 @@ function fakeNotificationDeliveryRepository(input: {
     },
     async leaseDueDeliveries() {
       return input.deliveries ?? [];
+    },
+    async prepareDeliveryForDispatch(lease) {
+      return (input.deliveries ?? []).find(
+        (delivery) => delivery.attemptId === lease.attemptId
+      ) ?? null;
     },
     async recordDeliveryOutcome(outcome) {
       outcomes.push(outcome);

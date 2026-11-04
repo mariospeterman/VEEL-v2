@@ -8,12 +8,10 @@ export function createProfileCreatorRepositoryMethods(
 ): Pick<ProfileRepository, "findCreatorProfileByHandle"> {
   return {
     async findCreatorProfileByHandle(handle, viewerUserId = null) {
-      const viewerRows = viewerUserId
-        ? await sql<{ id: string }[]>`
-            select id from users where supabase_user_id = ${viewerUserId} limit 1
-          `
-        : [];
-      const appViewerUserId = viewerRows[0]?.id ?? null;
+      // Application sessions resolve the canonical users.id. The legacy
+      // supabase_user_id column is nullable compatibility data and must not be
+      // consulted as a second identity authority.
+      const appViewerUserId = viewerUserId;
       const rows = await sql<CreatorProfileRow[]>`
         select
           u.id,
@@ -34,10 +32,16 @@ export function createProfileCreatorRepositoryMethods(
           membership.benefits as membership_benefits,
           membership.amount_minor as membership_amount_minor,
           membership.amount_atomic as membership_amount_atomic,
+          membership.currency as membership_currency,
+          membership.period_days as membership_period_days,
+          membership.period_seconds as membership_period_seconds,
+          membership.billing_mode as membership_billing_mode,
           membership.provider_state as membership_provider_state,
+          membership.provider as membership_provider,
           membership.token_mint as membership_token_mint,
           membership.token_program as membership_token_program,
           membership.program_id as membership_program_id,
+          membership.plan_pda as membership_plan_pda,
           membership.merchant_wallet as membership_merchant_wallet,
           coalesce(social.follower_count, 0) as follower_count,
           coalesce(social.following_count, 0) as following_count,
@@ -71,7 +75,10 @@ export function createProfileCreatorRepositoryMethods(
         left join lateral (
           select sp.*
           from subscription_plans sp
-          where sp.creator_user_id = u.id and sp.scope = 'creator'
+          where sp.creator_user_id = u.id
+            and sp.scope = 'creator'
+            and sp.state = 'active'
+            and sp.provider_state <> 'disabled'
           order by sp.updated_at desc
           limit 1
         ) membership on true

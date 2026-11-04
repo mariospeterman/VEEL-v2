@@ -1,4 +1,5 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { createHash } from "node:crypto";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
 import { AgeRepositoryConfigurationError } from "./age-repository.js";
@@ -35,34 +36,20 @@ const ageProviderPreferences = new Set(["reusable_first", "didit", "yoti", "sums
 // Didit V3 uses one application-level webhook destination across workflows.
 // Route every Didit event through the normalized verification webhook so age,
 // adult eligibility, KYC, and KYB sessions share one idempotency boundary.
-const ageProviders = new Set<AgeProvider>(["yoti", "sumsub", "veriff", "persona"]);
+type DirectAgeWebhookProvider = Extract<AgeProvider, "sumsub" | "yoti">;
 
 export async function registerAgeRoutes(
   app: FastifyInstance,
   options: RegisterAgeRoutesOptions
 ): Promise<void> {
-  app.post(
-    "/v1/webhooks/age/:provider",
-    {
-      config: {
-        rawBody: true
-      }
-    },
-    async (request, reply) => {
-      const params = request.params as { provider?: string };
-
-      if (!params.provider || !ageProviders.has(params.provider as AgeProvider)) {
-        return reply.code(400).send({
-          code: "validation_failed",
-          message: "Unsupported age provider"
-        });
-      }
-
+  const receiveAgeWebhook =
+    (provider: DirectAgeWebhookProvider) => async (request: FastifyRequest, reply: FastifyReply) => {
       try {
+        const rawBody = rawBodyBuffer(request.rawBody);
         const normalized = normalizeAgeWebhook({
-          provider: params.provider as AgeProvider,
+          provider,
           body: request.body,
-          rawBody: rawBodyBuffer(request.rawBody),
+          rawBody,
           headers: request.headers,
           env: app.config
         });
@@ -71,13 +58,16 @@ export async function registerAgeRoutes(
           providerEventId: normalized.providerEventId,
           eventType: normalized.eventType,
           providerReference: normalized.providerReference,
+          providerSubjectReference: normalized.providerSubjectReference ?? null,
+          providerCorrelationId: normalized.providerCorrelationId ?? null,
           state: normalized.state,
           verifiedAt: normalized.occurredAt ?? null,
           failureCode: normalized.failureCode ?? null,
-          signatureHash: normalized.signatureHash
+          signatureHash: normalized.signatureHash,
+          payloadHash: createHash("sha256").update(rawBody).digest("hex")
         });
 
-        return reply.code(202).send({
+        return reply.code(provider === "yoti" ? 200 : 202).send({
           provider: normalized.provider,
           received: 1,
           processed: result === "applied" ? 1 : 0
@@ -107,7 +97,26 @@ export async function registerAgeRoutes(
 
         throw error;
       }
-    }
+    };
+
+  app.post(
+    "/v1/webhooks/age/sumsub",
+    {
+      config: {
+        rawBody: true
+      }
+    },
+    receiveAgeWebhook("sumsub")
+  );
+
+  app.post(
+    "/v1/webhooks/age/yoti",
+    {
+      config: {
+        rawBody: true
+      }
+    },
+    receiveAgeWebhook("yoti")
   );
 
   app.post("/v1/age/sessions", mutationRateLimit("ageMutation", "createAgeSession"), async (request, reply) => {
@@ -136,6 +145,7 @@ export async function registerAgeRoutes(
       });
     }
 
+    let reservedSessionId: string | null = null;
     try {
       const latestAgeStatus = await findAgeStatusForUser(
         options.ageRepository,
@@ -149,22 +159,54 @@ export async function registerAgeRoutes(
         });
       }
 
+      const supportsDurableHandoff = Boolean(
+        options.ageRepository.reservePendingAgeVerification &&
+        options.ageRepository.selectPendingAgeProvider &&
+        options.ageRepository.completePendingAgeVerification
+      );
+      const reservation = supportsDurableHandoff
+        ? await options.ageRepository.reservePendingAgeVerification?.({
+            userId: verifiedSession.userId,
+            idempotencyKey,
+            requestHash: createHash("sha256").update(JSON.stringify({ providerPreference })).digest("hex")
+          })
+        : null;
+      reservedSessionId = reservation?.id ?? null;
       const providerSession = await options.ageProviderWaterfall.createSession({
         supabaseUserId: verifiedSession.userId,
         providerPreference,
         idempotencyKey,
+        subjectReference: reservation?.subjectReference ?? null,
         callbackUrl: `${app.config.WEB_URL}/age/callback`,
-        webhookBaseUrl: `${app.config.API_URL}/v1/webhooks/age`
+        webhookBaseUrl: `${app.config.API_URL}/v1/webhooks/age`,
+        ...(reservation
+          ? { onProviderSelected: async (selection) => {
+              await options.ageRepository.selectPendingAgeProvider!({
+                sessionId: reservation.id,
+                ...selection
+              });
+            } }
+          : {})
       });
 
-      await options.ageRepository.createPendingAgeVerification({
-        userId: verifiedSession.userId,
-        provider: providerSession.provider,
-        providerReference: providerSession.providerReference,
-        jurisdiction: providerSession.jurisdiction ?? null,
-        rule: providerSession.rule ?? null,
-        expiresAt: providerSession.expiresAt
-      });
+      if (reservation) {
+        await options.ageRepository.completePendingAgeVerification?.({
+          sessionId: reservation.id,
+          providerSession
+        });
+      } else {
+        await options.ageRepository.createPendingAgeVerification({
+          userId: verifiedSession.userId,
+          provider: providerSession.provider,
+          providerReference: providerSession.providerReference,
+          ...(providerSession.providerExternalUserId
+            ? { providerExternalUserId: providerSession.providerExternalUserId }
+            : {}),
+          jurisdiction: providerSession.jurisdiction ?? null,
+          rule: providerSession.rule ?? null,
+          expiresAt: providerSession.expiresAt
+        });
+      }
 
       if (isMockVerificationProviderReference(app.config, providerSession.providerReference)) {
         await options.ageRepository.updateVerificationFromWebhook({
@@ -184,6 +226,20 @@ export async function registerAgeRoutes(
         expiresAt: providerSession.expiresAt.toISOString()
       });
     } catch (error) {
+      if (reservedSessionId && options.ageRepository.failPendingAgeVerification) {
+        await options.ageRepository.failPendingAgeVerification({
+          sessionId: reservedSessionId,
+          reason: error instanceof Error ? error.name : "provider_session_failed"
+        }).catch(() => undefined);
+      }
+      if (error instanceof Error && ["IDEMPOTENCY_KEY_REUSED", "VERIFICATION_SESSION_ALREADY_RESERVED"].includes(error.message)) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: error.message === "IDEMPOTENCY_KEY_REUSED"
+            ? "Idempotency-Key was already used with different age-verification input"
+            : "This age-verification session request has already been reserved"
+        });
+      }
       if (
         error instanceof AgeProviderUnavailableError ||
         error instanceof AgeProviderIntegrationPendingError ||

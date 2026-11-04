@@ -115,6 +115,8 @@ export interface RecoveryLinkIntent {
 export interface ExchangeRecoveryIdentityInput {
   provider: "supabase";
   providerSubject: string;
+  providerSessionId: string;
+  providerAuthenticatedAt: Date;
   linkIntentToken?: string;
   sessionExpiresAt: Date;
 }
@@ -155,6 +157,7 @@ interface ApplicationSessionRow {
   user_id: string;
   authenticated_at: Date;
   authentication_method: "wallet" | "supabase_recovery";
+  provider_session_id: string | null;
 }
 
 export function createPostgresWalletAuthRepository(
@@ -293,6 +296,7 @@ export function createPostgresWalletAuthRepository(
           userId: wallet.user_id,
           walletId: wallet.id,
           providerIdentityId: null,
+          providerSessionId: null,
           token,
           expiresAt: input.expiresAt,
           authenticationMethod: "wallet",
@@ -440,7 +444,33 @@ export function createPostgresWalletAuthRepository(
           userId = identity.user_id;
         }
 
-        await tx`select id from users where id = ${userId} for update`;
+        const users = await tx<{ recovery_authentication_valid_after: Date }[]>`
+          select recovery_authentication_valid_after
+          from users
+          where id = ${userId}
+          for update
+        `;
+        const user = users[0];
+        if (
+          !user ||
+          !Number.isFinite(input.providerAuthenticatedAt.getTime()) ||
+          input.providerAuthenticatedAt.getTime() <= user.recovery_authentication_valid_after.getTime()
+        ) {
+          throw new WalletAuthChallengeInvalidError();
+        }
+
+        // Hosted Supabase grants the application database role read access to
+        // auth.sessions, but row-lock clauses additionally require UPDATE on
+        // the provider-managed table.  The user-row cutoff supplies our race
+        // serialization boundary; this query is the provider-liveness check.
+        const providerSessions = await tx<{ id: string }[]>`
+          select id
+          from auth.sessions
+          where id = ${input.providerSessionId}::uuid
+            and user_id = ${input.providerSubject}::uuid
+          limit 1
+        `;
+        if (!providerSessions[0]) throw new WalletAuthChallengeInvalidError();
 
         await tx`
           update user_provider_identities
@@ -469,10 +499,11 @@ export function createPostgresWalletAuthRepository(
           userId,
           walletId: null,
           providerIdentityId: providerIdentityId ?? null,
+          providerSessionId: input.providerSessionId,
           token,
           expiresAt: input.sessionExpiresAt,
           authenticationMethod: "supabase_recovery",
-          authenticatedAt: new Date(),
+          authenticatedAt: input.providerAuthenticatedAt,
           rotatedFromSessionId
         });
 
@@ -502,7 +533,8 @@ export function createPostgresWalletAuthRepository(
       const expiresAt = await sql.begin(async (tx) => {
         const sessions = await tx<Array<ApplicationSessionRow & { expires_at: Date }>>`
           select session.id, session.user_id,
-            session.authenticated_at, session.authentication_method, session.expires_at
+            session.authenticated_at, session.authentication_method,
+            session.provider_session_id, session.expires_at
           from app_sessions session
           where session.token_hash = ${hashToken(input.sessionToken)}
             and session.revoked_at is null
@@ -536,6 +568,7 @@ export function createPostgresWalletAuthRepository(
           userId: session.user_id,
           walletId: wallet.id,
           providerIdentityId: null,
+          providerSessionId: null,
           token,
           expiresAt: session.expires_at,
           authenticationMethod: "wallet",
@@ -566,7 +599,19 @@ export function createPostgresWalletAuthRepository(
     },
     async revokeAllSessions(input) {
       return sql.begin(async (tx) => {
-        await tx`select id from users where id = ${input.userId} for update`;
+        const users = await tx<{ recovery_authentication_valid_after: Date }[]>`
+          update users
+          set
+            recovery_authentication_valid_after = greatest(
+              recovery_authentication_valid_after,
+              clock_timestamp()
+            ),
+            updated_at = now()
+          where id = ${input.userId}
+          returning recovery_authentication_valid_after
+        `;
+        const cutoff = users[0]?.recovery_authentication_valid_after;
+        if (!cutoff) throw new WalletAuthChallengeInvalidError();
         const revoked = await tx<{ id: string }[]>`
           update app_sessions
           set revoked_at = coalesce(revoked_at, now())
@@ -575,18 +620,20 @@ export function createPostgresWalletAuthRepository(
           returning id
         `;
 
-        if (revoked.length > 0) {
-          await tx`
-            insert into audit_events (
-              id, actor_user_id, subject_type, subject_id, action, metadata
-            )
-            values (
-              ${randomUUID()}, ${input.actorUserId}, 'user', ${input.userId},
-              'auth.sessions_revoked_all',
-              ${tx.json({ reason: input.reason, revokedSessionCount: revoked.length })}
-            )
-          `;
-        }
+        await tx`
+          insert into audit_events (
+            id, actor_user_id, subject_type, subject_id, action, metadata
+          )
+          values (
+            ${randomUUID()}, ${input.actorUserId}, 'user', ${input.userId},
+            'auth.sessions_revoked_all',
+            ${tx.json({
+              reason: input.reason,
+              revokedSessionCount: revoked.length,
+              recoveryAuthenticationValidAfter: cutoff.toISOString()
+            })}
+          )
+        `;
 
         return revoked.length;
       });
@@ -719,7 +766,8 @@ export async function rotateApplicationSessionInTransaction(
   }>>`
     select session.id, session.user_id,
       session.authenticated_at, session.authentication_method,
-      session.wallet_id, session.provider_identity_id, session.expires_at
+      session.wallet_id, session.provider_identity_id, session.provider_session_id,
+      session.expires_at
     from app_sessions session
     where session.token_hash = ${hashToken(input.sessionToken)}
       and session.revoked_at is null
@@ -734,6 +782,7 @@ export async function rotateApplicationSessionInTransaction(
     userId: session.user_id,
     walletId: session.wallet_id,
     providerIdentityId: session.provider_identity_id,
+    providerSessionId: session.provider_session_id,
     token,
     expiresAt: session.expires_at,
     authenticationMethod: session.authentication_method,
@@ -749,6 +798,7 @@ async function revokeAndInsertSession(
     userId: string;
     walletId: string | null;
     providerIdentityId: string | null;
+    providerSessionId: string | null;
     token: string;
     expiresAt: Date;
     authenticationMethod: "wallet" | "supabase_recovery";
@@ -771,12 +821,12 @@ async function revokeAndInsertSession(
   await tx`
     insert into app_sessions (
       id, user_id, wallet_id, provider_identity_id, token_hash, expires_at,
-      authentication_method, authenticated_at, rotated_from_session_id
+      authentication_method, authenticated_at, provider_session_id, rotated_from_session_id
     )
     values (
       ${randomUUID()}, ${input.userId}, ${input.walletId}, ${input.providerIdentityId},
       ${hashToken(input.token)}, ${input.expiresAt}, ${input.authenticationMethod}, ${input.authenticatedAt},
-      ${input.rotatedFromSessionId}
+      ${input.providerSessionId}, ${input.rotatedFromSessionId}
     )
   `;
 }

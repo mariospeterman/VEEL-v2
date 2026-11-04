@@ -1,12 +1,9 @@
 interface FeedCursorPayload {
-  version: 1;
+  version: 2;
   mode: "recommended" | "following";
   surface: "home" | "bits" | "moments";
-  asOf: string;
-  rankingRevision: string;
-  score: number;
-  createdAt: string;
-  id: string;
+  sessionId: string;
+  position: number;
 }
 
 export class InvalidFeedCursorError extends Error {
@@ -36,7 +33,7 @@ export function isStaleFeedCursorError(error: unknown): boolean {
 }
 
 export function encodeFeedCursor(payload: Omit<FeedCursorPayload, "version">): string {
-  return Buffer.from(JSON.stringify({ version: 1, ...payload } satisfies FeedCursorPayload), "utf8")
+  return Buffer.from(JSON.stringify({ version: 2, ...payload } satisfies FeedCursorPayload), "utf8")
     .toString("base64url");
 }
 
@@ -48,19 +45,14 @@ export function decodeFeedCursor(cursor: string): FeedCursorPayload {
   try {
     const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<FeedCursorPayload>;
     if (
-      value.version !== 1 ||
+      value.version !== 2 ||
       !["recommended", "following"].includes(value.mode ?? "") ||
       !["home", "bits", "moments"].includes(value.surface ?? "") ||
-      !isCanonicalTimestamp(value.asOf) ||
-      !isRankingRevision(value.rankingRevision) ||
-      !isCanonicalTimestamp(value.createdAt) ||
-      !Number.isInteger(value.score) ||
-      value.score! < -2_147_483_648 ||
-      value.score! > 2_147_483_647 ||
-      Date.parse(value.createdAt) > Date.parse(value.asOf) ||
-      Date.parse(value.asOf) > Date.now() + 5 * 60_000 ||
-      typeof value.id !== "string" ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.id)
+      typeof value.sessionId !== "string" ||
+      !isUuid(value.sessionId) ||
+      !Number.isInteger(value.position) ||
+      value.position! < 1 ||
+      value.position! > 512
     ) {
       throw new InvalidFeedCursorError();
     }
@@ -71,14 +63,8 @@ export function decodeFeedCursor(cursor: string): FeedCursorPayload {
   }
 }
 
-function isCanonicalTimestamp(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
-}
-
-function isRankingRevision(value: unknown): value is string {
-  return typeof value === "string" && /^[0-9a-f]{32}$/.test(value);
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function hasFeedCursorErrorCode(error: unknown, code: string): boolean {

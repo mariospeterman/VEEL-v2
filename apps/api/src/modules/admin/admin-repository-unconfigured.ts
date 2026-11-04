@@ -60,6 +60,7 @@ export function createUnconfiguredAdminRepository(): AdminRepository {
     updateOrganizationKyb: fail,
     listOrganizationMembers: fail,
     updateOrganizationMember: fail,
+    getFeatureFlag: fail,
     listFeatureFlags: fail,
     updateFeatureFlag: fail
   };

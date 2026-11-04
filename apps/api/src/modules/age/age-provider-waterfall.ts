@@ -28,13 +28,31 @@ export function createAgeProviderWaterfall(env: ServerEnv): AgeProviderWaterfall
     async createSession(input) {
       try {
         const session = await verificationProviders.createSession({
-          ...input,
-          purpose: "age_access"
+          supabaseUserId: input.supabaseUserId,
+          purpose: "age_access",
+          providerPreference: input.providerPreference,
+          idempotencyKey: input.idempotencyKey,
+          callbackUrl: input.callbackUrl,
+          webhookBaseUrl: input.webhookBaseUrl,
+          ...(input.subjectReference !== undefined
+            ? { subjectReference: input.subjectReference }
+            : {}),
+          ...(input.onProviderSelected
+            ? { onProviderSelected: async (selection) => {
+                await input.onProviderSelected!({
+                provider: selection.provider,
+                method: selection.method as "reusable_age" | "age_estimation" | "non_doc" | "doc_scan" | "gov_id_selfie",
+                assuranceLevel: selection.assuranceLevel,
+                reusable: selection.reusable
+                });
+              } }
+            : {})
         });
 
         return {
           provider: session.provider as "didit" | "yoti" | "sumsub" | "veriff" | "persona",
           providerReference: session.providerReference,
+          providerExternalUserId: session.providerExternalUserId ?? null,
           launchUrl: session.launchUrl,
           expiresAt: session.expiresAt,
           rule: "over_18"

@@ -66,6 +66,7 @@ function createMockVerificationProviderAdapter(env: ServerEnv): VerificationProv
       return {
         provider: "didit",
         providerReference,
+        providerExternalUserId: providerSubjectReference(input),
         providerSessionId: providerReference,
         launchUrl: appendQuery(input.callbackUrl, {
           provider: "mock",
@@ -102,15 +103,17 @@ export function createStaticVerificationProviderWaterfall(
             continue;
           }
 
-          try {
-            return await adapter.createSession(input);
-          } catch (error) {
-            if (error instanceof VerificationProviderHttpError && error.status >= 500) {
-              continue;
-            }
-
-            throw error;
-          }
+          await input.onProviderSelected?.({
+            provider: adapter.provider,
+            method: verificationMethod(input, adapter.provider),
+            assuranceLevel: verificationAssurance(input, adapter.provider),
+            reusable: adapter.provider === "yoti"
+          });
+          // Once a provider call starts its outcome can be ambiguous (for example,
+          // a remote session may exist even if the response is lost). Do not open a
+          // second provider session automatically. Recovery reuses the durable local
+          // reservation and provider reconciliation instead.
+          return adapter.createSession(input);
         }
       }
 
@@ -132,14 +135,16 @@ function createSumsubVerificationProviderAdapter(env: ServerEnv): VerificationPr
         throw new VerificationProviderHttpError("sumsub", 503, "Sumsub is not configured");
       }
 
-      const path = "/resources/accessTokens/sdk";
-      const externalUserId = input.purpose === "org_kyb"
-        ? `org:${input.organizationId}`
-        : `user:${input.supabaseUserId}`;
+      const path = "/resources/sdkIntegrations/levels/-/websdkLink";
+      const externalUserId = providerSubjectReference(input);
       const body = JSON.stringify({
-        ttlInSecs: 600,
+        ttlInSecs: 1800,
         userId: externalUserId,
-        levelName
+        levelName,
+        redirect: {
+          successUrl: input.callbackUrl,
+          rejectUrl: input.callbackUrl
+        }
       });
       const timestamp = Math.floor(Date.now() / 1000).toString();
       const signature = createHmac("sha256", env.SUMSUB_SECRET_KEY)
@@ -156,19 +161,19 @@ function createSumsubVerificationProviderAdapter(env: ServerEnv): VerificationPr
         body
       });
       const responseBody = objectBody(await response.json());
-      const token = firstString(responseBody.token);
-      const userId = firstString(responseBody.userId) ?? externalUserId;
+      const launchUrl = firstString(responseBody.url);
 
-      if (!token) {
-        throw new VerificationProviderHttpError("sumsub", 502, "Sumsub response is missing an access token");
+      if (!launchUrl) {
+        throw new VerificationProviderHttpError("sumsub", 502, "Sumsub response is missing a WebSDK launch URL");
       }
 
       return {
         provider: "sumsub",
-        providerReference: userId,
-        providerApplicantId: userId,
-        launchUrl: appendQuery(input.callbackUrl, { provider: "sumsub", token }),
-        expiresAt: expiresInSeconds(600),
+        providerReference: externalUserId,
+        providerExternalUserId: externalUserId,
+        providerApplicantId: null,
+        launchUrl,
+        expiresAt: expiresInSeconds(1800),
         method: verificationMethod(input, "sumsub"),
         assuranceLevel: verificationAssurance(input, "sumsub")
       };
@@ -224,6 +229,7 @@ function createDiditVerificationProviderAdapter(env: ServerEnv): VerificationPro
       return {
         provider: "didit",
         providerReference: id,
+        providerExternalUserId: providerSubjectReference(input),
         providerSessionId: id,
         launchUrl: url,
         expiresAt: expiresInSeconds(24 * 60 * 60),
@@ -256,7 +262,7 @@ function createYotiVerificationProviderAdapter(env: ServerEnv): VerificationProv
         body: JSON.stringify({
           type: "OVER",
           ttl: 900,
-          reference_id: input.idempotencyKey,
+          reference_id: providerSubjectReference(input),
           callback: { url: input.callbackUrl, auto: true },
           notification_url: `${input.webhookBaseUrl}/yoti`,
           digital_id: {
@@ -287,6 +293,7 @@ function createYotiVerificationProviderAdapter(env: ServerEnv): VerificationProv
       return {
         provider: "yoti",
         providerReference: id,
+        providerExternalUserId: providerSubjectReference(input),
         providerSessionId: id,
         launchUrl: appendQuery(env.YOTI_LAUNCH_BASE_URL, {
           sessionId: id,
@@ -320,7 +327,8 @@ function createPersonaVerificationProviderAdapter(env: ServerEnv): VerificationP
           authorization: `Bearer ${env.PERSONA_API_KEY}`,
           "content-type": "application/json",
           "idempotency-key": input.idempotencyKey,
-          "key-inflection": "kebab"
+          "key-inflection": "kebab",
+          "persona-version": "2026-09-29"
         },
         body: JSON.stringify({
           data: {
@@ -334,25 +342,48 @@ function createPersonaVerificationProviderAdapter(env: ServerEnv): VerificationP
                   : "WeVid creator KYC"
             }
           },
-          meta: {
-            "redirect-uri": input.callbackUrl
-          }
+          meta: {}
         })
       });
       const body = objectBody(await response.json());
       const data = objectBody(body.data);
-      const meta = objectBody(body.meta, true);
       const attributes = objectBody(data.attributes, true);
       const id = firstString(data.id);
-      const url = firstString(meta?.["one-time-link"], meta?.["one_time_link"]);
 
-      if (!id || !url) {
-        throw new VerificationProviderHttpError("persona", 502, "Persona response is missing inquiry launch data");
+      if (!id) {
+        throw new VerificationProviderHttpError("persona", 502, "Persona response is missing an inquiry id");
+      }
+
+      const launchResponse = await providerFetch(
+        "persona",
+        `${env.PERSONA_API_BASE_URL}/api/v1/inquiries/${encodeURIComponent(id)}/generate-one-time-link`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${env.PERSONA_API_KEY}`,
+            "content-type": "application/json",
+            "idempotency-key": `${input.idempotencyKey}:launch`,
+            "key-inflection": "kebab",
+            "persona-version": "2026-09-29"
+          },
+          body: JSON.stringify({
+            meta: {
+              "redirect-uri": input.callbackUrl
+            }
+          })
+        }
+      );
+      const launchBody = objectBody(await launchResponse.json());
+      const launchMeta = objectBody(launchBody.meta, true);
+      const url = firstString(launchMeta?.["one-time-link"], launchMeta?.["one_time_link"]);
+      if (!url) {
+        throw new VerificationProviderHttpError("persona", 502, "Persona response is missing a one-time link");
       }
 
       return {
         provider: "persona",
         providerReference: id,
+        providerExternalUserId: providerSubjectReference(input),
         providerInquiryId: id,
         launchUrl: url,
         expiresAt: parseDate(firstString(attributes?.["expires-at"], attributes?.["expires_at"])) ?? expiresInSeconds(86_400),
@@ -383,8 +414,8 @@ function createVeriffVerificationProviderAdapter(env: ServerEnv): VerificationPr
         body: JSON.stringify({
           verification: {
             callback: input.callbackUrl,
-            vendorData: input.supabaseUserId,
-            endUserId: input.supabaseUserId
+            vendorData: providerSubjectReference(input),
+            endUserId: providerSubjectReference(input)
           }
         })
       });
@@ -400,6 +431,7 @@ function createVeriffVerificationProviderAdapter(env: ServerEnv): VerificationPr
       return {
         provider: "veriff",
         providerReference: id,
+        providerExternalUserId: providerSubjectReference(input),
         providerSessionId: id,
         launchUrl: url,
         expiresAt: expiresInSeconds(7 * 24 * 60 * 60),

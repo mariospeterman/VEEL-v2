@@ -476,7 +476,11 @@ export function createPostgresSubscriptionCollectionRepository(
         if (exhausted.length > 0) {
           await transaction`
             update subscriptions
-            set state = 'suspended', next_collection_at = null, updated_at = now()
+            set
+              state = 'suspended',
+              next_collection_at = null,
+              failure_reason = 'collection_attempt_limit_exceeded',
+              updated_at = now()
             where id in ${transaction(exhausted.map((row) => row.subscription_id))}
           `;
         }
@@ -519,7 +523,11 @@ export function createPostgresSubscriptionCollectionRepository(
             for update of s skip locked
           )
           update subscriptions subscription
-          set state = 'suspended', next_collection_at = null, updated_at = now()
+          set
+            state = 'suspended',
+            next_collection_at = null,
+            failure_reason = 'recipient_verification_required',
+            updated_at = now()
           from blocked
           where subscription.id = blocked.subscription_id
           returning
@@ -792,6 +800,7 @@ export function createPostgresSubscriptionCollectionRepository(
               current_period_starts_at = ${row.period_starts_at},
               current_period_ends_at = ${row.period_ends_at},
               next_collection_at = ${row.period_ends_at},
+              failure_reason = null,
               updated_at = now()
             where id = ${input.subscriptionId}
           `;
@@ -828,6 +837,7 @@ export function createPostgresSubscriptionCollectionRepository(
               state = 'revoked',
               revoked_at = coalesce(revoked_at, now()),
               next_collection_at = null,
+              failure_reason = ${input.outcome.failureCode},
               updated_at = now()
             where id = ${input.subscriptionId}
           `;
@@ -863,6 +873,7 @@ export function createPostgresSubscriptionCollectionRepository(
           set
             state = ${row.attempt_count >= input.maxAttempts ? "suspended" : "grace_period"},
             next_collection_at = ${row.attempt_count >= input.maxAttempts ? null : input.outcome.retryAt},
+            failure_reason = ${input.outcome.failureCode},
             updated_at = now()
           where id = ${input.subscriptionId}
         `;

@@ -5,6 +5,7 @@ import {
   accessStateForRule,
   toContentItem as toCanonicalContentItem
 } from "../content/content-repository-mappers.js";
+import { toSubscriptionPlan } from "../subscription/subscription-repository-mappers.js";
 
 export function toUserResource(row: ProfileRow): UserResource {
   return {
@@ -38,33 +39,50 @@ export function toCreatorProfile(
       livePassesEnabled: row.live_passes_enabled,
       paidMessagesEnabled: row.paid_messages_enabled,
       subscriptionsEnabled: row.subscriptions_enabled,
-      membershipOffer:
-        row.membership_plan_id && row.membership_label && row.membership_provider_state
-          ? {
-              id: row.membership_plan_id,
-              scope: "creator",
-              creator: toUserResource(row),
-              label: row.membership_label,
-              description: row.membership_description,
-              benefits: row.membership_benefits ?? [],
-              amountMinor: Number(row.membership_amount_minor ?? 0),
-              currency: "USDC",
-              periodDays: 30,
-              billingMode: "delegated_solana_subscription",
-              providerState: row.membership_provider_state,
-              provider: "official_solana_subscription_program",
-              tokenMint: row.membership_token_mint,
-              tokenProgram: row.membership_token_program,
-              programId: row.membership_program_id,
-              planPda: null,
-              merchantWallet: row.membership_merchant_wallet,
-              amountAtomic: Number(row.membership_amount_atomic ?? 0),
-              periodSeconds: 2_592_000
-            }
-          : null
+      membershipOffer: toPublicMembershipOffer(row)
     },
     recentContent: recentContent.map(toContentItem)
   };
+}
+
+function toPublicMembershipOffer(
+  row: CreatorProfileRow
+): components["schemas"]["SubscriptionPlan"] | null {
+  if (
+    !row.membership_plan_id ||
+    !row.membership_label ||
+    !row.membership_currency ||
+    !row.membership_period_days ||
+    !row.membership_billing_mode ||
+    !row.membership_provider_state
+  ) {
+    return null;
+  }
+
+  return toSubscriptionPlan({
+    id: row.membership_plan_id,
+    scope: "creator",
+    creator_user_id: row.id,
+    creator_handle: row.handle,
+    creator_display_name: row.display_name,
+    creator_avatar_url: row.avatar_url,
+    label: row.membership_label,
+    description: row.membership_description,
+    benefits: row.membership_benefits ?? [],
+    amount_minor: row.membership_amount_minor ?? 0,
+    amount_atomic: row.membership_amount_atomic,
+    currency: row.membership_currency,
+    period_days: row.membership_period_days,
+    period_seconds: row.membership_period_seconds,
+    billing_mode: row.membership_billing_mode,
+    provider_state: row.membership_provider_state,
+    provider: row.membership_provider,
+    token_mint: row.membership_token_mint,
+    token_program: row.membership_token_program,
+    program_id: row.membership_program_id,
+    plan_pda: row.membership_plan_pda,
+    merchant_wallet: row.membership_merchant_wallet
+  });
 }
 
 function toProfileLinks(value: unknown): components["schemas"]["ProfileLink"][] {

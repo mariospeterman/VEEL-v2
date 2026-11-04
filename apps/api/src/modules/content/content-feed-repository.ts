@@ -9,6 +9,18 @@ import {
   StaleFeedCursorError
 } from "./content-feed-cursor.js";
 
+export const FEED_RANKING_CANDIDATE_LIMIT = 512;
+const FEED_RANKING_SESSION_CLEANUP_LIMIT = 64;
+
+interface FeedRankingSessionRow {
+  id: string;
+  as_of: Date;
+}
+
+interface FeedPageRow extends FeedRow {
+  session_position: number;
+}
+
 export function createContentFeedRepositoryMethods(
   sql: postgres.Sql
 ): Pick<ContentRepository, "listHomeFeed"> {
@@ -21,79 +33,77 @@ export function createContentFeedRepositoryMethods(
       ) {
         throw new InvalidFeedCursorError();
       }
-      return sql.begin("isolation level repeatable read read only", async (transaction) => {
-        const asOf = decodedCursor?.asOf ?? new Date().toISOString();
-        const rankingStates = await transaction<{ revision: string }[]>`
-          with ranking_inputs as (
-            ${eligibleFeedSql(transaction, input, asOf)}
-          )
-          select md5(coalesce(string_agg(
-            concat_ws(
-              ':',
-              id::text,
-              creator_user_id::text,
-              like_count::text,
-              comment_count::text,
-              share_count::text,
-              viewer_following_creator::text,
-              seen_before::text
-            ),
-            '|' order by id
-          ), '')) as revision
-          from ranking_inputs
-        `;
-        const rankingRevision = rankingStates[0]?.revision;
-        if (!rankingRevision) throw new InvalidFeedCursorError();
-        if (decodedCursor && decodedCursor.rankingRevision !== rankingRevision) {
-          throw new StaleFeedCursorError();
-        }
+      return sql.begin("isolation level repeatable read", async (transaction) => {
+        const session = decodedCursor
+          ? await findFeedRankingSession(transaction, input, decodedCursor.sessionId)
+          : await createFeedRankingSession(transaction, input);
 
-        const rows = await transaction<FeedRow[]>`
-        with eligible as (
-          ${eligibleFeedSql(transaction, input, asOf)}
-        ),
-        scored as (
+        if (!session) throw new StaleFeedCursorError();
+
+        const rows = await transaction<FeedPageRow[]>`
+        with active_session as (
           select
-            eligible.*,
-            (
-              case when viewer_following_creator then 260 else 0 end
-              + greatest(
-                  0,
-                  168 - floor(extract(epoch from (${asOf}::timestamptz - created_at)) / 3600)::integer
-                )
-              + least(240::bigint, like_count * 2 + comment_count * 4 + share_count * 3)::integer
-              - case when seen_before then 320 else 0 end
-              + abs(mod(hashtextextended(id::text || viewer_id::text, 0), 19))::integer
-            )::integer as base_score
-          from eligible
+            session.id,
+            session.viewer_user_id as viewer_id,
+            session.mode,
+            session.surface,
+            session.as_of,
+            session.ranked_content_ids
+          from feed_ranking_sessions session
+          join users viewer on viewer.id = session.viewer_user_id
+          where session.id = ${session.id}
+            and viewer.supabase_user_id = ${input.supabaseUserId}
+            and session.mode = ${input.mode}
+            and session.surface = ${input.surface}
+            and session.expires_at > now()
         ),
-        diversified as (
+        session_items as materialized (
           select
-            scored.*,
-            row_number() over (
-              partition by creator_user_id
-              order by base_score desc, created_at desc, id desc
-            ) as creator_sequence
-          from scored
+            ranked.content_item_id,
+            ranked.position::integer as session_position,
+            active_session.viewer_id,
+            active_session.mode,
+            active_session.surface
+          from active_session
+          cross join lateral unnest(active_session.ranked_content_ids)
+            with ordinality as ranked(content_item_id, position)
+          where ranked.position > ${decodedCursor?.position ?? 0}
         ),
-        ranked as (
-          select
-            diversified.*,
-            (base_score - least(240, ((creator_sequence - 1) * 80)::integer))::integer as ranking_score
-          from diversified
+        current_eligible as materialized (
+          select authorized.content_item_id
+          from active_session
+          cross join lateral private.eligible_content(active_session.viewer_id, null) authorized
         ),
         page_ids as (
-          select *
-          from ranked
+          select
+            session_items.content_item_id as id,
+            session_items.session_position,
+            session_items.viewer_id
+          from session_items
+          join content_items content on content.id = session_items.content_item_id
+          join current_eligible eligible on eligible.content_item_id = content.id
+          left join user_follows current_follow
+            on current_follow.follower_user_id = session_items.viewer_id
+            and current_follow.followed_user_id = content.creator_user_id
           where (
-            ${decodedCursor?.score ?? null}::integer is null
-            or (ranking_score, created_at, id) < (
-              ${decodedCursor?.score ?? null}::integer,
-              ${decodedCursor?.createdAt ?? null}::timestamptz,
-              ${decodedCursor?.id ?? null}::uuid
+            (
+              session_items.surface = 'moments'
+              and content.distribution_mode = 'moment'
+              and content.expires_at > now()
+            ) or (
+              session_items.surface = 'home'
+              and content.distribution_mode = 'post'
+            ) or (
+              session_items.surface = 'bits'
+              and content.distribution_mode = 'post'
+              and content.media_type in ('bit', 'clip')
             )
           )
-          order by ranking_score desc, created_at desc, id desc
+            and (
+              session_items.mode <> 'following'
+              or current_follow.state = 'active'
+            )
+          order by session_items.session_position
           limit ${input.limit + 1}
         )
         select
@@ -107,7 +117,7 @@ export function createContentFeedRepositoryMethods(
           ci.asset_revision,
           ci.nsfw_label,
           ci.created_at,
-          page_ids.ranking_score,
+          page_ids.session_position,
           creator.id as creator_id,
           profile.handle,
           profile.display_name,
@@ -127,10 +137,10 @@ export function createContentFeedRepositoryMethods(
           entitlement.ends_at as entitlement_ends_at,
           (reaction.user_id is not null) as liked,
           (save.user_id is not null) as saved,
-          page_ids.like_count,
-          page_ids.comment_count,
-          page_ids.share_count,
-          page_ids.viewer_following_creator
+          coalesce(counter.like_count, 0) as like_count,
+          coalesce(counter.comment_count, 0) as comment_count,
+          coalesce(counter.share_count, 0) as share_count,
+          coalesce(current_follow.state = 'active', false) as viewer_following_creator
         from page_ids
         join content_items ci on ci.id = page_ids.id
         join users creator on creator.id = ci.creator_user_id
@@ -143,6 +153,10 @@ export function createContentFeedRepositoryMethods(
           and reaction.state = 'active'
         left join content_saves save
           on save.content_item_id = ci.id and save.user_id = viewer.id and save.state = 'active'
+        left join content_engagement_counters counter on counter.content_item_id = ci.id
+        left join user_follows current_follow
+          on current_follow.follower_user_id = viewer.id
+          and current_follow.followed_user_id = ci.creator_user_id
         left join lateral (
           select poster_url, playback_url, provider, provider_state, provider_playable
           from media_assets
@@ -185,6 +199,7 @@ export function createContentFeedRepositoryMethods(
               'providerState', asset.provider_state,
               'playbackUrl', asset.playback_url,
               'providerPlayable', asset.provider_playable,
+              'providerAssetId', asset.provider_asset_id,
               'posterUrl', asset.poster_url,
               'mimeType', asset.mime_type,
               'widthPixels', asset.width_pixels,
@@ -237,7 +252,7 @@ export function createContentFeedRepositoryMethods(
             and viewer_vote.voter_user_id = viewer.id
           where poll.content_item_id = ci.id
         ) poll_projection on true
-        order by page_ids.ranking_score desc, ci.created_at desc, ci.id desc
+        order by page_ids.session_position
       `;
 
       const pageRows = rows.slice(0, input.limit);
@@ -248,64 +263,186 @@ export function createContentFeedRepositoryMethods(
           ? encodeFeedCursor({
               mode: input.mode,
               surface: input.surface,
-              asOf,
-              rankingRevision,
-              score: lastRow.ranking_score,
-              createdAt: lastRow.created_at.toISOString(),
-              id: lastRow.id
+              sessionId: session.id,
+              position: lastRow.session_position
             })
           : null,
         mode: input.mode,
         surface: input.surface,
         rankingVersion: "deterministic_v1",
-        generatedAt: asOf
+        generatedAt: session.as_of.toISOString()
       };
       });
     }
   };
 }
 
-function eligibleFeedSql(
+async function findFeedRankingSession(
   sql: postgres.TransactionSql,
   input: Parameters<ContentRepository["listHomeFeed"]>[0],
-  asOf: string
-) {
-  return sql`
+  sessionId: string
+): Promise<FeedRankingSessionRow | null> {
+  const rows = await sql<FeedRankingSessionRow[]>`
     with viewer as (
       select id
       from users
       where supabase_user_id = ${input.supabaseUserId}
       limit 1
     )
-    select
-      ci.id,
-      ci.creator_user_id,
-      ci.created_at,
-      coalesce(counter.like_count, 0) as like_count,
-      coalesce(counter.comment_count, 0) as comment_count,
-      coalesce(counter.share_count, 0) as share_count,
-      coalesce(follow.state = 'active', false) as viewer_following_creator,
-      (impression.content_item_id is not null) as seen_before,
-      viewer.id as viewer_id
-    from content_items ci
-    join viewer on true
-    join private.eligible_content(viewer.id, null) eligible
-      on eligible.content_item_id = ci.id
-    left join content_engagement_counters counter on counter.content_item_id = ci.id
-    left join user_follows follow
-      on follow.follower_user_id = viewer.id
-      and follow.followed_user_id = ci.creator_user_id
-    left join viewer_content_impressions impression
-      on impression.user_id = viewer.id
-      and impression.content_item_id = ci.id
-      and impression.first_seen_at <= ${asOf}::timestamptz
-    where ci.creator_user_id <> viewer.id
-      and ci.created_at <= ${asOf}::timestamptz
-      and (
-        (${input.surface} = 'moments' and ci.distribution_mode = 'moment' and ci.expires_at > ${asOf}::timestamptz)
-        or (${input.surface} = 'home' and ci.distribution_mode = 'post')
-        or (${input.surface} = 'bits' and ci.distribution_mode = 'post' and ci.media_type in ('bit', 'clip'))
-      )
-      and (${input.mode} <> 'following' or follow.state = 'active')
+    select session.id, session.as_of
+    from feed_ranking_sessions session
+    join viewer on viewer.id = session.viewer_user_id
+    where session.id = ${sessionId}
+      and session.mode = ${input.mode}
+      and session.surface = ${input.surface}
+      and session.expires_at > now()
+    limit 1
   `;
+  return rows[0] ?? null;
+}
+
+async function createFeedRankingSession(
+  sql: postgres.TransactionSql,
+  input: Parameters<ContentRepository["listHomeFeed"]>[0]
+): Promise<FeedRankingSessionRow | null> {
+  await sql`
+    delete from feed_ranking_sessions
+    where id in (
+      select id
+      from feed_ranking_sessions
+      where expires_at <= now()
+      order by expires_at, id
+      limit ${FEED_RANKING_SESSION_CLEANUP_LIMIT}
+      for update skip locked
+    )
+  `;
+
+  const rows = await sql<FeedRankingSessionRow[]>`
+    with viewer as (
+      select id
+      from users
+      where supabase_user_id = ${input.supabaseUserId}
+      limit 1
+    ),
+    candidate_window as materialized (
+      select
+        content.id,
+        content.creator_user_id,
+        content.created_at,
+        viewer.id as viewer_id,
+        now() as as_of
+      from content_items content
+      join viewer on true
+      where content.state = 'ready'
+        and content.publish_state = 'published'
+        and content.moderation_state = 'approved'
+        and content.creator_user_id <> viewer.id
+        and content.created_at <= now()
+        and (
+          (${input.surface} = 'moments'
+            and content.distribution_mode = 'moment'
+            and content.expires_at > now())
+          or (${input.surface} = 'home' and content.distribution_mode = 'post')
+          or (${input.surface} = 'bits'
+            and content.distribution_mode = 'post'
+            and content.media_type in ('bit', 'clip'))
+        )
+        and (
+          ${input.mode} <> 'following'
+          or exists (
+            select 1
+            from user_follows followed
+            where followed.follower_user_id = viewer.id
+              and followed.followed_user_id = content.creator_user_id
+              and followed.state = 'active'
+          )
+        )
+      order by content.created_at desc, content.id desc
+      limit ${FEED_RANKING_CANDIDATE_LIMIT}
+    ),
+    authorized as materialized (
+      select eligible.content_item_id
+      from viewer
+      cross join lateral private.eligible_content(viewer.id, null) eligible
+    ),
+    eligible as (
+      select
+        candidate.id,
+        candidate.creator_user_id,
+        candidate.created_at,
+        candidate.viewer_id,
+        candidate.as_of,
+        coalesce(counter.like_count, 0) as like_count,
+        coalesce(counter.comment_count, 0) as comment_count,
+        coalesce(counter.share_count, 0) as share_count,
+        coalesce(follow.state = 'active', false) as viewer_following_creator,
+        (impression.content_item_id is not null) as seen_before
+      from candidate_window candidate
+      join authorized on authorized.content_item_id = candidate.id
+      left join content_engagement_counters counter on counter.content_item_id = candidate.id
+      left join user_follows follow
+        on follow.follower_user_id = candidate.viewer_id
+        and follow.followed_user_id = candidate.creator_user_id
+      left join viewer_content_impressions impression
+        on impression.user_id = candidate.viewer_id
+        and impression.content_item_id = candidate.id
+        and impression.first_seen_at <= candidate.as_of
+    ),
+    scored as (
+      select
+        eligible.*,
+        (
+          case when viewer_following_creator then 260 else 0 end
+          + greatest(
+              0,
+              168 - floor(extract(epoch from (as_of - created_at)) / 3600)::integer
+            )
+          + least(240::bigint, like_count * 2 + comment_count * 4 + share_count * 3)::integer
+          - case when seen_before then 320 else 0 end
+          + abs(mod(hashtextextended(id::text || viewer_id::text, 0), 19))::integer
+        )::integer as base_score
+      from eligible
+    ),
+    diversified as (
+      select
+        scored.*,
+        row_number() over (
+          partition by creator_user_id
+          order by base_score desc, created_at desc, id desc
+        ) as creator_sequence
+      from scored
+    ),
+    ranked as (
+      select
+        diversified.*,
+        (base_score - least(240, ((creator_sequence - 1) * 80)::integer))::integer as ranking_score
+      from diversified
+    ),
+    snapshot as (
+      select coalesce(
+        array_agg(id order by ranking_score desc, created_at desc, id desc),
+        '{}'::uuid[]
+      ) as ranked_content_ids
+      from ranked
+    )
+    insert into feed_ranking_sessions (
+      viewer_user_id,
+      mode,
+      surface,
+      as_of,
+      ranked_content_ids,
+      expires_at
+    )
+    select
+      viewer.id,
+      ${input.mode},
+      ${input.surface},
+      now(),
+      snapshot.ranked_content_ids,
+      now() + interval '30 minutes'
+    from viewer
+    cross join snapshot
+    returning id, as_of
+  `;
+  return rows[0] ?? null;
 }

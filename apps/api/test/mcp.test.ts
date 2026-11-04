@@ -145,9 +145,68 @@ describe("external MCP connector foundation", () => {
 
     expect(deniedResponse.statusCode).toBe(200);
     expect(deniedResponse.json().error.message).toContain("required tool scope");
-    expect(mcpRepository.toolCalls).toMatchObject([{ state: "denied" }]);
+    expect(mcpRepository.toolCalls).toMatchObject([{
+      state: "denied",
+      toolVersion: "1.0.0"
+    }]);
 
     await app.close();
+  });
+
+  it("shares per-connection tool limits across replicas and isolates risk buckets", async () => {
+    process.env.MCP_TOOL_CALL_RATE_LIMIT_PER_MINUTE = "1";
+    SharedRateLimitStore.reset();
+    const mcpRepository = new FakeMcpRepository();
+    const dependencies = testDependencies({
+      mcpRepository,
+      contentRepository: new FakeContentRepository()
+    });
+    const firstReplica = await buildApi({ ...dependencies, rateLimitStore: SharedRateLimitStore });
+    const secondReplica = await buildApi({ ...dependencies, rateLimitStore: SharedRateLimitStore });
+    await Promise.all([firstReplica.ready(), secondReplica.ready()]);
+
+    try {
+      const token = await createCreatorToken(firstReplica, [
+        "creator.profile.read",
+        "creator.drafts.write"
+      ]);
+      const call = (
+        app: Awaited<ReturnType<typeof buildApi>>,
+        id: number,
+        name: string,
+        args: Record<string, unknown> = {}
+      ) => app.inject({
+        method: "POST",
+        url: "/mcp",
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          jsonrpc: "2.0",
+          id,
+          method: "tools/call",
+          params: { name, arguments: args }
+        }
+      });
+
+      const firstRead = await call(firstReplica, 40, "creator_get_profile");
+      expect(firstRead.statusCode).toBe(200);
+
+      const crossReplicaRead = await call(secondReplica, 41, "creator_get_profile");
+      expect(crossReplicaRead.statusCode).toBe(429);
+      expect(crossReplicaRead.headers["retry-after"]).toMatch(/^\d+$/);
+      expect(crossReplicaRead.json()).toMatchObject({
+        error: { code: -32029, message: "Tool rate limit exceeded" }
+      });
+
+      const separateDraftBucket = await call(secondReplica, 42, "creator_create_private_draft", {
+        mediaType: "image",
+        caption: "Separate risk bucket"
+      });
+      expect(separateDraftBucket.statusCode).toBe(200);
+      expect(separateDraftBucket.json()).toHaveProperty("result.structuredContent.draft");
+    } finally {
+      await Promise.all([firstReplica.close(), secondReplica.close()]);
+      SharedRateLimitStore.reset();
+    }
   });
 
   it("runs a creator draft tool through the content repository without publishing", async () => {
@@ -194,6 +253,7 @@ describe("external MCP connector foundation", () => {
     ]);
     expect(mcpRepository.toolCalls).toMatchObject([{
       state: "allowed",
+      toolVersion: "1.0.0",
       inputRedacted: { mediaType: "image", caption: "[redacted]" }
     }]);
     expect(contentRepository.createdDrafts[0]?.origin).toMatchObject({
@@ -797,6 +857,15 @@ describe("external MCP connector foundation", () => {
     expect(unsupportedProtocol.statusCode).toBe(400);
     expect(unsupportedProtocol.json()).toMatchObject({ code: "invalid_protocol_version" });
 
+    const currentFinalProtocolNotYetImplemented = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: { authorization: `Bearer ${token}`, "mcp-protocol-version": "2026-07-28" },
+      payload: { jsonrpc: "2.0", id: 14, method: "tools/list" }
+    });
+    expect(currentFinalProtocolNotYetImplemented.statusCode).toBe(400);
+    expect(currentFinalProtocolNotYetImplemented.json()).toMatchObject({ code: "invalid_protocol_version" });
+
     const rejected = await app.inject({
       method: "POST",
       url: "/mcp",
@@ -1007,7 +1076,7 @@ describe("MCP OAuth completion", () => {
     });
     expect(wrongVerifier.statusCode).toBe(400);
 
-    const tokenResponse = await app.inject({
+    const concurrentExchanges = await Promise.all(Array.from({ length: 8 }, () => app.inject({
       method: "POST",
       url: "/oauth/token",
       payload: {
@@ -1017,7 +1086,10 @@ describe("MCP OAuth completion", () => {
         code,
         code_verifier: verifier
       }
-    });
+    })));
+    expect(concurrentExchanges.filter((response) => response.statusCode === 200)).toHaveLength(1);
+    expect(concurrentExchanges.filter((response) => response.statusCode === 400)).toHaveLength(7);
+    const tokenResponse = concurrentExchanges.find((response) => response.statusCode === 200)!;
     expect(tokenResponse.statusCode).toBe(200);
     expect(tokenResponse.json()).toMatchObject({
       token_type: "Bearer",
@@ -1088,6 +1160,35 @@ describe("MCP OAuth completion", () => {
     await app.close();
   });
 });
+
+class SharedRateLimitStore {
+  static readonly buckets = new Map<string, { current: number; resetAt: number }>();
+
+  constructor(_options: unknown) {}
+
+  static reset() {
+    this.buckets.clear();
+  }
+
+  incr(
+    key: string,
+    callback: (error: Error | null, result?: { current: number; ttl: number }) => void,
+    timeWindow: number
+  ) {
+    const now = Date.now();
+    const existing = SharedRateLimitStore.buckets.get(key);
+    const bucket = !existing || existing.resetAt <= now
+      ? { current: 0, resetAt: now + timeWindow }
+      : existing;
+    bucket.current += 1;
+    SharedRateLimitStore.buckets.set(key, bucket);
+    callback(null, { current: bucket.current, ttl: Math.max(1, bucket.resetAt - now) });
+  }
+
+  child() {
+    return this;
+  }
+}
 
 async function createCreatorToken(
   app: Awaited<ReturnType<typeof buildApi>>,
@@ -1189,7 +1290,7 @@ const fakeProfileRepository = {
         policyBoundary: "creator_records_only_no_balances_payout_queue_or_social_priority",
         blockedReasons: []
       },
-      earnings: {},
+      earnings: { assets: [], confirmedPaymentCount: 0 },
       products: [],
       recentActivity: []
     };
@@ -1440,7 +1541,7 @@ class FakeMcpRepository implements McpRepository {
     tokenRevokedAt: string | null;
   }>();
   readonly authorizationRequests: OAuthAuthorizationRequest[] = [];
-  readonly authorizationCodes = new Map<string, OAuthAuthorizationCode & { codeHash: string }>();
+  readonly authorizationCodes = new Map<string, OAuthAuthorizationCode & { codeHash: string; authorizationRequestId: string }>();
   readonly toolCalls: McpToolCallAuditInput[] = [];
   staffRoles = ["owner"];
   readonly clients: OAuthClient[] = [
@@ -1572,7 +1673,7 @@ class FakeMcpRepository implements McpRepository {
       scopes: input.approvedScopes,
       expiresAt: input.connectionExpiresAt
     });
-    const code: OAuthAuthorizationCode & { codeHash: string } = {
+    const code: OAuthAuthorizationCode & { codeHash: string; authorizationRequestId: string } = {
       id: randomUUID(),
       clientId: request.clientId,
       publicClientId: request.publicClientId,
@@ -1587,7 +1688,8 @@ class FakeMcpRepository implements McpRepository {
       scopes: input.approvedScopes,
       expiresAt: input.codeExpiresAt.toISOString(),
       usedAt: null,
-      codeHash: input.codeHash
+      codeHash: input.codeHash,
+      authorizationRequestId: request.id
     };
     request.status = "approved";
     request.approvedScopes = input.approvedScopes;
@@ -1602,20 +1704,21 @@ class FakeMcpRepository implements McpRepository {
     return request;
   }
 
-  async findOAuthAuthorizationCodeByHash(input: Parameters<McpRepository["findOAuthAuthorizationCodeByHash"]>[0]) {
-    return [...this.authorizationCodes.values()].find((code) => code.codeHash === input.codeHash) ?? null;
-  }
-
-  async markOAuthAuthorizationCodeUsed(input: Parameters<McpRepository["markOAuthAuthorizationCodeUsed"]>[0]) {
-    const code = this.authorizationCodes.get(input.codeId);
-    if (code) code.usedAt = new Date().toISOString();
-  }
-
-  async issueOAuthAccessToken(input: Parameters<McpRepository["issueOAuthAccessToken"]>[0]) {
-    const code = this.authorizationCodes.get(input.codeId);
-    if (!code) throw new Error("missing code");
+  async exchangeOAuthAuthorizationCode(input: Parameters<McpRepository["exchangeOAuthAuthorizationCode"]>[0]) {
+    const code = [...this.authorizationCodes.values()].find((candidate) => candidate.codeHash === input.codeHash);
+    const client = this.clients.find((candidate) => candidate.id === code?.clientId);
+    if (
+      !code || code.usedAt || new Date(code.expiresAt).getTime() <= Date.now() ||
+      !client || client.status !== "active" || client.clientId !== input.clientId ||
+      code.redirectUri !== input.redirectUri || code.codeChallenge !== input.codeChallenge ||
+      code.resource !== input.resource || code.audience !== input.resource
+    ) return null;
     const connection = this.connections.get(code.connectionId);
-    if (!connection) throw new Error("missing connection");
+    if (!connection || connection.state !== "active" || new Date(connection.expiresAt).getTime() <= Date.now()) return null;
+    code.usedAt = new Date().toISOString();
+    const authorizationRequest = this.authorizationRequests.find((request) => request.id === code.authorizationRequestId);
+    if (authorizationRequest) authorizationRequest.status = "exchanged";
+    const tokenExpiresAt = new Date(Math.min(input.expiresAt.getTime(), new Date(connection.expiresAt).getTime())).toISOString();
     const token = {
       ...stripHash(connection),
       supabaseUserId: connection.supabaseUserId,
@@ -1624,7 +1727,7 @@ class FakeMcpRepository implements McpRepository {
       resource: code.resource,
       audience: code.audience,
       tokenHash: input.tokenHash,
-      tokenExpiresAt: input.expiresAt.toISOString(),
+      tokenExpiresAt,
       tokenRevokedAt: null
     };
     this.oauthAccessTokens.set(token.oauthTokenId, token);

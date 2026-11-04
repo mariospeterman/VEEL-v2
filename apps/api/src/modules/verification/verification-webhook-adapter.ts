@@ -49,16 +49,16 @@ function normalizeSumsubWebhook(input: {
   if (!secret) throw new VerificationWebhookConfigurationError("sumsub");
 
   const digest = headerValue(input.headers["x-payload-digest"]);
-  const digestAlg = headerValue(input.headers["x-payload-digest-alg"]) ?? "HMAC_SHA256_HEX";
+  const digestAlg = headerValue(input.headers["x-payload-digest-alg"]);
   if (!digest || !verifyDigest(digest, digestAlg, input.rawBody, secret)) {
     throw new VerificationWebhookSignatureError("sumsub");
   }
 
   const body = objectBody(input.body);
   const eventType = stringValue(body.type);
-  const providerEventId = firstStringValue(body.correlationId, body.applicantId);
+  const providerEventId = `sumsub:${sha256Hex(input.rawBody)}`;
   const providerReference = firstStringValue(body.applicantId, body.externalUserId);
-  if (!eventType || !providerEventId || !providerReference) {
+  if (!eventType || !providerReference) {
     throw new VerificationWebhookValidationError("Sumsub webhook is missing required identifiers");
   }
 
@@ -68,6 +68,8 @@ function normalizeSumsubWebhook(input: {
     provider: "sumsub",
     providerEventId,
     providerReference,
+    providerSubjectReference: stringValue(body.externalUserId),
+    providerCorrelationId: stringValue(body.correlationId),
     eventType,
     status: mapReviewState(eventType, reviewAnswer, stringValue(body.reviewStatus)),
     signatureHash: sha256Hex(digest),
@@ -111,6 +113,7 @@ function normalizeDiditWebhook(input: {
     provider: "didit",
     providerEventId,
     providerReference,
+    providerSubjectReference: firstStringValue(body.vendor_data, data?.vendor_data),
     eventType,
     status: mapGenericState(firstStringValue(body.status, data?.status, data?.decision)),
     signatureHash: sha256Hex(signatureV2),
@@ -162,6 +165,7 @@ function normalizePersonaWebhook(input: {
     provider: "persona",
     providerEventId,
     providerReference,
+    providerSubjectReference: firstStringValue(inquiryAttributes?.["reference-id"], inquiryAttributes?.["reference_id"]),
     eventType,
     status: mapGenericState(firstStringValue(inquiryAttributes?.status, body.status, eventType)),
     signatureHash: sha256Hex(signature),
@@ -197,6 +201,7 @@ function normalizeVeriffWebhook(input: {
     provider: "veriff",
     providerEventId,
     providerReference,
+    providerSubjectReference: firstStringValue(verification?.vendorData, verification?.vendor_data, verification?.endUserId),
     eventType,
     status: mapVeriffState(firstStringValue(verification?.status, verification?.decision, body.status, verification?.code)),
     signatureHash: sha256Hex(signature),
@@ -205,8 +210,15 @@ function normalizeVeriffWebhook(input: {
   };
 }
 
-function verifyDigest(digest: string, digestAlg: string, rawBody: Buffer, secret: string): boolean {
-  const algorithm = digestAlg === "HMAC_SHA1_HEX" ? "sha1" : digestAlg === "HMAC_SHA512_HEX" ? "sha512" : "sha256";
+function verifyDigest(digest: string, digestAlg: string | null, rawBody: Buffer, secret: string): boolean {
+  const algorithm = digestAlg === "HMAC_SHA1_HEX"
+    ? "sha1"
+    : digestAlg === "HMAC_SHA256_HEX"
+      ? "sha256"
+      : digestAlg === "HMAC_SHA512_HEX"
+        ? "sha512"
+        : null;
+  if (!algorithm) return false;
   return secureEqualHex(createHmac(algorithm, secret).update(rawBody).digest("hex"), digest);
 }
 
@@ -303,7 +315,7 @@ function parseUnixSeconds(...values: unknown[]): Date | null {
   return null;
 }
 
-function sha256Hex(value: string): string {
+function sha256Hex(value: string | Buffer): string {
   return createHash("sha256").update(value).digest("hex");
 }
 

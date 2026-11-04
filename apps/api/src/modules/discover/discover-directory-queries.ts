@@ -1,39 +1,57 @@
 import type postgres from "postgres";
-import type { EventPage, HashtagPage, LiveRoomPage, User } from "./types.js";
+import { keysetPage } from "../../shared/keyset-pagination.js";
+import { toLiveRoom } from "../live/live-repository-mappers.js";
+import type { LiveRoomRow } from "../live/live-repository-rows.js";
+import { liveRoomSelectSql } from "../live/live-repository-sql.js";
+import {
+  decodeCreatorCursor,
+  decodeEventCursor,
+  decodeHashtagCursor,
+  decodeLiveCursor,
+  encodeCreatorCursor,
+  encodeEventCursor,
+  encodeHashtagCursor,
+  encodeLiveCursor
+} from "./discover-cursor.js";
 import type {
   CreatorRow,
   EventRow,
-  HashtagRow,
-  LiveRoomRow
+  HashtagRow
 } from "./discover-repository-rows.js";
-import { normalizeSearch, toEvent, toLiveRoom, toUser } from "./discover-repository-mappers.js";
+import { normalizeSearch, toEvent, toUser } from "./discover-repository-mappers.js";
+import type {
+  DiscoverLiveRoomPage,
+  EventPage,
+  HashtagPage,
+  User
+} from "./types.js";
 
 export async function listHashtags(
   sql: postgres.Sql,
   input: { query?: string | undefined; cursor?: string | undefined; limit: number }
 ): Promise<HashtagPage> {
   const search = normalizeSearch(input.query);
+  const cursor = decodeHashtagCursor(input.cursor);
   const rows = await sql<HashtagRow[]>`
     select slug, display_name, state
     from hashtags
     where state in ('active', 'restricted')
       and (${search}::text is null or slug ilike '%' || ${search} || '%' or display_name ilike '%' || ${search} || '%')
-      and (${input.cursor ?? null}::text is null or slug > ${input.cursor ?? null}::text)
+      and (${cursor?.slug ?? null}::text is null or slug > ${cursor?.slug ?? null}::text)
     order by slug asc
     limit ${input.limit + 1}
   `;
 
-  const pageRows = rows.slice(0, input.limit);
-  const nextRow = rows[input.limit];
-
-  return {
-    items: pageRows.map((row) => ({
+  return keysetPage(
+    rows,
+    input.limit,
+    (row) => ({
       slug: row.slug,
       displayName: row.display_name,
       state: row.state
-    })),
-    nextCursor: nextRow ? nextRow.slug : null
-  };
+    }),
+    (row) => encodeHashtagCursor(row.slug)
+  );
 }
 
 export async function listCreators(
@@ -41,25 +59,26 @@ export async function listCreators(
   input: { query?: string | undefined; cursor?: string | undefined; limit: number }
 ): Promise<{ items: User[]; nextCursor: string | null }> {
   const search = normalizeSearch(input.query);
+  const cursor = decodeCreatorCursor(input.cursor);
   const rows = await sql<CreatorRow[]>`
     select u.id, p.handle, p.display_name, p.avatar_url
     from profiles p
     join users u on u.id = p.user_id
     where u.state = 'active'
+      and p.visibility = 'public'
       and p.handle is not null
       and p.display_name is not null
       and (${search}::text is null or p.handle ilike '%' || ${search} || '%' or p.display_name ilike '%' || ${search} || '%')
-      and (${input.cursor ?? null}::text is null or p.handle > ${input.cursor ?? null}::text)
-    order by p.handle asc
+      and (
+        ${cursor?.handle ?? null}::text is null
+        or (p.handle, u.id) > (${cursor?.handle ?? null}::text, ${cursor?.id ?? null}::uuid)
+      )
+    order by p.handle asc, u.id asc
     limit ${input.limit + 1}
   `;
-  const pageRows = rows.slice(0, input.limit);
-  const nextRow = rows[input.limit];
-
-  return {
-    items: pageRows.map(toUser),
-    nextCursor: nextRow?.handle ?? null
-  };
+  return keysetPage(rows, input.limit, toUser, (row) =>
+    encodeCreatorCursor(row.handle!, row.id)
+  );
 }
 
 export async function listEvents(
@@ -67,6 +86,7 @@ export async function listEvents(
   input: { query?: string | undefined; cursor?: string | undefined; limit: number }
 ): Promise<EventPage> {
   const search = normalizeSearch(input.query);
+  const cursor = decodeEventCursor(input.cursor);
   const rows = await sql<EventRow[]>`
     select
       e.id,
@@ -103,83 +123,69 @@ export async function listEvents(
     left join event_access_pass_types tt on tt.event_id = e.id and tt.state = 'active'
     where e.state = 'published'
       and (${search}::text is null or e.title ilike '%' || ${search} || '%' or e.description ilike '%' || ${search} || '%')
-      and (${input.cursor ?? null}::timestamptz is null or e.starts_at > ${input.cursor ?? null}::timestamptz)
+      and (
+        ${cursor?.startsAt ?? null}::timestamptz is null
+        or (e.starts_at, e.id) > (
+          ${cursor?.startsAt ?? null}::timestamptz,
+          ${cursor?.id ?? null}::uuid
+        )
+      )
     group by e.id
-    order by e.starts_at asc
+    order by e.starts_at asc, e.id asc
     limit ${input.limit + 1}
   `;
-  const pageRows = rows.slice(0, input.limit);
-  const nextRow = rows[input.limit];
-
-  return {
-    items: pageRows.map(toEvent),
-    nextCursor: nextRow ? nextRow.starts_at.toISOString() : null
-  };
+  return keysetPage(rows, input.limit, toEvent, (row) =>
+    encodeEventCursor(row.starts_at, row.id)
+  );
 }
+
+type DiscoverLiveRoomRow = LiveRoomRow & {
+  created_at: Date;
+};
 
 export async function listLive(
   sql: postgres.Sql,
   input: { supabaseUserId: string; cursor?: string | undefined; limit: number }
-): Promise<LiveRoomPage> {
-  const rows = await sql<LiveRoomRow[]>`
-    with viewer as (
+): Promise<DiscoverLiveRoomPage> {
+  const cursor = decodeLiveCursor(input.cursor);
+  const rows = await sql<DiscoverLiveRoomRow[]>`
+    with target_user as (
       select id
       from users
       where supabase_user_id = ${input.supabaseUserId}
       limit 1
+    ),
+    canonical_rooms as (
+      ${liveRoomSelectSql(sql)}
+      where lr.state in ('waiting', 'live', 'replay_ready')
+        and exists (
+          select 1 from users active_creator
+          where active_creator.id = lr.creator_user_id
+            and active_creator.state = 'active'
+        )
     )
-    select
-      lr.id,
-      lr.title,
-      lr.state,
-      creator.id as creator_id,
-      p.handle,
-      p.display_name,
-      p.avatar_url,
-      lr.playback_url,
-      lr.access_rule,
-      lr.preview_seconds,
-      lr.event_price_minor,
-      lr.currency,
-      lr.members_only_chat,
-      lr.members_included_in_paid_event,
-      lr.replay_window_hours,
-      lr.replay_content_item_id,
-      exists (
-        select 1
-        from live_passes lp
-        where lp.room_id = lr.id
-          and lp.user_id = (select id from viewer)
-          and lp.state = 'active'
-          and (lp.expires_at is null or lp.expires_at > now())
-      ) as has_active_pass,
-      exists (
-        select 1
-        from subscriptions s
-        where s.subscriber_user_id = (select id from viewer)
-          and s.creator_user_id = lr.creator_user_id
-          and s.scope = 'creator'
-          and s.state in ('active', 'renewal_pending', 'grace_period')
-          and s.current_period_starts_at is not null
-          and s.current_period_starts_at <= now()
-          and s.current_period_ends_at is not null
-          and s.current_period_ends_at > now()
-      ) as has_active_membership,
-      lr.creator_user_id = (select id from viewer) as is_creator
-    from live_rooms lr
-    join users creator on creator.id = lr.creator_user_id
-    join profiles p on p.user_id = creator.id
-    where lr.state in ('waiting', 'live', 'replay_ready')
-      and creator.state = 'active'
-      and (${input.cursor ?? null}::uuid is null or lr.id > ${input.cursor ?? null}::uuid)
-    order by case lr.state when 'live' then 0 when 'waiting' then 1 else 2 end, lr.created_at desc
+    select *
+    from canonical_rooms
+    where canonical_rooms.live_safety_state = 'approved'
+      and canonical_rooms.live_provider_release_allowed is true
+      and (
+        canonical_rooms.state in ('waiting', 'live')
+        or (
+          canonical_rooms.state = 'replay_ready'
+          and canonical_rooms.replay_release_allowed is true
+        )
+      )
+      and (
+        ${cursor?.createdAt ?? null}::timestamptz is null
+        or (canonical_rooms.created_at, canonical_rooms.id) < (
+          ${cursor?.createdAt ?? null}::timestamptz,
+          ${cursor?.id ?? null}::uuid
+        )
+      )
+    order by canonical_rooms.created_at desc, canonical_rooms.id desc
     limit ${input.limit + 1}
   `;
-  const pageRows = rows.slice(0, input.limit);
-  const nextRow = rows[input.limit];
-
-  return {
-    items: pageRows.map(toLiveRoom),
-    nextCursor: nextRow?.id ?? null
-  };
+  return keysetPage(rows, input.limit, toLiveRoom, (row) =>
+    encodeLiveCursor(row.created_at, row.id)
+  );
 }

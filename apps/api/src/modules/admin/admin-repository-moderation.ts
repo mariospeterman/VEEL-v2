@@ -1,10 +1,16 @@
 import { createHash, randomUUID } from "node:crypto";
+import {
+  executeWithMutationCommandReceipt,
+  resolveMutationActorBySupabaseUserId
+} from "../../shared/mutation-command-receipt.js";
 import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
 import type { AdminRepository } from "./types.js";
 import { AdminRepositoryStateConflictError } from "./admin-repository-errors.js";
 import {
   AdminContentRow,
   AdminReportRow,
+  decodePriorityTimestampIdCursor,
+  encodePriorityTimestampIdCursor,
   pageSize,
   page,
   toAdminContentItem,
@@ -17,45 +23,92 @@ export function createModerationRepository(
 ): Pick<AdminRepository, "listContent" | "updateContentModeration" | "listReports" | "updateReport"> {
   return {
     async listContent(input) {
-      const rows = await sql<AdminContentRow[]>`
+      const cursorScope = "GET /v1/admin/content";
+      const cursor = decodePriorityTimestampIdCursor(cursorScope, input.cursor);
+      const rows = await sql<Array<AdminContentRow & { queue_priority: number }>>`
+        with content_queue as (
+          select
+            ci.id,
+            u.id as creator_id,
+            p.handle,
+            p.display_name,
+            p.avatar_url,
+            coalesce(msc.state, ci.moderation_state) as moderation_state,
+            ci.state,
+            ci.created_at,
+            case when coalesce(msc.state, ci.moderation_state) in (
+              'quarantined', 'preprocessing', 'hash_checking', 'classification',
+              'review_required', 'changes_requested', 'held_for_reporting', 'appealed', 'pending', 'reported', 'restricted'
+            ) then 0 else 1 end as queue_priority
+          from content_items ci
+          left join media_safety_cases msc
+            on msc.content_item_id = ci.id
+            and msc.state <> 'superseded'
+          join users u on u.id = ci.creator_user_id
+          join profiles p on p.user_id = u.id
+        )
         select
-          ci.id,
-          u.id as creator_id,
-          p.handle,
-          p.display_name,
-          p.avatar_url,
-          coalesce(msc.state, ci.moderation_state) as moderation_state,
-          ci.state,
-          ci.created_at
-        from content_items ci
-        left join media_safety_cases msc
-          on msc.content_item_id = ci.id
-          and msc.state <> 'superseded'
-        join users u on u.id = ci.creator_user_id
-        join profiles p on p.user_id = u.id
-        where (${input.cursor ?? null}::timestamptz is null or ci.created_at < ${input.cursor ?? null}::timestamptz)
+          id,
+          creator_id,
+          handle,
+          display_name,
+          avatar_url,
+          moderation_state,
+          state,
+          created_at,
+          queue_priority
+        from content_queue
+        where (
+          ${cursor.priority}::integer is null
+          or queue_priority > ${cursor.priority}::integer
+          or (
+            queue_priority = ${cursor.priority}::integer
+            and (
+              created_at < ${cursor.timestamp}::timestamptz
+              or (
+                created_at = ${cursor.timestamp}::timestamptz
+                and id < ${cursor.id}::uuid
+              )
+            )
+          )
+        )
         order by
-          case when coalesce(msc.state, ci.moderation_state) in (
-            'quarantined', 'preprocessing', 'hash_checking', 'classification',
-            'review_required', 'changes_requested', 'held_for_reporting', 'appealed', 'pending', 'reported', 'restricted'
-          ) then 0 else 1 end,
-          ci.created_at desc
+          queue_priority asc,
+          created_at desc,
+          id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toAdminContentItem);
+      return page(
+        rows,
+        toAdminContentItem,
+        (row) => encodePriorityTimestampIdCursor(
+          cursorScope,
+          row.queue_priority,
+          row.created_at,
+          row.id
+        )
+      );
     },
     async updateContentModeration(input) {
       const moderation = contentModerationForAction(input.body.action);
-      const rows = await withPostgresTransaction(sql, async (transaction) => {
-        const actorRows = await transaction<{ id: string }[]>`
-          select id
-          from users
-          where supabase_user_id = ${input.supabaseUserId}
-          limit 1
-        `;
-        const actor = actorRows[0];
-        if (!actor) return [] as AdminContentRow[];
+      return withPostgresTransaction(sql, async (transaction) => {
+        const actorUserId = await resolveMutationActorBySupabaseUserId(
+          transaction,
+          input.supabaseUserId
+        );
+        if (!actorUserId) return null;
+
+        return executeWithMutationCommandReceipt(transaction, {
+          actorUserId,
+          action: "admin.content_moderation.update",
+          targetType: "content",
+          targetId: input.contentId,
+          idempotencyKey: input.idempotencyKey,
+          requestVersion: 1,
+          requestBody: input.body,
+          responseStatus: 200
+        }, async () => {
 
         const currentContentRows = await transaction<
           { id: string; state: string; moderation_state: string; publish_state: string }[]
@@ -66,7 +119,7 @@ export function createModerationRepository(
           for update
         `;
         const currentContent = currentContentRows[0];
-        if (!currentContent) return [] as AdminContentRow[];
+        if (!currentContent) return null;
 
         const safetyCaseRows = await transaction<{ id: string; state: string }[]>`
           select id, state
@@ -122,7 +175,7 @@ export function createModerationRepository(
               'clear',
               ${moderationReviewHash({
                 action: input.body.action,
-                actorUserId: actor.id,
+                actorUserId,
                 contentId: input.contentId,
                 reason: input.body.reason
               })},
@@ -146,7 +199,7 @@ export function createModerationRepository(
             reason_code = ${approving ? "staff_approved" : requestingChanges ? "changes_requested" : input.body.action === "restrict" ? "staff_review_required" : "policy_rejected"},
             decision_message = ${input.body.reason.trim()},
             provider_release_allowed = ${approving},
-            reviewed_by_user_id = ${actor.id},
+            reviewed_by_user_id = ${actorUserId},
             decided_at = now(),
             updated_at = now()
           where id = ${safetyCase.id}
@@ -158,7 +211,7 @@ export function createModerationRepository(
             set
               state = ${approving ? "overturned" : "upheld"},
               resolution_reason = ${`staff_${input.body.action}`},
-              reviewed_by_user_id = ${actor.id},
+              reviewed_by_user_id = ${actorUserId},
               reviewed_at = now(),
               updated_at = now()
             where media_safety_case_id = ${safetyCase.id}
@@ -239,7 +292,7 @@ export function createModerationRepository(
         }
 
         const updated = updatedRows[0];
-        if (!updated) return [] as AdminContentRow[];
+        if (!updated) return null;
 
         await transaction`
           insert into audit_events (
@@ -252,7 +305,7 @@ export function createModerationRepository(
           )
           values (
             gen_random_uuid(),
-            ${actor.id},
+            ${actorUserId},
             'content',
             ${input.contentId},
             'content_moderation_updated',
@@ -270,7 +323,7 @@ export function createModerationRepository(
           )
         `;
 
-        return await transaction<AdminContentRow[]>`
+        const responseRows = await transaction<AdminContentRow[]>`
           select
             ci.id,
             u.id as creator_id,
@@ -288,32 +341,80 @@ export function createModerationRepository(
           join profiles p on p.user_id = u.id
           where ci.id = ${input.contentId}
         `;
+        return responseRows[0] ? toAdminContentItem(responseRows[0]) : null;
+        });
       });
-
-      return rows[0] ? toAdminContentItem(rows[0]) : null;
     },
     async listReports(input) {
-      const rows = await sql<AdminReportRow[]>`
-        select id, subject_type, subject_id, state, reason, created_at
-        from reports
-        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
+      const cursorScope = "GET /v1/admin/reports";
+      const cursor = decodePriorityTimestampIdCursor(cursorScope, input.cursor);
+      const rows = await sql<Array<AdminReportRow & { queue_priority: number }>>`
+        with report_queue as (
+          select
+            id,
+            subject_type,
+            subject_id,
+            state,
+            reason,
+            created_at,
+            case when state in ('submitted', 'queued', 'reviewing', 'escalated') then 0 else 1 end
+              as queue_priority
+          from reports
+        )
+        select id, subject_type, subject_id, state, reason, created_at, queue_priority
+        from report_queue
+        where (
+          ${cursor.priority}::integer is null
+          or queue_priority > ${cursor.priority}::integer
+          or (
+            queue_priority = ${cursor.priority}::integer
+            and (
+              created_at < ${cursor.timestamp}::timestamptz
+              or (
+                created_at = ${cursor.timestamp}::timestamptz
+                and id < ${cursor.id}::uuid
+              )
+            )
+          )
+        )
         order by
-          case when state in ('submitted', 'queued', 'reviewing', 'escalated') then 0 else 1 end,
-          created_at desc
+          queue_priority asc,
+          created_at desc,
+          id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toAdminReport);
+      return page(
+        rows,
+        toAdminReport,
+        (row) => encodePriorityTimestampIdCursor(
+          cursorScope,
+          row.queue_priority,
+          row.created_at,
+          row.id
+        )
+      );
     },
     async updateReport(input) {
-      const rows = await withPostgresTransaction(sql, async (transaction) => {
-        const updatedRows = await transaction<AdminReportRow[]>`
-          with actor as (
-            select id
-            from users
-            where supabase_user_id = ${input.supabaseUserId}
-            limit 1
-          ),
+      return withPostgresTransaction(sql, async (transaction) => {
+        const actorUserId = await resolveMutationActorBySupabaseUserId(
+          transaction,
+          input.supabaseUserId
+        );
+        if (!actorUserId) return null;
+
+        return executeWithMutationCommandReceipt(transaction, {
+          actorUserId,
+          action: "admin.report.update",
+          targetType: "report",
+          targetId: input.reportId,
+          idempotencyKey: input.idempotencyKey,
+          requestVersion: 1,
+          requestBody: input.body,
+          responseStatus: 200
+        }, async () => {
+          const updatedRows = await transaction<AdminReportRow[]>`
+          with
           current_report as (
             select id, state
             from reports
@@ -350,20 +451,19 @@ export function createModerationRepository(
             )
             select
               gen_random_uuid(),
-              actor.id,
+              ${actorUserId}::uuid,
               'report',
               updated_report.id,
               'report_review_updated',
               jsonb_build_object(
-                'reason', ${input.body.reason},
-                'idempotencyKey', ${input.idempotencyKey},
+                'reason', ${input.body.reason}::text,
+                'idempotencyKey', ${input.idempotencyKey}::text,
                 'reportedSubjectType', updated_report.subject_type,
                 'reportedSubjectId', updated_report.subject_id,
                 'previousState', updated_report.previous_state,
                 'newState', updated_report.state
               )
             from updated_report
-            cross join actor
             returning id
           )
           select id, subject_type, subject_id, state, reason, created_at
@@ -371,10 +471,9 @@ export function createModerationRepository(
           where exists (select 1 from audit_insert)
         `;
 
-        return updatedRows;
+          return updatedRows[0] ? toAdminReport(updatedRows[0]) : null;
+        });
       });
-
-      return rows[0] ? toAdminReport(rows[0]) : null;
     },
   };
 }

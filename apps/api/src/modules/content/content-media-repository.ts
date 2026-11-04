@@ -24,12 +24,18 @@ type ContentMediaRepositoryMethods = Required<Pick<
   | "captureProviderObservationCutoff"
   | "completeImageAssetUpload"
   | "completeMediaAssetCleanup"
+  | "completeVideoAssetUpload"
+  | "completeVideoUploadCompensation"
   | "createMediaAsset"
   | "findMediaAssetByProviderAsset"
+  | "findOwnedContentForPublication"
   | "findOwnedContentForUpload"
   | "findOwnedMediaAssetForSync"
   | "recordMediaProviderWebhook"
+  | "recordVideoUploadProviderAsset"
+  | "reserveVideoAssetUpload"
   | "reserveImageAssetUpload"
+  | "beginVideoUploadCompensation"
   | "retireOwnedMediaAsset"
   | "scheduleUnattachedMediaProviderCleanup"
   | "updateMediaAssetFromWebhook"
@@ -149,6 +155,390 @@ export function createContentMediaRepositoryMethods(
       });
 
       return rows[0] ? { id: rows[0].id } : undefined;
+    },
+    async reserveVideoAssetUpload(input) {
+      return withPostgresTransaction(sql, async (transaction) => {
+        const actors = await transaction<{ id: string }[]>`
+          select id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}
+            and state = 'active'
+          limit 1
+          for update
+        `;
+        const actor = actors[0];
+        if (!actor) throw new ContentImageUploadConflictError("draft_locked");
+
+        const existingRows = await transaction<{
+          content_item_id: string;
+          media_asset_id: string;
+          mime_type: string;
+          provider_asset_id: string | null;
+          request_hash: string;
+          state: string;
+        }[]>`
+          select content_item_id, media_asset_id, mime_type, provider_asset_id, request_hash, state
+          from media_upload_operations
+          where actor_user_id = ${actor.id}
+            and idempotency_key = ${input.idempotencyKey}
+          for update
+        `;
+        const existing = existingRows[0];
+        if (existing) {
+          if (
+            existing.request_hash !== input.requestHash ||
+            existing.content_item_id !== input.contentId ||
+            existing.mime_type !== input.mimeType
+          ) {
+            throw new ContentImageUploadConflictError("idempotency_conflict");
+          }
+          if (existing.state === "provider_creation_claimed") {
+            return {
+              mediaAssetId: existing.media_asset_id,
+              state: "provider_creation_pending" as const
+            };
+          }
+          if (!existing.provider_asset_id) {
+            throw new ContentImageUploadConflictError("receipt_invalid");
+          }
+          if (existing.state === "provider_created") {
+            return {
+              mediaAssetId: existing.media_asset_id,
+              providerAssetId: existing.provider_asset_id,
+              state: "attach_provider_asset" as const
+            };
+          }
+          if (existing.state === "completed") {
+            return {
+              mediaAssetId: existing.media_asset_id,
+              providerAssetId: existing.provider_asset_id,
+              state: "completed" as const
+            };
+          }
+          throw new ContentImageUploadConflictError("receipt_invalid");
+        }
+
+        const drafts = await transaction<{ media_type: string }[]>`
+          select media_type
+          from content_items
+          where id = ${input.contentId}
+            and creator_user_id = ${actor.id}
+            and state <> 'deleted'
+            and publish_state in ('draft', 'unpublished')
+          for update
+        `;
+        const draft = drafts[0];
+        if (!draft) throw new ContentImageUploadConflictError("draft_locked");
+        if (!["bit", "clip", "vod", "live_replay", "carousel"].includes(draft.media_type)) {
+          throw new ContentImageUploadConflictError("format_invalid");
+        }
+
+        const assetCounts = await transaction<{ asset_count: number }[]>`
+          select (
+            select count(*)::integer
+            from media_assets
+            where content_item_id = ${input.contentId}
+              and retired_at is null
+          ) + (
+            select count(*)::integer
+            from media_upload_operations
+            where content_item_id = ${input.contentId}
+              and state in ('provider_creation_claimed', 'provider_created')
+          ) as asset_count
+        `;
+        if ((assetCounts[0]?.asset_count ?? 10) >= 10) {
+          throw new ContentImageUploadConflictError("draft_locked");
+        }
+
+        await assertCreatorMediaQuota(
+          transaction,
+          actor.id,
+          input.quotaWindowStart,
+          input.dailyMediaUploadQuota
+        );
+
+        const mediaAssetId = randomUUID();
+        await transaction`
+          insert into media_upload_operations (
+            actor_user_id,
+            content_item_id,
+            media_asset_id,
+            idempotency_key,
+            request_hash,
+            mime_type,
+            state
+          ) values (
+            ${actor.id},
+            ${input.contentId},
+            ${mediaAssetId},
+            ${input.idempotencyKey},
+            ${input.requestHash},
+            ${input.mimeType},
+            'provider_creation_claimed'
+          )
+        `;
+        return { mediaAssetId, state: "create_provider_asset" as const };
+      });
+    },
+    async recordVideoUploadProviderAsset(input) {
+      return withPostgresTransaction(sql, async (transaction) => {
+        const rows = await transaction<{
+          media_asset_id: string;
+          provider_asset_id: string | null;
+          request_hash: string;
+          state: string;
+        }[]>`
+          select operation.media_asset_id, operation.provider_asset_id,
+            operation.request_hash, operation.state
+          from media_upload_operations operation
+          join users actor on actor.id = operation.actor_user_id
+          where actor.supabase_user_id = ${input.supabaseUserId}
+            and operation.idempotency_key = ${input.idempotencyKey}
+          for update of operation
+        `;
+        const operation = rows[0];
+        if (!operation || operation.request_hash !== input.requestHash) {
+          throw new ContentImageUploadConflictError("idempotency_conflict");
+        }
+        if (operation.provider_asset_id && operation.provider_asset_id !== input.providerAssetId) {
+          throw new ContentImageUploadConflictError("receipt_invalid");
+        }
+        if (!["provider_creation_claimed", "provider_created"].includes(operation.state)) {
+          throw new ContentImageUploadConflictError("receipt_invalid");
+        }
+        await transaction`
+          update media_upload_operations
+          set provider_asset_id = ${input.providerAssetId},
+              state = 'provider_created',
+              updated_at = now()
+          where actor_user_id = (
+              select id from users where supabase_user_id = ${input.supabaseUserId}
+            )
+            and idempotency_key = ${input.idempotencyKey}
+        `;
+        return {
+          mediaAssetId: operation.media_asset_id,
+          providerAssetId: input.providerAssetId
+        };
+      });
+    },
+    async completeVideoAssetUpload(input) {
+      return withPostgresTransaction(sql, async (transaction) => {
+        const rows = await transaction<{
+          actor_user_id: string;
+          content_item_id: string;
+          media_asset_id: string;
+          provider_asset_id: string | null;
+          request_hash: string;
+          state: string;
+        }[]>`
+          select operation.actor_user_id, operation.content_item_id,
+            operation.media_asset_id, operation.provider_asset_id,
+            operation.request_hash, operation.state
+          from media_upload_operations operation
+          join users actor on actor.id = operation.actor_user_id
+          where actor.supabase_user_id = ${input.supabaseUserId}
+            and operation.idempotency_key = ${input.idempotencyKey}
+          for update of operation
+        `;
+        const operation = rows[0];
+        if (!operation || operation.request_hash !== input.requestHash) {
+          throw new ContentImageUploadConflictError("idempotency_conflict");
+        }
+        if (!operation.provider_asset_id) {
+          throw new ContentImageUploadConflictError("receipt_invalid");
+        }
+        if (operation.state === "completed") {
+          return {
+            mediaAssetId: operation.media_asset_id,
+            providerAssetId: operation.provider_asset_id
+          };
+        }
+        if (operation.state !== "provider_created") {
+          throw new ContentImageUploadConflictError("receipt_invalid");
+        }
+
+        const drafts = await transaction<{ id: string }[]>`
+          select id
+          from content_items
+          where id = ${operation.content_item_id}
+            and creator_user_id = ${operation.actor_user_id}
+            and state <> 'deleted'
+            and publish_state in ('draft', 'unpublished')
+          for update
+        `;
+        if (!drafts[0]) throw new ContentImageUploadConflictError("draft_locked");
+
+        const assetCounts = await transaction<{ asset_count: number }[]>`
+          select count(*)::integer as asset_count
+          from media_assets
+          where content_item_id = ${operation.content_item_id}
+            and retired_at is null
+        `;
+        if ((assetCounts[0]?.asset_count ?? 10) >= 10) {
+          throw new ContentImageUploadConflictError("draft_locked");
+        }
+
+        const assets = await transaction<{ id: string }[]>`
+          insert into media_assets (
+            id, content_item_id, provider, provider_asset_id, provider_state,
+            provider_playable, asset_kind, required_for_release
+          ) values (
+            ${operation.media_asset_id}, ${operation.content_item_id}, 'bunny',
+            ${operation.provider_asset_id}, 'created', false, 'video', true
+          )
+          on conflict (provider, provider_asset_id) do nothing
+          returning id
+        `;
+        if (!assets[0]) {
+          const existing = await transaction<{ id: string; content_item_id: string }[]>`
+            select id, content_item_id
+            from media_assets
+            where provider = 'bunny'
+              and provider_asset_id = ${operation.provider_asset_id}
+          `;
+          if (
+            existing[0]?.id !== operation.media_asset_id ||
+            existing[0]?.content_item_id !== operation.content_item_id
+          ) {
+            throw new ContentImageUploadConflictError("receipt_invalid");
+          }
+        }
+
+        await transaction`
+          insert into media_moderation_jobs (
+            media_safety_case_id, media_asset_id, stage, state, idempotency_key
+          )
+          select safety.id, ${operation.media_asset_id},
+            'provider_scan_reconciliation', 'queued',
+            ${`media-safety:asset:${operation.media_asset_id}:provider-scan-v1`}
+          from media_safety_cases safety
+          where safety.content_item_id = ${operation.content_item_id}
+            and safety.state <> 'superseded'
+          on conflict (idempotency_key) do nothing
+        `;
+        await transaction`
+          update media_safety_cases
+          set state = 'preprocessing',
+              reason_code = 'awaiting_provider_scan_reconciliation',
+              provider_release_allowed = false,
+              updated_at = now()
+          where content_item_id = ${operation.content_item_id}
+            and state in ('quarantined', 'preprocessing')
+        `;
+        await transaction`
+          update media_upload_operations
+          set state = 'completed', updated_at = now()
+          where actor_user_id = ${operation.actor_user_id}
+            and idempotency_key = ${input.idempotencyKey}
+        `;
+        return {
+          mediaAssetId: operation.media_asset_id,
+          providerAssetId: operation.provider_asset_id
+        };
+      });
+    },
+    async beginVideoUploadCompensation(input) {
+      return withPostgresTransaction(sql, async (transaction) => {
+        const rows = await transaction<{
+          actor_user_id: string;
+          content_item_id: string;
+          media_asset_id: string;
+          provider_asset_id: string | null;
+          request_hash: string;
+          state: string;
+        }[]>`
+          select operation.actor_user_id, operation.content_item_id,
+            operation.media_asset_id, operation.provider_asset_id,
+            operation.request_hash, operation.state
+          from media_upload_operations operation
+          join users actor on actor.id = operation.actor_user_id
+          where actor.supabase_user_id = ${input.supabaseUserId}
+            and operation.idempotency_key = ${input.idempotencyKey}
+          for update of operation
+        `;
+        const operation = rows[0];
+        if (!operation || operation.request_hash !== input.requestHash) {
+          throw new ContentImageUploadConflictError("idempotency_conflict");
+        }
+        if (!operation.provider_asset_id || operation.state === "completed") {
+          throw new ContentImageUploadConflictError("receipt_invalid");
+        }
+
+        await transaction`
+          insert into media_assets (
+            id, content_item_id, provider, provider_asset_id, provider_state,
+            provider_playable, asset_kind, position, required_for_release,
+            retired_at, retired_by_user_id, retirement_reason,
+            provider_cleanup_state, provider_cleanup_error_code,
+            provider_cleanup_attempt_count, provider_cleanup_next_attempt_at
+          ) values (
+            ${operation.media_asset_id}, ${operation.content_item_id}, 'bunny',
+            ${operation.provider_asset_id}, 'compensation_pending', false,
+            'video', null, false, now(), ${operation.actor_user_id},
+            'provider_attach_failed', 'pending', ${input.failureCode}, 0, now()
+          )
+          on conflict (provider, provider_asset_id) do update
+          set provider_cleanup_state = case
+                when media_assets.provider_cleanup_state = 'completed' then 'completed'
+                else 'pending'
+              end,
+              provider_cleanup_error_code = case
+                when media_assets.provider_cleanup_state = 'completed' then null
+                else ${input.failureCode}
+              end,
+              provider_cleanup_next_attempt_at = case
+                when media_assets.provider_cleanup_state = 'completed' then null
+                else now()
+              end
+        `;
+        await transaction`
+          update media_upload_operations
+          set state = 'compensation_pending',
+              failure_code = ${input.failureCode},
+              updated_at = now()
+          where actor_user_id = ${operation.actor_user_id}
+            and idempotency_key = ${input.idempotencyKey}
+        `;
+        return {
+          mediaAssetId: operation.media_asset_id,
+          providerAssetId: operation.provider_asset_id
+        };
+      });
+    },
+    async completeVideoUploadCompensation(input) {
+      await withPostgresTransaction(sql, async (transaction) => {
+        const rows = await transaction<{
+          actor_user_id: string;
+          media_asset_id: string;
+          request_hash: string;
+        }[]>`
+          select operation.actor_user_id, operation.media_asset_id, operation.request_hash
+          from media_upload_operations operation
+          join users actor on actor.id = operation.actor_user_id
+          where actor.supabase_user_id = ${input.supabaseUserId}
+            and operation.idempotency_key = ${input.idempotencyKey}
+          for update of operation
+        `;
+        const operation = rows[0];
+        if (!operation || operation.request_hash !== input.requestHash) {
+          throw new ContentImageUploadConflictError("idempotency_conflict");
+        }
+        await transaction`
+          update media_assets
+          set provider_cleanup_state = 'completed',
+              provider_cleanup_error_code = null,
+              provider_cleanup_next_attempt_at = null
+          where id = ${operation.media_asset_id}
+            and retired_at is not null
+        `;
+        await transaction`
+          update media_upload_operations
+          set state = 'compensated', updated_at = now()
+          where actor_user_id = ${operation.actor_user_id}
+            and idempotency_key = ${input.idempotencyKey}
+        `;
+      });
     },
     async scheduleUnattachedMediaProviderCleanup(input) {
       await withPostgresTransaction(sql, async (transaction) => {
@@ -742,6 +1132,14 @@ export function createContentMediaRepositoryMethods(
           where id = ${input.mediaAssetId}
             and retired_at is not null
         `;
+        if (input.succeeded) {
+          await transaction`
+            update media_upload_operations
+            set state = 'compensated', updated_at = now()
+            where media_asset_id = ${input.mediaAssetId}
+              and state = 'compensation_pending'
+          `;
+        }
         await transaction`
           insert into audit_events (
             id, actor_user_id, subject_type, subject_id, action, idempotency_key, metadata
@@ -787,12 +1185,44 @@ export function createContentMediaRepositoryMethods(
         join users u on u.id = ci.creator_user_id
         where ci.id = ${input.contentId}
           and u.supabase_user_id = ${input.supabaseUserId}
-          and ci.state in ('draft', 'processing')
+          and ci.state <> 'deleted'
+          and ci.publish_state in ('draft', 'unpublished')
         limit 1
       `;
 
       const row = rows[0];
 
+      return row
+        ? {
+            id: row.id,
+            mediaType: row.media_type,
+            caption: row.caption,
+            nsfwLabel: row.nsfw_label
+          }
+        : null;
+    },
+    async findOwnedContentForPublication(input) {
+      const rows = await sql<{
+        id: string;
+        media_type: ContentItem["mediaType"];
+        caption: string | null;
+        nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
+      }[]>`
+        select
+          ci.id,
+          ci.media_type,
+          ci.caption,
+          ci.nsfw_label
+        from content_items ci
+        join users u on u.id = ci.creator_user_id
+        where ci.id = ${input.contentId}
+          and u.supabase_user_id = ${input.supabaseUserId}
+          and ci.state <> 'deleted'
+          and ci.publish_state in ('draft', 'unpublished', 'submitted_for_review')
+        limit 1
+      `;
+
+      const row = rows[0];
       return row
         ? {
             id: row.id,
@@ -913,50 +1343,57 @@ export function createContentMediaRepositoryMethods(
       });
     },
     async recordMediaProviderWebhook(input) {
-      const insertedReceipts = await sql<{ id: string }[]>`
-        insert into provider_webhook_receipts (
-          id,
-          provider,
-          webhook_type,
-          signature_hash,
-          idempotency_key
-        )
-        values (
-          ${randomUUID()},
-          ${input.provider},
-          'media-status',
-          ${input.signatureHash ?? null},
-          ${input.providerEventId}
-        )
-        on conflict (provider, webhook_type, idempotency_key) do nothing
-        returning id
-      `;
+      return withPostgresTransaction(sql, async (transaction) => {
+        await transaction`
+          insert into provider_webhook_receipts (
+            id,
+            provider,
+            webhook_type,
+            signature_hash,
+            idempotency_key
+          )
+          values (
+            ${randomUUID()},
+            ${input.provider},
+            'media-status',
+            ${input.signatureHash ?? null},
+            ${input.providerEventId}
+          )
+          on conflict (provider, webhook_type, idempotency_key) do nothing
+        `;
 
-      if (insertedReceipts.length === 0) {
-        return false;
-      }
+        await transaction`
+          insert into provider_events (
+            id,
+            provider,
+            provider_event_id,
+            event_type,
+            normalized_state,
+            replay_payload
+          )
+          values (
+            ${randomUUID()},
+            ${input.provider},
+            ${input.providerEventId},
+            ${input.eventType},
+            ${input.normalizedState},
+            ${transaction.json(toJsonObject(input.replayPayload ?? {}))}
+          )
+          on conflict (provider, provider_event_id) do nothing
+        `;
 
-      await sql`
-        insert into provider_events (
-          id,
-          provider,
-          provider_event_id,
-          event_type,
-          normalized_state,
-          replay_payload
-        )
-        values (
-          ${randomUUID()},
-          ${input.provider},
-          ${input.providerEventId},
-          ${input.eventType},
-          ${input.normalizedState},
-          ${sql.json(toJsonObject(input.replayPayload ?? {}))}
-        )
-        on conflict (provider, provider_event_id) do nothing
-      `;
+        const events = await transaction<{ processed_at: Date | null }[]>`
+          select processed_at
+          from provider_events
+          where provider = ${input.provider}
+            and provider_event_id = ${input.providerEventId}
+          for update
+        `;
 
-      return true;
+        // A receipt from an interrupted legacy delivery no longer suppresses
+        // the event, and an event that crashed before apply remains retryable.
+        return events[0]?.processed_at === null;
+      });
     },
     async updateMediaAssetFromWebhook(input) {
       const rows = await withPostgresTransaction(sql, async (transaction) => {
@@ -1115,6 +1552,12 @@ async function assertCreatorMediaQuota(
           select 1 from media_assets reserved_asset
           where reserved_asset.id = reservation.reserved_media_asset_id
         )
+    ) + (
+      select count(*)::integer
+      from media_upload_operations operation
+      where operation.actor_user_id = ${actorUserId}
+        and operation.state in ('provider_creation_claimed', 'provider_created')
+        and operation.created_at >= ${quotaWindowStart}
     ) as quota_count
   `;
   if ((counts[0]?.quota_count ?? dailyMediaUploadQuota) >= dailyMediaUploadQuota) {

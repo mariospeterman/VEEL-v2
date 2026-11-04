@@ -220,6 +220,74 @@ describe("Solana creator split settlement verification", () => {
     ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
   });
 
+  it("does not reuse one native SOL transfer for equal creator and Enterprise legs", async () => {
+    const input = settlementInput({
+      enterpriseWallet: creatorWallet,
+      creatorAmountMinor: 4_500_000,
+      enterpriseManagementAmountMinor: 4_500_000
+    });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 4_500_000),
+      transfer(platformFeeWallet, 1_000_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 4_500_000),
+      transfer(creatorWallet, 4_500_000),
+      transfer(platformFeeWallet, 1_000_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: true, blockTime });
+  });
+
+  it("does not reuse one native SOL transfer for equal platform and referral legs", async () => {
+    const input = settlementInput({
+      referralWallet: platformFeeWallet,
+      platformFeeAmountMinor: 500_000,
+      referralAmountMinor: 500_000
+    });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 9_000_000),
+      transfer(platformFeeWallet, 500_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 9_000_000),
+      transfer(platformFeeWallet, 500_000),
+      transfer(platformFeeWallet, 500_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: true, blockTime });
+  });
+
+  it("does not reuse one USDC transfer for equal creator and Enterprise legs", async () => {
+    const input = settlementInput({
+      currency: "USDC",
+      tokenMint: usdcMint,
+      tokenDecimals: 6,
+      totalAmountMinor: 1_000_000,
+      enterpriseWallet: creatorWallet,
+      creatorAmountMinor: 450_000,
+      enterpriseManagementAmountMinor: 450_000,
+      platformFeeAmountMinor: 100_000
+    });
+
+    await expect(expectSettlement([
+      tokenTransfer(creatorWallet, 450_000),
+      tokenTransfer(platformFeeWallet, 100_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
+
+    await expect(expectSettlement([
+      tokenTransfer(creatorWallet, 450_000),
+      tokenTransfer(creatorWallet, 450_000),
+      tokenTransfer(platformFeeWallet, 100_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: true, blockTime });
+  });
+
   it("requires exact decoded memo content and rejects settlement after intent expiry", async () => {
     await expect(expectSettlement([
       transfer(creatorWallet, 9_000_000),

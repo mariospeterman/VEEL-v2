@@ -198,6 +198,7 @@ export async function createAuthorizationIntent(
       on conflict do nothing
       returning
         id,
+        created_at,
         scope,
         plan_id,
         state,
@@ -216,6 +217,7 @@ export async function createAuthorizationIntent(
         period_seconds,
         plan_pda,
         subscription_pda,
+        failure_reason,
         merchant_wallet,
         creator_user_id,
         null::text as creator_handle,

@@ -1,4 +1,4 @@
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { TextEncoder } from "node:util";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
@@ -40,35 +40,38 @@ import {
   createPostgresSubscriptionCollectionRepository,
   processDueSubscriptionCollections
 } from "../../worker/src/subscription-collections";
+import {
+  assertIntegrationDatabaseIsAllowed,
+  integrationDatabaseUrl
+} from "./integration-database.js";
 
 const enableRealApiIntegration =
   process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS === "1" ||
   process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS === "true";
 const describeIntegration = enableRealApiIntegration ? describe : describe.skip;
-const buyerSupabaseUserId = "10000000-0000-4000-8000-000000000001";
-const creatorSupabaseUserId = "10000000-0000-4000-8000-000000000002";
-const authToken = "integration-buyer-token";
-const creatorAuthToken = "integration-creator-token";
+const buyerSupabaseUserId = randomUUID();
+const creatorSupabaseUserId = randomUUID();
+const authToken = `integration-buyer-${randomUUID()}`;
+const creatorAuthToken = `integration-creator-${randomUUID()}`;
 const sumsubWebhookSecret = "sumsub-integration-webhook-secret";
-const treasuryWallet = "1".repeat(32);
-const subscriptionCollectorWallet = "1".repeat(32);
-const subscriptionTokenMint = "3".repeat(32);
-const subscriptionAuthorityAddress = "4".repeat(32);
-const subscriptionDelegationAddress = "5".repeat(32);
-const subscriptionTokenAccount = "6".repeat(32);
-const subscriptionPlanPda = "7".repeat(32);
-const subscriptionMerchantWallet = "8".repeat(32);
+const treasuryWallet = randomBase58Address();
+const subscriptionCollectorWallet = randomBase58Address();
+const subscriptionTokenMint = randomBase58Address();
+const subscriptionAuthorityAddress = randomBase58Address();
+const subscriptionDelegationAddress = randomBase58Address();
+const subscriptionTokenAccount = randomBase58Address();
+const subscriptionPlanPda = randomBase58Address();
+const subscriptionMerchantWallet = randomBase58Address();
 const subscriptionProgramId = "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44";
-const creatorSettlementWallet = "2".repeat(32);
-const validSolanaSignature =
-  "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
-const validEventAccessSolanaSignature = deterministicBase58Signature(41);
-const validPaidMessageSolanaSignature = deterministicBase58Signature(83);
-const validDeclinedPaidMessageSolanaSignature = deterministicBase58Signature(97);
-const validLivePassSolanaSignature = deterministicBase58Signature(127);
-const validRemediationSolanaSignature = deterministicBase58Signature(139);
-const invalidReservationSolanaSignature = deterministicBase58Signature(151);
-const validSubscriptionAuthorizationSignature = deterministicBase58Signature(149);
+const creatorSettlementWallet = randomBase58Address();
+const validSolanaSignature = randomBase58Signature();
+const validEventAccessSolanaSignature = randomBase58Signature();
+const validPaidMessageSolanaSignature = randomBase58Signature();
+const validDeclinedPaidMessageSolanaSignature = randomBase58Signature();
+const validLivePassSolanaSignature = randomBase58Signature();
+const validRemediationSolanaSignature = randomBase58Signature();
+const invalidReservationSolanaSignature = randomBase58Signature();
+const validSubscriptionAuthorizationSignature = randomBase58Signature();
 
 describeIntegration("authenticated API happy path against Postgres", () => {
   it("links wallet, verifies age, creates content, unlocks content, buys Event Access, funds a structured creator request, buys paid live event access, and verifies subscriptions", async () => {
@@ -235,6 +238,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       },
       postgresClient: sql
     });
+    const journeyLock = await sql.reserve();
+    await journeyLock`
+      select pg_advisory_lock(hashtextextended('wevid-integration:authenticated-happy-path', 0))
+    `;
 
     try {
       await app.ready();
@@ -279,11 +286,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       `;
       await sql`
         insert into app_sessions (
-          id, user_id, wallet_id, token_hash, expires_at, authentication_method, authenticated_at
+          id, user_id, wallet_id, token_hash, expires_at, authentication_method, authenticated_at,
+          provider_session_id
         )
         values (
           ${randomUUID()}, ${buyerSupabaseUserId}, null, ${hashToken(authToken)},
-          now() + interval '30 minutes', 'supabase_recovery', now()
+          now() + interval '30 minutes', 'supabase_recovery', now(), ${randomUUID()}
         )
       `;
       await seedCreatorPaidContent(sql, {
@@ -425,7 +433,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
 
       const webhookPayload = JSON.stringify({
         type: "applicantReviewed",
-        applicantId: providerReference,
+        applicantId: `sumsub-applicant-${runId}`,
+        externalUserId: providerReference,
         correlationId: `sumsub-event-${runId}`,
         reviewResult: {
           reviewAnswer: "GREEN"
@@ -487,6 +496,17 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         payload: { consentVersion: "mutuals-consent-2026-06-04" }
       });
       expect(activateMutualsResponse.statusCode, activateMutualsResponse.body).toBe(200);
+
+      const mutualsFeedResponse = await app.inject({
+        method: "GET",
+        url: "/v1/mutuals/feed",
+        headers: authenticatedHeaders(`mutuals-feed-${runId}`)
+      });
+      expect(mutualsFeedResponse.statusCode, mutualsFeedResponse.body).toBe(200);
+      expect(mutualsFeedResponse.json().items).toContainEqual(expect.objectContaining({
+        contentId: seededFreeContentId,
+        mediaKind: "video"
+      }));
 
       const concurrentMutualsRequests = [
         { action: "yes", key: `mutuals-yes-${runId}` },
@@ -988,7 +1008,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         surface: "home",
         rankingVersion: "deterministic_v1"
       });
-      const staleFollowingPage = followingFeedResponse.json<{
+      const stableFollowingPage = followingFeedResponse.json<{
         items: Array<{
           id: string;
           creator: { id: string };
@@ -997,22 +1017,43 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }>;
         nextCursor: string | null;
       }>();
-      expect(staleFollowingPage.items.find((item) => item.id === seededContentId)).toMatchObject({
+      expect(stableFollowingPage.items.find((item) => item.id === seededContentId)).toMatchObject({
         mediaAssets: [{ id: seededMediaAssetId, position: 0, posterUrl: null }]
       });
-      expect(staleFollowingPage.nextCursor).toEqual(expect.any(String));
+      expect(stableFollowingPage.nextCursor).toEqual(expect.any(String));
+      const revokedSnapshotContentId = feedFixtureIds.find(
+        (contentId) => !stableFollowingPage.items.some((item) => item.id === contentId)
+      );
+      expect(revokedSnapshotContentId).toEqual(expect.any(String));
       await sql`
         update content_engagement_counters
         set like_count = like_count + 1, updated_at = now()
         where content_item_id = ${feedFixtureIds[0]!}
       `;
-      const staleRankingCursorResponse = await app.inject({
+      await sql`
+        update content_items
+        set publish_state = 'unpublished', updated_at = now()
+        where id = ${revokedSnapshotContentId!}
+      `;
+      const stableRankingCursorResponse = await app.inject({
         method: "GET",
-        url: `/v1/content/feed?mode=following&surface=home&cursor=${encodeURIComponent(staleFollowingPage.nextCursor!)}`,
-        headers: authenticatedHeaders(`following-feed-stale-${runId}`)
+        url: `/v1/content/feed?mode=following&surface=home&cursor=${encodeURIComponent(stableFollowingPage.nextCursor!)}`,
+        headers: authenticatedHeaders(`following-feed-stable-${runId}`)
       });
-      expect(staleRankingCursorResponse.statusCode, staleRankingCursorResponse.body).toBe(409);
-      expect(staleRankingCursorResponse.json()).toMatchObject({ code: "feed_cursor_stale" });
+      expect(stableRankingCursorResponse.statusCode, stableRankingCursorResponse.body).toBe(200);
+      const stableFollowingNextPage = stableRankingCursorResponse.json<{
+        items: Array<{ id: string }>;
+      }>();
+      const stableFirstPageIds = new Set(stableFollowingPage.items.map((item) => item.id));
+      expect(stableFollowingNextPage.items.some((item) => stableFirstPageIds.has(item.id))).toBe(false);
+      expect(stableFollowingNextPage.items).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: revokedSnapshotContentId })])
+      );
+      await sql`
+        update content_items
+        set publish_state = 'published', updated_at = now()
+        where id = ${revokedSnapshotContentId!}
+      `;
 
       const refreshedFollowingFeedResponse = await app.inject({
         method: "GET",
@@ -1186,6 +1227,51 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(concurrentLikeResponses[0]?.json()).toMatchObject({ liked: true, likeCount: 1 });
       expect(concurrentLikeResponses[1]?.json()).toMatchObject({ liked: true, likeCount: 1 });
 
+      const unlikeResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/like`,
+        headers: authenticatedHeaders(`engagement-unlike-${runId}`)
+      });
+      expect(unlikeResponse.statusCode, unlikeResponse.body).toBe(200);
+      expect(unlikeResponse.json()).toMatchObject({ liked: false, likeCount: 0 });
+      const delayedLikeReplay = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/like`,
+        headers: authenticatedHeaders(likeIdempotencyKey)
+      });
+      expect(delayedLikeReplay.statusCode, delayedLikeReplay.body).toBe(200);
+      expect(delayedLikeReplay.json()).toMatchObject({ liked: false, likeCount: 0 });
+      const relikeResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/like`,
+        headers: authenticatedHeaders(`engagement-relike-${runId}`)
+      });
+      expect(relikeResponse.statusCode, relikeResponse.body).toBe(200);
+      expect(relikeResponse.json()).toMatchObject({ liked: true, likeCount: 1 });
+
+      const saveKey = `engagement-save-${runId}`;
+      const saveResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/save`,
+        headers: authenticatedHeaders(saveKey)
+      });
+      expect(saveResponse.statusCode, saveResponse.body).toBe(200);
+      expect(saveResponse.json()).toMatchObject({ saved: true });
+      const unsaveResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/save`,
+        headers: authenticatedHeaders(`engagement-unsave-${runId}`)
+      });
+      expect(unsaveResponse.statusCode, unsaveResponse.body).toBe(200);
+      expect(unsaveResponse.json()).toMatchObject({ saved: false });
+      const delayedSaveReplay = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/save`,
+        headers: authenticatedHeaders(saveKey)
+      });
+      expect(delayedSaveReplay.statusCode, delayedSaveReplay.body).toBe(200);
+      expect(delayedSaveReplay.json()).toMatchObject({ saved: false });
+
       const conflictingLikeResponse = await app.inject({
         method: "POST",
         url: `/v1/engagement/${seededContentId}/like`,
@@ -1270,6 +1356,28 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(commentLikeResponses.map((response) => response.statusCode)).toEqual([200, 200]);
       expect(commentLikeResponses[0]?.json()).toMatchObject({ commentId: rootCommentId, liked: true, likeCount: 1 });
       expect(commentLikeResponses[1]?.json()).toEqual(commentLikeResponses[0]?.json());
+
+      const commentUnlikeResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/comments/${rootCommentId}/like`,
+        headers: authenticatedHeaders(`engagement-comment-unlike-${runId}`)
+      });
+      expect(commentUnlikeResponse.statusCode, commentUnlikeResponse.body).toBe(200);
+      expect(commentUnlikeResponse.json()).toMatchObject({ commentId: rootCommentId, liked: false, likeCount: 0 });
+      const delayedCommentLikeReplay = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/comments/${rootCommentId}/like`,
+        headers: authenticatedHeaders(commentLikeKey)
+      });
+      expect(delayedCommentLikeReplay.statusCode, delayedCommentLikeReplay.body).toBe(200);
+      expect(delayedCommentLikeReplay.json()).toMatchObject({ commentId: rootCommentId, liked: false, likeCount: 0 });
+      const commentRelikeResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/comments/${rootCommentId}/like`,
+        headers: authenticatedHeaders(`engagement-comment-relike-${runId}`)
+      });
+      expect(commentRelikeResponse.statusCode, commentRelikeResponse.body).toBe(200);
+      expect(commentRelikeResponse.json()).toMatchObject({ commentId: rootCommentId, liked: true, likeCount: 1 });
 
       const commentsResponse = await app.inject({
         method: "GET",
@@ -2867,6 +2975,68 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         invalid_signal_count: "0"
       });
 
+      const [playbackQualification] = await sql<{
+        media_type: string;
+        state: string;
+        publish_state: string;
+        visibility: string;
+        moderation_state: string;
+        other_creator: boolean;
+        has_restrictive_rule: boolean;
+        has_active_entitlement: boolean;
+        has_release_asset: boolean;
+      }[]>`
+        select
+          content.media_type,
+          content.state,
+          content.publish_state,
+          content.visibility,
+          content.moderation_state,
+          content.creator_user_id <> viewer.id as other_creator,
+          exists (
+            select 1
+            from content_access_rules rule
+            where rule.content_item_id = content.id
+              and rule.state = 'active'
+              and (rule.starts_at is null or rule.starts_at <= now())
+              and (rule.ends_at is null or rule.ends_at > now())
+              and rule.access_type <> 'free'
+          ) as has_restrictive_rule,
+          exists (
+            select 1
+            from entitlements entitlement
+            where entitlement.user_id = viewer.id
+              and entitlement.target_type = 'content'
+              and entitlement.target_id = content.id
+              and entitlement.state = 'active'
+              and entitlement.starts_at <= now()
+              and (entitlement.ends_at is null or entitlement.ends_at > now())
+          ) as has_active_entitlement,
+          exists (
+            select 1
+            from media_assets asset
+            where asset.id = content.release_media_asset_id
+              and asset.content_item_id = content.id
+              and asset.retired_at is null
+              and asset.provider_state = 'ready'
+              and asset.duration_ms is not null
+          ) as has_release_asset
+        from content_items content
+        join users viewer on viewer.supabase_user_id = ${buyerSupabaseUserId}
+        where content.id = ${seededFreeContentId}
+      `;
+      expect(playbackQualification).toEqual({
+        media_type: "vod",
+        state: "ready",
+        publish_state: "published",
+        visibility: "public",
+        moderation_state: "approved",
+        other_creator: true,
+        has_restrictive_rule: false,
+        has_active_entitlement: false,
+        has_release_asset: true
+      });
+
       const playbackSessionResponse = await app.inject({
         method: "POST",
         url: "/v1/platform-usage/playback-sessions",
@@ -3975,16 +4145,106 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }
       });
       expect(creatorRequestResponse.statusCode, creatorRequestResponse.body).toBe(201);
-      const creatorRequest = creatorRequestResponse.json<{ id: string }>();
+      const creatorRequest = creatorRequestResponse.json<{ id: string; termsRevision: number }>();
+
+      const [creatorRequestConsentBoundary] = await sql<{
+        state: string;
+        terms_revision: number;
+        creator_is_authenticated_actor: boolean;
+        requester_is_buyer: boolean;
+        direct_request_state: string | null;
+      }[]>`
+        select
+          request.state,
+          request.terms_revision,
+          request.creator_user_id = creator.id as creator_is_authenticated_actor,
+          request.requester_user_id = buyer.id as requester_is_buyer,
+          direct_request.state as direct_request_state
+        from structured_creator_requests request
+        join users creator on creator.supabase_user_id = ${creatorSupabaseUserId}
+        join users buyer on buyer.supabase_user_id = ${buyerSupabaseUserId}
+        left join direct_message_requests direct_request
+          on direct_request.conversation_id = request.conversation_id
+        where request.id = ${creatorRequest.id}
+      `;
+      expect(creatorRequestConsentBoundary).toEqual({
+        state: "proposed",
+        terms_revision: creatorRequest.termsRevision,
+        creator_is_authenticated_actor: true,
+        requester_is_buyer: true,
+        direct_request_state: null
+      });
 
       const acceptCreatorRequestResponse = await app.inject({
         method: "PATCH",
         url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${creatorRequest.id}`,
         headers: creatorAuthenticatedHeaders(`creator-request-accept-${runId}`),
-        payload: { action: "accept", agreedAmountMinor: 10000000 }
+        payload: { action: "accept", expectedTermsRevision: creatorRequest.termsRevision }
       });
       expect(acceptCreatorRequestResponse.statusCode, acceptCreatorRequestResponse.body).toBe(200);
       expect(acceptCreatorRequestResponse.json()).toMatchObject({ id: creatorRequest.id, state: "accepted" });
+
+      const revisionRequestResponse = await app.inject({
+        method: "POST",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests`,
+        headers: authenticatedHeaders(`creator-request-revision-${runId}`),
+        payload: {
+          creatorUserId: seededCreatorUserId,
+          deliverable: `One revision-bound integration video ${shortRunId}`,
+          permittedCategory: "video",
+          proposedAmountMinor: 11000000,
+          currency: "SOL",
+          expectedDeliveryDays: 14,
+          clarificationRule: "One written clarification before acceptance.",
+          cancellationRule: "Cancellation before payment; remediation after verified settlement.",
+          expiresAt: new Date(Date.now() + 86_400_000).toISOString()
+        }
+      });
+      expect(revisionRequestResponse.statusCode, revisionRequestResponse.body).toBe(201);
+      const revisionRequest = revisionRequestResponse.json<{ id: string; termsRevision: number }>();
+      expect(revisionRequest.termsRevision).toBe(1);
+
+      const counterTermsResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${revisionRequest.id}`,
+        headers: creatorAuthenticatedHeaders(`creator-request-revision-propose-${runId}`),
+        payload: {
+          action: "propose_terms",
+          expectedTermsRevision: revisionRequest.termsRevision,
+          agreedAmountMinor: 12000000,
+          expectedDeliveryDays: 10
+        }
+      });
+      expect(counterTermsResponse.statusCode, counterTermsResponse.body).toBe(200);
+      const counterTerms = counterTermsResponse.json<{ termsRevision: number }>();
+      expect(counterTermsResponse.json()).toMatchObject({
+        state: "terms_proposed",
+        agreedAmountMinor: 12000000,
+        expectedDeliveryDays: 10,
+        termsRevision: 2
+      });
+
+      const staleTermsAcceptance = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${revisionRequest.id}`,
+        headers: authenticatedHeaders(`creator-request-revision-stale-${runId}`),
+        payload: { action: "accept_terms", expectedTermsRevision: revisionRequest.termsRevision }
+      });
+      expect(staleTermsAcceptance.statusCode, staleTermsAcceptance.body).toBe(403);
+
+      const exactTermsAcceptance = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${revisionRequest.id}`,
+        headers: authenticatedHeaders(`creator-request-revision-accept-${runId}`),
+        payload: { action: "accept_terms", expectedTermsRevision: counterTerms.termsRevision }
+      });
+      expect(exactTermsAcceptance.statusCode, exactTermsAcceptance.body).toBe(200);
+      expect(exactTermsAcceptance.json()).toMatchObject({
+        state: "accepted",
+        agreedAmountMinor: 12000000,
+        expectedDeliveryDays: 10,
+        termsRevision: 2
+      });
 
       const creatorRequestIntentResponse = await app.inject({
         method: "POST",
@@ -4074,12 +4334,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }
       });
       expect(remediationRequestResponse.statusCode, remediationRequestResponse.body).toBe(201);
-      const remediationRequest = remediationRequestResponse.json<{ id: string }>();
+      const remediationRequest = remediationRequestResponse.json<{ id: string; termsRevision: number }>();
       const acceptRemediationRequestResponse = await app.inject({
         method: "PATCH",
         url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${remediationRequest.id}`,
         headers: creatorAuthenticatedHeaders(`creator-request-remediation-accept-${runId}`),
-        payload: { action: "accept", agreedAmountMinor: 10000000 }
+        payload: { action: "accept", expectedTermsRevision: remediationRequest.termsRevision }
       });
       expect(acceptRemediationRequestResponse.statusCode, acceptRemediationRequestResponse.body).toBe(200);
       const creatorRequestRemediationIntentResponse = await app.inject({
@@ -4347,6 +4607,49 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           accessState: "members_only"
         }
       });
+
+      const chatMembershipPlanId = `integration-chat-membership-${shortRunId}`;
+      const chatMembershipSubscriptionId = randomUUID();
+      await sql`
+        insert into subscription_plans (
+          id, scope, creator_user_id, label, amount_minor, currency, period_days,
+          billing_mode, provider_state, token_mint, token_program, provider,
+          program_id, amount_atomic, period_seconds, creator_amount_atomic,
+          platform_fee_amount_atomic, allocation_amount_atomic, state
+        ) values (
+          ${chatMembershipPlanId}, 'creator', ${seededCreatorUserId},
+          'Paid live chat membership regression', 100, 'USDC', 30,
+          'delegated_solana_subscription', 'disabled', ${subscriptionTokenMint},
+          'spl_token', 'official_solana_subscription_program', ${subscriptionProgramId},
+          100, 2592000, 100, 0, 0, 'disabled'
+        )
+      `;
+      await sql`
+        insert into subscriptions (
+          id, subscriber_user_id, scope, plan_id, creator_user_id, state,
+          renewal_mode, token_mint, amount_atomic, period_seconds,
+          current_period_starts_at, current_period_ends_at
+        ) values (
+          ${chatMembershipSubscriptionId}, ${buyerUserId!}, 'creator',
+          ${chatMembershipPlanId}, ${seededCreatorUserId}, 'active',
+          'delegated_solana_subscription', ${subscriptionTokenMint}, 100, 2592000,
+          now() - interval '1 day', now() + interval '29 days'
+        )
+      `;
+
+      const membershipWithoutEventAccessChat = await app.inject({
+        method: "POST",
+        url: `/v1/live/rooms/${seededLiveRoomId}/messages`,
+        headers: authenticatedHeaders(`live-chat-membership-without-pass-${runId}`),
+        payload: { body: "Membership must not bypass paid event access" }
+      });
+      expect(
+        membershipWithoutEventAccessChat.statusCode,
+        membershipWithoutEventAccessChat.body
+      ).toBe(403);
+
+      await sql`delete from subscriptions where id = ${chatMembershipSubscriptionId}`;
+      await sql`delete from subscription_plans where id = ${chatMembershipPlanId}`;
 
       const livePassIntentResponse = await app.inject({
         method: "POST",
@@ -5162,24 +5465,37 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         following_count: "0"
       });
     } finally {
-      await cleanupRun(sql, {
-        buyerHandle,
-        creatorHandle,
-        buyerSupabaseUserId,
-        creatorSupabaseUserId,
-        providerReference,
-        seededContentId,
-        seededFreeContentId,
-        seededEventId,
-        seededConversationId,
-        seededLiveRoomId,
-        seededSubscriptionPlanId,
-        seededProviderEventId,
-        seededProviderReplayRequestId,
-        seededOrganizationId
-      });
-      await app.close();
-      vi.unstubAllEnvs();
+      try {
+        await cleanupRun(sql, {
+          buyerHandle,
+          creatorHandle,
+          buyerSupabaseUserId,
+          creatorSupabaseUserId,
+          providerReference,
+          seededContentId,
+          seededFreeContentId,
+          seededEventId,
+          seededConversationId,
+          seededLiveRoomId,
+          seededSubscriptionPlanId,
+          seededProviderEventId,
+          seededProviderReplayRequestId,
+          seededOrganizationId
+        });
+      } finally {
+        try {
+          await journeyLock`
+            select pg_advisory_unlock(hashtextextended('wevid-integration:authenticated-happy-path', 0))
+          `;
+        } finally {
+          journeyLock.release();
+          try {
+            await app.close();
+          } finally {
+            vi.unstubAllEnvs();
+          }
+        }
+      }
     }
   }, 180_000);
 
@@ -5213,11 +5529,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       await sql`
         insert into app_sessions (
           id, user_id, wallet_id, provider_identity_id, token_hash, expires_at,
-          authentication_method, authenticated_at
+          authentication_method, authenticated_at, provider_session_id
         )
         values (
           ${sessionId}, ${userId}, null, ${providerIdentityId}, ${hashToken(sessionToken)},
-          now() + interval '10 minutes', 'supabase_recovery', now()
+          now() + interval '10 minutes', 'supabase_recovery', now(), ${randomUUID()}
         )
       `;
       await sql`
@@ -5234,6 +5550,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         repository.exchangeRecoveryIdentity({
           provider: "supabase",
           providerSubject,
+          providerSessionId: randomUUID(),
+          providerAuthenticatedAt: new Date(),
           linkIntentToken,
           sessionExpiresAt: new Date(Date.now() + 10 * 60 * 1000)
         })
@@ -5309,6 +5627,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         repository.exchangeRecoveryIdentity({
           provider: "supabase",
           providerSubject: randomUUID(),
+          providerSessionId: randomUUID(),
+          providerAuthenticatedAt: new Date(),
           linkIntentToken,
           sessionExpiresAt: new Date(Date.now() + 10 * 60 * 1000)
         })
@@ -5451,7 +5771,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           and subject_id = ${userId}
           and action = 'auth.sessions_revoked_all'
       `;
-      expect(audits[0]?.count).toBe("2");
+      expect(audits[0]?.count).toBe("3");
     } finally {
       if (userId) {
         await sql`delete from audit_events where actor_user_id = ${userId}`;
@@ -5481,39 +5801,10 @@ class IntegrationJourneyRateLimitStore {
   }
 }
 
-function integrationDatabaseUrl(): string {
-  const databaseUrl =
-    process.env.API_INTEGRATION_DATABASE_URL ??
-    process.env.TEST_DATABASE_URL ??
-    process.env.DATABASE_URL;
-
-  if (!databaseUrl) {
-    throw new Error(
-      "Set API_INTEGRATION_DATABASE_URL, TEST_DATABASE_URL, or DATABASE_URL for real API integration tests."
-    );
-  }
-
-  return databaseUrl;
-}
-
-function assertIntegrationDatabaseIsAllowed(databaseUrl: string): void {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Refusing to run real API integration tests with NODE_ENV=production.");
-  }
-
-  const host = new URL(databaseUrl).hostname;
-  const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-
-  if (!isLocal && process.env.VEEL_ALLOW_REMOTE_API_INTEGRATION_TESTS !== "1") {
-    throw new Error(
-      "Refusing to run real API integration tests against a remote database unless VEEL_ALLOW_REMOTE_API_INTEGRATION_TESTS=1 is set."
-    );
-  }
-}
-
 function authenticatedHeaders(idempotencyKey?: string): Record<string, string> {
   return {
     authorization: `Bearer ${authToken}`,
+    "x-wevid-expected-actor-id": buyerSupabaseUserId,
     ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {})
   };
 }
@@ -5521,6 +5812,7 @@ function authenticatedHeaders(idempotencyKey?: string): Record<string, string> {
 function creatorAuthenticatedHeaders(idempotencyKey: string): Record<string, string> {
   return {
     authorization: `Bearer ${creatorAuthToken}`,
+    "x-wevid-expected-actor-id": creatorSupabaseUserId,
     "idempotency-key": idempotencyKey
   };
 }
@@ -5555,6 +5847,7 @@ function createIntegrationAgeWaterfall(providerReference: string): AgeProviderWa
       return {
         provider: "sumsub",
         providerReference,
+        providerExternalUserId: providerReference,
         launchUrl: `https://age.example.test/sumsub/${providerReference}`,
         expiresAt: new Date(Date.now() + 15 * 60 * 1000),
         jurisdiction: "US",
@@ -5566,6 +5859,14 @@ function createIntegrationAgeWaterfall(providerReference: string): AgeProviderWa
 
 function sumsubDigest(rawPayload: string): string {
   return createHmac("sha256", sumsubWebhookSecret).update(rawPayload).digest("hex");
+}
+
+function randomBase58Address(): string {
+  return bs58.encode(randomBytes(32));
+}
+
+function randomBase58Signature(): string {
+  return bs58.encode(randomBytes(64));
 }
 
 function deterministicBase58Signature(seed: number): string {
@@ -5713,7 +6014,8 @@ async function seedCreatorPaidContent(
       poster_url,
       playback_url,
       provider_playable,
-      ready_at
+      ready_at,
+      duration_ms
     )
     values (
       ${input.mediaAssetId},
@@ -5724,7 +6026,8 @@ async function seedCreatorPaidContent(
       'https://media.example.test/integration-poster.jpg',
       ${`https://video.example.test/${input.mediaAssetId}/playlist.m3u8`},
       true,
-      now()
+      now(),
+      90000
     )
   `;
   await approveSeededContent(sql, {
@@ -5836,7 +6139,8 @@ async function seedCreatorFreeVideo(
       poster_url,
       playback_url,
       provider_playable,
-      ready_at
+      ready_at,
+      duration_ms
     )
     values (
       ${input.mediaAssetId},
@@ -5847,7 +6151,8 @@ async function seedCreatorFreeVideo(
       'https://media.example.test/integration-free-poster.jpg',
       ${`https://video.example.test/${input.mediaAssetId}/playlist.m3u8`},
       true,
-      now()
+      now(),
+      90000
     )
   `;
   await approveSeededContent(sql, {
@@ -6939,6 +7244,7 @@ async function cleanupRun(
     await tx`
       delete from subscription_plans
       where id = ${input.seededSubscriptionPlanId}
+         ${userIds.length > 0 ? tx`or creator_user_id in ${tx(userIds)}` : tx``}
     `;
 
     if (eventIds.length > 0) {
@@ -7182,6 +7488,15 @@ async function cleanupRun(
 
     if (userIds.length > 0) {
       await tx`
+        update payment_intents
+        set commercial_policy_override_id = null
+        where commercial_policy_override_id in (
+          select id
+          from payment_commercial_policy_overrides
+          where updated_by_user_id in ${tx(userIds)}
+        )
+      `;
+      await tx`
         delete from payment_commercial_policy_overrides
         where updated_by_user_id in ${tx(userIds)}
       `;
@@ -7204,6 +7519,10 @@ async function cleanupRun(
       `;
       await tx`
         delete from engagement_action_receipts
+        where actor_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from mutation_command_receipts
         where actor_user_id in ${tx(userIds)}
       `;
       await tx`

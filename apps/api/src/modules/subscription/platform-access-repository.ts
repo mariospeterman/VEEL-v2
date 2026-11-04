@@ -82,11 +82,19 @@ export function createPlatformAccessRepositoryMethods(
           throw new PlatformUsageLimitReachedError();
         }
 
+        const mediaAssetId = input.targetType === "content"
+          ? await findContentReleaseMediaAssetId(transaction, input.targetId)
+          : null;
+        if (input.targetType === "content" && !mediaAssetId) {
+          throw new PlatformPlaybackNotQualifyingError();
+        }
+
         const rows = await transaction<PlaybackSessionRow[]>`
           insert into platform_playback_sessions (
             user_id,
             target_type,
             target_id,
+            media_asset_id,
             window_starts_at,
             window_ends_at,
             idempotency_key,
@@ -96,6 +104,7 @@ export function createPlatformAccessRepositoryMethods(
             ${actorId},
             ${input.targetType},
             ${input.targetId},
+            ${mediaAssetId},
             ${access.usage.windowStartsAt},
             ${access.usage.windowEndsAt},
             ${input.idempotencyKey},
@@ -257,6 +266,23 @@ export function createPlatformAccessRepositoryMethods(
       });
     }
   };
+}
+
+async function findContentReleaseMediaAssetId(
+  sql: QuerySql,
+  contentId: string
+): Promise<string | null> {
+  const rows = await sql<{ media_asset_id: string }[]>`
+    select asset.id as media_asset_id
+    from content_items content
+    join media_assets asset on asset.id = content.release_media_asset_id
+    where content.id = ${contentId}
+      and asset.content_item_id = content.id
+      and asset.provider_state = 'ready'
+      and asset.duration_ms is not null
+    limit 1
+  `;
+  return rows[0]?.media_asset_id ?? null;
 }
 
 async function findActorId(sql: QuerySql, supabaseUserId: string): Promise<string> {
@@ -495,6 +521,7 @@ interface PlaybackSessionRow {
   user_id: string;
   target_type: "content" | "live_room";
   target_id: string;
+  media_asset_id: string | null;
   state: PlatformPlaybackSession["state"];
   window_starts_at: Date;
   window_ends_at: Date;

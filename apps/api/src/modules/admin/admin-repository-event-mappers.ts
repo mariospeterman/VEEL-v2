@@ -114,7 +114,10 @@ export interface AgeCheckRow {
 
 export interface IdentityCheckRow {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  subject_type: AdminIdentityCheck["subjectType"];
+  subject_id: string;
+  purpose: AdminIdentityCheck["purpose"];
   provider: string;
   provider_reference: string;
   verification_type: AdminIdentityCheck["verificationType"];
@@ -133,9 +136,16 @@ export interface IdentityCheckRow {
 export interface AiSessionRow {
   id: string;
   actor_user_id: string;
+  transport: AdminAiSession["transport"];
+  connection_id: string | null;
   scope: AdminAiSession["scope"];
   state: AdminAiSession["state"];
   allowed_tool_count: string | number;
+  client_name: string | null;
+  client_type: AdminAiSession["clientType"];
+  auth_mode: AdminAiSession["authMode"];
+  granted_scopes: string[];
+  last_used_at: Date | null;
   created_at: Date;
   expires_at: Date;
 }
@@ -143,11 +153,16 @@ export interface AiSessionRow {
 export interface AiToolCallRow {
   id: string;
   session_id: string;
+  connection_id: string | null;
   actor_user_id: string;
+  transport: AdminAiToolCall["transport"];
   scope: AdminAiToolCall["scope"];
   tool_name: AdminAiToolCall["toolName"];
+  tool_version: string | null;
   state: AdminAiToolCall["state"];
   confirmation_state: AdminAiToolCall["confirmationState"];
+  risk_level: AdminAiToolCall["riskLevel"];
+  required_scopes: string[];
   subject_type: Exclude<AdminAiToolCall["subjectType"], undefined>;
   subject_id: string | null;
   input_summary: string;
@@ -226,6 +241,9 @@ export function toIdentityCheck(row: IdentityCheckRow): AdminIdentityCheck {
   return {
     id: row.id,
     userId: row.user_id,
+    subjectType: row.subject_type,
+    subjectId: row.subject_id,
+    purpose: row.purpose,
     provider: row.provider,
     providerReference: row.provider_reference,
     verificationType: row.verification_type,
@@ -247,9 +265,16 @@ export function toAiSession(row: AiSessionRow): AdminAiSession {
   return {
     id: row.id,
     actorUserId: row.actor_user_id,
+    transport: row.transport,
+    connectionId: row.connection_id,
     scope: row.scope,
     state: row.state,
     allowedToolCount: Number(row.allowed_tool_count),
+    clientName: row.client_name,
+    clientType: row.client_type,
+    authMode: row.auth_mode,
+    grantedScopes: row.granted_scopes,
+    lastUsedAt: row.last_used_at?.toISOString() ?? null,
     createdAt: row.created_at.toISOString(),
     expiresAt: row.expires_at.toISOString()
   };
@@ -259,11 +284,16 @@ export function toAiToolCall(row: AiToolCallRow): AdminAiToolCall {
   return {
     id: row.id,
     sessionId: row.session_id,
+    connectionId: row.connection_id,
     actorUserId: row.actor_user_id,
+    transport: row.transport,
     scope: row.scope,
     toolName: row.tool_name,
+    toolVersion: row.tool_version,
     state: row.state,
     confirmationState: row.confirmation_state,
+    riskLevel: row.risk_level,
+    requiredScopes: row.required_scopes,
     subjectType: row.subject_type,
     subjectId: row.subject_id,
     inputSummary: row.input_summary,
