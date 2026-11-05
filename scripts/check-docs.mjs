@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { isScopedReviewRepairBranch } from "./production-status-branch-policy.mjs";
 
 const required = [
   "docs/v2-new-build/INDEX.md",
@@ -214,14 +215,10 @@ if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
   }
   const activePullRequest = activePullRequests[0];
   const activeBranch = activePullRequest?.head?.ref;
-  const latestMergedConvergence = /^Convergence (\d{2})(?:[A-Z])?\b/.exec(
-    productionStatus.latestMergedSlice ?? "",
-  )?.[1];
-  const isScopedReviewRepair = latestMergedConvergence
-    ? new RegExp(
-        `^codex/converge-${latestMergedConvergence}-(?:[a-z0-9]+-)+repairs?$`,
-      ).test(activeBranch ?? "")
-    : false;
+  const isScopedReviewRepair = isScopedReviewRepairBranch({
+    activeBranch,
+    latestMergedSlice: productionStatus.latestMergedSlice,
+  });
   if (
     activePullRequest &&
     !isScopedReviewRepair &&
