@@ -304,10 +304,10 @@ test("creates one ordered mixed-media carousel without a second format chooser",
 });
 
 test("renders legacy text and poll posts as read-only archives", async ({ page }) => {
-  await page.goto(`/content/${textContentId}`);
+  await page.goto(`/content/${textContentId}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText("A structured text post with a real consumer renderer.")).toBeVisible();
 
-  await page.goto(`/content/${pollContentId}`);
+  await page.goto(`/content/${pollContentId}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "What should we publish next?" })).toBeVisible();
   const archivedPoll = page.locator(`section[aria-labelledby="poll-${pollContentId}"]`);
   await expect(archivedPoll.getByText("Archived poll", { exact: true })).toBeVisible();
@@ -320,7 +320,7 @@ test("renders legacy text and poll posts as read-only archives", async ({ page }
     request.method === "POST" && request.path === `/v1/content/${pollContentId}/poll-votes`
   )).toBe(false);
 
-  await page.goto("/profile/ariamoon");
+  await page.goto("/profile/ariamoon", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
   await expect(page.getByText("A structured text post with a real consumer renderer.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "What should we publish next?" })).toBeVisible();
