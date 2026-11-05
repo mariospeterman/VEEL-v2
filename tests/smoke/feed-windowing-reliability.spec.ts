@@ -163,7 +163,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/feed/preferences") {
     sendJson(response, 200, {
-      defaultMode: "recommended",
+      defaultMode: "latest",
       nsfwPreference: "both",
       hiddenCreatorIds: [],
       hiddenTopics: []
@@ -179,9 +179,9 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     sendJson(response, 200, {
       items,
       nextCursor: null,
-      mode: url.searchParams.get("mode") ?? "recommended",
+      mode: url.searchParams.get("mode") ?? "latest",
       surface,
-      rankingVersion: "deterministic_v1",
+      rankingVersion: "chronological_v1",
       generatedAt: "2026-11-05T06:00:00.000Z"
     });
     return;
@@ -435,7 +435,10 @@ async function fulfillProofImage(route: Route) {
 function setCorsHeaders(response: ServerResponse) {
   response.setHeader("Access-Control-Allow-Origin", e2eOrigin);
   response.setHeader("Access-Control-Allow-Credentials", "true");
-  response.setHeader("Access-Control-Allow-Headers", "authorization,content-type,idempotency-key,accept");
+  response.setHeader(
+    "Access-Control-Allow-Headers",
+    "authorization,content-type,idempotency-key,accept,x-wevid-expected-actor-id"
+  );
   response.setHeader("Access-Control-Allow-Methods", "DELETE,GET,POST,PATCH,OPTIONS");
 }
 
