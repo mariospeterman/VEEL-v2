@@ -414,7 +414,8 @@ paths:
     post:
       operationId: uploadMyProfileAvatar
       tags: [Profiles]
-      summary: Upload current profile avatar through server-side Supabase Storage
+      summary: Reserved private profile-avatar upload boundary
+      description: Fails closed until the sanitized private staging, safety release, atomic attachment, replay, and replacement-cleanup lifecycle is configured. Profile onboarding does not require an avatar.
       parameters:
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
       requestBody:
@@ -808,6 +809,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/mine:
@@ -854,13 +856,15 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/{contentId}/poll-votes:
     post:
       operationId: voteOnContentPoll
       tags: [Content]
-      summary: Cast or replace the signed-in viewer's poll vote
-      description: The backend validates content eligibility and poll state, updates counters transactionally, and preserves lifetime idempotency receipts.
+      deprecated: true
+      summary: Replay a previously completed historical poll vote
+      description: New poll voting is retired. An exact completed idempotency replay may still return its retained historical response; every fresh command returns 410.
       parameters:
         - $ref: "#/components/parameters/ContentId"
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
@@ -873,6 +877,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/{contentId}/publish:
@@ -892,6 +897,7 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/content/{contentId}/moderation-appeals:
@@ -3645,7 +3651,8 @@ components:
       in: query
       schema:
         type: string
-        enum: [recommended, following]
+        enum: [latest, following]
+      description: Chronological first-publication order. Legacy `recommended` requests are accepted by the server as an undocumented transition alias for `latest`.
     FeedSurface:
       name: surface
       in: query
@@ -3802,6 +3809,7 @@ components:
     NotFound: { description: Not found, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     ValidationFailed: { description: Validation failed, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     Conflict: { description: Conflict, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
+    Gone: { description: The requested product capability has been retired, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     RateLimited: { description: Rate limited, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     NotImplemented: { description: Not implemented, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
     ServiceUnavailable: { description: Service unavailable, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorResponse" } } } }
@@ -3840,7 +3848,7 @@ components:
     CreatorMediaPage: { description: Owner-visible publication workspace, content: { application/json: { schema: { $ref: "#/components/schemas/CreatorMediaPage" } } } }
     MediaModerationAppeal: { description: Creator moderation appeal, content: { application/json: { schema: { $ref: "#/components/schemas/MediaModerationAppeal" } } } }
     UploadSession: { description: Safe upload session, content: { application/json: { schema: { $ref: "#/components/schemas/UploadSession" } } } }
-    ProfileAvatarUpload: { description: Uploaded profile avatar URL, content: { application/json: { schema: { $ref: "#/components/schemas/ProfileAvatarUpload" } } } }
+    ProfileAvatarUpload: { description: Released profile avatar resource; unavailable until the private avatar lifecycle is configured, content: { application/json: { schema: { $ref: "#/components/schemas/ProfileAvatarUpload" } } } }
     LiveRoom: { description: Live room, content: { application/json: { schema: { $ref: "#/components/schemas/LiveRoom" } } } }
     LiveRoomPage: { description: Live rooms, content: { application/json: { schema: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: "#/components/schemas/LiveRoom" } }, nextCursor: { type: [string, "null"] } } } } } }
     HostConnection: { description: Masked host connection, content: { application/json: { schema: { $ref: "#/components/schemas/HostConnection" } } } }
@@ -4267,7 +4275,7 @@ components:
               message: { type: string }
     ErrorCode:
       type: string
-      enum: [unauthorized, forbidden, not_found, validation_failed, rate_limited, conflict, idempotency_conflict, provider_unavailable, service_unavailable, internal_server_error, recent_authentication_required, payment_not_confirmed, webhook_signature_invalid]
+      enum: [unauthorized, forbidden, not_found, validation_failed, rate_limited, conflict, idempotency_conflict, content_format_retired, feed_cursor_stale, provider_unavailable, service_unavailable, internal_server_error, recent_authentication_required, payment_not_confirmed, webhook_signature_invalid]
     ErrorResponse:
       type: object
       required: [code, message]
@@ -4284,9 +4292,14 @@ components:
       enum: [SOL, USDC]
     SessionState:
       type: object
-      required: [authenticated, appAccessState]
+      required: [authenticated, clientSessionScope, appAccessState]
       properties:
         authenticated: { type: boolean }
+        clientSessionScope:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{43}$"
+          readOnly: true
+          description: Pseudonymous scope for isolating browser state across application-session rotation. This is not an authentication credential or database session identifier.
         appAccessState: { $ref: "#/components/schemas/AppAccessState" }
         user: { $ref: "#/components/schemas/User" }
     CreateAgeSessionRequest:
@@ -4660,7 +4673,6 @@ components:
       properties:
         handle: { type: string, pattern: "^[a-z0-9_]{2,32}$" }
         displayName: { type: string, minLength: 1, maxLength: 80 }
-        avatarUrl: { type: [string, "null"], format: uri, maxLength: 2048 }
         bio: { type: string, maxLength: 500 }
         locationLabel: { type: string, maxLength: 120 }
         links:
@@ -4704,7 +4716,7 @@ components:
       type: object
       required: [defaultMode, nsfwPreference]
       properties:
-        defaultMode: { type: string, enum: [recommended, following] }
+        defaultMode: { type: string, enum: [latest, following] }
         nsfwPreference: { type: string, enum: [both, nsfw, sfw] }
         hiddenCreatorIds:
           type: array
@@ -4716,7 +4728,7 @@ components:
       type: object
       additionalProperties: false
       properties:
-        defaultMode: { type: string, enum: [recommended, following] }
+        defaultMode: { type: string, enum: [latest, following] }
         nsfwPreference: { type: string, enum: [both, nsfw, sfw] }
     HideFeedCreatorRequest:
       type: object
@@ -4874,9 +4886,9 @@ components:
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/ContentItem" } }
         nextCursor: { type: [string, "null"] }
-        mode: { type: string, enum: [recommended, following] }
+        mode: { type: string, enum: [latest, following] }
         surface: { type: string, enum: [home, bits, moments] }
-        rankingVersion: { type: string, enum: [deterministic_v1] }
+        rankingVersion: { type: string, enum: [chronological_v1] }
         generatedAt: { type: string, format: date-time }
     DiscoverPage:
       type: object
@@ -5231,7 +5243,7 @@ components:
           readOnly: true
           description: Short-lived viewer-scoped Livepeer capability returned only in authorized responses; never log or persist it.
         expiresAt: { type: [string, "null"], format: date-time }
-        blockReason: { type: [string, "null"], enum: [entitlement_required, allowance_exhausted, provider_unavailable, replay_under_review, room_suspended, stream_ended, null] }
+        blockReason: { type: [string, "null"], enum: [entitlement_required, allowance_exhausted, playback_lease_required, provider_unavailable, replay_under_review, room_suspended, stream_ended, null] }
         usage: { $ref: "#/components/schemas/PlaybackUsageContext" }
     PlaybackUsageContext:
       type: object
@@ -5241,15 +5253,17 @@ components:
         targetType: { type: string, enum: [content, live_room] }
         targetId: { type: string, format: uuid }
         heartbeatIntervalSeconds: { type: integer, minimum: 5, maximum: 30 }
+        leaseExpiresAt:
+          type: [string, "null"]
+          format: date-time
+          description: Server-owned allowance lease expiry. A missing value requires the explicit playback-session command before capability issuance.
     CreateContentRequest:
       type: object
       required: [mediaType, visibility, nsfwLabel, representationMode, contentSafetyPolicyAccepted]
       properties:
-        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel, text, poll] }
+        mediaType: { type: string, enum: [bit, clip, image, vod, live_replay, carousel] }
         distributionMode: { type: string, enum: [post, moment], default: post }
         caption: { type: string }
-        bodyText: { type: string, minLength: 1, maxLength: 10000 }
-        poll: { $ref: "#/components/schemas/ContentPollDraft" }
         visibility: { type: string, enum: [public, followers, subscribers, private] }
         nsfwLabel: { type: string, enum: [none, adult, explicit] }
         representationMode: { type: string, enum: [no_real_person, self_only, declared_performers] }
@@ -5260,7 +5274,6 @@ components:
       type: object
       properties:
         caption: { type: string }
-        bodyText: { type: string, minLength: 1, maxLength: 10000 }
         expectedCompositionRevision: { type: integer, minimum: 1 }
         assetOrder:
           type: array
@@ -6101,12 +6114,14 @@ components:
         playedSeconds: { type: integer, minimum: 1, maximum: 30 }
     PlatformPlaybackSession:
       type: object
-      required: [id, state, heartbeatIntervalSeconds, consumedSeconds, usage]
+      required: [id, state, heartbeatIntervalSeconds, consumedSeconds, reservedSeconds, leaseExpiresAt, usage]
       properties:
         id: { type: string, format: uuid }
         state: { type: string, enum: [active, exhausted, closed, expired] }
         heartbeatIntervalSeconds: { type: integer }
         consumedSeconds: { type: integer }
+        reservedSeconds: { type: integer, minimum: 0, maximum: 900 }
+        leaseExpiresAt: { type: [string, "null"], format: date-time }
         usage: { $ref: "#/components/schemas/PlatformUsage" }
     SubscriptionPage:
       type: object

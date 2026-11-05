@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import type { AdminRepository, AdminMutualsSafety } from "./types.js";
 import { countOpenReports } from "./admin-report-authority.js";
 import {
@@ -30,7 +31,9 @@ export function createEventOpsRepository(
 ): Pick<AdminRepository, "listEvents" | "listAccessPasses" | "listLiveRooms" | "listMediaAssets" | "listAgeChecks" | "listIdentityChecks" | "listAiSessions" | "listAiToolCalls" | "getMutualsSafety"> {
   return {
     async listEvents(input) {
-      const cursorScope = "GET /v1/admin/events";
+      const cursorScope = bindCursorScope("GET /v1/admin/events", {
+        sort: "starts_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const eventRows = await sql<EventRow[]>`
         select
@@ -103,7 +106,9 @@ export function createEventOpsRepository(
       };
     },
     async listAccessPasses(input) {
-      const cursorScope = "GET /v1/admin/event-access-passes";
+      const cursorScope = bindCursorScope("GET /v1/admin/event-access-passes", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<AccessPassRow[]>`
         select
@@ -133,7 +138,9 @@ export function createEventOpsRepository(
       );
     },
     async listLiveRooms(input) {
-      const cursorScope = "GET /v1/admin/live/rooms";
+      const cursorScope = bindCursorScope("GET /v1/admin/live/rooms", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<LiveRoomRow[]>`
         select
@@ -195,7 +202,9 @@ export function createEventOpsRepository(
       };
     },
     async listMediaAssets(input) {
-      const cursorScope = "GET /v1/admin/media/assets";
+      const cursorScope = bindCursorScope("GET /v1/admin/media/assets", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<MediaAssetRow[]>`
         select
@@ -232,7 +241,9 @@ export function createEventOpsRepository(
       );
     },
     async listAgeChecks(input) {
-      const cursorScope = "GET /v1/admin/age-kyc/age-checks";
+      const cursorScope = bindCursorScope("GET /v1/admin/age-kyc/age-checks", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<AgeCheckRow[]>`
         select
@@ -271,7 +282,9 @@ export function createEventOpsRepository(
       );
     },
     async listIdentityChecks(input) {
-      const cursorScope = "GET /v1/admin/age-kyc/identity-checks";
+      const cursorScope = bindCursorScope("GET /v1/admin/age-kyc/identity-checks", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<IdentityCheckRow[]>`
         select
@@ -322,7 +335,9 @@ export function createEventOpsRepository(
       );
     },
     async listAiSessions(input) {
-      const cursorScope = "GET /v1/admin/ai/sessions";
+      const cursorScope = bindCursorScope("GET /v1/admin/ai/sessions", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<AiSessionRow[]>`
         with operation_sessions as (
@@ -396,7 +411,9 @@ export function createEventOpsRepository(
       );
     },
     async listAiToolCalls(input) {
-      const cursorScope = "GET /v1/admin/ai/tool-calls";
+      const cursorScope = bindCursorScope("GET /v1/admin/ai/tool-calls", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<AiToolCallRow[]>`
         with operation_tool_calls as (

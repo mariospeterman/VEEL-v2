@@ -101,7 +101,17 @@ export function createCreatorMembershipOfferRepositoryMethods(
         const recipientWallet = recipientDecision?.address;
         if (!recipientWallet) throw new SubscriptionPolicyError("recipient_wallet_missing");
 
-        const planId = `creator_${actor.id}_monthly`;
+        const existingPlanRows = await transaction<{ id: string }[]>`
+          select id
+          from subscription_plans
+          where creator_user_id = ${actor.id}
+            and scope = 'creator'
+          order by updated_at desc, created_at desc, id desc
+          limit 1
+        `;
+        const planId = existingPlanRows[0]
+          ? `creator_${actor.id}_monthly_${randomUUID().replaceAll("-", "")}`
+          : `creator_${actor.id}_monthly`;
         const rows = await transaction<PlanRow[]>`
           insert into subscription_plans (
             id, scope, creator_user_id, label, description, benefits,
@@ -126,26 +136,6 @@ export function createCreatorMembershipOfferRepositoryMethods(
             ${recipientDecision?.decision_reason ?? "policy_missing_fail_closed"},
             'disabled', now()
           )
-          on conflict (id) do update set
-            label = excluded.label,
-            description = excluded.description,
-            benefits = excluded.benefits,
-            amount_minor = excluded.amount_minor,
-            amount_atomic = excluded.amount_atomic,
-            token_mint = excluded.token_mint,
-            program_id = excluded.program_id,
-            plan_pda = null,
-            merchant_wallet = excluded.merchant_wallet,
-            creator_amount_atomic = excluded.creator_amount_atomic,
-            platform_fee_amount_atomic = excluded.platform_fee_amount_atomic,
-            allocation_amount_atomic = 0,
-            recipient_kyc_required = excluded.recipient_kyc_required,
-            recipient_kyc_policy_mode = excluded.recipient_kyc_policy_mode,
-            recipient_kyc_policy_version = excluded.recipient_kyc_policy_version,
-            recipient_kyc_decision_reason = excluded.recipient_kyc_decision_reason,
-            provider_state = 'staging_required',
-            state = 'disabled',
-            updated_at = now()
           returning
             id, scope, label, description, benefits, amount_minor, amount_atomic,
             currency, period_days, period_seconds, billing_mode, provider_state,

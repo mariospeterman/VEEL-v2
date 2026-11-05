@@ -23,6 +23,11 @@
       "types": "./src/live-provider.ts",
       "development": "./src/live-provider.ts",
       "default": "./dist/live-provider.js"
+    },
+    "./subscription-authorization-verifier-runtime": {
+      "types": "./src/subscription-authorization-verifier-runtime.ts",
+      "development": "./src/subscription-authorization-verifier-runtime.ts",
+      "default": "./dist/subscription-authorization-verifier-runtime.js"
     }
   },
   "scripts": {
@@ -40,7 +45,6 @@
     "@fastify/swagger": "^9.5.2",
     "@livepeer/core": "3.3.1",
     "@opentelemetry/api": "1.9.1",
-    "@solana-commerce/solana-pay": "0.1.1",
     "@solana-program/token": "0.15.0",
     "@solana/kit": "7.1.0",
     "@solana/subscriptions": "0.5.0",
@@ -50,6 +54,7 @@
     "@veel/config": "workspace:*",
     "@veel/contracts": "workspace:*",
     "@veel/observability": "workspace:*",
+    "@veel/solana-pay-codec": "workspace:*",
     "bs58": "^6.0.0",
     "fastestsmallesttextencoderdecoder": "1.0.22",
     "fastify": "5.12.8",

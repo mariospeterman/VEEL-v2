@@ -136,7 +136,7 @@ function FeedFacts({ feedPreferences }: { feedPreferences: ApiResult<FeedPrefere
         <ContentPreferenceControl initialPreference={feedPreferences.data.nsfwPreference} />
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
-        <Fact label="Feed" value={feedPreferences.data.defaultMode === "following" ? "Following" : "For you"} />
+        <Fact label="Feed" value={feedPreferences.data.defaultMode === "following" ? "Following" : "Latest"} />
         <Fact label="Hidden creators" value={String(feedPreferences.data.hiddenCreatorIds?.length ?? 0)} />
         <Fact label="Hidden topics" value={String(feedPreferences.data.hiddenTopics?.length ?? 0)} />
       </div>

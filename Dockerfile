@@ -23,6 +23,7 @@ COPY packages/config/package.json packages/config/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/observability/package.json packages/observability/package.json
+COPY packages/solana-pay-codec/package.json packages/solana-pay-codec/package.json
 COPY packages/test-factories/package.json packages/test-factories/package.json
 COPY packages/ui/package.json packages/ui/package.json
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
@@ -31,11 +32,13 @@ FROM dependencies AS build
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_OPTIONS=--max-old-space-size=2560
-# pnpm 10 injects the API package before source is copied into this stage.
-# Refresh that exact snapshot for worker type resolution and deployment.
+# pnpm 10 injects workspace packages before source is copied into this stage.
+# Refresh the exact snapshots needed for type resolution and deployment.
 RUN cp -R apps/api/src apps/worker/node_modules/@veel/api/src
+RUN cp -R packages/solana-pay-codec/src apps/api/node_modules/@veel/solana-pay-codec/src
 RUN pnpm -r --workspace-concurrency=1 --if-present build
 RUN cp -R apps/api/dist apps/worker/node_modules/@veel/api/dist
+RUN cp -R packages/solana-pay-codec/dist apps/api/node_modules/@veel/solana-pay-codec/dist
 RUN pnpm --filter @veel/api deploy --prod /release/api
 RUN pnpm --filter @veel/worker deploy --prod /release/worker
 RUN node scripts/finalize-deploy-package.mjs /release/api

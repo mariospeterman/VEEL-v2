@@ -3,96 +3,68 @@ import { describe, it } from "vitest";
 import {
   bulletBlockAfter,
   checkRankingPolicy,
+  feedChronologyViolations,
   feedRankingImplementationChecks,
-  financialSignalViolations,
+  financialSignalViolations
 } from "./check-ranking-policy.mjs";
 
-describe("money-based ranking policy", () => {
-  it("accepts the repository ranking implementation and active guidance", () => {
+describe("chronological feed policy", () => {
+  it("accepts the repository and canonical guidance", () => {
     assert.doesNotThrow(() => checkRankingPolicy());
   });
 
-  it("rejects financial code or configuration signals", () => {
+  it("rejects financial ordering inputs", () => {
     assert.deepEqual(
-      financialSignalViolations("score", ["like_count", "payment_amount", "subscriber_spend"]),
-      ["score: payment_amount", "score: subscriber_spend"],
+      financialSignalViolations("order", ["published_at", "payment_amount", "subscriber_spend"]),
+      ["order: payment_amount", "order: subscriber_spend"]
     );
   });
 
-  it("inspects the bounded candidate and scoring SQL blocks", () => {
+  it("inspects the bounded page-selection SQL block", () => {
     const repository = [
-      "candidate_window as materialized (",
+      "page_ids as materialized (",
       "select content.id from content_items content",
-      "authorized as materialized (",
-      "select eligible.content_item_id",
-      "eligible as (",
-      "select candidate.*, counter.like_count from candidate_window candidate",
-      "scored as (",
-      "select eligible.*, like_count * 2 as base_score from eligible",
-      "snapshot as (",
-      "select array_agg(id) from scored",
+      "order by content.published_at desc, content.id desc",
+      "select",
+      "          ci.id,"
     ].join("\n");
 
-    assert.deepEqual(feedRankingImplementationChecks(repository), [
+    assert.deepEqual(feedRankingImplementationChecks(repository), [[
+      "chronological feed page selection",
       [
-        "feed ranking candidate inputs",
-        ["candidate_window as materialized (", "select content.id from content_items content", ""],
-      ],
-      [
-        "feed ranking score inputs",
-        [
-          "eligible as (",
-          "select candidate.*, counter.like_count from candidate_window candidate",
-          "scored as (",
-          "select eligible.*, like_count * 2 as base_score from eligible",
-          "",
-        ],
-      ],
-    ]);
+        "page_ids as materialized (",
+        "select content.id from content_items content",
+        "order by content.published_at desc, content.id desc",
+        ""
+      ]
+    ]]);
   });
 
-  it("rejects financial signals added to either feed ranking SQL block", () => {
-    const repository = [
-      "candidate_window as materialized (",
-      "select content.id, wallet.balance from content_items content",
-      "authorized as materialized (",
-      "select eligible.content_item_id",
-      "eligible as (",
-      "select candidate.*, subscription.revenue from candidate_window candidate",
-      "scored as (",
-      "select eligible.*, revenue as base_score from eligible",
-      "snapshot as (",
-      "select array_agg(id) from scored",
-    ].join("\n");
-    const violations = feedRankingImplementationChecks(repository)
-      .flatMap(([label, lines]) => financialSignalViolations(label, lines));
-
-    assert.deepEqual(violations, [
-      "feed ranking candidate inputs: select content.id, wallet.balance from content_items content",
-      "feed ranking score inputs: select candidate.*, subscription.revenue from candidate_window candidate",
-      "feed ranking score inputs: select eligible.*, revenue as base_score from eligible",
-    ]);
+  it("rejects retired scoring sessions and missing policy boundaries", () => {
+    const violations = feedChronologyViolations("feed_ranking_sessions ranking_score");
+    assert.ok(violations.includes("feed must order by published_at DESC and id DESC"));
+    assert.ok(violations.includes("retired scoring/session inputs remain in the active feed repository"));
   });
 
-  it("fails closed when the bounded feed SQL markers drift", () => {
+  it("fails closed when the feed SQL markers drift", () => {
     assert.throws(
       () => feedRankingImplementationChecks("select 1"),
-      /could not locate feed ranking candidate inputs/,
+      /could not locate chronological feed page selection/
     );
   });
 
-  it("checks only the declared allowed-signal bullet block", () => {
+  it("checks only the declared chronological guidance block", () => {
     const source = [
-      "Allowed ranking signals:",
+      "Chronological ordering inputs:",
       "",
-      "- follows",
-      "- creator freshness",
+      "- immutable first-publication time",
+      "- stable content ID tie-breaker",
       "",
-      "Financial analytics may include revenue but are not ranking inputs.",
+      "Financial analytics may include revenue outside feed ordering."
     ].join("\n");
-    assert.deepEqual(bulletBlockAfter(source, "Allowed ranking signals:"), [
-      "- follows",
-      "- creator freshness",
+    assert.deepEqual(bulletBlockAfter(source, "Chronological ordering inputs:"), [
+      "- immutable first-publication time",
+      "- stable content ID tie-breaker"
     ]);
   });
 });

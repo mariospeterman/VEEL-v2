@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-11-04
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
@@ -33,11 +33,11 @@ Current implementation state:
 - `GET /v1/age/status` is the browser-safe age read projection. `/age` reads it through the typed web API helper and starts `POST /v1/age/sessions` only after explicit authenticated user action.
 - `GET /v1/verification/status` is the backend-owned capability projection for app, creator, Studio, and enterprise access.
 - `POST /v1/verification/sessions` starts adult-publisher eligibility, creator KYC, or organization KYB sessions. Adult-publisher sessions require an explicit versioned terms acceptance. The browser receives only a hosted provider launch URL and cannot mark any verification complete.
-- `POST /v1/webhooks/verification/{provider}` accepts signed age, adult-content, KYC, and KYB callbacks and writes normalized `verification_records`.
+- `POST /v1/webhooks/verification/{provider}` accepts signed adult-content, creator-KYC, and organization-KYB callbacks and writes normalized `verification_records`. Sumsub ordinary-age compatibility remains on the separate literal route `POST /v1/webhooks/age/sumsub`; the two routes are not interchangeable.
 - The runtime waterfall has real HTTP session adapters for Yoti, Persona, Veriff, and Sumsub. Each adapter is inert until its exact env/config is present, and all unconfigured or failing providers fail closed with `503`.
 - The creator/business verification waterfall has real HTTP session adapters for Didit, Sumsub, Persona, and Veriff. Didit, Sumsub, and Persona can serve creator KYC and org KYB when their purpose-specific workflows/levels/templates are configured. Veriff is currently a creator KYC documentary fallback only unless a Veriff business/KYB product is separately approved and wired.
 - Local/test environments can enable `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=true` to use API-owned mock adapters for age, creator KYC, and organization KYB. These adapters create normal pending sessions, immediately apply a normalized valid result through the repository boundary, and are disabled when `NODE_ENV=production`.
-- The landing path exposes one recommended age action and lets the server choose the lowest-friction configured method. Didit Adaptive Age Verification is the preferred low-friction path; Yoti Digital ID is the reusable credential candidate. The UI does not hardcode provider availability.
+- The landing path exposes one age action. `AGE_VERIFICATION_DRIVER` selects exactly one supported backend provider; browser input cannot switch providers or shop an adverse result. A missing or incomplete selected provider fails closed.
 - Adult-publishing intent is not part of the locked three-step onboarding. Adult eligibility begins later from Create when explicit publication is selected; a valid higher-assurance result may satisfy ordinary age access only under explicit reuse policy.
 - Before any provider request, the API atomically reserves a `verification_sessions` row and its matching pending `verification_records` entry. Provider selection is persisted before the external HTTP call, and the remote identifiers are attached afterward. This makes an early signed webhook reconcilable even if it arrives before the provider response. `verification_records` is the sole application authority; `age_verifications` is a revoked historical archive after migration `0077`.
 - Raw provider payloads, identity images, document data, and browser-completed age state are not accepted by this route.
@@ -47,12 +47,14 @@ Current implementation state:
 - Phantom Browser SDK: https://docs.phantom.com/sdks/browser-sdk/index
 - Phantom deeplinks: https://docs.phantom.com/phantom-deeplinks/handling-sessions
 - Solana Mobile Wallet Adapter: https://docs.solanamobile.com/developers/mobile-wallet-adapter
-- Sumsub API auth + webhooks: https://docs.sumsub.com/reference/get-started-with-api
+- Sumsub API request authentication: https://docs.sumsub.com/reference/authentication
 - Sumsub hosted WebSDK link: https://docs.sumsub.com/reference/generate-websdk-external-link
 - Sumsub applicant review webhook: https://docs.sumsub.com/docs/receive-verification-results
 - Sumsub webhook payload fields: https://docs.sumsub.com/docs/user-verification-webhooks
 - Sumsub webhook signature verification: https://docs.sumsub.com/docs/webhook-manager
 - Yoti age verification overview: https://developers.yoti.com/age-verification/age-verification-introduction
+- Yoti session creation and retry/resume prerequisites: https://developers.yoti.com/age-verification/create-a-session
+- Yoti AVS error codes: https://developers.yoti.com/age-verification/error-code-avs
 - Yoti notifications/signature verification: https://developers.yoti.com/age-verification/notifications
 - Didit Sessions API: https://docs.didit.me/integration/api-full-flow
 - Didit Adaptive Age Verification: https://docs.didit.me/core-technology/age-estimation/overview
@@ -60,10 +62,8 @@ Current implementation state:
 - Persona create inquiry: https://docs.withpersona.com/api-reference/inquiries/create-an-inquiry
 - Persona generate one-time link: https://docs.withpersona.com/api-reference/inquiries/generate-a-one-time-link
 - Didit webhook ordering and signatures: https://docs.didit.me/integration/webhooks
-- EU age verification / EUDI: https://digital-strategy.ec.europa.eu/en/policies/eu-age-verification
-- Scytales age verification connector: https://www.scytales.com/age-verification-connector
 
-The Sumsub session/webhook, Persona inquiry/link, Didit webhook, and Yoti age-notification references above were re-checked on 2026-11-04. Sumsub requires the declared HMAC algorithm over the exact raw bytes; Yoti embeds its RSA-PSS signature in the JSON notification and retries unless the receiver returns `200`.
+The Sumsub session/webhook, Persona inquiry/link, Didit webhook, and Yoti age-notification references above were re-checked on 2026-11-05. Sumsub signs API requests with HMAC-SHA256 over the timestamp, uppercase method, path plus query, and exact request body, while inbound webhooks require the declared HMAC algorithm over the exact raw bytes. Didit V3 signs canonical JSON with `X-Signature-V2`; for 24 hours after destination-secret rotation it also sends `X-Signature-V2-Previous`, and receivers must accept a valid match on either header while still enforcing the signed five-minute timestamp window. Yoti embeds its RSA-PSS signature in the JSON notification and retries unless the receiver returns `200`.
 
 ## Wallet signing
 
@@ -165,13 +165,13 @@ Never store raw identity documents, selfies, registry files, UBO documents, biom
 
 ### Required API env when explicitly selected
 
-- `AGE_VERIFICATION_DRIVER=sumsub`
+- `AGE_VERIFICATION_DRIVER=sumsub` only when the separate ordinary-age compatibility flow is intentionally selected
 - `SUMSUB_APP_TOKEN`
 - `SUMSUB_SECRET_KEY`
 - `SUMSUB_WEBHOOK_SECRET`
-- `SUMSUB_LEVEL_NAME`
-- `SUMSUB_CREATOR_KYC_LEVEL_NAME`
-- `SUMSUB_ORG_KYB_LEVEL_NAME`
+- `SUMSUB_LEVEL_NAME` for ordinary age, or as a compatibility fallback only
+- `SUMSUB_CREATOR_KYC_LEVEL_NAME` for individual creator KYC
+- `SUMSUB_ORG_KYB_LEVEL_NAME` for organization KYB
 - `SUMSUB_API_BASE_URL=https://api.sumsub.com`
 - `DIDIT_API_KEY`
 - `DIDIT_WEBHOOK_SECRET`
@@ -190,7 +190,7 @@ Never store raw identity documents, selfies, registry files, UBO documents, biom
 - `VERIFF_SHARED_SECRET`
 - `VERIFF_API_BASE_URL=https://stationapi.veriff.com`
 
-`SUMSUB_LEVEL_NAME` remains a compatibility fallback. Production should prefer separate creator and organization levels so creator KYC does not accidentally satisfy organization KYB or the reverse.
+`SUMSUB_LEVEL_NAME` remains a compatibility fallback. Production must configure separate individual creator and company organization levels so creator KYC does not accidentally satisfy organization KYB or the reverse. The current adapter also selects the individual creator level for Sumsub adult-publisher sessions; there is no separate Sumsub adult-level env today, so that use case remains disabled unless the configured level and provider contract are explicitly approved for the exact adult-publisher policy.
 `PERSONA_TEMPLATE_ID` remains a compatibility fallback. Production should prefer separate creator and organization templates so person KYC and business KYB cannot satisfy the wrong policy.
 
 ### Provider logo assets
@@ -223,7 +223,8 @@ The frontend has neutral monogram fallbacks for local development, but those fal
 - Signed webhooks that arrive before the remote id is attached are stored as normalized unmatched receipts and reconciled by the stable subject reference when session creation completes.
 - Provider delivery order is not decision order. Decisions are applied by the provider-authored event timestamp. An older approval cannot overwrite a newer denial; at equal timestamps the more restrictive decision wins. A timestamp-less positive result cannot overwrite an existing decision.
 - Provider event idempotency uses the provider's documented immutable event id when one exists. Sumsub's `correlationId` is stored only as correlation metadata because multiple decisions can share it; Sumsub events use a fingerprint of the exact signed payload as the event id.
-- A launch link's `expires_at` describes only how long the browser may start the provider flow. A valid evidence record does not inherit that TTL. Valid evidence remains active until provider revocation or an approved re-check/retention policy supplies an evidence expiry; that policy still requires legal and provider acceptance before launch.
+- A Sumsub launch link is requested with `ttlInSecs=1800`, and the local pending session receives the same 30-minute `expires_at`. That expiry describes only how long the browser may start the hosted flow. The current webhook write stores successful normalized evidence with `expires_at=null`; it does not inherit the launch TTL.
+- The implemented Sumsub adverse transition is a later signed `applicantReviewed` result with `reviewAnswer=RED`, which can supersede an earlier `GREEN` by provider-authored event time. The adapter does not currently map `applicantReset`, deletion, inactivity, or another provider lifecycle event to normalized `revoked`. Evidence validity duration, ongoing monitoring, re-check cadence, retention, and a complete revocation contract therefore remain explicit provider/legal launch gates rather than implied runtime behavior.
 - A valid canonical age result may activate a provisional user, but it does not change the user's selected profile visibility. Age evidence stores the threshold (`18`) and result (`true`) required by the capability resolver.
 
 ### Provider-specific runtime notes
@@ -241,23 +242,26 @@ Didit launch approval requires four separately published workflows in the Busine
 
 The production webhook destination must subscribe to `status.updated`, use webhook version V3, and point to the verification webhook route with the `didit` provider path parameter. Console-issued credentials and a signed sandbox fixture remain mandatory launch evidence; mock approval is disabled in production.
 - Persona session creation is an explicit two-step server flow pinned to `Persona-Version: 2026-09-29`: create the inquiry with the purpose-specific template, then call Persona's generate-one-time-link inquiry endpoint. The browser receives only `meta.one-time-link`. Persona webhooks verify `Persona-Signature` as timestamped HMAC-SHA256 over `timestamp.rawBody`.
-- Sumsub session creation signs `POST /resources/sdkIntegrations/levels/-/websdkLink` with `x-app-token`, `x-app-access-ts`, and `x-app-access-sig`, supplies the purpose-specific level and stable external user id, and returns the hosted `url`. An SDK access token is SDK input, not a browser callback URL, and is not appended to the WeVid callback. Creator and organization levels should be separate.
+- Sumsub session creation calls `${SUMSUB_API_BASE_URL}/resources/sdkIntegrations/levels/-/websdkLink` and signs the exact body with HMAC-SHA256 over `<unix-seconds>POST<path><body>`. It sends `x-app-token`, `x-app-access-ts`, and lowercase-hex `x-app-access-sig`, supplies `ttlInSecs=1800`, the stable WeVid subject as `userId`, the selected purpose level, and the same WeVid callback URL for success and rejection. Only the hosted response `url` is returned to the browser. An SDK access token is SDK input, not a browser callback URL, and is not appended to the WeVid callback. Creator and organization levels must be separate.
 - Veriff session creation uses the Veriff Sessions API with `x-auth-client`. Veriff webhooks verify `x-hmac-signature` against the raw payload. In this scaffold Veriff is creator KYC only, not organization KYB.
 
 ### Required dashboard setup
 
-1. Create or select a Sumsub verification level intended for the approved creator/compliance use case.
-2. Set the level name into `SUMSUB_LEVEL_NAME`.
-3. Add the production webhook URL:
+1. Create an individual level for creator KYC and a separate company level for organization KYB in the same Sumsub environment as the app token.
+2. Set the exact, case-sensitive names in `SUMSUB_CREATOR_KYC_LEVEL_NAME` and `SUMSUB_ORG_KYB_LEVEL_NAME`. Do not rely on `SUMSUB_LEVEL_NAME` as the production KYC/KYB authority.
+3. Add the contextual verification webhook URL for those levels:
+   - `POST https://<api-domain>/v1/webhooks/verification/{provider}` with `{provider}` set to `sumsub`
+4. Only if Sumsub is separately selected for ordinary age compatibility, configure that flow to use:
    - `POST https://<api-domain>/v1/webhooks/age/sumsub`
-4. Configure the webhook signing secret to match `SUMSUB_WEBHOOK_SECRET`.
-5. Ensure the webhook includes applicant review events.
-6. Keep the API app token and secret key server-side only.
+5. Configure the webhook signing secret to match `SUMSUB_WEBHOOK_SECRET`, select SHA-256 or SHA-512 explicitly, and subscribe to `applicantReviewed` results.
+6. Keep the app token, API signing secret, and webhook secret server-side only.
+7. Prove the exact individual and company sandbox levels, signed webhook destinations, later adverse-result behavior, data-retention terms, and provider account acceptance before promoting Sumsub. Configured values alone are not staging or launch evidence.
 
 ### Sumsub webhook expectations in this repo
 
 - Route:
-  - `POST /v1/webhooks/age/sumsub`
+  - `POST /v1/webhooks/verification/{provider}` with `{provider}=sumsub` for adult-publisher, creator-KYC, and organization-KYB sessions
+  - `POST /v1/webhooks/age/sumsub` only for the separately selected ordinary-age compatibility flow
 - Signature:
   - header `x-payload-digest`
   - header `x-payload-digest-alg`
@@ -273,7 +277,8 @@ The production webhook destination must subscribe to `status.updated`, use webho
   - `createdAt` is the decision timestamp; later provider decisions win, including a later `RED` after an earlier `GREEN`
 - Result ownership:
   - the browser cannot complete or override the result
-  - only the verified webhook path applies the over-18 decision
+  - the contextual route resolves the pending session purpose and applies `GREEN` as `valid` or `RED` as `blocked`; it never infers KYC or KYB from browser state
+  - the age route separately applies the normalized over-18 result
 - Storage:
   - `provider_webhook_receipts` stores receipt metadata and a hash of the signature only
   - `provider_events` stores normalized provider event state
@@ -282,18 +287,18 @@ The production webhook destination must subscribe to `status.updated`, use webho
 
 ### Runtime behavior in this repo
 
-- The API creates a Sumsub hosted WebSDK link for the configured level and stable external user id.
-- The provider launch URL is returned to the browser; `/age` redirects to it only after the backend creates the session.
-- The browser cannot self-complete the age check.
-- A signed `applicantReviewed` webhook with `reviewResult.reviewAnswer=GREEN` applies the over-18 decision server-side.
-- A signed `applicantReviewed` webhook with `reviewResult.reviewAnswer=RED` records a failed age state.
+- The API creates a Sumsub hosted WebSDK link for the configured purpose level and stable external user id. The link and local pending session expire after 1,800 seconds.
+- The hosted provider URL is returned to the browser only after the backend reserves the normalized session. The browser cannot self-complete age, KYC, KYB, or adult-publisher eligibility.
+- On the contextual route, a signed `applicantReviewed` webhook with `reviewResult.reviewAnswer=GREEN` records valid evidence and `RED` records blocked evidence for the reserved purpose. Valid evidence currently has no automatic expiry.
+- On the age route, the same signed outcome mapping applies the separate over-18 compatibility decision.
+- A later timestamped `RED` can supersede an earlier `GREEN`; no other Sumsub event currently creates a normalized `revoked` record.
 - Duplicate provider events return `202` but are not applied twice.
 
 ## Yoti
 
 ### Required API env
 
-- `AGE_VERIFICATION_DRIVER=yoti_digital_id`
+- `AGE_VERIFICATION_DRIVER=yoti`
 - `YOTI_SDK_ID`
 - `YOTI_API_TOKEN`
 - `YOTI_NOTIFICATION_KEY_PATH`
@@ -306,7 +311,8 @@ The production webhook destination must subscribe to `status.updated`, use webho
 2. Configure the notification / webhook endpoint:
    - `POST https://<api-domain>/v1/webhooks/age/yoti`
 3. Export the Yoti notification public key to the API host and set its path in `YOTI_NOTIFICATION_KEY_PATH`.
-4. Keep the API token server-side only.
+4. Ask Yoti client support to enable both retry and resume for the exact SDK/application before enabling this adapter. The API always requests `retry_enabled=true` and `resume_enabled=true`; an account without those capabilities can fail session creation with `E000109` or `E000108`.
+5. Keep the API token server-side only.
 
 ### Yoti webhook expectations in this repo
 
@@ -330,11 +336,12 @@ The production webhook destination must subscribe to `status.updated`, use webho
 
 ### Runtime behavior in this repo
 
-- The API starts the Yoti session.
+- The API starts one Yoti mixed AVS session with documented retry/resume controls. Because that session can complete through estimation or document fallback, WeVid records it as non-reusable `age_estimation` evidence until an authenticated result proves a more specific method.
 - The launch URL is returned to the browser; `/age` redirects to it only after the backend creates the session.
 - The browser cannot self-complete the check.
 - A signed notification with `state=COMPLETE` applies the over-18 decision server-side.
 - A signed notification with `state=FAIL` or `state=ERROR` records a failed age state.
+- Retry/resume can emit multiple notifications for one session, including `FAIL` followed by `COMPLETE`. The signed notification id and timestamp remain the webhook idempotency and decision-order inputs; `sequence_number` is excluded from Yoti's signed payload and must not become an authorization authority.
 - Duplicate provider events return `200` but are not applied twice.
 
 ## Production guardrails
@@ -343,19 +350,22 @@ The production webhook destination must subscribe to `status.updated`, use webho
 - Mock adapters are not provider integrations and must not be used for staging provider proof, launch approval, legal evidence, or compliance reporting.
 - If a real provider is selected but not configured, fail closed and block access.
 - Keep provider secrets server-side only.
-- Do not store unnecessary identity payloads; the app should keep only the minimum over-18 result fields.
+- Do not store unnecessary identity payloads; keep only the normalized facts required for the exact age, adult-publisher, creator-KYC, or organization-KYB capability.
 
 ## Go-live checklist
 
 1. Pick one production age-assurance driver for ordinary viewer access:
-   - `AGE_VERIFICATION_DRIVER=yoti_digital_id`
-   - or another reusable/light provider only after its adapter, contract, webhook, and retention rules are launch-approved
+   - `AGE_VERIFICATION_DRIVER=yoti`, or
+   - `AGE_VERIFICATION_DRIVER=didit` only after its exact configured workflow, webhook, and retention rules are launch-approved
    - do not use Sumsub or Veriff as default viewer onboarding
 2. Set the matching provider env in the API runtime.
 3. Keep `AGE_VERIFICATION_ALLOW_MOCK_PROVIDER=false` in production.
-4. Configure the provider dashboard webhook to call the exact `/v1/webhooks/age/sumsub` or `/v1/webhooks/age/yoti` endpoint selected for the approved workflow.
+4. Configure the provider dashboard webhook to call the exact age endpoint selected for ordinary viewer access. Sumsub creator KYC/KYB must instead call `/v1/webhooks/verification/{provider}` with `{provider}=sumsub`.
 5. Verify the webhook secret or notification key matches the API env.
 6. Complete one full provider session on a staging domain and confirm:
    - the webhook is received
    - the user age status flips server-side
    - app access unlocks only after the server-owned result is stored
+7. Before promoting Yoti, prove the exact production-equivalent SDK can create sessions with retry/resume enabled without `E000108` or `E000109`. Exercise a signed `FAIL` then later signed `COMPLETE` retry sequence and confirm the later provider-authored result reconciles correctly. If provider timestamps cannot order the attempts unambiguously, reconcile through Yoti's authenticated session-results endpoint rather than trusting the unsigned `sequence_number`; keep access blocked until that path has evidence.
+8. Before enabling Sumsub creator earnings or organization verification, complete separate sandbox individual-KYC and company-KYB sessions and confirm each result updates only its reserved purpose.
+9. Prove a later signed adverse result, define evidence validity/re-check and revocation policy, and record provider account/adult-platform acceptance. Until that evidence exists, Sumsub remains provider-blocked regardless of configured credentials.

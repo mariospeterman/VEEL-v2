@@ -6,8 +6,7 @@ import {
   ApiMutationError,
   createAgeSession,
   getCurrentSession,
-  updateMyProfile,
-  uploadMyProfileAvatar
+  updateMyProfile
 } from "@/api-mutations";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { SupabaseAuthPanel } from "@/supabase/supabase-auth-panel";
@@ -18,7 +17,7 @@ import {
   markOnboardingJourneyHandoff,
   recordOnboardingEvent
 } from "@/analytics/onboarding-analytics";
-import { safeSameOriginPath } from "@/navigation/safe-same-origin-path";
+import { assignSameOriginPath } from "@/navigation/safe-same-origin-path";
 
 const onboardingSteps = [
   {
@@ -29,7 +28,7 @@ const onboardingSteps = [
   {
     eyebrow: "2 / 3",
     title: "Profile details",
-    copy: "Choose a handle. A name and photo are optional."
+    copy: "Choose a handle. A display name is optional; you can continue without a photo."
   },
   {
     eyebrow: "3 / 3",
@@ -180,23 +179,10 @@ function LandingWalletList({ authState, onAccountNotFound, onLinked, purpose }: 
 }
 
 function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!avatarFile) {
-      setAvatarPreview(null);
-      return;
-    }
-
-    const nextPreview = URL.createObjectURL(avatarFile);
-    setAvatarPreview(nextPreview);
-    return () => URL.revokeObjectURL(nextPreview);
-  }, [avatarFile]);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -218,10 +204,6 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
         handle: normalizedHandle
       });
       await updateMyProfile(profilePayload);
-      if (avatarFile) {
-        const avatarUrl = await uploadAvatarFile(avatarFile);
-        await updateMyProfile({ ...profilePayload, avatarUrl });
-      }
       recordOnboardingEvent("profile_step_completed");
       await continueFromProfile();
     } catch (reason) {
@@ -264,18 +246,9 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
     <>
       <form className="landing-profile-setup" noValidate onSubmit={saveProfile}>
         <div className="landing-form-grid">
-          <label className="landing-avatar-upload">
-            <input
-              accept="image/jpeg,image/png,image/webp"
-              name="profile-picture"
-              onChange={(event) => {
-                setAvatarFile(event.target.files?.[0] ?? null);
-                setError(null);
-              }}
-              type="file"
-            />
-            {avatarPreview ? <img alt="" src={avatarPreview} /> : <span>Add photo</span>}
-          </label>
+          <div aria-disabled="true" className="landing-avatar-upload">
+            <span>Photo optional · available after setup</span>
+          </div>
           <label>
             <span>Handle</span>
             <input
@@ -332,7 +305,7 @@ function OnboardingAgeStep() {
             recordOnboardingEvent("age_step_completed");
             recordOnboardingEvent("protected_app_entered");
             markOnboardingJourneyHandoff();
-            window.location.assign(resolveSafeNextPath());
+            redirectToSafeNextPath();
             return;
           }
         } catch {
@@ -389,7 +362,7 @@ function OnboardingAgeStep() {
         recordOnboardingEvent("age_step_completed");
         recordOnboardingEvent("protected_app_entered");
         markOnboardingJourneyHandoff();
-        window.location.assign(resolveSafeNextPath());
+        redirectToSafeNextPath();
       }
     } finally {
       setStartingAction(null);
@@ -409,7 +382,7 @@ function OnboardingAgeStep() {
         recordOnboardingEvent("age_step_completed");
         recordOnboardingEvent("protected_app_entered");
         markOnboardingJourneyHandoff();
-        window.location.assign(resolveSafeNextPath());
+        redirectToSafeNextPath();
         return;
       }
 
@@ -484,40 +457,7 @@ function buildProfilePayload({
   };
 }
 
-async function uploadAvatarFile(file: File) {
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-    throw new Error("Profile picture must be JPEG, PNG, or WebP.");
-  }
-
-  if (file.size > 5_000_000) {
-    throw new Error("Profile picture must be 5MB or smaller.");
-  }
-
-  const dataBase64 = await fileToBase64(file);
-  const contentType = file.type as "image/jpeg" | "image/png" | "image/webp";
-  const uploaded = await uploadMyProfileAvatar({
-    contentType,
-    dataBase64,
-    fileName: file.name
-  });
-
-  return uploaded.avatarUrl;
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Profile picture could not be read."));
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      const [, base64 = ""] = result.split(",");
-      resolve(base64);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function resolveSafeNextPath() {
+function redirectToSafeNextPath() {
   const params = new URLSearchParams(window.location.search);
-  return safeSameOriginPath(params.get("next"), "/app/home");
+  assignSameOriginPath(params.get("next"), "/app/home");
 }

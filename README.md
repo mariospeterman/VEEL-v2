@@ -15,7 +15,8 @@ Read these first:
 4. [Build plan](docs/v2-new-build/build-plan.md)
 5. [App architecture](docs/v2-new-build/app-architecture.md)
 6. [Stack decision](docs/v2-new-build/stack-decision.md)
-7. [AI tooling rules](docs/ai-tooling/agent-operating-rules.md)
+7. [Add keys and test the core app](docs/v2-new-build/add-keys-and-test-core-app.md)
+8. [AI tooling rules](docs/ai-tooling/agent-operating-rules.md)
 
 ## Intended Stack
 

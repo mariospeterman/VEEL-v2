@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import type { AdminRepository } from "./types.js";
 import {
   ComplianceLedgerRow,
@@ -22,7 +23,9 @@ export function createComplianceRepository(
 ): Pick<AdminRepository, "listComplianceLedger" | "listDac7Reports" | "listCarfReports" | "listVatDeterminations" | "listReceipts" | "listInvoices"> {
   return {
     async listComplianceLedger(input) {
-      const cursorScope = "GET /v1/admin/compliance/ledger";
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/ledger", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ComplianceLedgerRow[]>`
         select
@@ -69,7 +72,9 @@ export function createComplianceRepository(
       );
     },
     async listDac7Reports(input) {
-      const cursorScope = "GET /v1/admin/compliance/dac7/reports";
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/dac7/reports", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ComplianceReportRow[]>`
         select id, reporting_year, jurisdiction, state, line_count, export_id::text, null::boolean as carf_reporting_required, created_at, exported_at
@@ -93,7 +98,9 @@ export function createComplianceRepository(
       );
     },
     async listCarfReports(input) {
-      const cursorScope = "GET /v1/admin/compliance/carf/reports";
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/carf/reports", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ComplianceReportRow[]>`
         select id, reporting_year, jurisdiction, state, line_count, export_id::text, carf_reporting_required, created_at, exported_at
@@ -117,7 +124,9 @@ export function createComplianceRepository(
       );
     },
     async listVatDeterminations(input) {
-      const cursorScope = "GET /v1/admin/compliance/vat/determinations";
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/vat/determinations", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<VatDeterminationRow[]>`
         select
@@ -152,7 +161,9 @@ export function createComplianceRepository(
       );
     },
     async listReceipts(input) {
-      const cursorScope = "GET /v1/admin/compliance/receipts";
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/receipts", {
+        sort: "issued_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ReceiptRow[]>`
         select
@@ -184,7 +195,9 @@ export function createComplianceRepository(
       );
     },
     async listInvoices(input) {
-      const cursorScope = "GET /v1/admin/compliance/invoices";
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/invoices", {
+        sort: "issued_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<InvoiceRow[]>`
         select id, invoice_number, seller_of_record, buyer_user_id, seller_user_id, total_amount_minor, vat_amount_minor, currency, state, issued_at

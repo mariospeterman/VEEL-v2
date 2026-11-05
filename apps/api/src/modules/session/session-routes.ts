@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { AgeRepositoryConfigurationError } from "../age/age-repository.js";
 import { findAgeStatusForUser, type AgeRepository, type AgeStatus } from "../age/types.js";
@@ -40,12 +41,22 @@ export async function registerSessionRoutes(
         hasWalletForUser(options.walletRepository, verifiedSession.userId)
       ]);
 
-      return reply.code(200).send(toSessionState(profile, ageStatus, hasWallet));
+      return reply.code(200).send(toSessionState(
+        profile,
+        ageStatus,
+        hasWallet,
+        clientSessionScope(verifiedSession.sessionId)
+      ));
     } catch (error) {
       if (error instanceof AgeRepositoryConfigurationError) {
         const profile = await options.sessionRepository.findProfileByUserId(verifiedSession.userId);
 
-        return reply.code(200).send(toSessionState(profile, requiredAgeStatus(), false));
+        return reply.code(200).send(toSessionState(
+          profile,
+          requiredAgeStatus(),
+          false,
+          clientSessionScope(verifiedSession.sessionId)
+        ));
       }
 
       if (error instanceof WalletRepositoryConfigurationError) {
@@ -54,7 +65,12 @@ export async function registerSessionRoutes(
           findAgeStatusForUser(options.ageRepository, verifiedSession.userId)
         ]);
 
-        return reply.code(200).send(toSessionState(profile, ageStatus, false));
+        return reply.code(200).send(toSessionState(
+          profile,
+          ageStatus,
+          false,
+          clientSessionScope(verifiedSession.sessionId)
+        ));
       }
 
       if (error instanceof SessionRepositoryConfigurationError) {
@@ -70,11 +86,13 @@ export async function registerSessionRoutes(
 function toSessionState(
   profile: SessionProfile | null,
   ageStatus: AgeStatus,
-  hasWallet: boolean
+  hasWallet: boolean,
+  browserSessionScope: string
 ): SessionState {
   if (!profile) {
     return {
       authenticated: true,
+      clientSessionScope: browserSessionScope,
       appAccessState: identityRequired()
     };
   }
@@ -88,6 +106,7 @@ function toSessionState(
 
   const sessionState: SessionState = {
     authenticated: true,
+    clientSessionScope: browserSessionScope,
     appAccessState
   };
 
@@ -96,6 +115,13 @@ function toSessionState(
   }
 
   return sessionState;
+}
+
+function clientSessionScope(sessionId: string): string {
+  return createHash("sha256")
+    .update("wevid-client-session-scope:v1\0", "utf8")
+    .update(sessionId, "utf8")
+    .digest("base64url");
 }
 
 function toUserResource(profile: SessionProfile): UserResource {

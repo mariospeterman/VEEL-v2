@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { bindCursorScope } from "../src/shared/keyset-pagination.js";
 import { decodeFeedCursor } from "../src/modules/content/content-feed-cursor.js";
 import { createPostgresContentRepository } from "../src/modules/content/content-repository.js";
 import { createPostgresClient } from "../src/shared/postgres.js";
@@ -10,13 +11,14 @@ const enabled = ["1", "true"].includes(
 );
 const describeIntegration = enabled ? describe : describe.skip;
 
-describeIntegration("bounded feed ranking sessions against Postgres", () => {
-  it("keeps pagination stable across engagement changes and reauthorizes before delivery", async () => {
+describeIntegration("chronological content feed against Postgres", () => {
+  it("traverses beyond 512 with tied microseconds while reauthorizing each page", async () => {
     const databaseUrl = guardedIntegrationDatabaseUrl();
     const sql = createPostgresClient(databaseUrl);
     const repository = createPostgresContentRepository(sql);
     const viewerId = randomUUID();
     const creatorId = randomUUID();
+    const newContentId = randomUUID();
     const suffix = viewerId.replaceAll("-", "").slice(0, 12);
     const contentIds = Array.from({ length: 520 }, () => randomUUID());
 
@@ -29,7 +31,7 @@ describeIntegration("bounded feed ranking sessions against Postgres", () => {
       `;
       await sql`
         insert into profiles (user_id, handle, display_name, visibility)
-        values (${creatorId}, ${`feed_session_${suffix}`}, 'Feed session creator', 'public')
+        values (${creatorId}, ${`feed_keyset_${suffix}`}, 'Feed keyset creator', 'public')
       `;
       await sql`
         insert into verification_records (
@@ -49,86 +51,107 @@ describeIntegration("bounded feed ranking sessions against Postgres", () => {
         await transaction`set local session_replication_role = replica`;
         await transaction`
           insert into content_items (
-            id, creator_user_id, media_type, state, visibility, nsfw_label,
-            moderation_state, publish_state, published_at, created_at
+            id, creator_user_id, media_type, distribution_mode, state, visibility,
+            nsfw_label, moderation_state, publish_state, published_at, created_at
           )
           select
-            seeded.id, ${creatorId}, 'image', 'ready', 'public', 'none',
-            'approved', 'published', now(),
-            now() - (seeded.position::integer * interval '1 minute')
+            seeded.id,
+            ${creatorId},
+            'image',
+            'post',
+            'ready',
+            'public',
+            'none',
+            'approved',
+            'published',
+            now() - interval '1 hour'
+              - (floor((seeded.position - 1)::numeric / 2) * interval '1 microsecond'),
+            now() - interval '2 hours'
           from unnest(${contentIds}::uuid[]) with ordinality as seeded(id, position)
         `;
       });
-      await sql`
-        insert into content_engagement_counters (content_item_id)
+
+      const expectedRows = await sql<Array<{ id: string }>>`
         select id
         from content_items
-        where id in ${sql(contentIds)}
-        on conflict (content_item_id) do nothing
+        where id = any(${contentIds}::uuid[])
+        order by published_at desc, id desc
       `;
+      const expectedIds = expectedRows.map((row) => row.id);
+      const revokedContentId = expectedIds[100]!;
 
       const firstPage = await repository.listHomeFeed({
         supabaseUserId: viewerId,
         mode: "following",
         surface: "home",
-        limit: 20
+        limit: 100
       });
-      expect(firstPage.items).toHaveLength(20);
+      expect(firstPage.items).toHaveLength(100);
+      expect(firstPage.rankingVersion).toBe("chronological_v1");
       expect(firstPage.nextCursor).toEqual(expect.any(String));
 
-      const cursor = decodeFeedCursor(firstPage.nextCursor!);
-      const sessions = await sql<Array<{
-        candidate_count: number;
-        ttl_seconds: number;
-        ranked_content_ids: string[];
-      }>>`
-        select
-          cardinality(ranked_content_ids)::integer as candidate_count,
-          extract(epoch from (expires_at - as_of))::integer as ttl_seconds,
-          ranked_content_ids
-        from feed_ranking_sessions
-        where id = ${cursor.sessionId}
-          and viewer_user_id = ${viewerId}
-      `;
-      expect(sessions[0]).toMatchObject({ candidate_count: 512, ttl_seconds: 1800 });
+      const scope = bindCursorScope("content:feed", {
+        actor: viewerId,
+        mode: "following",
+        order: "published_at:desc,id:desc",
+        surface: "home"
+      });
+      const decoded = decodeFeedCursor(firstPage.nextCursor!, scope);
+      expect(decoded.upper.publishedAt).toMatch(/\.\d{6}Z$/);
 
-      const firstPageIds = new Set(firstPage.items.map((item) => item.id));
-      const revokedContentId = sessions[0]?.ranked_content_ids.find(
-        (contentId) => !firstPageIds.has(contentId)
-      );
-      expect(revokedContentId).toEqual(expect.any(String));
+      await sql.begin(async (transaction) => {
+        await transaction`set local session_replication_role = replica`;
+        await transaction`
+          insert into content_items (
+            id, creator_user_id, media_type, distribution_mode, state, visibility,
+            nsfw_label, moderation_state, publish_state, published_at, created_at
+          ) values (
+            ${newContentId}, ${creatorId}, 'image', 'post', 'ready', 'public',
+            'none', 'approved', 'published', now(), now()
+          )
+        `;
+        await transaction`
+          update content_items
+          set publish_state = 'unpublished', updated_at = now()
+          where id = ${revokedContentId}
+        `;
+      });
 
-      await sql`
-        update content_engagement_counters
-        set like_count = like_count + 100, updated_at = now()
-        where content_item_id = ${contentIds[0]!}
-      `;
-      await sql`
-        update content_items
-        set publish_state = 'unpublished', updated_at = now()
-        where id = ${revokedContentId!}
-      `;
+      const deliveredIds = firstPage.items.map((item) => item.id);
+      let cursor = firstPage.nextCursor;
+      while (cursor) {
+        const page = await repository.listHomeFeed({
+          supabaseUserId: viewerId,
+          mode: "following",
+          surface: "home",
+          cursor,
+          limit: 100
+        });
+        expect(page.generatedAt).toBe(firstPage.generatedAt);
+        deliveredIds.push(...page.items.map((item) => item.id));
+        cursor = page.nextCursor;
+      }
 
-      const secondPage = await repository.listHomeFeed({
+      expect(deliveredIds).toEqual(expectedIds.filter((id) => id !== revokedContentId));
+      expect(new Set(deliveredIds).size).toBe(deliveredIds.length);
+      expect(deliveredIds).toHaveLength(519);
+      expect(deliveredIds).not.toContain(newContentId);
+
+      const refreshed = await repository.listHomeFeed({
         supabaseUserId: viewerId,
         mode: "following",
         surface: "home",
-        cursor: firstPage.nextCursor!,
         limit: 20
       });
-      expect(secondPage.items.some((item) => firstPageIds.has(item.id))).toBe(false);
-      expect(secondPage.items.map((item) => item.id)).not.toContain(revokedContentId);
-      expect(secondPage.generatedAt).toBe(firstPage.generatedAt);
+      expect(refreshed.items[0]?.id).toBe(newContentId);
     } finally {
       try {
         await sql.begin(async (transaction) => {
           await transaction`set local session_replication_role = replica`;
-          await transaction`delete from feed_ranking_sessions where viewer_user_id = ${viewerId}`;
           await transaction`
-            delete from content_engagement_counters
-            where content_item_id = any(${contentIds}::uuid[])
+            delete from content_items
+            where id = any(${[...contentIds, newContentId]}::uuid[])
           `;
-          await transaction`delete from content_items where id = any(${contentIds}::uuid[])`;
           await transaction`
             delete from user_follows
             where follower_user_id = ${viewerId} and followed_user_id = ${creatorId}

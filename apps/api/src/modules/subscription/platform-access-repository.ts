@@ -12,6 +12,7 @@ import type {
   PlatformPlaybackSession,
   SubscriptionRepository
 } from "./types.js";
+import { platformPlaybackLeaseSeconds } from "./platform-playback-policy.js";
 
 const heartbeatIntervalSeconds = 15;
 const maxHeartbeatSeconds = 30;
@@ -45,13 +46,34 @@ export function createPlatformAccessRepositoryMethods(
         });
 
         if (!countsTowardAllowance) {
-          return { countsTowardAllowance: false, limitReached: false };
+          return {
+            countsTowardAllowance: false,
+            limitReached: false,
+            leaseRequired: false,
+            leaseExpiresAt: null
+          };
         }
 
         const access = await resolvePlatformAccess(transaction, actorId);
+        if (access.currentTier.publicMediaAllowanceSeconds === null) {
+          return {
+            countsTowardAllowance: true,
+            limitReached: false,
+            leaseRequired: false,
+            leaseExpiresAt: null
+          };
+        }
+
+        const leaseExpiresAt = await findActivePlaybackLeaseExpiry(transaction, {
+          actorId,
+          targetType: input.targetType,
+          targetId: input.targetId
+        });
         return {
           countsTowardAllowance: true,
-          limitReached: access.usage.limitReached
+          limitReached: leaseExpiresAt === null && access.usage.limitReached,
+          leaseRequired: true,
+          leaseExpiresAt: leaseExpiresAt?.toISOString() ?? null
         };
       });
     },
@@ -77,16 +99,91 @@ export function createPlatformAccessRepositoryMethods(
           throw new PlatformPlaybackNotQualifyingError();
         }
 
-        const access = await resolvePlatformAccess(transaction, actorId);
-        if (access.usage.limitReached) {
-          throw new PlatformUsageLimitReachedError();
-        }
+        const initialAccess = await resolvePlatformAccess(transaction, actorId);
 
         const mediaAssetId = input.targetType === "content"
           ? await findContentReleaseMediaAssetId(transaction, input.targetId)
           : null;
         if (input.targetType === "content" && !mediaAssetId) {
           throw new PlatformPlaybackNotQualifyingError();
+        }
+
+        let reservedSeconds = 0;
+        let leaseExpiresAt: Date | null = null;
+        if (initialAccess.currentTier.publicMediaAllowanceSeconds !== null) {
+          await transaction`
+            insert into platform_usage_windows (
+              user_id,
+              window_starts_at,
+              window_ends_at,
+              public_media_seconds
+            )
+            values (
+              ${actorId},
+              ${initialAccess.usage.windowStartsAt},
+              ${initialAccess.usage.windowEndsAt},
+              0
+            )
+            on conflict (user_id, window_starts_at) do nothing
+          `;
+          const usageRows = await transaction<{ public_media_seconds: string | number }[]>`
+            select public_media_seconds
+            from platform_usage_windows
+            where user_id = ${actorId}
+              and window_starts_at = ${initialAccess.usage.windowStartsAt}
+            for update
+          `;
+          if (!usageRows[0]) throw new SubscriptionRepositoryConfigurationError();
+
+          const concurrent = await findSessionByIdempotency(
+            transaction,
+            actorId,
+            input.idempotencyKey
+          );
+          if (concurrent) {
+            if (concurrent.request_hash !== input.requestHash) {
+              throw new SubscriptionIdempotencyConflictError();
+            }
+            return toPlaybackSession(concurrent, await resolvePlatformAccess(transaction, actorId));
+          }
+
+          const lockedAccess = await resolvePlatformAccess(transaction, actorId);
+          const allowance = lockedAccess.currentTier.publicMediaAllowanceSeconds;
+          if (allowance !== null) {
+            const currentUsage = Number(usageRows[0].public_media_seconds);
+            const remaining = Math.max(0, allowance - currentUsage);
+            const windowRows = await transaction<{ remaining_seconds: string | number }[]>`
+              select greatest(
+                0,
+                floor(extract(epoch from (
+                  ${initialAccess.usage.windowEndsAt}::timestamptz - now()
+                )))::integer
+              ) as remaining_seconds
+            `;
+            const windowRemainingSeconds = Number(windowRows[0]?.remaining_seconds ?? 0);
+            reservedSeconds = Math.min(
+              platformPlaybackLeaseSeconds,
+              remaining,
+              windowRemainingSeconds
+            );
+            if (reservedSeconds < 1) {
+              throw new PlatformUsageLimitReachedError();
+            }
+
+            const clockRows = await transaction<{ lease_expires_at: Date }[]>`
+              select now() + make_interval(secs => ${reservedSeconds}) as lease_expires_at
+            `;
+            leaseExpiresAt = clockRows[0]?.lease_expires_at ?? null;
+            if (!leaseExpiresAt) throw new SubscriptionRepositoryConfigurationError();
+            await transaction`
+              update platform_usage_windows
+              set
+                public_media_seconds = public_media_seconds + ${reservedSeconds},
+                updated_at = now()
+              where user_id = ${actorId}
+                and window_starts_at = ${initialAccess.usage.windowStartsAt}
+            `;
+          }
         }
 
         const rows = await transaction<PlaybackSessionRow[]>`
@@ -97,6 +194,8 @@ export function createPlatformAccessRepositoryMethods(
             media_asset_id,
             window_starts_at,
             window_ends_at,
+            allowance_reserved_seconds,
+            resource_lease_expires_at,
             idempotency_key,
             request_hash
           )
@@ -105,8 +204,10 @@ export function createPlatformAccessRepositoryMethods(
             ${input.targetType},
             ${input.targetId},
             ${mediaAssetId},
-            ${access.usage.windowStartsAt},
-            ${access.usage.windowEndsAt},
+            ${initialAccess.usage.windowStartsAt},
+            ${initialAccess.usage.windowEndsAt},
+            ${reservedSeconds},
+            ${leaseExpiresAt},
             ${input.idempotencyKey},
             ${input.requestHash}
           )
@@ -123,7 +224,7 @@ export function createPlatformAccessRepositoryMethods(
           throw new SubscriptionIdempotencyConflictError();
         }
 
-        return toPlaybackSession(session, access);
+        return toPlaybackSession(session, await resolvePlatformAccess(transaction, actorId));
       });
     },
 
@@ -172,7 +273,8 @@ export function createPlatformAccessRepositoryMethods(
 
         const nowRows = await transaction<{ now: Date }[]>`select now() as now`;
         const now = nowRows[0]?.now ?? new Date();
-        if (now >= session.window_ends_at) {
+        const sessionExpiresAt = session.resource_lease_expires_at ?? session.window_ends_at;
+        if (now >= sessionExpiresAt) {
           const expired = await updateSessionState(transaction, session.id, "expired");
           return toPlaybackSession(expired, await resolvePlatformAccess(transaction, actorId));
         }
@@ -184,6 +286,57 @@ export function createPlatformAccessRepositoryMethods(
         })) {
           const closed = await updateSessionState(transaction, session.id, "closed");
           return toPlaybackSession(closed, await resolvePlatformAccess(transaction, actorId));
+        }
+
+        if (Number(session.allowance_reserved_seconds) > 0) {
+          const elapsedSeconds = Math.max(
+            0,
+            Math.floor((now.getTime() - session.last_heartbeat_at.getTime()) / 1_000)
+          );
+          const remainingReservedSeconds = Math.max(
+            0,
+            Number(session.allowance_reserved_seconds) - Number(session.consumed_seconds)
+          );
+          const creditedSeconds = Math.max(
+            0,
+            Math.min(
+              input.playedSeconds,
+              maxHeartbeatSeconds,
+              elapsedSeconds + heartbeatClockSkewSeconds,
+              remainingReservedSeconds
+            )
+          );
+          await transaction`
+            insert into platform_playback_heartbeats (
+              session_id,
+              sequence,
+              reported_seconds,
+              credited_seconds,
+              idempotency_key,
+              request_hash
+            )
+            values (
+              ${session.id},
+              ${input.sequence},
+              ${input.playedSeconds},
+              ${creditedSeconds},
+              ${input.idempotencyKey},
+              ${input.requestHash}
+            )
+          `;
+          const updatedRows = await transaction<PlaybackSessionRow[]>`
+            update platform_playback_sessions
+            set
+              consumed_seconds = consumed_seconds + ${creditedSeconds},
+              last_sequence = ${input.sequence},
+              last_heartbeat_at = ${now},
+              updated_at = now()
+            where id = ${session.id}
+            returning *
+          `;
+          const updated = updatedRows[0];
+          if (!updated) throw new SubscriptionRepositoryConfigurationError();
+          return toPlaybackSession(updated, await resolvePlatformAccess(transaction, actorId));
         }
 
         await transaction`
@@ -292,6 +445,25 @@ async function findActorId(sql: QuerySql, supabaseUserId: string): Promise<strin
   const actor = rows[0];
   if (!actor) throw new SubscriptionRepositoryConfigurationError();
   return actor.id;
+}
+
+async function findActivePlaybackLeaseExpiry(
+  sql: QuerySql,
+  input: { actorId: string; targetType: "content" | "live_room"; targetId: string }
+): Promise<Date | null> {
+  const rows = await sql<{ resource_lease_expires_at: Date }[]>`
+    select resource_lease_expires_at
+    from platform_playback_sessions
+    where user_id = ${input.actorId}
+      and target_type = ${input.targetType}
+      and target_id = ${input.targetId}
+      and state = 'active'
+      and allowance_reserved_seconds > 0
+      and resource_lease_expires_at > now()
+    order by resource_lease_expires_at desc
+    limit 1
+  `;
+  return rows[0]?.resource_lease_expires_at ?? null;
 }
 
 async function resolvePlatformAccess(sql: QuerySql, actorId: string): Promise<PlatformAccess> {
@@ -493,6 +665,8 @@ function toPlaybackSession(
     state: row.state,
     heartbeatIntervalSeconds,
     consumedSeconds: Number(row.consumed_seconds),
+    reservedSeconds: Number(row.allowance_reserved_seconds),
+    leaseExpiresAt: row.resource_lease_expires_at?.toISOString() ?? null,
     usage: access.usage
   };
 }
@@ -528,6 +702,8 @@ interface PlaybackSessionRow {
   consumed_seconds: string | number;
   last_sequence: number;
   last_heartbeat_at: Date;
+  allowance_reserved_seconds: string | number;
+  resource_lease_expires_at: Date | null;
   idempotency_key: string;
   request_hash: string;
 }

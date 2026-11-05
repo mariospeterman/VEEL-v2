@@ -181,6 +181,68 @@ describeIntegration("notification push ownership against Postgres", () => {
       state: "skipped"
     });
   });
+
+  it("rotates a shared endpoint concurrently with a revoked outcome without deadlock or stale revocation", async () => {
+    const databaseUrl = guardedDatabaseUrl();
+    const encryptionKey = randomBytes(32).toString("base64url");
+    sql = createPostgresClient(databaseUrl);
+    apiRepository = createPostgresNotificationRepository(databaseUrl, { encryptionKey });
+    workerRepository = createPostgresNotificationDeliveryRepository({ databaseUrl, encryptionKey });
+    const userA = await seedUser(sql);
+    const userB = await seedUser(sql);
+    userIds.push(userA, userB);
+    await enablePush(sql, userA);
+    await enablePush(sql, userB);
+
+    const endpoint = `https://fcm.googleapis.com/fcm/send/${randomUUID()}`;
+    const firstDevice = await apiRepository.registerDevice({
+      supabaseUserId: userA,
+      idempotencyKey: `register-concurrent-a-${randomUUID()}`,
+      body: pushSubscription(endpoint)
+    });
+    await seedNotification(sql, userA, "Concurrent endpoint rotation");
+    await workerRepository.enqueueDueDeliveries({ now: new Date(), limit: 20 });
+    const [lease] = await workerRepository.leaseDueDeliveries({
+      now: new Date(Date.now() + 1_000),
+      limit: 20,
+      leaseDurationMs: 60_000,
+      maxAttempts: 8
+    });
+    expect(lease).toBeDefined();
+
+    const [, rotatedDevice] = await Promise.all([
+      workerRepository.recordDeliveryOutcome({
+        attemptId: lease!.attemptId,
+        deviceId: lease!.deviceId,
+        deviceSubscriptionGeneration: lease!.deviceSubscriptionGeneration,
+        userId: lease!.userId,
+        leaseToken: lease!.leaseToken,
+        maxAttempts: 8,
+        outcome: { state: "revoked", failureCode: "push_subscription_gone" }
+      }),
+      apiRepository.registerDevice({
+        supabaseUserId: userB,
+        idempotencyKey: `register-concurrent-b-${randomUUID()}`,
+        body: pushSubscription(endpoint)
+      })
+    ]);
+
+    expect(rotatedDevice.id).toBe(firstDevice.id);
+    const current = await sql<Array<{
+      state: string;
+      subscription_generation: number;
+      user_id: string;
+    }>>`
+      select state, subscription_generation::integer as subscription_generation, user_id
+      from notification_devices
+      where id = ${firstDevice.id}
+    `;
+    expect(current[0]).toEqual({
+      state: "active",
+      subscription_generation: 2,
+      user_id: userB
+    });
+  });
 });
 
 function guardedDatabaseUrl(): string {

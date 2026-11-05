@@ -3,6 +3,7 @@ import type { AdminRepository } from "./types.js";
 import type { AdminPermission } from "./admin-permissions.js";
 import { countOpenReports } from "./admin-report-authority.js";
 import { resolveActiveStaffAccess } from "./admin-staff-access.js";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import {
   CountRow,
   NotificationHealthRow,
@@ -391,7 +392,10 @@ export function createAccessRepository(
       }
     },
     async listUsers(input) {
-      const cursorScope = "GET /v1/admin/users";
+      const cursorScope = bindCursorScope("GET /v1/admin/users", {
+        query: input.query?.toLowerCase() ?? null,
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<AdminUserRow[]>`
         select

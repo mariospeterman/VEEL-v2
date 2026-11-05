@@ -6,6 +6,7 @@ import {
   MessageRequestForbiddenError
 } from "./message-errors.js";
 import {
+  bindCursorScope,
   decodeTimestampKindIdCursor,
   encodeTimestampKindIdCursor,
   keysetPage
@@ -89,8 +90,13 @@ export async function listCommercialInteractions(
   const context = await readCommercialContext(sql, input, true);
   if (!context) return null;
 
+  const cursorScope = bindCursorScope(commercialCursorScope, {
+    actor: context.actor_id,
+    conversation: input.conversationId,
+    sort: "created_at:desc,kind:desc,id:desc"
+  });
   const cursor = decodeTimestampKindIdCursor(
-    commercialCursorScope,
+    cursorScope,
     input.cursor,
     commercialKinds
   );
@@ -122,7 +128,7 @@ export async function listCommercialInteractions(
     input.limit,
     (row) => row,
     (row) => encodeTimestampKindIdCursor(
-      commercialCursorScope,
+      cursorScope,
       row.created_at,
       row.kind,
       row.id

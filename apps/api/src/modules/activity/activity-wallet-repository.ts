@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor,
   keysetPage
@@ -13,7 +14,11 @@ import type { ListActivityInput } from "./types.js";
 const walletTransactionCursorScope = "GET /v1/activity/wallet-transactions";
 
 export async function listWalletTransactions(sql: postgres.Sql, input: ListActivityInput) {
-  const cursor = decodeTimestampIdCursor(walletTransactionCursorScope, input.cursor);
+  const cursorScope = bindCursorScope(walletTransactionCursorScope, {
+    actor: input.supabaseUserId,
+    sort: "created_at:desc,id:desc"
+  });
+  const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
   const rows = await sql<WalletTransactionRow[]>`
     with target_user as (
       select id
@@ -54,6 +59,6 @@ export async function listWalletTransactions(sql: postgres.Sql, input: ListActiv
   `;
 
   return keysetPage(rows, input.limit, toWalletTransaction, (row) =>
-    encodeTimestampIdCursor(walletTransactionCursorScope, row.created_at, row.id)
+    encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
   );
 }

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-08-24
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
@@ -32,7 +32,8 @@ Non-goals:
 - OAuth revocation: `/oauth/revoke`
 - Authenticated web consent: `/oauth/consent/:requestId`
 - Scoped tool listing and tool execution
-- Deliberate MCP `2025-11-25` compatibility negotiation with standard text plus `structuredContent` results. The official `2026-07-28` specification is the latest final release; WeVid does not claim that negotiation level until its exact client matrix is implemented and staged.
+- Deliberate handshake-era MCP `2025-11-25` compatibility with standard text plus `structuredContent` results. The official current final specification is `2026-07-28`; WeVid does not implement its stateless `server/discover` lifecycle or claim that revision.
+- A narrow hand-written Fastify/JSON-RPC endpoint, with no installed `@modelcontextprotocol/*` SDK. `initialize` echoes an exact `2025-06-18` request and otherwise offers `2025-11-25`; post-initialization header tolerance for `2025-03-26`, `2025-06-18`, and `2025-11-25` is an older-client compatibility allowance, not a claim that all optional features or SDK combinations have passed.
 - Protocol-version headers on post-initialization smoke requests and HTTP 400 rejection for explicit
   unsupported versions
 - Configured-Origin validation for Streamable HTTP requests
@@ -238,8 +239,10 @@ Remote MCP is production-auth-capable only after public HTTPS deployment, OAuth 
 
 - MCP Inspector: `https://modelcontextprotocol.io/docs/tools/inspector`
 - MCP Authorization: `https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization`
+- MCP `2025-11-25` lifecycle and version negotiation: `https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle`
 - MCP Streamable HTTP transport: `https://modelcontextprotocol.io/specification/2025-11-25/basic/transports`
-- Latest final MCP specification: `https://modelcontextprotocol.io/specification/2026-07-28`
+- Current final MCP specification: `https://modelcontextprotocol.io/specification/2026-07-28`
+- Official TypeScript SDK protocol-version compatibility: `https://ts.sdk.modelcontextprotocol.io/v2/protocol-versions`
 - Claude Code MCP: `https://docs.anthropic.com/en/docs/claude-code/mcp`
 - Claude custom connectors: `https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp`
 - OpenAI MCP/connectors: `https://developers.openai.com/api/docs/guides/tools-connectors-mcp`

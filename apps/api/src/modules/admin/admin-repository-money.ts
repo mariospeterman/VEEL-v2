@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import type { AdminRepository } from "./types.js";
 import {
   PaymentRow,
@@ -21,7 +22,10 @@ export function createMoneyRepository(
 ): Pick<AdminRepository, "listPaymentIntents" | "listUnlocks" | "listProviderEvents" | "enqueueProviderEventReplay" | "listAuditEvents"> {
   return {
     async listPaymentIntents(input) {
-      const cursorScope = "GET /v1/admin/payments/intents";
+      const cursorScope = bindCursorScope("GET /v1/admin/payments/intents", {
+        query: input.query ?? null,
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<PaymentRow[]>`
         select
@@ -66,7 +70,10 @@ export function createMoneyRepository(
       );
     },
     async listUnlocks(input) {
-      const cursorScope = "GET /v1/admin/unlocks";
+      const cursorScope = bindCursorScope("GET /v1/admin/unlocks", {
+        query: input.query ?? null,
+        sort: "granted_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<UnlockRow[]>`
         select id, user_id, target_type, target_id, product_type, payment_intent_id, state, granted_at, ends_at as expires_at
@@ -93,7 +100,9 @@ export function createMoneyRepository(
       );
     },
     async listProviderEvents(input) {
-      const cursorScope = "GET /v1/admin/provider-events";
+      const cursorScope = bindCursorScope("GET /v1/admin/provider-events", {
+        sort: "received_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ProviderEventRow[]>`
         select
@@ -197,7 +206,9 @@ export function createMoneyRepository(
       return rows[0]?.provider_event_exists ?? false;
     },
     async listAuditEvents(input) {
-      const cursorScope = "GET /v1/admin/audit";
+      const cursorScope = bindCursorScope("GET /v1/admin/audit", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<AuditEventRow[]>`
         select id, subject_type, action, created_at

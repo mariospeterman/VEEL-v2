@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor,
   keysetPage
@@ -250,7 +251,11 @@ export function createEventAccessPassRepositoryMethods(
       return rows[0] ? toEventAccessPass(rows[0]) : null;
     },
     async listAccessPasses(input) {
-      const cursor = decodeTimestampIdCursor(eventAccessPassCursorScope, input.cursor);
+      const cursorScope = bindCursorScope(eventAccessPassCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<AccessPassRow[]>`
         with actor as (
           select id
@@ -286,7 +291,7 @@ export function createEventAccessPassRepositoryMethods(
       `;
 
       return keysetPage(rows, input.limit, toEventAccessPass, (row) =>
-        encodeTimestampIdCursor(eventAccessPassCursorScope, row.created_at, row.id)
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
       );
     }
   };

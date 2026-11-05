@@ -9,6 +9,7 @@ import {
   publicCapabilityMutation,
   publicMutation
 } from "./api-mutation-transport";
+import type { DiscoverCursorSet, DiscoverPage } from "./api-client-types";
 export { ApiMutationError } from "./api-mutation-types";
 export type {
   OnboardingAnalyticsEventRequest,
@@ -80,7 +81,6 @@ export type {
   CreatorMediaPage,
   PaymentIntent,
   PublishContentRequest,
-  ProfileAvatarUpload,
   RefundDisputeRequest,
   SessionState,
   SubmitSubscriptionAuthorizationRequest,
@@ -95,7 +95,6 @@ export type {
   UpdateProfileRequest,
   UpdateCreatorOnboardingRequest,
   UpsertCreatorMembershipOfferRequest,
-  UploadProfileAvatarRequest,
   UploadSession,
   ImageAssetUploadResult,
   UpdateContentMediaAssetRequest,
@@ -197,7 +196,6 @@ import type {
   CreatorMediaPage,
   PaymentIntent,
   PublishContentRequest,
-  ProfileAvatarUpload,
   RefundDisputeRequest,
   SessionState,
   SubmitSubscriptionAuthorizationRequest,
@@ -212,7 +210,6 @@ import type {
   UpdateProfileRequest,
   UpdateCreatorOnboardingRequest,
   UpsertCreatorMembershipOfferRequest,
-  UploadProfileAvatarRequest,
   UploadSession,
   ImageAssetUploadResult,
   UpdateContentMediaAssetRequest,
@@ -273,13 +270,6 @@ export async function updateMyCreatorOnboarding(
     body,
     idempotencyKey
   );
-}
-
-export async function uploadMyProfileAvatar(
-  body: UploadProfileAvatarRequest,
-  idempotencyKey = crypto.randomUUID()
-): Promise<ProfileAvatarUpload> {
-  return authenticatedMutation<ProfileAvatarUpload>("/v1/profiles/me/avatar", "POST", body, idempotencyKey);
 }
 
 export async function createWalletAuthChallenge(
@@ -625,13 +615,36 @@ export async function createDataRequest(
 }
 
 export async function getFeedPage(
-  mode: "recommended" | "following",
+  mode: "latest" | "following",
   surface: "home" | "bits" | "moments",
   cursor?: string
 ): Promise<FeedPage> {
   const query = new URLSearchParams({ mode, surface });
   if (cursor) query.set("cursor", cursor);
   return authenticatedGet<FeedPage>(`/v1/content/feed?${query.toString()}`);
+}
+
+export async function getDiscoverSearchPage(
+  searchQuery = "",
+  cursors: Partial<DiscoverCursorSet> = {}
+): Promise<DiscoverPage> {
+  const query = new URLSearchParams();
+  if (searchQuery) query.set("q", searchQuery);
+
+  const cursorParameters = [
+    ["contentCursor", cursors.content],
+    ["creatorCursor", cursors.creators],
+    ["hashtagCursor", cursors.hashtags],
+    ["eventCursor", cursors.events],
+    ["liveCursor", cursors.liveRooms]
+  ] as const;
+  for (const [parameter, cursor] of cursorParameters) {
+    if (cursor) query.set(parameter, cursor);
+  }
+
+  return authenticatedGet<DiscoverPage>(
+    `/v1/discover/search${query.size > 0 ? `?${query.toString()}` : ""}`
+  );
 }
 
 export async function followUser(userId: string, idempotencyKey: string): Promise<FollowState> {

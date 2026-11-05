@@ -53,8 +53,9 @@ describe("bounded subscription projections", () => {
       const limit = values[10] as number;
       return Promise.resolve(rows.filter((row) => {
         if (!timestamp) return true;
-        const value = row.created_at.toISOString();
-        return value < timestamp || (value === timestamp && (!id || row.id < id));
+        const rowTime = row.created_at.getTime();
+        const cursorTime = Date.parse(timestamp);
+        return rowTime < cursorTime || (rowTime === cursorTime && (!id || row.id < id));
       }).slice(0, limit));
     }) as unknown as PostgresSql;
     const repository = createPostgresSubscriptionRepository(sql);

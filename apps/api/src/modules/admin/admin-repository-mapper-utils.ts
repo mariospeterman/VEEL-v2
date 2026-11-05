@@ -1,10 +1,25 @@
+import {
+  cursorTimestamp,
+  isCanonicalCursorTimestamp
+} from "../../shared/database-timestamp.js";
+import {
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
+  KeysetPaginationCursorError
+} from "../../shared/keyset-pagination.js";
 import type {
   AdminComplianceLedgerEntry
 } from "./types.js";
 
+export {
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
+  KeysetPaginationCursorError as AdminPaginationCursorError
+};
+
 export const pageSize = 50;
 
-const adminCursorVersion = 1;
+const adminCursorVersion = 2;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const featureFlagKeyPattern = /^[a-z0-9_.:-]{2,120}$/;
 
@@ -13,16 +28,6 @@ interface AdminCursorPayload {
   s: string;
   k: Array<string | number>;
   i: string;
-}
-
-export class AdminPaginationCursorError extends Error {
-  readonly code = "validation_failed";
-  readonly statusCode = 400;
-
-  constructor() {
-    super("The admin pagination cursor is invalid for this collection");
-    this.name = "AdminPaginationCursorError";
-  }
 }
 
 export function page<Row, Item>(
@@ -39,50 +44,8 @@ export function page<Row, Item>(
   };
 }
 
-export function encodeTimestampIdCursor(scope: string, timestamp: Date, id: string): string {
-  return encodeAdminCursor(scope, [timestamp.toISOString()], id);
-}
-
-export function decodeTimestampIdCursor(scope: string, cursor: string | undefined): {
-  timestamp: string | null;
-  id: string | null;
-} {
-  if (!cursor) return { timestamp: null, id: null };
-
-  const payload = decodeAdminCursor(scope, cursor);
-  if (payload) {
-    const [timestamp] = payload.k;
-    if (payload.k.length !== 1 || !isTimestamp(timestamp)) {
-      throw new AdminPaginationCursorError();
-    }
-    return { timestamp, id: payload.i };
-  }
-
-  // Accept the short-lived unversioned compound cursor emitted by an earlier repair build.
-  try {
-    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
-      createdAt?: unknown;
-      id?: unknown;
-    };
-    if (
-      isTimestamp(parsed.createdAt) &&
-      typeof parsed.id === "string" &&
-      uuidPattern.test(parsed.id)
-    ) {
-      return { timestamp: parsed.createdAt, id: parsed.id };
-    }
-  } catch {
-    // Fall through to the timestamp-only compatibility path.
-  }
-
-  // Legacy timestamp cursors include the whole boundary timestamp on the next request. This can
-  // repeat rows from that timestamp, but it cannot omit them; every response emits a v1 cursor.
-  if (isTimestamp(cursor)) return { timestamp: cursor, id: null };
-  throw new AdminPaginationCursorError();
-}
-
 export function encodeTimestampKeyCursor(scope: string, timestamp: Date, key: string): string {
-  return encodeAdminCursor(scope, [timestamp.toISOString()], key, featureFlagKeyPattern);
+  return encodeAdminCursor(scope, [cursorTimestamp(timestamp)], key, featureFlagKeyPattern);
 }
 
 export function decodeTimestampKeyCursor(scope: string, cursor: string | undefined): {
@@ -92,16 +55,11 @@ export function decodeTimestampKeyCursor(scope: string, cursor: string | undefin
   if (!cursor) return { timestamp: null, key: null };
 
   const payload = decodeAdminCursor(scope, cursor, featureFlagKeyPattern);
-  if (payload) {
-    const [timestamp] = payload.k;
-    if (payload.k.length !== 1 || !isTimestamp(timestamp)) {
-      throw new AdminPaginationCursorError();
-    }
-    return { timestamp, key: payload.i };
+  const [timestamp] = payload.k;
+  if (payload.k.length !== 1 || !isTimestamp(timestamp)) {
+    throw new KeysetPaginationCursorError();
   }
-
-  if (isTimestamp(cursor)) return { timestamp: cursor, key: null };
-  throw new AdminPaginationCursorError();
+  return { timestamp, key: payload.i };
 }
 
 export function encodePriorityTimestampIdCursor(
@@ -110,7 +68,7 @@ export function encodePriorityTimestampIdCursor(
   timestamp: Date,
   id: string
 ): string {
-  return encodeAdminCursor(scope, [priority, timestamp.toISOString()], id);
+  return encodeAdminCursor(scope, [priority, cursorTimestamp(timestamp)], id);
 }
 
 export function decodePriorityTimestampIdCursor(scope: string, cursor: string | undefined): {
@@ -121,24 +79,16 @@ export function decodePriorityTimestampIdCursor(scope: string, cursor: string | 
   if (!cursor) return { priority: null, timestamp: null, id: null };
 
   const payload = decodeAdminCursor(scope, cursor);
-  if (payload) {
-    const [priority, timestamp] = payload.k;
-    if (
-      payload.k.length !== 2 ||
-      typeof priority !== "number" ||
-      !Number.isInteger(priority) ||
-      !isTimestamp(timestamp)
-    ) {
-      throw new AdminPaginationCursorError();
-    }
-    return { priority, timestamp, id: payload.i };
+  const [priority, timestamp] = payload.k;
+  if (
+    payload.k.length !== 2 ||
+    typeof priority !== "number" ||
+    !Number.isInteger(priority) ||
+    !isTimestamp(timestamp)
+  ) {
+    throw new KeysetPaginationCursorError();
   }
-
-  // A legacy timestamp did not carry the queue priority. Restarting this one collection is the only
-  // complete continuation: applying the timestamp to every priority bucket could omit newer rows in
-  // a later bucket. The first restarted response upgrades the client to a v1 compound cursor.
-  if (isTimestamp(cursor)) return { priority: null, timestamp: cursor, id: null };
-  throw new AdminPaginationCursorError();
+  return { priority, timestamp, id: payload.i };
 }
 
 export function encodeTwoTimestampIdCursor(
@@ -149,7 +99,7 @@ export function encodeTwoTimestampIdCursor(
 ): string {
   return encodeAdminCursor(
     scope,
-    [firstTimestamp.toISOString(), secondTimestamp.toISOString()],
+    [cursorTimestamp(firstTimestamp), cursorTimestamp(secondTimestamp)],
     id
   );
 }
@@ -162,22 +112,15 @@ export function decodeTwoTimestampIdCursor(scope: string, cursor: string | undef
   if (!cursor) return { firstTimestamp: null, secondTimestamp: null, id: null };
 
   const payload = decodeAdminCursor(scope, cursor);
-  if (payload) {
-    const [firstTimestamp, secondTimestamp] = payload.k;
-    if (
-      payload.k.length !== 2 ||
-      !isTimestamp(firstTimestamp) ||
-      !isTimestamp(secondTimestamp)
-    ) {
-      throw new AdminPaginationCursorError();
-    }
-    return { firstTimestamp, secondTimestamp, id: payload.i };
+  const [firstTimestamp, secondTimestamp] = payload.k;
+  if (
+    payload.k.length !== 2 ||
+    !isTimestamp(firstTimestamp) ||
+    !isTimestamp(secondTimestamp)
+  ) {
+    throw new KeysetPaginationCursorError();
   }
-
-  if (isTimestamp(cursor)) {
-    return { firstTimestamp: cursor, secondTimestamp: null, id: null };
-  }
-  throw new AdminPaginationCursorError();
+  return { firstTimestamp, secondTimestamp, id: payload.i };
 }
 
 function encodeAdminCursor(
@@ -186,7 +129,9 @@ function encodeAdminCursor(
   id: string,
   idPattern = uuidPattern
 ): string {
-  if (!scope || !idPattern.test(id)) throw new AdminPaginationCursorError();
+  if (!scope || scope.length > 160 || !idPattern.test(id)) {
+    throw new KeysetPaginationCursorError();
+  }
   const payload: AdminCursorPayload = {
     v: adminCursorVersion,
     s: scope,
@@ -200,12 +145,15 @@ function decodeAdminCursor(
   scope: string,
   cursor: string,
   idPattern = uuidPattern
-): AdminCursorPayload | null {
+): AdminCursorPayload {
+  if (cursor.length < 1 || cursor.length > 512 || !/^[A-Za-z0-9_-]+$/.test(cursor)) {
+    throw new KeysetPaginationCursorError();
+  }
   let decoded: unknown;
   try {
     decoded = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
   } catch {
-    return null;
+    throw new KeysetPaginationCursorError();
   }
 
   if (
@@ -216,7 +164,7 @@ function decodeAdminCursor(
     !("k" in decoded) ||
     !("i" in decoded)
   ) {
-    return null;
+    throw new KeysetPaginationCursorError();
   }
 
   const payload = decoded as Partial<AdminCursorPayload>;
@@ -227,13 +175,13 @@ function decodeAdminCursor(
     typeof payload.i !== "string" ||
     !idPattern.test(payload.i)
   ) {
-    throw new AdminPaginationCursorError();
+    throw new KeysetPaginationCursorError();
   }
   return payload as AdminCursorPayload;
 }
 
 function isTimestamp(value: unknown): value is string {
-  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+  return isCanonicalCursorTimestamp(value);
 }
 
 export function nullableNumber(value: string | number | null): number | null {

@@ -2,6 +2,7 @@ import { parseServerEnv } from "@veel/config";
 import { createCanonicalProviderReplayRuntime } from "@veel/api/provider-event-replay-runtime";
 import { createBunnyStreamUploadAdapter } from "@veel/api/media-upload-provider";
 import { createLivepeerProviderAdapter } from "@veel/api/live-provider";
+import { createSolanaSubscriptionAuthorizationVerifier } from "@veel/api/subscription-authorization-verifier-runtime";
 import { pathToFileURL } from "node:url";
 import {
   createPostgresLiveSafetyRepository,
@@ -60,6 +61,12 @@ import {
   type ProviderEventReplayRepository
 } from "./provider-event-replay.js";
 import {
+  createPostgresSubscriptionAuthorizationReconciliationRepository,
+  processSubscriptionAuthorizationReconciliations,
+  type ProcessSubscriptionAuthorizationReconciliationsResult,
+  type SubscriptionAuthorizationReconciliationRepository
+} from "./subscription-authorization-reconciliation.js";
+import {
   createPostgresSubscriptionCollectionRepository,
   createSolanaSubscriptionCollectionProvider,
   createUnconfiguredSubscriptionCollectionProvider,
@@ -83,6 +90,7 @@ export const buildWorkerRuntime = () => {
     environment: config.NODE_ENV,
     queues: [
       "analytics-projections",
+      "subscription-authorization-reconciliation",
       "subscription-collections",
       "notification-deliveries",
       "payment-confirmation-emails",
@@ -97,6 +105,11 @@ export const buildWorkerRuntime = () => {
         name: "analytics-projections",
         cadence: "every_minute",
         sourceIndex: "analytics_projection_jobs_lease_idx"
+      },
+      {
+        name: "subscription-authorization-reconciliation",
+        cadence: "every_minute",
+        sourceIndex: "subscription_authorization_intents_subscription_idx"
       },
       {
         name: "subscription-collections",
@@ -275,6 +288,33 @@ export async function runSubscriptionCollectionTick(input: {
   }
 }
 
+export async function runSubscriptionAuthorizationReconciliationTick(input: {
+  repository?: SubscriptionAuthorizationReconciliationRepository;
+  verifier?: ReturnType<typeof createSolanaSubscriptionAuthorizationVerifier>;
+  now?: Date;
+  limit?: number;
+} = {}): Promise<ProcessSubscriptionAuthorizationReconciliationsResult> {
+  const config = parseServerEnv(process.env);
+  const repository = input.repository ??
+    createPostgresSubscriptionAuthorizationReconciliationRepository({
+      ...(config.DATABASE_URL ? { databaseUrl: config.DATABASE_URL } : {})
+    });
+  const verifier = input.verifier ?? createSolanaSubscriptionAuthorizationVerifier(config);
+
+  try {
+    return await processSubscriptionAuthorizationReconciliations({
+      repository,
+      verifier,
+      ...(input.now ? { now: input.now } : {}),
+      ...(input.limit ? { limit: input.limit } : {})
+    });
+  } finally {
+    if (!input.repository) {
+      await repository.close?.();
+    }
+  }
+}
+
 export async function runProviderEventReplayTick(input: {
   repository?: ProviderEventReplayRepository;
   adapter?: ProviderEventReplayAdapter;
@@ -417,6 +457,7 @@ export interface ScheduledWorkerTickResult {
   paymentConfirmationEmails: "completed" | "failed";
   providerEventReplays: "completed" | "failed";
   scheduledPublications: "completed" | "failed";
+  subscriptionAuthorizationReconciliation: "completed" | "failed";
   subscriptionCollections: "completed" | "failed";
 }
 
@@ -434,6 +475,7 @@ export interface WorkerTickRunners {
   paymentConfirmationEmails(): Promise<unknown>;
   providerEventReplays(): Promise<unknown>;
   scheduledPublications(): Promise<unknown>;
+  subscriptionAuthorizationReconciliation(): Promise<unknown>;
   subscriptionCollections(): Promise<unknown>;
 }
 
@@ -461,6 +503,8 @@ export async function runScheduledWorkerTick(input: {
     paymentConfirmationEmails: () => runPaymentConfirmationEmailTick({ limit: config.WORKER_BATCH_LIMIT }),
     providerEventReplays: () => runProviderEventReplayTick({ limit: config.WORKER_BATCH_LIMIT }),
     scheduledPublications: () => runScheduledPublicationTick({ limit: config.WORKER_BATCH_LIMIT }),
+    subscriptionAuthorizationReconciliation: () =>
+      runSubscriptionAuthorizationReconciliationTick({ limit: config.WORKER_BATCH_LIMIT }),
     subscriptionCollections: () => runSubscriptionCollectionTick({ limit: config.WORKER_BATCH_LIMIT })
   };
   const tasks = [
@@ -472,6 +516,7 @@ export async function runScheduledWorkerTick(input: {
     ["paymentConfirmationEmails", runners.paymentConfirmationEmails],
     ["providerEventReplays", runners.providerEventReplays],
     ["scheduledPublications", runners.scheduledPublications],
+    ["subscriptionAuthorizationReconciliation", runners.subscriptionAuthorizationReconciliation],
     ["subscriptionCollections", runners.subscriptionCollections]
   ] as const;
   const results = await Promise.all(
@@ -521,6 +566,7 @@ export function startWorkerProcess(input: {
         paymentConfirmationEmails: "completed",
         providerEventReplays: "completed",
         scheduledPublications: "completed",
+        subscriptionAuthorizationReconciliation: "completed",
         subscriptionCollections: "completed"
       });
     }

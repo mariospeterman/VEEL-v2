@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: wallet, onramp, payments, subscriptions, media, live, age/KYC, AI, events
-Last updated: 2026-08-15
+Last updated: 2026-11-05
 Source of truth: yes for provider topology; vendor/account approval remains provider-specific
 
 Owns:
@@ -44,20 +44,35 @@ This ADR turns the v2 blueprint into concrete provider defaults for the first im
 | Event Access | Internal backend QR/pass entitlement + Solana Pay settlement first; NFT/Solana pass ADR later | Proven, simple, noncustodial split settlement without premature custom smart contracts. |
 | Event location | Browser geolocation with permission + manual OSM-backed place search | Free/low-cost launch UX without platform handling private location carelessly. |
 | Share | Internal Veel share/repost/message has no referral commission; external share tab uses backend referral URL | Keeps social sharing clean while preserving referral attribution for off-platform conversion. |
-| Commerce interoperability | Selected Solana Commerce Kit primitive: exact-pinned `@solana-commerce/solana-pay` behind the existing payment module in Slice 06 | Replaces manual Solana Pay URL/QR plumbing without replacing WeVid payment intents, wallets, checkout UI, transaction composition, exact split verification, or domain outcomes. |
+| Solana Pay interoperability | Exact-pinned `@solana/pay` `1.0.26` in the isolated `@veel/solana-pay-codec` package plus exact-pinned server SVG QR generation | Uses the maintained Solana Pay package without replacing WeVid payment intents, wallets, checkout UI, transaction composition, exact split verification, or domain outcomes. |
 | Physical commerce | Deferred WeVid-native Product Offers plus lightweight Orders/Fulfillment; no full commerce engine | Content remains the advertisement and the profile the storefront while existing identity, wallet, payment, verification, dispute, notification, and audit authorities are reused. |
 
-## Commerce Kit And Native Commerce Lock
+## Solana Pay Dependency And Native Commerce Lock
 
 The superseded commerce-engine direction is rejected. Vendure, Medusa, Shopify, WooCommerce, and other full commerce engines are not canonical providers or core dependencies. Shopify may be reconsidered much later only as an optional import/synchronisation connector for professional sellers, and any such connector requires a new ADR; it cannot own WeVid product identity, checkout, seller identity, customer identity, orders, payments, or fulfillment.
 
-The Commerce Kit baseline was re-checked on 2026-08-15 and is exact-pinned in Slice 06 as `@solana-commerce/solana-pay` version `0.1.1`, tied to official upstream repository HEAD `6164d5104f3d1bd4cfbb637075f000d6ac23d6c3`. The selected runtime surface is limited to `encodeTransactionRequestURL` query generation and `createQRDataURL` SVG generation behind `solana-pay-codec.ts`; no package type crosses the adapter.
+Solana Commerce Kit is retired upstream and is not a selected dependency. Its historical Slice 06
+baseline remains recorded for audit: `@solana-commerce/solana-pay` `0.1.1` at upstream HEAD
+`6164d5104f3d1bd4cfbb637075f000d6ac23d6c3` had a verified transaction-request incompatibility in
+which the encoder omitted the `solana:` scheme while the parser required that scheme and truncated
+the callback pathname. That evidence explains the replacement; it is not current implementation
+guidance or a supported fallback.
 
-Version `0.1.1` has a verified encoder/parser incompatibility for transaction requests: its encoder returns the HTTPS callback without the standard `solana:` scheme, while its parser requires `solana:` and removes two pathname characters. WeVid does not broaden provider authority to compensate. The adapter uses the official encoder's query shape and QR generator, supplies and validates the standard scheme locally, rejects transfer requests and unsafe callback origins, and pins the defect in compatibility tests. An upgrade is accepted only after official source review, round-trip/safety tests, bundle proof, real devnet wallet/QR proof, and rollback confirmation.
+The replacement is exact-pinned `@solana/pay` `1.0.26` inside `@veel/solana-pay-codec`, with
+server-side `qrcode` `1.5.4` exact-pinned for accessible SVG data URLs. The codec admits only the
+validated HTTPS transaction-request form, enforces the standard `solana:<absolute-https-url>`
+round trip, rejects transfer requests and unsafe callback shapes, and exposes only WeVid-owned
+primitives. Package types do not cross its boundary.
 
-Only `@solana-commerce/solana-pay` is initially selected, for Solana Pay URL encode/parse, transaction-request URLs, QR data generation, and deep-link/cross-device wallet handoff. `@solana-commerce/kit`, `@solana-commerce/react`, `@solana-commerce/connector`, `@solana-commerce/sdk`, and `@solana-commerce/headless` are excluded initially because they would add unused meta functionality or duplicate WeVid checkout UI, wallet connection/state, transaction approval, cart, order, or payment-flow authority. `@solana-commerce/headless` may return for review only after a focused benchmark proves meaningful code removal without creating a competing authority.
+`@solana/pay` `1.0.26` uses the Solana Kit 6 peer/dependency family. The codec package is therefore
+an intentional dependency island. The API and worker retain their existing Solana Kit 7 family and
+must not be downgraded, hoisted into the island, or treated as package-compatible. The QR dependency
+is used directly on Node so browser-only QR styling code is not checkout authority.
 
-Commerce Kit is isolated behind the existing payment module. It never confirms settlement, computes price or recipients, composes WeVid's exact split transaction, grants entitlement/access, creates an order, or replaces Privy/Wallet Standard. A Commerce Kit callback, wallet approval, QR, or submitted signature is presentation/pending evidence only; blockchain settlement verified against the stored WeVid `PaymentIntent` remains payment truth.
+The codec never confirms settlement, computes price or recipients, composes WeVid's exact split
+transaction, grants access, creates an order, or replaces Privy/Wallet Standard. A URL, QR, wallet
+approval, or submitted signature is presentation/pending evidence only; chain settlement verified
+against the stored WeVid `PaymentIntent` remains payment truth.
 
 ## Provider Acceptance States
 
@@ -88,11 +103,11 @@ Current provider gate:
 | Age fallback | Veriff | candidate | Global age assurance, risk-based checks, webhook verification, privacy/security review. |
 | Documentary fallback | Persona | candidate | Procurement, privacy/security, data minimization, explicit legal basis for documentary fallback. |
 | VOD | Bunny Stream/CDN/TUS | candidate; `CODE_COMPLETE_PROVIDER_BLOCKED` for the C08 private MCP handoff | TUS upload, signed/tokenized playback, webhook idempotency, provider outage state. The private MCP path reuses canonical image sanitization and Bunny TUS behind a one-time capability; staging still must prove the exact provider account, Shield, upload, deletion/recovery, and rollback behavior before approval. |
-| Live/replay | Livepeer JWT | candidate; `CODE_COMPLETE_PROVIDER_BLOCKED` in Slice 07 | OBS ingest, one-response owner secret reveal, exact JWT subject/expiry, moderation source multistream, signed webhook timestamp/replay protection, suspend/terminate, separately quarantined replay, and no viewer secret exposure are code-complete. Staging must prove real ingest/playback, webhook delivery, moderation-target behavior, measured suspension/recovery, replay handoff/release, provider account acceptance, and rollback before `staging-approved`. |
+| Live/replay | Livepeer JWT | candidate; `CODE_COMPLETE_PROVIDER_BLOCKED` in Slice 07 | Official SDK browser camera/microphone broadcast is primary; OBS is Advanced. The one-response owner reveal is recent-authenticated, no-store, audited, and memory-only. Exact JWT subject/expiry, moderation source multistream, signed webhook replay protection, suspend/terminate, separately quarantined replay, and no viewer secret exposure are code-complete. Staging must prove both ingest paths, playback, webhooks, moderation-target behavior, measured suspension/recovery, replay handoff/release, provider account acceptance, and rollback before `staging-approved`. |
 | Payment evidence | Helius | candidate | Devnet/staging webhook, scoped watched addresses/references, signature/replay validation, confirmed payment fixture. |
 | Onramp/funding | Embedded-wallet funding UI | candidate | User-controlled wallet funding, provider KYC handled by provider, no entitlement on funding completion. |
 | Subscriptions/allowances | Canonical Solana Subscription Delegation Program recurring delegation, `@solana/subscriptions` `0.5.0` + `@solana/kit` `7.1.0` exact-pinned | candidate, `CODE_COMPLETE_PROVIDER_BLOCKED` | Code owns server-derived one-click setup, finalized on-chain account/transaction verification, exact direct creator/platform `transferRecurring` collection, reconciliation, first-payment activation, cancellation, creator offers, ops, and fail-closed provider config. Devnet/staging must still prove real embedded/external wallet setup, first collection, renewal, revoke, insufficient funds/grace/recovery, responsive UX, collector rotation, and rollback through `pnpm proof:subscriptions` before staging approval. |
-| Commerce interoperability | `@solana-commerce/solana-pay` `0.1.1` | candidate; `CODE_COMPLETE_PROVIDER_BLOCKED` in Slice 06 | Exact pin, narrow codec, known-defect compatibility tests, unsafe-link rejection, API build/import proof, and exact multi-recipient backend verifier are code-complete. Staging must prove real devnet external/embedded-wallet deep link and QR behavior, mobile return behavior, package/account acceptance, security review, and rollback before `staging-approved`. |
+| Solana Pay interoperability | `@solana/pay` `1.0.26` plus Node `qrcode` `1.5.4` in the isolated Kit 6 codec package | candidate; `CODE_COMPLETE_PROVIDER_BLOCKED` in Slice 06 | Exact pins, narrow transaction-request codec, unsafe-link rejection, SVG QR proof, API build/import proof, and exact multi-recipient backend verifier are code-complete. Staging must prove real devnet external/embedded-wallet deep link and QR behavior, mobile return behavior, security review, and rollback before `staging-approved`. Commerce Kit is `replaced`. |
 
 No provider can be treated as launch-approved until its staging smoke, security review, account/terms review, and fallback/rollback notes are documented.
 
@@ -115,10 +130,10 @@ Before implementation, verify the latest official docs for each provider/API. Th
 | Supabase RLS | `https://supabase.com/docs/guides/database/postgres/row-level-security` |
 | Supabase Realtime | `https://supabase.com/docs/guides/realtime` |
 | Solana Pay | `https://docs.solanapay.com/` |
-| Solana Pay transaction requests | `https://solana.com/docs/tools/solana-pay/quickstart/transaction-requests` |
-| Solana Commerce Kit overview | `https://solana.com/docs/tools/commerce-kit` |
-| Solana Commerce Kit source | `https://github.com/solana-foundation/commerce-kit` |
-| Commerce Kit Solana Pay package | `https://github.com/solana-foundation/commerce-kit/tree/main/packages/solana-pay` |
+| Solana Pay transaction-request specification | `https://docs.solanapay.com/spec` |
+| Solana Pay current quickstart | `https://solana.com/docs/payments/quickstart` |
+| Solana Pay package source | `https://github.com/solana-foundation/pay` |
+| Retired Commerce Kit notice | `https://solana.com/docs/tools/commerce-kit/quickstart/payment-button` |
 | Solana Subscriptions overview | `https://solana.com/docs/payments/subscriptions/overview` |
 | Solana Subscriptions fixed delegation | `https://solana.com/docs/payments/subscriptions/fixed-delegation` |
 | Solana Subscriptions recurring delegation | `https://solana.com/docs/payments/subscriptions/recurring-delegation` |
@@ -126,6 +141,7 @@ Before implementation, verify the latest official docs for each provider/API. Th
 | Helius webhooks | `https://www.helius.dev/docs/webhooks` |
 | Bunny Stream auth/security | `https://docs.bunny.net/stream/authentication`, `https://docs.bunny.net/stream/security` |
 | Bunny TUS uploads | `https://docs.bunny.net/stream/tus-resumable-uploads` |
+| Bunny Stream current player and signed embeds | `https://docs.bunny.net/stream/player`, `https://docs.bunny.net/stream/embedding`, `https://docs.bunny.net/stream/token-authentication` |
 | Bunny edge/API protection | `https://docs.bunny.net/shield/overview` |
 | Livepeer JWT access | `https://docs.livepeer.org/developers/guides/access-control-jwt` |
 | Livepeer React Player | `https://docs.livepeer.org/sdks/react/migration/3.x/Player` |
@@ -333,8 +349,8 @@ This ADR does not replace the implementation-specific Bunny/Livepeer playback de
 
 Recommended default:
 
-- Bunny VOD: backend-issued signed/tokenized playback is mandatory for full locked content; public or short-lived safe teaser playback is allowed.
-- Livepeer: JWT playback policy is mandatory from day one for paid/pass-gated streams and paid replay assets.
+- Bunny VOD: backend-issued signed/tokenized playback is mandatory for full locked content; public or short-lived safe teaser playback is allowed. The current `player.mediadelivery.net/embed` player is the supported embed boundary; the deprecated legacy iframe hostname is prohibited. An allowance-backed signed embed must not outlive its persisted server reservation.
+- Livepeer: JWT playback policy is mandatory from day one for paid/pass-gated streams and paid replay assets. An allowance-backed JWT duration must not outlive its persisted server reservation and issuance fails closed when no whole lease second remains.
 - Frontend should use official provider players/components where they fit the UX, then wrap them in Veel UI primitives. Do not build custom playback engines.
 
 Token/lifetime defaults must be configurable by environment and admin policy. Admin can override env defaults for product policy without code deployment; environment remains the safe fallback when admin config is missing.

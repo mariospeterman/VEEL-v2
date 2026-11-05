@@ -20,11 +20,15 @@ import {
   createPostgresOrganizationRepository,
   organizationDashboardCursorScope
 } from "../src/modules/organization/organization-repository.js";
-import { decodeTimestampIdCursor } from "../src/shared/keyset-pagination.js";
+import {
+  bindCursorScope,
+  decodeTimestampIdCursor
+} from "../src/shared/keyset-pagination.js";
 import type { PostgresSql } from "../src/shared/postgres.js";
 
 const tiedAt = new Date("2026-11-04T12:30:00.000Z");
 const ids = [uuidFor(3), uuidFor(2), uuidFor(1)];
+const actorId = uuidFor(100);
 
 describe("remaining compound pagination authorities", () => {
   it("uses the last visible comment and matches its timestamp/id ORDER BY", async () => {
@@ -36,7 +40,7 @@ describe("remaining compound pagination authorities", () => {
     const repository = createEngagementCommentRepositoryMethods(sql);
 
     const page = await repository.listComments({
-      supabaseUserId: uuidFor(100),
+      supabaseUserId: actorId,
       contentId: uuidFor(101),
       limit: 2
     });
@@ -44,7 +48,7 @@ describe("remaining compound pagination authorities", () => {
     expect(query).toContain("(c.created_at, c.id) <");
     expect(query).toContain("order by c.created_at desc, c.id desc");
     expect(page.items.map((item) => item.id)).toEqual(ids.slice(0, 2));
-    expect(cursorId(engagementCommentsCursorScope, page.nextCursor)).toBe(ids[1]);
+    expect(cursorId(engagementCommentsCursorScope(actorId, uuidFor(101)), page.nextCursor)).toBe(ids[1]);
   });
 
   it("uses the last visible notification and matches its timestamp/id ORDER BY", async () => {
@@ -56,14 +60,17 @@ describe("remaining compound pagination authorities", () => {
     const repository = createPostgresNotificationRepository(sql);
 
     const page = await repository.listNotifications({
-      supabaseUserId: uuidFor(100),
+      supabaseUserId: actorId,
       limit: 2
     });
 
     expect(query).toContain("(n.created_at, n.id) <");
     expect(query).toContain("order by n.created_at desc, n.id desc");
     expect(page.items.map((item) => item.id)).toEqual(ids.slice(0, 2));
-    expect(cursorId(notificationCursorScope, page.nextCursor)).toBe(ids[1]);
+    expect(cursorId(bindCursorScope(notificationCursorScope, {
+      actor: actorId,
+      sort: "created_at:desc,id:desc"
+    }), page.nextCursor)).toBe(ids[1]);
   });
 
   it("uses the last visible Event Access pass and matches its timestamp/id ORDER BY", async () => {
@@ -78,14 +85,17 @@ describe("remaining compound pagination authorities", () => {
     );
 
     const page = await repository.listAccessPasses({
-      supabaseUserId: uuidFor(100),
+      supabaseUserId: actorId,
       limit: 2
     });
 
     expect(query).toContain("(te.created_at, te.id) <");
     expect(query).toContain("order by te.created_at desc, te.id desc");
     expect(page.items.map((item) => item.id)).toEqual(ids.slice(0, 2));
-    expect(cursorId(eventAccessPassCursorScope, page.nextCursor)).toBe(ids[1]);
+    expect(cursorId(bindCursorScope(eventAccessPassCursorScope, {
+      actor: actorId,
+      sort: "created_at:desc,id:desc"
+    }), page.nextCursor)).toBe(ids[1]);
   });
 
   it("uses the last visible organization and matches its timestamp/id ORDER BY", async () => {
@@ -97,14 +107,18 @@ describe("remaining compound pagination authorities", () => {
     const repository = createPostgresOrganizationRepository(sql);
 
     const page = await repository.listMyDashboards({
-      supabaseUserId: uuidFor(100),
+      supabaseUserId: actorId,
       limit: 2
     });
 
     expect(query).toContain("(o.created_at, o.id) <");
     expect(query).toContain("order by o.created_at desc, o.id desc");
     expect(page.items.map((item) => item.organization.organizationId)).toEqual(ids.slice(0, 2));
-    expect(cursorId(organizationDashboardCursorScope, page.nextCursor)).toBe(ids[1]);
+    expect(cursorId(bindCursorScope(organizationDashboardCursorScope, {
+      actor: actorId,
+      membership_states: "active,invited",
+      sort: "created_at:desc,id:desc"
+    }), page.nextCursor)).toBe(ids[1]);
   });
 
   it("uses the last visible content and Mutual row for both Mutuals lists", async () => {
@@ -120,11 +134,11 @@ describe("remaining compound pagination authorities", () => {
     const repository = createPostgresMutualsRepository(sql);
 
     const feed = await repository.listFeed({
-      supabaseUserId: uuidFor(100),
+      supabaseUserId: actorId,
       limit: 2
     });
     const mutuals = await repository.listMutuals({
-      supabaseUserId: uuidFor(100),
+      supabaseUserId: actorId,
       limit: 2
     });
 
@@ -134,8 +148,14 @@ describe("remaining compound pagination authorities", () => {
     expect(queries[1]).toContain("order by created_at desc, id desc");
     expect(feed?.items.map((item) => item.contentId)).toEqual(ids.slice(0, 2));
     expect(mutuals.items.map((item) => item.id)).toEqual(ids.slice(0, 2));
-    expect(cursorId(mutualsFeedCursorScope, feed?.nextCursor ?? null)).toBe(ids[1]);
-    expect(cursorId(mutualsListCursorScope, mutuals.nextCursor)).toBe(ids[1]);
+    expect(cursorId(bindCursorScope(mutualsFeedCursorScope, {
+      actor: actorId,
+      sort: "created_at:desc,content_id:desc"
+    }), feed?.nextCursor ?? null)).toBe(ids[1]);
+    expect(cursorId(bindCursorScope(mutualsListCursorScope, {
+      actor: actorId,
+      sort: "created_at:desc,id:desc"
+    }), mutuals.nextCursor)).toBe(ids[1]);
   });
 });
 

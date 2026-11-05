@@ -58,7 +58,11 @@ export default async function LiveRoomPage({
 function LiveStage({ room }: { room: LiveRoom }) {
   return (
     <section className="media-pane relative overflow-hidden rounded border border-(--line) bg-[#0f1217]">
-      <ProviderPlayback playback={room.playback} title={`${room.title} live playback`} />
+      <ProviderPlayback
+        playback={room.playback}
+        resourceKey={`live-room:${room.id}`}
+        title={`${room.title} live playback`}
+      />
       <div className="absolute left-4 top-4 flex items-center gap-2">
         <span className="rounded bg-[#fee2e2] px-2 py-1 text-xs font-semibold uppercase text-[#991b1b]">
           {roomStateLabel(room.state)}

@@ -19,7 +19,6 @@ export function createProfileMutationRepositoryMethods(
   return {
     async upsertMyProfile(userId, input) {
       const hasDisplayName = Object.hasOwn(input, "displayName");
-      const hasAvatarUrl = Object.hasOwn(input, "avatarUrl");
       const hasBio = Object.hasOwn(input, "bio");
       const hasLinks = Object.hasOwn(input, "links");
       const hasLocationLabel = Object.hasOwn(input, "locationLabel");
@@ -48,7 +47,6 @@ export function createProfileMutationRepositoryMethods(
                   user_id,
                   handle,
                   display_name,
-                  avatar_url,
                   bio,
                   profile_links,
                   location_label,
@@ -58,7 +56,6 @@ export function createProfileMutationRepositoryMethods(
                   id,
                   ${input.handle.toLowerCase()},
                   ${input.displayName ?? input.handle},
-                  ${input.avatarUrl ?? null},
                   ${input.bio ?? null},
                   ${transaction.json(input.links ?? [])},
                   ${input.locationLabel ?? null},
@@ -67,7 +64,6 @@ export function createProfileMutationRepositoryMethods(
                 on conflict (user_id) do update set
                   handle = excluded.handle,
                   display_name = case when ${hasDisplayName} then ${input.displayName ?? input.handle} else profiles.display_name end,
-                  avatar_url = case when ${hasAvatarUrl} then ${input.avatarUrl ?? null} else profiles.avatar_url end,
                   bio = case when ${hasBio} then ${input.bio ?? null} else profiles.bio end,
                   profile_links = case when ${hasLinks} then ${transaction.json(input.links ?? [])} else profiles.profile_links end,
                   location_label = case when ${hasLocationLabel} then ${input.locationLabel ?? null} else profiles.location_label end,

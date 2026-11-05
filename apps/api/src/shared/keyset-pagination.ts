@@ -1,4 +1,10 @@
-const cursorVersion = 1;
+import { createHash } from "node:crypto";
+import {
+  cursorTimestamp,
+  isCanonicalCursorTimestamp
+} from "./database-timestamp.js";
+
+const cursorVersion = 2;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface CursorPayload {
@@ -26,6 +32,36 @@ export class KeysetPaginationCursorError extends Error {
     super("The pagination cursor is invalid for this collection");
     this.name = "KeysetPaginationCursorError";
   }
+}
+
+type CursorScopeValue = string | number | boolean | null | undefined;
+
+/**
+ * Bind an opaque cursor to its route, actor/tenant, normalized filters, and
+ * sort contract without exposing those values in the cursor payload.
+ */
+export function bindCursorScope(
+  route: string,
+  context: Readonly<Record<string, CursorScopeValue>>
+): string {
+  if (!route || route.length > 120) throw new KeysetPaginationCursorError();
+  const entries = Object.entries(context)
+    .filter((entry): entry is [string, Exclude<CursorScopeValue, undefined>] =>
+      entry[1] !== undefined
+    )
+    .sort(([left], [right]) => left.localeCompare(right));
+  if (entries.some(([key, value]) =>
+    !/^[a-z][a-z0-9_]{0,63}$/.test(key) ||
+    (typeof value === "number" && !Number.isFinite(value))
+  )) {
+    throw new KeysetPaginationCursorError();
+  }
+
+  const digest = createHash("sha256")
+    .update(JSON.stringify(entries))
+    .digest("base64url")
+    .slice(0, 22);
+  return `${route}#${digest}`;
 }
 
 export function keysetPage<Row, Item>(
@@ -67,12 +103,8 @@ export function decodeTimestampIdCursor(
   if (!cursor) return { timestamp: null, id: null };
 
   const payload = decodeCursorPayload(scope, cursor);
-  if (payload) {
-    if (payload.k !== undefined) throw new KeysetPaginationCursorError();
-    return { timestamp: payload.t, id: payload.i };
-  }
-
-  return legacyTimestampCursor(cursor);
+  if (payload.k !== undefined) throw new KeysetPaginationCursorError();
+  return { timestamp: payload.t, id: payload.i };
 }
 
 export function encodeTimestampKindIdCursor(
@@ -99,14 +131,10 @@ export function decodeTimestampKindIdCursor(
   if (!cursor) return { timestamp: null, kind: null, id: null };
 
   const payload = decodeCursorPayload(scope, cursor);
-  if (payload) {
-    if (!payload.k || !allowedKinds.includes(payload.k)) {
-      throw new KeysetPaginationCursorError();
-    }
-    return { timestamp: payload.t, kind: payload.k, id: payload.i };
+  if (!payload.k || !allowedKinds.includes(payload.k)) {
+    throw new KeysetPaginationCursorError();
   }
-
-  return { ...legacyTimestampCursor(cursor), kind: null };
+  return { timestamp: payload.t, kind: payload.k, id: payload.i };
 }
 
 function encodeCursor(payload: CursorPayload): string {
@@ -116,9 +144,9 @@ function encodeCursor(payload: CursorPayload): string {
   return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
 }
 
-function decodeCursorPayload(scope: string, cursor: string): CursorPayload | null {
+function decodeCursorPayload(scope: string, cursor: string): CursorPayload {
   if (cursor.length < 1 || cursor.length > 512) throw new KeysetPaginationCursorError();
-  if (!/^[A-Za-z0-9_-]+$/.test(cursor)) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(cursor)) throw new KeysetPaginationCursorError();
 
   let decoded: unknown;
   try {
@@ -153,24 +181,16 @@ function decodeCursorPayload(scope: string, cursor: string): CursorPayload | nul
   return payload as CursorPayload;
 }
 
-function legacyTimestampCursor(cursor: string): TimestampIdCursor {
+function canonicalTimestamp(value: Date | string): string {
   try {
-    return { timestamp: canonicalTimestamp(cursor), id: null };
+    return cursorTimestamp(value);
   } catch {
     throw new KeysetPaginationCursorError();
   }
 }
 
-function canonicalTimestamp(value: Date | string): string {
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) throw new KeysetPaginationCursorError();
-  return parsed.toISOString();
-}
-
 function isCanonicalTimestamp(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  const parsed = new Date(value);
-  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
+  return isCanonicalCursorTimestamp(value);
 }
 
 function validKind(value: unknown): value is string {

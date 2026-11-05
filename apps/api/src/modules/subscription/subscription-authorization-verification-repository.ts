@@ -17,6 +17,8 @@ export async function findAuthorizationVerificationContext(
     {
       authorization_intent_id: string;
       setup_reference: string;
+      submitted_signature: string | null;
+      submitted_at: Date | null;
       collector_address: string | null;
       subscriber_wallet: string | null;
       authority_address: string | null;
@@ -41,6 +43,8 @@ export async function findAuthorizationVerificationContext(
     select
       sai.id as authorization_intent_id,
       sai.setup_reference,
+      sai.submitted_signature,
+      sai.submitted_at,
       s.collector_address,
       s.subscriber_wallet,
       sai.authority_address,
@@ -75,6 +79,8 @@ export async function findAuthorizationVerificationContext(
     ? {
         authorizationIntentId: row.authorization_intent_id,
         setupReference: row.setup_reference,
+        submittedSignature: row.submitted_signature,
+        submittedAt: row.submitted_at,
         delegationProgramId: input.delegationProgramId,
         collectorAddress: row.collector_address,
         subscriberWallet: row.subscriber_wallet,
@@ -84,7 +90,7 @@ export async function findAuthorizationVerificationContext(
         tokenMint: row.token_mint,
         tokenProgram: row.token_program,
         amountMinor: Number(row.amount_minor),
-        amountAtomic: Number(row.amount_atomic),
+        amountAtomic: String(row.amount_atomic),
         periodDays: row.period_days,
         periodSeconds: row.period_seconds,
         delegationNonce: Number(row.delegation_nonce),
@@ -163,7 +169,7 @@ export async function submitAuthorization(
       update subscription_authorization_intents sai
       set
         state = case when ${input.verification.verified} then 'verified' else 'submitted' end,
-        submitted_signature = ${input.body.signature},
+        submitted_signature = coalesce(sai.submitted_signature, ${input.body.signature}),
         verified_signature = case when ${input.verification.verified} then ${input.body.signature} else sai.verified_signature end,
         failure_reason = case when ${input.verification.verified} then null else ${input.verification.failureCode ?? null}::text end,
         submitted_at = coalesce(sai.submitted_at, now()),
@@ -175,6 +181,7 @@ export async function submitAuthorization(
         and sai.subscription_id = s.id
         and s.subscriber_user_id = ${actor.id}
         and sai.state in ('created', 'submitted')
+        and (sai.submitted_signature is null or sai.submitted_signature = ${input.body.signature})
       returning
         s.id,
         s.created_at,
@@ -217,7 +224,11 @@ export async function submitAuthorization(
         return null;
       }
 
-      await activateSubscriptionAfterVerification(transaction, row, input);
+      const canonicalApplied = await applyAuthorizationVerificationToSubscription(transaction, {
+        subscriptionId: row.id,
+        signature: input.body.signature,
+        verification: input.verification
+      });
       const subscription = await findSubscriptionById(transaction, {
         supabaseUserId: input.supabaseUserId,
         subscriptionId: row.id
@@ -231,7 +242,9 @@ export async function submitAuthorization(
           : "subscription.authorization_submitted",
         authorizationIntentId: row.authorization_intent_id,
         metadata: {
-          failureCode: input.verification.failureCode ?? null
+          failureCode: input.verification.failureCode ?? null,
+          retryable: input.verification.retryable ?? false,
+          canonicalApplied
         }
       });
 
@@ -240,39 +253,49 @@ export async function submitAuthorization(
   );
 }
 
-async function activateSubscriptionAfterVerification(
+export async function applyAuthorizationVerificationToSubscription(
   transaction: postgres.TransactionSql,
-  row: SubscriptionRow & {
-    plan_period_days: number;
-    plan_amount_minor: string | number;
-    plan_amount_atomic: string | number;
-    plan_creator_amount_atomic: string | number;
-    plan_platform_fee_amount_atomic: string | number;
-    plan_allocation_amount_atomic: string | number;
-    plan_currency: SubscriptionPlan["currency"];
-  },
-  input: Parameters<SubscriptionRepository["submitAuthorization"]>[0]
-) {
-  await transaction`
+  input: {
+    subscriptionId: string;
+    signature: string;
+    verification: Parameters<SubscriptionRepository["submitAuthorization"]>[0]["verification"];
+  }
+): Promise<boolean> {
+  const rows = await transaction<{ id: string }[]>`
     update subscriptions s
     set
-      authority_address = ${input.verification.facts?.authorityAddress ?? null},
-      delegation_address = ${input.verification.facts?.delegationAddress ?? null},
-      subscriber_token_account = ${input.verification.facts?.subscriberTokenAccount ?? null},
-      user_token_account = ${input.verification.facts?.subscriberTokenAccount ?? null},
-      subscription_authority_pda = ${input.verification.facts?.authorityAddress ?? null},
-      subscription_pda = coalesce(s.subscription_pda, ${input.verification.facts?.delegationAddress ?? null}::text),
-      plan_pda = coalesce(s.plan_pda, ${input.verification.facts?.planPda ?? null}::text),
-      setup_signature = ${input.body.signature},
-      verified_signature = case when ${input.verification.verified} then ${input.body.signature} else s.verified_signature end,
+      authority_address = case when ${input.verification.verified} then ${input.verification.facts?.authorityAddress ?? null}::text else s.authority_address end,
+      delegation_address = case when ${input.verification.verified} then ${input.verification.facts?.delegationAddress ?? null}::text else s.delegation_address end,
+      subscriber_token_account = case when ${input.verification.verified} then ${input.verification.facts?.subscriberTokenAccount ?? null}::text else s.subscriber_token_account end,
+      user_token_account = case when ${input.verification.verified} then ${input.verification.facts?.subscriberTokenAccount ?? null}::text else s.user_token_account end,
+      subscription_authority_pda = case when ${input.verification.verified} then ${input.verification.facts?.authorityAddress ?? null}::text else s.subscription_authority_pda end,
+      subscription_pda = case when ${input.verification.verified} then coalesce(s.subscription_pda, ${input.verification.facts?.delegationAddress ?? null}::text) else s.subscription_pda end,
+      plan_pda = case when ${input.verification.verified} then coalesce(s.plan_pda, ${input.verification.facts?.planPda ?? null}::text) else s.plan_pda end,
+      setup_signature = coalesce(s.setup_signature, ${input.signature}),
+      verified_signature = case when ${input.verification.verified} then ${input.signature} else s.verified_signature end,
       verified_at = case when ${input.verification.verified} then now() else s.verified_at end,
       failure_reason = case when ${input.verification.verified} then null else ${input.verification.failureCode ?? null}::text end,
       delegation_expires_at = case when ${input.verification.verified} then ${input.verification.facts?.delegationExpiresAt ?? null}::timestamptz else s.delegation_expires_at end,
-      state = case when ${input.verification.verified} then 'renewal_pending' else s.state end,
+      state = case
+        when ${input.verification.verified} then 'renewal_pending'
+        when not ${input.verification.retryable ?? false} then 'suspended'
+        else s.state
+      end,
       current_period_starts_at = case when ${input.verification.verified} then null else s.current_period_starts_at end,
       current_period_ends_at = case when ${input.verification.verified} then null else s.current_period_ends_at end,
-      next_collection_at = case when ${input.verification.verified} then now() else s.next_collection_at end,
+      next_collection_at = case
+        when ${input.verification.verified} then now()
+        when not ${input.verification.retryable ?? false} then null
+        else s.next_collection_at
+      end,
       updated_at = now()
-    where s.id = ${row.id}
+    where s.id = ${input.subscriptionId}
+      and s.state = 'authorization_pending'
+      and s.cancel_at_period_end = false
+      and s.cancelled_at is null
+      and s.revoked_at is null
+      and (s.setup_signature is null or s.setup_signature = ${input.signature})
+    returning s.id
   `;
+  return rows.length > 0;
 }

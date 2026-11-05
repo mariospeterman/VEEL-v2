@@ -203,7 +203,7 @@ export function ContentEngagementPanel({
     }
   }
 
-  async function shareToConversation() {
+  function openConversationDraft() {
     if (!conversationId) return;
     window.location.assign(
       `/app/messages?conversation=${encodeURIComponent(conversationId)}&share=${encodeURIComponent(contentId)}`
@@ -318,12 +318,13 @@ export function ContentEngagementPanel({
           </div>
           {conversations && conversations.length > 0 ? (
             <div className="grid gap-2">
-              <label className="text-sm font-semibold" htmlFor={`share-conversation-${contentId}`}>Send in Messages</label>
+              <label className="text-sm font-semibold" htmlFor={`share-conversation-${contentId}`}>Share in Messages</label>
               <select className="min-h-11 rounded border border-(--line) bg-(--background) px-3" id={`share-conversation-${contentId}`} onChange={(event) => setConversationId(event.target.value)} value={conversationId}>
                 <option value="">Choose a conversation</option>
                 {conversations.map((conversation) => <option key={conversation.id} value={conversation.id}>{conversation.title}</option>)}
               </select>
-              <button className="primary-button" disabled={busy || !conversationId} onClick={() => void shareToConversation()} type="button">Send post</button>
+              <p className="text-xs leading-5 text-(--muted)">This opens a message draft. Review it and select Send in Messages to deliver the post.</p>
+              <button className="primary-button" disabled={busy || !conversationId} onClick={openConversationDraft} type="button">Open message draft</button>
             </div>
           ) : <a className="text-sm font-semibold underline" href="/app/messages">Open Messages to start a conversation</a>}
         </div>

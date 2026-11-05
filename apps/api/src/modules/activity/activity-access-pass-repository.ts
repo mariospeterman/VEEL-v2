@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor,
   keysetPage
@@ -10,7 +11,11 @@ import type { ListActivityInput } from "./types.js";
 const accessPassCursorScope = "GET /v1/activity/access-passes";
 
 export async function listAccessPasses(sql: postgres.Sql, input: ListActivityInput) {
-  const cursor = decodeTimestampIdCursor(accessPassCursorScope, input.cursor);
+  const cursorScope = bindCursorScope(accessPassCursorScope, {
+    actor: input.supabaseUserId,
+    sort: "created_at:desc,id:desc"
+  });
+  const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
   const rows = await sql<AccessPassRow[]>`
     with target_user as (
       select id
@@ -46,6 +51,6 @@ export async function listAccessPasses(sql: postgres.Sql, input: ListActivityInp
   `;
 
   return keysetPage(rows, input.limit, toAccessPass, (row) =>
-    encodeTimestampIdCursor(accessPassCursorScope, row.created_at, row.id)
+    encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
   );
 }

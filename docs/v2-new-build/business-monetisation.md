@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: business model, monetisation, noncustodial money movement
-Last updated: 2026-08-15
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
@@ -259,13 +259,14 @@ Only free public long-form VOD and public live viewing consumes the platform all
 
 The canonical accounting path is server-owned:
 
-1. The backend decides whether a requested content item or live room qualifies before it issues full playback.
-2. The browser starts one idempotent playback session only after provider playback starts.
-3. Visible, actively playing time is reported in ordered, idempotent heartbeats of at most 30 seconds.
-4. PostgreSQL serializes the current usage window, caps credited time by server-observed elapsed time and remaining allowance, and records the session, heartbeat, and usage update atomically.
-5. Exhaustion blocks only otherwise-free public VOD/live playback. Paid, membership, event, preview, Bits, promotional, and owner playback remain governed by their normal entitlement/access policies.
+1. The backend decides whether a requested content item or live room qualifies. A bounded tier returns playback blocked with an explicit lease-required context; it does not mint a signed provider resource on that read.
+2. An explicit user start sends one idempotent playback-session command. Browsing, preloading, and repeated content/live reads never debit allowance.
+3. PostgreSQL serializes the current usage window and atomically reserves the smaller of 15 minutes, the remaining allowance, and the seconds remaining in that accounting window. The session lease lasts exactly that reservation, including a final partial chunk.
+4. Only after the reservation commits may the backend mint Bunny or Livepeer playback. The provider capability expiry is capped to the allowance lease, so a bearer URL or JWT cannot outlive the backend authority that paid for it.
+5. Visible, actively playing time is reported in ordered, idempotent heartbeats of at most 30 seconds for analytics. Heartbeats do not debit a reserved session again and cannot extend its lease; unused reserved seconds are not refunded from browser claims.
+6. Exhaustion blocks only otherwise-free public VOD/live playback after the last active lease expires. Paid, membership, event, preview, Bits, promotional, owner, and unlimited-tier playback remain governed by their normal entitlement/access policies and do not reserve allowance.
 
-Bunny iframe state is observed through the official [Bunny Stream Player.js playback API](https://docs.bunny.net/stream/playback-api). Livepeer playback uses the official [`@livepeer/react` player](https://docs.livepeer.org/sdks/react/Player) and native media lifecycle events. Client events initiate usage reports but never own allowance truth.
+Bunny iframe state is observed through the official [Bunny Stream Player.js playback API](https://docs.bunny.net/stream/playback-api). Livepeer playback uses the official [`@livepeer/react` player](https://docs.livepeer.org/sdks/react/Player) and native media lifecycle events. Client events initiate the explicit lease command and analytics reports but never own allowance truth.
 
 Tier rules:
 
@@ -303,7 +304,7 @@ The minimum new domain concepts are Product Offer, content/profile/live attachme
 
 Commerce activation is independently policy-gated. Seller/trader identity, lawful seller disclosures, shipping/return policy, prohibited-product screening, product safety/traceability, recall handling, jurisdiction, tax readiness, and EU DSA/GPSR obligations require legal and operational approval. Noncustodial direct settlement does not remove marketplace responsibilities. Launch, when approved, begins with lawful low-risk creator merchandise.
 
-Profile-native UX is canonical: content is the advertisement, the creator profile is the storefront, the wallet is the payment account, selected Commerce Kit primitives are invisible payment interoperability, and WeVid owns the social experience and business rules. A Product Offer may attach to a profile, Post, Bit, or live stream, with at most one explicit contextual `View product` or `Buy product` action. Products do not enter the five primary navigation items, open checkout automatically, alter feed ranking, or grant access to people.
+Profile-native UX is canonical: content is the advertisement, the creator profile is the storefront, the wallet is the payment account, the isolated Solana Pay codec is invisible transaction-request/QR interoperability, and WeVid owns the social experience and business rules. A Product Offer may attach to a profile, Post, Bit, or live stream, with at most one explicit contextual `View product` or `Buy product` action. Products do not enter the five primary navigation items, open checkout automatically, alter feed ordering, or grant access to people.
 
 ## Subscription State Machine
 

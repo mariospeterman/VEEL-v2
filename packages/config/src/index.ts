@@ -166,13 +166,8 @@ const serverEnvObjectSchema = z.object({
     .enum(["disabled_fail_closed", "shadow", "enforced", "launch_approved"])
     .default("disabled_fail_closed"),
   AGE_VERIFICATION_DRIVER: z
-    .preprocess(emptyToUndefined, z.enum(["didit", "yoti_digital_id", "yoti", "sumsub", "veriff", "persona"]).optional()),
+    .preprocess(emptyToUndefined, z.enum(["didit", "yoti", "sumsub", "veriff", "persona"]).optional()),
   AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: booleanSchema(false),
-  AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: booleanSchema(true),
-  AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: booleanSchema(true),
-  AGE_VERIFICATION_REUSABLE_PROVIDERS: z.string().default("yoti_digital_id"),
-  AGE_VERIFICATION_FALLBACK_PROVIDERS: z.string().default("didit_adaptive_age,persona_document"),
-  AGE_VERIFICATION_FALLBACK_ORDER: z.string().default("reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document"),
   AGE_VERIFICATION_REVERIFY_MODE: z.enum(["risk_or_expiry", "fixed_interval"]).default("risk_or_expiry"),
   AGE_VERIFICATION_REVERIFY_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
   SUMSUB_APP_TOKEN: optionalStringSchema,

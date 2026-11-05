@@ -26,7 +26,7 @@ export interface RegisterEngagementRoutesOptions {
   engagementRepository: EngagementRepository;
 }
 
-const feedModes = new Set(["recommended", "following"]);
+const feedModes = new Set(["latest", "following"]);
 const nsfwPreferences = new Set(["both", "nsfw", "sfw"]);
 const shareModes = new Set(["internal_message", "external_referral_link", "copy_link"]);
 const shareTargetTypes = new Set(["content", "profile", "event"]);

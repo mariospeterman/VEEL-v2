@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  bindCursorScope,
   decodeTimestampKindIdCursor,
   encodeTimestampKindIdCursor,
   keysetPage
@@ -131,8 +132,12 @@ export function createPostgresReferralRepository(database?: string | PostgresSql
       };
     },
     async listActivity(input) {
+      const cursorScope = bindCursorScope(referralActivityCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,activity_type:desc,id:desc"
+      });
       const cursor = decodeTimestampKindIdCursor(
-        referralActivityCursorScope,
+        cursorScope,
         input.cursor,
         referralActivityKinds
       );
@@ -222,7 +227,7 @@ export function createPostgresReferralRepository(database?: string | PostgresSql
           ...(row.currency ? { currency: row.currency } : {})
         }),
         (row) => encodeTimestampKindIdCursor(
-          referralActivityCursorScope,
+          cursorScope,
           row.created_at,
           row.activity_type,
           row.id

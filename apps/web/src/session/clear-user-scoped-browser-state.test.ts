@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { legacyOfflineMessageQueueKey, offlineMessageQueuePrefix } from "../messages/offline-message-queue";
+import {
+  legacyOfflineMessageQueueKey,
+  legacyOfflineMessageQueuePrefix,
+  legacyOfflineMessageSessionKey,
+  offlineMessageQueuePrefix,
+  offlineMessageSessionKey
+} from "../messages/offline-message-queue";
 import { legacyRecentSearchKey, recentSearchKeyPrefix } from "../search/recent-searches";
 import { clearUserScopedBrowserState } from "./clear-user-scoped-browser-state";
 
@@ -8,11 +14,13 @@ describe("clearUserScopedBrowserState", () => {
     const localStorage = new MemoryStorage([
       [legacyOfflineMessageQueueKey, "legacy"],
       [legacyRecentSearchKey, "legacy search"],
-      [`${offlineMessageQueuePrefix}actor:browser:conversation`, "private message"]
+      [`${legacyOfflineMessageQueuePrefix}actor:browser:conversation`, "private v2 message"],
+      [`${offlineMessageQueuePrefix}actor:session:tab:conversation`, "private v3 message"]
     ]);
     const sessionStorage = new MemoryStorage([
       [`${recentSearchKeyPrefix}actor`, "private query"],
-      ["wevid:message-offline-session:v2", "session"]
+      [legacyOfflineMessageSessionKey, "legacy session"],
+      [offlineMessageSessionKey, "current session"]
     ]);
 
     clearUserScopedBrowserState(localStorage, sessionStorage);

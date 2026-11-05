@@ -257,8 +257,9 @@ export async function sendBoundedWebPushRequest(
 export function createPostgresNotificationDeliveryRepository(input: {
   databaseUrl?: string | undefined;
   encryptionKey?: string | undefined;
+  sql?: postgres.Sql | undefined;
 }): NotificationDeliveryRepository {
-  if (!input.databaseUrl) {
+  if (!input.databaseUrl && !input.sql) {
     return {
       async enqueueDueDeliveries() {
         return 0;
@@ -276,11 +277,12 @@ export function createPostgresNotificationDeliveryRepository(input: {
   }
 
   const encryptionKey = parseAes256GcmKey(input.encryptionKey);
-  const sql = postgres(input.databaseUrl, {
-    max: 3,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const ownsSql = !input.sql;
+  const sql = input.sql ?? postgres(input.databaseUrl as string, {
+      max: 3,
+      idle_timeout: 20,
+      prepare: false
+    });
 
   return {
     async enqueueDueDeliveries(input) {
@@ -532,6 +534,13 @@ export function createPostgresNotificationDeliveryRepository(input: {
         }
 
         if (input.outcome.state === "revoked") {
+          await transaction`
+            select id
+            from notification_devices
+            where id = ${input.deviceId}
+            limit 1
+            for update
+          `;
           const rows = await transaction<{ id: string }[]>`
             update notification_delivery_attempts
             set
@@ -580,7 +589,7 @@ export function createPostgresNotificationDeliveryRepository(input: {
     },
 
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsSql) await sql.end({ timeout: 5 });
     }
   };
 }

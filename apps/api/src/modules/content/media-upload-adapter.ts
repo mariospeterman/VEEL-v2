@@ -13,7 +13,7 @@ import type {
 
 const bunnyStreamBaseUrl = "https://video.bunnycdn.com";
 const bunnyTusUploadUrl = "https://video.bunnycdn.com/tusupload";
-const bunnyEmbedBaseUrl = "https://iframe.mediadelivery.net/embed";
+const bunnyEmbedBaseUrl = "https://player.mediadelivery.net/embed";
 const defaultUploadTtlSeconds = 24 * 60 * 60;
 const minimumUploadTtlSeconds = 60 * 60;
 
@@ -82,9 +82,9 @@ export function createBunnyStreamUploadAdapter(
       ? defaultUploadTtlSeconds
       : Math.max(minimumUploadTtlSeconds, Math.min(defaultUploadTtlSeconds, input.ttlSeconds));
     const expirationTime = Math.floor(Date.now() / 1000) + uploadTtlSeconds;
-    const signature = createHash("sha256")
-      .update(`${libraryId}${apiKey}${expirationTime}${input.providerAssetId}`)
-      .digest("hex");
+    // Bunny TUS mandates SHA-256 over this exact provider-authentication payload; this is not password storage.
+    // codeql[js/insufficient-password-hash]
+    const signature = createHash("sha256").update(`${libraryId}${apiKey}${expirationTime}${input.providerAssetId}`).digest("hex");
     return {
       provider: "bunny",
       providerAssetId: input.providerAssetId,
@@ -204,9 +204,16 @@ export function createBunnyStreamUploadAdapter(
         throw new MediaUploadProviderConfigurationError();
       }
 
-      const expires =
-        Math.floor((input.now?.getTime() ?? Date.now()) / 1000) +
+      const nowSeconds = Math.floor((input.now?.getTime() ?? Date.now()) / 1000);
+      const configuredExpires = nowSeconds +
         (env.BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS ?? 900);
+      const requestedExpires = input.expiresAt
+        ? Math.floor(input.expiresAt.getTime() / 1000)
+        : configuredExpires;
+      const expires = Math.min(configuredExpires, requestedExpires);
+      if (expires <= nowSeconds) {
+        throw new MediaUploadProviderError();
+      }
       const token = createHash("sha256")
         .update(`${tokenKey}${input.providerAssetId}${expires}`)
         .digest("hex");

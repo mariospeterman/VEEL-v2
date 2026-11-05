@@ -33,6 +33,7 @@ export default async function MessagesPage({
       <h1 className="mb-4 text-2xl font-semibold tracking-tight">Messages</h1>
       <MessagesWorkspace
         actorUserId={session?.user?.id ?? null}
+        clientSessionScope={session?.clientSessionScope ?? null}
         initialConversationId={selected?.id ?? null}
         initialConversations={conversations}
         initialMessages={messages}

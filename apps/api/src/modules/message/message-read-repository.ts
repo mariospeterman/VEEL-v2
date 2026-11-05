@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor
 } from "../../shared/keyset-pagination.js";
@@ -18,7 +19,11 @@ export async function listConversations(
   sql: postgres.ISql,
   input: ListConversationsInput
 ) {
-  const cursor = decodeTimestampIdCursor(conversationCursorScope, input.cursor);
+  const cursorScope = bindCursorScope(conversationCursorScope, {
+    actor: input.supabaseUserId,
+    sort: "sort_at:desc,id:desc"
+  });
+  const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
   const rows = await sql<ConversationRow[]>`
     with actor as (
       select id
@@ -98,7 +103,7 @@ export async function listConversations(
   return {
     items: pageRows.map(toConversation),
     nextCursor: lastVisible
-      ? encodeTimestampIdCursor(conversationCursorScope, lastVisible.sort_at, lastVisible.id)
+      ? encodeTimestampIdCursor(cursorScope, lastVisible.sort_at, lastVisible.id)
       : null
   };
 }
@@ -176,7 +181,11 @@ export async function listMessages(sql: postgres.Sql, input: PaginatedConversati
     return null;
   }
 
-  const cursorScope = `messages:conversation:${input.conversationId}`;
+  const cursorScope = bindCursorScope("messages:conversation", {
+    actor: input.supabaseUserId,
+    conversation: input.conversationId,
+    sort: "created_at:desc,id:desc"
+  });
   const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
   const rows = await sql<MessageRow[]>`
     ${messageSelectSql(sql, participantId)}

@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
+import type { CreatorDashboard, CreatorOnboarding } from "../../apps/web/src/api-client-types";
 
 const e2eToken = "veel-e2e-token";
 const e2eOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000").origin;
@@ -64,6 +65,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
 
   await page.goto("/app/studio");
   await expect(page.getByRole("heading", { name: "Studio", exact: true })).toBeVisible();
+  await expect(page.getByText("0.00000124 SOL", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your media" })).toBeVisible();
   await expect(page.getByText("Please confirm the music rights.")).toBeVisible();
   await expect(page.getByRole("region", { name: "Media provenance review" })).toBeVisible();
@@ -999,7 +1001,7 @@ function stringField(body: unknown, key: string) {
   return typeof value === "string" ? value : null;
 }
 
-function user() {
+function user(): CreatorDashboard["creator"] {
   return {
     id: "00000000-0000-4000-8000-000000000010",
     handle: "ariamoon",
@@ -1015,6 +1017,7 @@ function user() {
 function sessionState() {
   return {
     authenticated: true,
+    clientSessionScope: "s".repeat(43),
     appAccessState: { allowed: true, reason: "ready" },
     user: user()
   };
@@ -1071,7 +1074,7 @@ function paymentActivityItem() {
   };
 }
 
-function creatorDashboard() {
+function creatorDashboard(): CreatorDashboard {
   return {
     creator: user(),
     readiness: {
@@ -1087,10 +1090,13 @@ function creatorDashboard() {
       blockedReasons: []
     },
     earnings: {
-      currency: "SOL",
-      creatorEarningsMinor: 1240,
-      platformFeesMinor: 120,
-      referralCommissionsMinor: 35,
+      assets: [{
+        currency: "SOL",
+        creatorEarningsAtomic: "1240",
+        platformFeesAtomic: "120",
+        referralCommissionsAtomic: "35",
+        confirmedPaymentCount: 18
+      }],
       confirmedPaymentCount: 18
     },
     products: [
@@ -1098,8 +1104,11 @@ function creatorDashboard() {
         productType: "content_unlock",
         enabled: true,
         confirmedPaymentCount: 12,
-        amountMinor: 25,
-        currency: "SOL"
+        assets: [{
+          currency: "SOL",
+          amountAtomic: "25",
+          confirmedPaymentCount: 12
+        }]
       }
     ],
     recentActivity: []
@@ -1144,7 +1153,7 @@ function olderCreatorMediaItem() {
   };
 }
 
-function creatorOnboarding() {
+function creatorOnboarding(): CreatorOnboarding {
   return {
     state: "ready",
     canStartEarning: true,
@@ -1158,7 +1167,8 @@ function creatorOnboarding() {
         support: true,
         contentUnlocks: true,
         eventAccessAndLive: false,
-        paidMessages: true
+        paidMessages: true,
+        memberships: false
       }
     },
     steps: [

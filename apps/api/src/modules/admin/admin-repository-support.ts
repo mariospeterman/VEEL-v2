@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import {
   executeWithMutationCommandReceipt,
   resolveMutationActorBySupabaseUserId
@@ -21,7 +22,9 @@ export function createSupportRepository(
 ): Pick<AdminRepository, "listSupportCases" | "updateSupportCase" | "listSupportPolicies" | "updateSupportPolicy"> {
   return {
     async listSupportCases(input) {
-      const cursorScope = "GET /v1/admin/support/cases";
+      const cursorScope = bindCursorScope("GET /v1/admin/support/cases", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<SupportCaseRow[]>`
         select
@@ -155,7 +158,9 @@ export function createSupportRepository(
       });
     },
     async listSupportPolicies(input) {
-      const cursorScope = "GET /v1/admin/support/policies";
+      const cursorScope = bindCursorScope("GET /v1/admin/support/policies", {
+        sort: "updated_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<SupportPolicyRow[]>`
         select

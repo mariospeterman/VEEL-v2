@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   decodeTimestampKindIdCursor,
   encodeTimestampIdCursor,
@@ -13,7 +14,11 @@ const paymentActivityCursorScope = "GET /v1/activity/payments";
 const activityKinds = ["payment_intent", "wallet_transaction"] as const;
 
 export async function listActivity(sql: postgres.Sql, input: ListActivityInput) {
-  const cursor = decodeTimestampKindIdCursor(activityCursorScope, input.cursor, activityKinds);
+  const cursorScope = bindCursorScope(activityCursorScope, {
+    actor: input.supabaseUserId,
+    sort: "created_at:desc,kind:desc,id:desc"
+  });
+  const cursor = decodeTimestampKindIdCursor(cursorScope, input.cursor, activityKinds);
   const rows = await sql<ActivityRow[]>`
     with target_user as (
       select id
@@ -125,7 +130,7 @@ export async function listActivity(sql: postgres.Sql, input: ListActivityInput) 
 
   return toActivityPage(rows, input.limit, (row) =>
     encodeTimestampKindIdCursor(
-      activityCursorScope,
+      cursorScope,
       row.created_at,
       row.kind,
       row.id
@@ -134,7 +139,11 @@ export async function listActivity(sql: postgres.Sql, input: ListActivityInput) 
 }
 
 export async function listPaymentActivity(sql: postgres.Sql, input: ListActivityInput) {
-  const cursor = decodeTimestampIdCursor(paymentActivityCursorScope, input.cursor);
+  const cursorScope = bindCursorScope(paymentActivityCursorScope, {
+    actor: input.supabaseUserId,
+    sort: "created_at:desc,id:desc"
+  });
+  const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
   const rows = await sql<ActivityRow[]>`
     with target_user as (
       select id
@@ -201,6 +210,6 @@ export async function listPaymentActivity(sql: postgres.Sql, input: ListActivity
   `;
 
   return toActivityPage(rows, input.limit, (row) =>
-    encodeTimestampIdCursor(paymentActivityCursorScope, row.created_at, row.id)
+    encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
   );
 }

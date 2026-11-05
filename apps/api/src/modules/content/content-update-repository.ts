@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import type postgres from "postgres";
-import { ContentCompositionConflictError, ContentEventDraftConflictError } from "./content-errors.js";
+import {
+  ContentCompositionConflictError,
+  ContentEventDraftConflictError,
+  ContentFormatRetiredError
+} from "./content-errors.js";
 import { extractHashtagSlugs, toContentItem } from "./content-repository-mappers.js";
 import type { ContentRow } from "./content-repository-rows.js";
 import type { ContentItem, ContentRepository, UpdateOwnedContentInput } from "./types.js";
@@ -70,6 +74,20 @@ export function createContentUpdateRepositoryMethods(
         if (receipt.response_body?.contentId) {
           const replay = await selectOwnedCompositionRow(transaction, receipt.response_body.contentId, actor.id);
           return replay ? toContentItem(replay, null) : null;
+        }
+
+        const ownedContentRows = await transaction<{ media_type: ContentRow["media_type"] }[]>`
+          select media_type
+          from content_items
+          where id = ${input.contentId}
+            and creator_user_id = ${actor.id}
+            and state <> 'deleted'
+          for update
+        `;
+        const ownedContent = ownedContentRows[0];
+        if (!ownedContent) return null;
+        if (ownedContent.media_type === "text" || ownedContent.media_type === "poll") {
+          throw new ContentFormatRetiredError();
         }
 
         if (hasCompositionUpdate) {
@@ -187,16 +205,6 @@ export function createContentUpdateRepositoryMethods(
                   )
                 ) then 'pending'
                 else ci.moderation_state
-              end,
-              published_at = case
-                when ci.publish_state = 'published' and (
-                  (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
-                  or (
-                    ${Boolean(input.representationMode)}
-                    and safety.representation_mode is distinct from ${input.representationMode ?? "not_declared"}
-                  )
-                ) then null
-                else ci.published_at
               end,
               updated_at = now()
             from actor, current_safety safety

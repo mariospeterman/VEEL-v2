@@ -30,3 +30,15 @@ export function safeSameOriginPath<T extends string | null>(
     return fallback;
   }
 }
+
+export function assignSameOriginPath(
+  value: string | null | undefined,
+  fallback: string
+): void {
+  const safeFallback = safeSameOriginPath(fallback, "/");
+  const safeDestination = safeSameOriginPath(value, safeFallback);
+
+  // Both values are reduced to a root-relative path with no authority, backslash, or encoded separator.
+  // codeql[js/client-side-unvalidated-url-redirection]
+  window.location.assign(safeDestination);
+}

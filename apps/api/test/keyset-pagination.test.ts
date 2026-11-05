@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   decodeTimestampKindIdCursor,
   encodeTimestampIdCursor,
@@ -7,6 +8,7 @@ import {
   KeysetPaginationCursorError,
   keysetPage
 } from "../src/shared/keyset-pagination.js";
+import { cursorTimestamp } from "../src/shared/database-timestamp.js";
 
 const timestampScope = "GET /v1/refunds/requests";
 const kindScope = "GET /v1/activity";
@@ -69,25 +71,63 @@ describe("compound keyset pagination", () => {
     expect(new Set(seen)).toHaveLength(orderedRows.length);
   });
 
-  it("accepts a legacy timestamp as an inclusive boundary and scopes new cursors", () => {
-    const legacyCursor = decodeTimestampIdCursor(timestampScope, "2026-11-04T12:30:00Z");
-    expect(legacyCursor).toEqual({
-      timestamp: "2026-11-04T12:30:00.000Z",
-      id: null
-    });
-    expect(afterTimestampCursor({
-      id: uuidFor(998),
-      createdAt: new Date("2026-11-04T12:30:00.000Z")
-    }, legacyCursor)).toBe(true);
-
+  it("rejects ambiguous legacy precision and scopes new cursors", () => {
     const cursor = encodeTimestampIdCursor(
       timestampScope,
       "2026-11-04T12:30:00.000Z",
       uuidFor(999)
     );
+    expect(decodeTimestampIdCursor(timestampScope, cursor)).toEqual({
+      timestamp: "2026-11-04T12:30:00.000000Z",
+      id: uuidFor(999)
+    });
+    expect(() => decodeTimestampIdCursor(timestampScope, "2026-11-04T12:30:00.000Z"))
+      .toThrow(KeysetPaginationCursorError);
+    const oldVersion = Buffer.from(JSON.stringify({
+      v: 1,
+      s: timestampScope,
+      t: "2026-11-04T12:30:00.000Z",
+      i: uuidFor(999)
+    })).toString("base64url");
+    expect(() => decodeTimestampIdCursor(timestampScope, oldVersion))
+      .toThrow(KeysetPaginationCursorError);
     expect(() => decodeTimestampIdCursor("GET /v1/activity/payments", cursor))
       .toThrow(KeysetPaginationCursorError);
     expect(() => decodeTimestampIdCursor(timestampScope, Buffer.from("{}").toString("base64url")))
+      .toThrow(KeysetPaginationCursorError);
+  });
+
+  it("binds cursors to hashed actor, filter, and sort context", () => {
+    const scope = bindCursorScope(timestampScope, {
+      actor: "private-actor-id",
+      filter: "creator memberships",
+      sort: "created_at:desc,id:desc"
+    });
+    const cursor = encodeTimestampIdCursor(
+      scope,
+      "2026-11-04T12:30:00.123456Z",
+      uuidFor(1001)
+    );
+    const decodedPayload = Buffer.from(cursor, "base64url").toString("utf8");
+
+    expect(decodedPayload).not.toContain("private-actor-id");
+    expect(decodedPayload).not.toContain("creator memberships");
+    expect(decodeTimestampIdCursor(scope, cursor).timestamp)
+      .toBe("2026-11-04T12:30:00.123456Z");
+
+    const changedActorScope = bindCursorScope(timestampScope, {
+      actor: "other-actor-id",
+      filter: "creator memberships",
+      sort: "created_at:desc,id:desc"
+    });
+    const changedFilterScope = bindCursorScope(timestampScope, {
+      actor: "private-actor-id",
+      filter: "platform subscriptions",
+      sort: "created_at:desc,id:desc"
+    });
+    expect(() => decodeTimestampIdCursor(changedActorScope, cursor))
+      .toThrow(KeysetPaginationCursorError);
+    expect(() => decodeTimestampIdCursor(changedFilterScope, cursor))
       .toThrow(KeysetPaginationCursorError);
   });
 });
@@ -117,7 +157,7 @@ function afterTimestampCursor(
   cursor: { timestamp: string | null; id: string | null }
 ): boolean {
   if (!cursor.timestamp) return true;
-  const timestamp = row.createdAt.toISOString();
+  const timestamp = cursorTimestamp(row.createdAt);
   return timestamp < cursor.timestamp || (
     timestamp === cursor.timestamp && (!cursor.id || row.id < cursor.id)
   );
@@ -128,7 +168,7 @@ function afterKindCursor(
   cursor: { timestamp: string | null; kind: string | null; id: string | null }
 ): boolean {
   if (!cursor.timestamp) return true;
-  const timestamp = row.createdAt.toISOString();
+  const timestamp = cursorTimestamp(row.createdAt);
   if (!cursor.kind || !cursor.id) return timestamp <= cursor.timestamp;
   return timestamp < cursor.timestamp || (
     timestamp === cursor.timestamp && (

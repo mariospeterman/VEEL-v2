@@ -3,6 +3,33 @@ import { describe, expect, it, vi } from "vitest";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
 
 describe("Bunny private image storage adapter", () => {
+  it("caps a signed embed to the backend-owned allowance lease", () => {
+    const now = new Date("2026-11-05T12:00:00.000Z");
+    const leaseExpiresAt = new Date("2026-11-05T12:00:37.000Z");
+    const adapter = createBunnyStreamUploadAdapter({
+      BUNNY_STREAM_LIBRARY_ID: "12345",
+      BUNNY_STREAM_EMBED_TOKEN_KEY: "embed-signing-key",
+      BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 86_400
+    });
+
+    const resource = adapter.createPlaybackResource?.({
+      providerAssetId: "video-guid",
+      now,
+      expiresAt: leaseExpiresAt
+    });
+
+    expect(resource?.url).toMatch(/^https:\/\/player\.mediadelivery\.net\/embed\/12345\/video-guid\?/);
+    expect(resource?.expiresAt).toBe(leaseExpiresAt.toISOString());
+    expect(new URL(resource!.url!).searchParams.get("expires")).toBe(
+      String(Math.floor(leaseExpiresAt.getTime() / 1_000))
+    );
+    expect(() => adapter.createPlaybackResource?.({
+      providerAssetId: "video-guid",
+      now,
+      expiresAt: now
+    })).toThrow("MEDIA_UPLOAD_PROVIDER_ERROR");
+  });
+
   it("limits MCP TUS handoffs to Bunny's one-hour minimum without exposing the API key", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-23T10:00:00.000Z"));
@@ -29,7 +56,11 @@ describe("Bunny private image storage adapter", () => {
       LibraryId: "12345",
       VideoId: "video-guid"
     });
-    expect(session.headers.AuthorizationSignature).toMatch(/^[a-f0-9]{64}$/);
+    expect(session.headers.AuthorizationSignature).toBe(
+      createHash("sha256")
+        .update(`12345stream-library-key${session.headers.AuthorizationExpire}video-guid`)
+        .digest("hex")
+    );
     expect(Object.values(session.headers)).not.toContain("stream-library-key");
     vi.useRealTimers();
   });

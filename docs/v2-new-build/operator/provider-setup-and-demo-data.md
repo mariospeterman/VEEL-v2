@@ -103,13 +103,13 @@ Official references: [Solana payment integration](https://solana.com/docs/paymen
 
 Create a staging Bunny Stream library and a separate private Storage zone/pull zone:
 
-1. Configure the Stream API key, library ID, embed token key, and read-only webhook key.
+1. Configure the Stream API key, library ID, embed token key, and read-only webhook key. Enable the current Bunny Player (`PlayerVersion=2`); do not enable or depend on the deprecated legacy iframe player.
 2. Configure the private image Storage access key, zone name, pull-zone URL, and pull-zone token key. Keep originals private and expose only released, signed derivatives.
 3. Register the Stream status callback at the API media webhook. The API verifies the v1 HMAC signature over the exact raw body.
 4. Keep `MEDIA_MODERATION_MODE=shadow` while measuring a real moderation path. Do not use `launch_approved` until upload scanning, quarantine, human fallback, approve/reject/appeal, retry, and dead-letter behavior have evidence.
-5. Run `pnpm proof:bunny-sfw` with the known-safe SFW fixture and verify create, TUS upload, processing, signed playback, deletion, and key-rotation recovery.
+5. Run `pnpm proof:bunny-sfw` with the known-safe SFW fixture to verify create, TUS upload, processing, and deletion. Then exercise the authenticated API playback path separately and capture a signed `player.mediadelivery.net/embed` resource whose `expires` is capped to the backend lease, plus embed-key rotation and denial evidence. The current proof script does not mint that signed embed and must not be cited as playback evidence.
 
-Official references: [Bunny TUS uploads](https://docs.bunny.net/stream/tus-resumable-uploads), [Bunny upload scanning](https://docs.bunny.net/shield/upload-scanning).
+Official references: [Bunny TUS uploads](https://docs.bunny.net/stream/tus-resumable-uploads), [Bunny Player](https://docs.bunny.net/stream/player), [embed token authentication](https://docs.bunny.net/stream/token-authentication), [Bunny upload scanning](https://docs.bunny.net/shield/upload-scanning).
 
 ## 7. Livepeer live and replay
 

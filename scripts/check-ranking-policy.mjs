@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const FINANCIAL_SIGNAL = /(?:^|[^a-z])(?:amounts?|balances?|checkouts?|commissions?|earnings?|entitlements?|memberships?|payments?|purchases?|receipts?|revenues?|settlements?|spend(?:ing)?|subscribers?|subscriptions?|supports?|tips?|unlocks?|wallets?)(?=$|[^a-z])/i;
+const FINANCIAL_SIGNAL = /(?:^|[^a-z])(?:amounts?|balances?|checkouts?|commissions?|earnings?|memberships?|payments?|purchases?|receipts?|revenues?|settlements?|spend(?:ing)?|subscribers?|subscriptions?|supports?|tips?|unlocks?|wallets?)(?=$|[^a-z])/i;
+const RETIRED_SCORING_SIGNAL = /feed_ranking_sessions|candidate_window|ranking_score|base_score|seen_before|viewer_content_impressions/i;
 
 function sourceBetween(source, start, end, label) {
   const startIndex = source.indexOf(start);
@@ -25,7 +26,6 @@ export function bulletBlockAfter(source, marker) {
       bullets.push(line);
       continue;
     }
-    if (started && line.trim() === "") break;
     if (started) break;
   }
   if (bullets.length === 0) {
@@ -41,60 +41,56 @@ export function financialSignalViolations(label, lines) {
 }
 
 export function feedRankingImplementationChecks(feedRepository) {
-  const candidateInputs = sourceBetween(
+  const pageSelection = sourceBetween(
     feedRepository,
-    "candidate_window as materialized (",
-    "authorized as materialized (",
-    "feed ranking candidate inputs",
+    "page_ids as materialized (",
+    "select\n          ci.id,",
+    "chronological feed page selection"
   );
-  const scoreInputs = sourceBetween(
-    feedRepository,
-    "eligible as (",
-    "snapshot as (",
-    "feed ranking score inputs",
-  );
+  return [["chronological feed page selection", pageSelection.split("\n")]];
+}
 
-  return [
-    ["feed ranking candidate inputs", candidateInputs.split("\n")],
-    ["feed ranking score inputs", scoreInputs.split("\n")],
-  ];
+export function feedChronologyViolations(feedRepository) {
+  const violations = [];
+  if (!feedRepository.includes("order by content.published_at desc, content.id desc")) {
+    violations.push("feed must order by published_at DESC and id DESC");
+  }
+  if (!feedRepository.includes("private.eligible_content(viewer.id, null)")) {
+    violations.push("feed must use the canonical eligibility authority on every page");
+  }
+  if (!feedRepository.includes("${input.mode} <> 'following'")) {
+    violations.push("Following must remain an explicit no-fallback filter");
+  }
+  if (!feedRepository.includes("content.media_type not in ('text', 'poll')")) {
+    violations.push("retired text and poll formats must stay out of primary feeds");
+  }
+  if (RETIRED_SCORING_SIGNAL.test(feedRepository)) {
+    violations.push("retired scoring/session inputs remain in the active feed repository");
+  }
+  return violations;
 }
 
 export function collectRankingPolicyViolations(sources) {
-  const checks = [
-    ...feedRankingImplementationChecks(sources.feedRepository),
-    [
-      "profile recommended rankings",
-      bulletBlockAfter(sources.profileRanking, "Recommended launch rankings:"),
-    ],
-    ["profile ranking inputs", bulletBlockAfter(sources.profileRanking, "Ranking inputs:")],
-    [
-      "engagement ranking inputs",
-      bulletBlockAfter(sources.engagementStrategy, "Allowed ranking signals:"),
-    ],
-    [
-      "recommendation inputs",
-      bulletBlockAfter(sources.recommendationDiscovery, "Backend ranking may use:"),
-    ],
-    [
-      "recommendation goals",
-      bulletBlockAfter(sources.recommendationDiscovery, "Rank for:"),
-    ],
+  const implementationBlocks = feedRankingImplementationChecks(sources.feedRepository);
+  const chronologyGuidance = bulletBlockAfter(
+    sources.recommendationDiscovery,
+    "Chronological ordering inputs:"
+  );
+  return [
+    ...feedChronologyViolations(sources.feedRepository),
+    ...implementationBlocks.flatMap(([label, lines]) => financialSignalViolations(label, lines)),
+    ...financialSignalViolations("chronological ordering guidance", chronologyGuidance)
   ];
-
-  return checks.flatMap(([label, lines]) => financialSignalViolations(label, lines));
 }
 
 export function checkRankingPolicy(root = process.cwd()) {
   const read = (path) => readFileSync(`${root}/${path}`, "utf8");
   const violations = collectRankingPolicyViolations({
     feedRepository: read("apps/api/src/modules/content/content-feed-repository.ts"),
-    profileRanking: read("docs/v2-new-build/profile-activity-ranking.md"),
-    engagementStrategy: read("docs/v2-new-build/engagement-strategy.md"),
-    recommendationDiscovery: read("docs/v2-new-build/recommendation-discovery.md"),
+    recommendationDiscovery: read("docs/v2-new-build/recommendation-discovery.md")
   });
   if (violations.length > 0) {
-    throw new Error(`Money-based ranking policy violations:\n- ${violations.join("\n- ")}`);
+    throw new Error(`Chronological feed policy violations:\n- ${violations.join("\n- ")}`);
   }
 }
 
@@ -104,7 +100,7 @@ const isDirectRun = process.argv[1]
 if (isDirectRun) {
   try {
     checkRankingPolicy();
-    console.log("Ranking policy check passed: scoring and active allowed-signal lists are non-financial.");
+    console.log("Ranking policy check passed: feeds are chronological, eligibility-gated, and non-financial.");
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

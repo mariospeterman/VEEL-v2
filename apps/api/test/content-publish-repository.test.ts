@@ -10,7 +10,13 @@ describe("content publish repository", () => {
     const transaction = vi.fn((strings: TemplateStringsArray) => {
       const query = strings.join("?");
       queries.push(query);
-      if (query.includes("for update")) return Promise.resolve([{ id: "content-id" }]);
+      if (query.includes("for update")) {
+        return Promise.resolve([{
+          id: "content-id",
+          actor_user_id: "00000000-0000-4000-8000-000000000001",
+          media_type: "vod"
+        }]);
+      }
       if (query.includes("from mutation_command_receipts")) return Promise.resolve([]);
       if (query.includes("with actor as")) return Promise.resolve([]);
       return Promise.resolve([{
@@ -40,5 +46,6 @@ describe("content publish repository", () => {
     expect(publishQuery).toContain("private.content_safety_release_ready(ci.id) as safety_ready");
     expect(publishQuery).not.toContain("for update");
     expect(publishQuery).not.toContain("private.content_composition_safety_ready(ci.id) as safety_ready");
+    expect(publishQuery).toContain("then coalesce(ci.published_at, now())");
   });
 });

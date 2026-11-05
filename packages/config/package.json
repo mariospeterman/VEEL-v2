@@ -13,6 +13,11 @@
       "types": "./src/public.ts",
       "development": "./src/public.ts",
       "default": "./dist/public.js"
+    },
+    "./asset-amount": {
+      "types": "./src/asset-amount.ts",
+      "development": "./src/asset-amount.ts",
+      "default": "./dist/asset-amount.js"
     }
   },
   "scripts": {

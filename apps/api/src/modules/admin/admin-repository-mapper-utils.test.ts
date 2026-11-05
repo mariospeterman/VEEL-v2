@@ -12,6 +12,7 @@ import {
   page,
   pageSize
 } from "./admin-repository-mapper-utils.js";
+import { cursorTimestamp } from "../../shared/database-timestamp.js";
 
 const timestampScope = "GET /v1/admin/users";
 const priorityScope = "GET /v1/admin/reports";
@@ -31,7 +32,7 @@ describe("admin repository pagination", () => {
 
     expect(result.items).toHaveLength(pageSize);
     expect(decodeTimestampIdCursor(timestampScope, result.nextCursor ?? undefined)).toEqual({
-      timestamp: rows[pageSize - 1]!.created_at.toISOString(),
+      timestamp: cursorTimestamp(rows[pageSize - 1]!.created_at),
       id: rows[pageSize - 1]!.id
     });
   });
@@ -120,8 +121,8 @@ describe("admin repository pagination", () => {
       result.nextCursor ?? undefined
     );
 
-    expect(cursor.timestamp).toBe(rows[pageSize - 1]!.updated_at.toISOString());
-    expect(cursor.timestamp).not.toBe(rows[pageSize - 1]!.created_at.toISOString());
+    expect(cursor.timestamp).toBe(cursorTimestamp(rows[pageSize - 1]!.updated_at));
+    expect(cursor.timestamp).not.toBe(cursorTimestamp(rows[pageSize - 1]!.created_at));
   });
 
   it("round-trips versioned, endpoint-scoped compound cursors", () => {
@@ -131,7 +132,7 @@ describe("admin repository pagination", () => {
 
     const timestampCursor = encodeTimestampIdCursor(timestampScope, firstTimestamp, id);
     expect(decodeTimestampIdCursor(timestampScope, timestampCursor)).toEqual({
-      timestamp: firstTimestamp.toISOString(),
+      timestamp: cursorTimestamp(firstTimestamp),
       id
     });
     expect(() => decodeTimestampIdCursor("GET /v1/admin/content", timestampCursor))
@@ -147,8 +148,8 @@ describe("admin repository pagination", () => {
       "GET /v1/admin/organizations/example/members",
       twoTimestampCursor
     )).toEqual({
-      firstTimestamp: firstTimestamp.toISOString(),
-      secondTimestamp: secondTimestamp.toISOString(),
+      firstTimestamp: cursorTimestamp(firstTimestamp),
+      secondTimestamp: cursorTimestamp(secondTimestamp),
       id
     });
   });
@@ -160,24 +161,20 @@ describe("admin repository pagination", () => {
     const cursor = encodeTimestampKeyCursor(scope, timestamp, key);
 
     expect(decodeTimestampKeyCursor(scope, cursor)).toEqual({
-      timestamp: timestamp.toISOString(),
+      timestamp: cursorTimestamp(timestamp),
       key
     });
     expect(() => decodeTimestampKeyCursor("GET /v1/admin/users", cursor))
       .toThrow(AdminPaginationCursorError);
   });
 
-  it("upgrades legacy timestamp cursors without omitting the tied boundary", () => {
-    expect(decodeTimestampIdCursor(timestampScope, "2026-11-04T12:30:00.000Z")).toEqual({
-      timestamp: "2026-11-04T12:30:00.000Z",
-      id: null
-    });
-    expect(decodePriorityTimestampIdCursor(priorityScope, "2026-11-04T12:30:00.000Z"))
-      .toEqual({
-        priority: null,
-        timestamp: "2026-11-04T12:30:00.000Z",
-        id: null
-      });
+  it("rejects ambiguous legacy timestamps so callers restart from page one", () => {
+    expect(() => decodeTimestampIdCursor(timestampScope, "2026-11-04T12:30:00.000Z"))
+      .toThrow(AdminPaginationCursorError);
+    expect(() => decodePriorityTimestampIdCursor(
+      priorityScope,
+      "2026-11-04T12:30:00.000Z"
+    )).toThrow(AdminPaginationCursorError);
   });
 });
 
@@ -204,7 +201,7 @@ function isAfterTimestampCursor(
   cursor: { timestamp: string | null; id: string | null }
 ): boolean {
   if (!cursor.timestamp) return true;
-  const timestamp = row.created_at.toISOString();
+  const timestamp = cursorTimestamp(row.created_at);
   return timestamp < cursor.timestamp || (
     timestamp === cursor.timestamp && (!cursor.id || row.id < cursor.id)
   );
@@ -215,7 +212,7 @@ function isAfterPriorityCursor(
   cursor: { priority: number | null; timestamp: string | null; id: string | null }
 ): boolean {
   if (cursor.priority === null || !cursor.timestamp || !cursor.id) return true;
-  const timestamp = row.created_at.toISOString();
+  const timestamp = cursorTimestamp(row.created_at);
   return row.priority > cursor.priority || (
     row.priority === cursor.priority && (
       timestamp < cursor.timestamp || (timestamp === cursor.timestamp && row.id < cursor.id)

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor,
   keysetPage
@@ -79,7 +80,12 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
 
   return {
     async listMyDashboards(input) {
-      const cursor = decodeTimestampIdCursor(organizationDashboardCursorScope, input.cursor);
+      const cursorScope = bindCursorScope(organizationDashboardCursorScope, {
+        actor: input.supabaseUserId,
+        membership_states: "active,invited",
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<OrganizationDashboardRow[]>`
         with target_user as (
           select id
@@ -168,7 +174,7 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
 
       return toDashboardPage(rows, input.limit, (row) =>
         encodeTimestampIdCursor(
-          organizationDashboardCursorScope,
+          cursorScope,
           row.created_at,
           row.organization_id
         )

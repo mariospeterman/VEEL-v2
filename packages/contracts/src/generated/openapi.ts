@@ -455,7 +455,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload current profile avatar through server-side Supabase Storage */
+        /**
+         * Reserved private profile-avatar upload boundary
+         * @description Fails closed until the sanitized private staging, safety release, atomic attachment, replay, and replacement-cleanup lifecycle is configured. Profile onboarding does not require an avatar.
+         */
         post: operations["uploadMyProfileAvatar"];
         delete?: never;
         options?: never;
@@ -958,8 +961,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Cast or replace the signed-in viewer's poll vote
-         * @description The backend validates content eligibility and poll state, updates counters transactionally, and preserves lifetime idempotency receipts.
+         * Replay a previously completed historical poll vote
+         * @deprecated
+         * @description New poll voting is retired. An exact completed idempotency replay may still return its retained historical response; every fresh command returns 410.
          */
         post: operations["voteOnContentPoll"];
         delete?: never;
@@ -4036,7 +4040,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        ErrorCode: "unauthorized" | "forbidden" | "not_found" | "validation_failed" | "rate_limited" | "conflict" | "idempotency_conflict" | "provider_unavailable" | "service_unavailable" | "internal_server_error" | "recent_authentication_required" | "payment_not_confirmed" | "webhook_signature_invalid";
+        ErrorCode: "unauthorized" | "forbidden" | "not_found" | "validation_failed" | "rate_limited" | "conflict" | "idempotency_conflict" | "content_format_retired" | "feed_cursor_stale" | "provider_unavailable" | "service_unavailable" | "internal_server_error" | "recent_authentication_required" | "payment_not_confirmed" | "webhook_signature_invalid";
         ErrorResponse: {
             code: components["schemas"]["ErrorCode"];
             message: string;
@@ -4051,6 +4055,8 @@ export interface components {
         Currency: "SOL" | "USDC";
         SessionState: {
             authenticated: boolean;
+            /** @description Pseudonymous scope for isolating browser state across application-session rotation. This is not an authentication credential or database session identifier. */
+            readonly clientSessionScope: string;
             appAccessState: components["schemas"]["AppAccessState"];
             user?: components["schemas"]["User"];
         };
@@ -4387,8 +4393,6 @@ export interface components {
         UpdateProfileRequest: {
             handle: string;
             displayName?: string;
-            /** Format: uri */
-            avatarUrl?: string | null;
             bio?: string;
             locationLabel?: string;
             links?: components["schemas"]["ProfileLink"][];
@@ -4423,7 +4427,7 @@ export interface components {
         };
         FeedPreferences: {
             /** @enum {string} */
-            defaultMode: "recommended" | "following";
+            defaultMode: "latest" | "following";
             /** @enum {string} */
             nsfwPreference: "both" | "nsfw" | "sfw";
             hiddenCreatorIds?: string[];
@@ -4431,7 +4435,7 @@ export interface components {
         };
         UpdateFeedPreferencesRequest: {
             /** @enum {string} */
-            defaultMode?: "recommended" | "following";
+            defaultMode?: "latest" | "following";
             /** @enum {string} */
             nsfwPreference?: "both" | "nsfw" | "sfw";
         };
@@ -4557,11 +4561,11 @@ export interface components {
             items: components["schemas"]["ContentItem"][];
             nextCursor?: string | null;
             /** @enum {string} */
-            mode: "recommended" | "following";
+            mode: "latest" | "following";
             /** @enum {string} */
             surface: "home" | "bits" | "moments";
             /** @enum {string} */
-            rankingVersion: "deterministic_v1";
+            rankingVersion: "chronological_v1";
             /** Format: date-time */
             generatedAt: string;
         };
@@ -4867,7 +4871,7 @@ export interface components {
             /** Format: date-time */
             expiresAt?: string | null;
             /** @enum {string|null} */
-            blockReason?: "entitlement_required" | "allowance_exhausted" | "provider_unavailable" | "replay_under_review" | "room_suspended" | "stream_ended" | null;
+            blockReason?: "entitlement_required" | "allowance_exhausted" | "playback_lease_required" | "provider_unavailable" | "replay_under_review" | "room_suspended" | "stream_ended" | null;
             usage?: components["schemas"]["PlaybackUsageContext"];
         };
         PlaybackUsageContext: {
@@ -4878,18 +4882,21 @@ export interface components {
             /** Format: uuid */
             targetId: string;
             heartbeatIntervalSeconds: number;
+            /**
+             * Format: date-time
+             * @description Server-owned allowance lease expiry. A missing value requires the explicit playback-session command before capability issuance.
+             */
+            leaseExpiresAt?: string | null;
         };
         CreateContentRequest: {
             /** @enum {string} */
-            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel" | "text" | "poll";
+            mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel";
             /**
              * @default post
              * @enum {string}
              */
             distributionMode: "post" | "moment";
             caption?: string;
-            bodyText?: string;
-            poll?: components["schemas"]["ContentPollDraft"];
             /** @enum {string} */
             visibility: "public" | "followers" | "subscribers" | "private";
             /** @enum {string} */
@@ -4903,7 +4910,6 @@ export interface components {
         };
         UpdateContentRequest: {
             caption?: string;
-            bodyText?: string;
             expectedCompositionRevision?: number;
             assetOrder?: string[];
             /** @enum {string} */
@@ -5749,6 +5755,9 @@ export interface components {
             state: "active" | "exhausted" | "closed" | "expired";
             heartbeatIntervalSeconds: number;
             consumedSeconds: number;
+            reservedSeconds: number;
+            /** Format: date-time */
+            leaseExpiresAt: string | null;
             usage: components["schemas"]["PlatformUsage"];
         };
         SubscriptionPage: {
@@ -7246,6 +7255,15 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
+        /** @description The requested product capability has been retired */
+        Gone: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description Rate limited */
         RateLimited: {
             headers: {
@@ -7596,7 +7614,7 @@ export interface components {
                 "application/json": components["schemas"]["UploadSession"];
             };
         };
-        /** @description Uploaded profile avatar URL */
+        /** @description Released profile avatar resource; unavailable until the private avatar lifecycle is configured */
         ProfileAvatarUpload: {
             headers: {
                 [name: string]: unknown;
@@ -8788,7 +8806,8 @@ export interface components {
         DiscoverLiveCursor: string;
         RefundCursor: string;
         SearchQuery: string;
-        FeedMode: "recommended" | "following";
+        /** @description Chronological first-publication order. Legacy `recommended` requests are accepted by the server as an undocumented transition alias for `latest`. */
+        FeedMode: "latest" | "following";
         FeedSurface: "home" | "bits" | "moments";
         ContentId: string;
         MediaAssetId: string;
@@ -9830,6 +9849,7 @@ export interface operations {
     getContentFeed: {
         parameters: {
             query?: {
+                /** @description Chronological first-publication order. Legacy `recommended` requests are accepted by the server as an undocumented transition alias for `latest`. */
                 mode?: components["parameters"]["FeedMode"];
                 surface?: components["parameters"]["FeedSurface"];
                 cursor?: components["parameters"]["Cursor"];
@@ -10300,6 +10320,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            410: components["responses"]["Gone"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -10362,6 +10383,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            410: components["responses"]["Gone"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -10385,6 +10407,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            410: components["responses"]["Gone"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -10409,6 +10432,7 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            410: components["responses"]["Gone"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };

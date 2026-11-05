@@ -9,6 +9,15 @@ const migrationsDir = join(packageRoot, "migrations");
 const readMigration = (fileName: string) => readFileSync(join(migrationsDir, fileName), "utf8");
 
 describe("database migrations", () => {
+  it("retires new text and poll writes without coercing historical records", () => {
+    const sql = readMigration("0130_media_core_scope_transition.sql");
+
+    expect(sql).toContain("retired content formats cannot be created");
+    expect(sql).toContain("retired content formats cannot be republished");
+    expect(sql).toContain("old.media_type in ('text', 'poll')");
+    expect(sql).toContain("historical retired content cannot be converted");
+  });
+
   it("bounds feed ranking snapshots and keeps them server-only", () => {
     const sql = readMigration("0129_bounded_feed_ranking_sessions.sql");
     const downSql = readMigration("0129_bounded_feed_ranking_sessions.down.sql");
@@ -203,6 +212,41 @@ describe("database migrations", () => {
     );
     expect(sql).not.toMatch(/create policy|grant\s+select|disable row level security/i);
     expect(downSql).not.toMatch(/^\s*(grant|create policy)\b/im);
+  });
+
+  it("keeps permission-scoped refund and managed finance data server-owned", () => {
+    const sql = readMigration("0132_permission_scoped_finance_data_api_authority.sql");
+    const downSql = readMigration(
+      "0132_permission_scoped_finance_data_api_authority.down.sql"
+    );
+    const serverOwnedTables = [
+      "refunds_and_disputes",
+      "refund_remediation_evidence",
+      "organization_settlement_wallets",
+      "managed_creator_relationships",
+      "managed_creator_agreements",
+      "managed_creator_allocation_records"
+    ];
+    const retiredPolicies = [
+      "refunds_and_disputes_select_self_or_staff",
+      "refund_remediation_evidence_select_self_or_staff",
+      "organization_settlement_wallets_member_or_staff_select",
+      "managed_creator_relationships_party_or_staff_select",
+      "managed_creator_agreements_party_or_staff_select",
+      "managed_creator_allocation_records_party_or_staff_select"
+    ];
+
+    for (const table of serverOwnedTables) {
+      expect(sql).toMatch(new RegExp(`\\b${table}\\b`));
+    }
+    for (const policy of retiredPolicies) {
+      expect(sql).toContain(`drop policy if exists ${policy}`);
+    }
+    expect(sql).toContain("from public, anon, authenticated");
+    expect(sql).not.toContain("service_role");
+    expect(sql).not.toMatch(/create policy|grant\s+select|disable row level security/i);
+    expect(downSql).not.toMatch(/^\s*(grant|create policy)\b/im);
+    expect(downSql).toContain("permission-specific authorization");
   });
 
   it("uses valid guarded publication rollback syntax", () => {

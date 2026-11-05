@@ -171,9 +171,10 @@ interface PaginationFixture extends BaseFixture {
 }
 
 function paginationFixture(): PaginationFixture {
+  const userId = randomUUID();
   return {
-    userId: randomUUID(),
-    supabaseUserId: randomUUID(),
+    userId,
+    supabaseUserId: userId,
     paymentIds: Array.from({ length: 7 }, () => randomUUID()),
     walletIds: Array.from({ length: 7 }, () => randomUUID()),
     eventId: randomUUID(),
@@ -185,9 +186,10 @@ function paginationFixture(): PaginationFixture {
 }
 
 function concurrencyFixture(): BaseFixture {
+  const userId = randomUUID();
   return {
-    userId: randomUUID(),
-    supabaseUserId: randomUUID(),
+    userId,
+    supabaseUserId: userId,
     paymentIds: [randomUUID()]
   };
 }

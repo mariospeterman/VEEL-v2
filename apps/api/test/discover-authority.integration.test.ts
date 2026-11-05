@@ -59,7 +59,7 @@ describeIntegration("discover authority against migrated Postgres", () => {
       `;
 
       for (const [index, contentId] of publicContentIds.entries()) {
-        await insertTextContent(sql, {
+        await insertImageContent(sql, {
           id: contentId,
           creatorId,
           caption: `mixed result ${index}`,
@@ -67,14 +67,14 @@ describeIntegration("discover authority against migrated Postgres", () => {
           createdAt: fixedCreatedAt
         });
       }
-      await insertTextContent(sql, {
+      await insertImageContent(sql, {
         id: subscriberContentId,
         creatorId,
         caption: "mixed subscriber only",
         visibility: "subscribers",
         createdAt: fixedCreatedAt
       });
-      await insertTextContent(sql, {
+      await insertImageContent(sql, {
         id: rejectedContentId,
         creatorId,
         caption: "mixed rejected",
@@ -82,7 +82,7 @@ describeIntegration("discover authority against migrated Postgres", () => {
         createdAt: fixedCreatedAt,
         releaseState: "rejected"
       });
-      await insertTextContent(sql, {
+      await insertImageContent(sql, {
         id: quarantinedContentId,
         creatorId,
         caption: "mixed quarantined",
@@ -191,7 +191,6 @@ describeIntegration("discover authority against migrated Postgres", () => {
         creatorId,
         suffix: `${suffix}-waiting-first`,
         safetyState: "approved",
-        state: "waiting",
         createdAt: firstWaitingCreatedAt
       });
       await insertLiveRoom(sql, {
@@ -199,9 +198,20 @@ describeIntegration("discover authority against migrated Postgres", () => {
         creatorId,
         suffix: `${suffix}-waiting-second`,
         safetyState: "approved",
-        state: "waiting",
         createdAt: secondWaitingCreatedAt
       });
+
+      const filteredLivePage = await repository.listLive({
+        supabaseUserId: viewerId,
+        query: "waiting-first",
+        limit: 12
+      });
+      expect(filteredLivePage.items.map((room) => room.id)).toEqual([firstWaitingLiveId]);
+      await expect(repository.listLive({
+        supabaseUserId: viewerId,
+        query: `no-live-match-${suffix}`,
+        limit: 12
+      })).resolves.toMatchObject({ items: [], nextCursor: null });
 
       const firstLivePage = await repository.listLive({
         supabaseUserId: viewerId,
@@ -211,11 +221,6 @@ describeIntegration("discover authority against migrated Postgres", () => {
       const liveCursor = firstLivePage.nextCursor;
       if (!liveCursor) throw new Error("Expected a live-room continuation cursor");
 
-      await sql`
-        update live_rooms
-        set state = 'live', updated_at = now()
-        where id = ${secondWaitingLiveId}
-      `;
       const secondLivePage = await repository.listLive({
         supabaseUserId: viewerId,
         cursor: liveCursor,
@@ -229,7 +234,7 @@ describeIntegration("discover authority against migrated Postgres", () => {
   });
 });
 
-async function insertTextContent(
+async function insertImageContent(
   sql: PostgresSql,
   input: {
     id: string;
@@ -241,16 +246,28 @@ async function insertTextContent(
   }
 ): Promise<void> {
   const releaseState = input.releaseState ?? "approved";
+  const mediaAssetId = randomUUID();
   await sql`
     insert into content_items (
       id, creator_user_id, media_type, state, visibility, nsfw_label,
-      moderation_state, publish_state, caption, body_text, created_at, updated_at
+      moderation_state, publish_state, published_at, caption, created_at, updated_at
     ) values (
-      ${input.id}, ${input.creatorId}, 'text', 'ready', ${input.visibility}, 'none',
-      'pending', 'published', ${input.caption}, ${input.caption}, ${input.createdAt}, ${input.createdAt}
+      ${input.id}, ${input.creatorId}, 'image', 'ready', ${input.visibility}, 'none',
+      'pending', 'published', ${input.createdAt}, ${input.caption}, ${input.createdAt}, ${input.createdAt}
     )
   `;
   await sql`
+    insert into media_assets (
+      id, content_item_id, provider, provider_asset_id, provider_state,
+      poster_url, asset_kind, position, is_cover, provider_playable,
+      ready_at, created_at
+    ) values (
+      ${mediaAssetId}, ${input.id}, 'bunny', ${`discover-image-${input.id}`}, 'ready',
+      ${`https://media.example.test/discover-${input.id}.webp`}, 'image', 0, true, true,
+      ${input.createdAt}, ${input.createdAt}
+    )
+  `;
+  const safetyCases = await sql<Array<{ id: string }>>`
     insert into media_safety_cases (
       content_item_id, declared_rating, state, decision_source, reason_code,
       policy_version, provider_release_allowed, evidence_summary, decided_at
@@ -259,7 +276,50 @@ async function insertTextContent(
       'discover-integration-v1', ${releaseState === "approved"}, '{}'::jsonb,
       ${releaseState === "quarantined" ? null : new Date()}
     )
+    returning id
   `;
+  const safetyCase = safetyCases[0];
+  if (!safetyCase) throw new Error("Expected a Discover safety-case fixture");
+
+  if (releaseState === "approved") {
+    await sql`
+      insert into provider_media_scan_events (
+        media_safety_case_id, media_asset_id, provider, provider_event_id,
+        scan_type, normalized_signal, payload_hash, model_or_ruleset_version,
+        release_eligible, observed_at, created_at
+      ) values
+        (
+          ${safetyCase.id}, ${mediaAssetId}, 'bunny_stream', ${`discover-container-${input.id}`},
+          'container_integrity', 'clear', encode(extensions.digest(${`${input.id}:container`}, 'sha256'), 'hex'),
+          'bunny-stream-playability-v1', true, ${input.createdAt}, ${input.createdAt}
+        ),
+        (
+          ${safetyCase.id}, ${mediaAssetId}, 'bunny_shield', ${`discover-malware-${input.id}`},
+          'malware', 'clear', encode(extensions.digest(${`${input.id}:malware`}, 'sha256'), 'hex'),
+          'discover-antivirus-v1', true, ${input.createdAt}, ${input.createdAt}
+        ),
+        (
+          ${safetyCase.id}, ${mediaAssetId}, 'bunny_shield', ${`discover-known-hash-${input.id}`},
+          'known_hash', 'clear', encode(extensions.digest(${`${input.id}:known-hash`}, 'sha256'), 'hex'),
+          'discover-known-hash-v1', true, ${input.createdAt}, ${input.createdAt}
+        ),
+        (
+          ${safetyCase.id}, ${mediaAssetId}, 'internal', ${`discover-classification-${input.id}`},
+          'content_classification', 'clear', encode(extensions.digest(${`${input.id}:classification`}, 'sha256'), 'hex'),
+          'discover-classifier-v1', true, ${input.createdAt}, ${input.createdAt}
+        ),
+        (
+          ${safetyCase.id}, ${mediaAssetId}, 'internal', ${`discover-manual-review-${input.id}`},
+          'manual_review', 'clear', encode(extensions.digest(${`${input.id}:manual-review`}, 'sha256'), 'hex'),
+          'discover-manual-v1', true, ${input.createdAt}, ${input.createdAt}
+        )
+    `;
+    await sql`
+      update content_items
+      set release_media_asset_id = ${mediaAssetId}
+      where id = ${input.id}
+    `;
+  }
   await sql`
     update content_items
     set moderation_state = ${releaseState === "approved" ? "approved" : releaseState}
@@ -342,6 +402,28 @@ async function cleanup(
   await sql`delete from media_safety_cases where live_room_id in (select id from live_rooms where creator_user_id = ${creatorId})`;
   await sql`delete from live_rooms where creator_user_id = ${creatorId}`;
   await sql`delete from events where creator_user_id = ${creatorId}`;
+  await sql`
+    delete from provider_media_scan_events
+    where media_safety_case_id in (
+      select safety.id
+      from media_safety_cases safety
+      join content_items content on content.id = safety.content_item_id
+      where content.creator_user_id = ${creatorId}
+    )
+  `;
+  await sql`
+    update content_items
+    set release_media_asset_id = null
+    where creator_user_id = ${creatorId}
+  `;
+  await sql`
+    delete from media_safety_cases
+    where content_item_id in (select id from content_items where creator_user_id = ${creatorId})
+  `;
+  await sql`
+    delete from media_assets
+    where content_item_id in (select id from content_items where creator_user_id = ${creatorId})
+  `;
   await sql`delete from content_items where creator_user_id = ${creatorId}`;
   await sql`delete from hashtags where slug = ${hashtagSlug}`;
   await sql`delete from verification_records where subject_id in (${creatorId}, ${viewerId})`;

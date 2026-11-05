@@ -24,6 +24,7 @@ export {
   ContentDraftIdempotencyConflictError,
   ContentDraftPollCloseError,
   ContentDraftQuotaExceededError,
+  ContentFormatRetiredError,
   ContentEventDraftConflictError,
   ContentCompositionConflictError,
   ContentAssetRetirementConflictError,

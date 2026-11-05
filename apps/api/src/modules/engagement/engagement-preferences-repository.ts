@@ -29,7 +29,7 @@ export function createEngagementPreferencesRepositoryMethods(
         preferences as (
           select
             actor.user_id,
-            coalesce(vfp.default_feed_mode, 'recommended') as default_feed_mode,
+            coalesce(vfp.default_feed_mode, 'latest') as default_feed_mode,
             coalesce(vfp.nsfw_preference, 'both') as nsfw_preference
           from actor
           left join viewer_feed_preferences vfp on vfp.user_id = actor.user_id
@@ -63,7 +63,7 @@ export function createEngagementPreferencesRepositoryMethods(
           )
           values (
             ${actor.id},
-            coalesce(${input.body.defaultMode ?? null}, 'recommended'),
+            coalesce(${input.body.defaultMode ?? null}, 'latest'),
             coalesce(${input.body.nsfwPreference ?? null}, 'both'),
             now()
           )
@@ -91,9 +91,9 @@ export function createEngagementPreferencesRepositoryMethods(
         await transaction`delete from viewer_hidden_topics where user_id = ${actor.id}`;
         await transaction`
           insert into viewer_feed_preferences (user_id, default_feed_mode, nsfw_preference, updated_at)
-          values (${actor.id}, 'recommended', 'both', now())
+          values (${actor.id}, 'latest', 'both', now())
           on conflict (user_id) do update
-          set default_feed_mode = 'recommended', nsfw_preference = 'both', updated_at = now()
+          set default_feed_mode = 'latest', nsfw_preference = 'both', updated_at = now()
         `;
         await insertAudit(transaction, actor.id, "feed_preferences", actor.id, "feed.reset", {
           idempotencyKey: input.idempotencyKey

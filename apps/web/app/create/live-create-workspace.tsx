@@ -55,9 +55,9 @@ export function LiveCreateWorkspace({ enabled }: { enabled: boolean }) {
     <section className="rounded border border-(--line) bg-(--panel) p-4 sm:p-5">
       <div>
         <p className="text-sm font-medium text-(--accent-text)">Live</p>
-        <h2 className="mt-1 text-lg font-semibold tracking-normal">Start with OBS</h2>
+        <h2 className="mt-1 text-lg font-semibold tracking-normal">Go live</h2>
         <p className="mt-1 text-sm leading-6 text-(--muted)">
-          Create the room, then connect OBS from a private host screen. Adult live is not available.
+          Create the room, then preview your camera and microphone on the private host screen. OBS remains available for advanced setups. Adult live is not available.
         </p>
       </div>
 

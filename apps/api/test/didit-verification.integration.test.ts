@@ -29,6 +29,17 @@ describeIntegration("Didit verification decisions against Postgres", () => {
     const repository = createPostgresVerificationRepository(sql);
 
     await sql`insert into users (id, supabase_user_id) values (${userId}, ${supabaseUserId})`;
+    await sql`
+      insert into creator_monetisation_settings (
+        user_id, support_enabled, content_unlocks_enabled, live_passes_enabled,
+        paid_messages_enabled, subscriptions_enabled
+      ) values (${userId}, true, false, false, false, false)
+    `;
+    await sql`
+      insert into recipient_monetisation_overrides (
+        user_id, kyc_requirement, reason_code
+      ) values (${userId}, 'required', 'verification_integration_test')
+    `;
     try {
       await repository.createPendingSession({
         supabaseUserId,
@@ -91,6 +102,8 @@ describeIntegration("Didit verification decisions against Postgres", () => {
       await sql`delete from verification_events where idempotency_key = ${providerEventId}`;
       await sql`delete from verification_records where subject_id = ${userId}`;
       await sql`delete from verification_sessions where subject_id = ${userId}`;
+      await sql`delete from recipient_monetisation_overrides where user_id = ${userId}`;
+      await sql`delete from creator_monetisation_settings where user_id = ${userId}`;
       await sql`delete from users where id = ${userId}`;
     }
   });
@@ -106,7 +119,7 @@ describeIntegration("Didit verification decisions against Postgres", () => {
     `;
     await sql`
       insert into profiles (user_id, handle, display_name, visibility)
-      values (${userId}, ${`auth-${userId}`}, 'Verification test', 'private')
+      values (${userId}, ${`auth_${userId.replaceAll("-", "").slice(0, 24)}`}, 'Verification test', 'private')
     `;
 
     try {
@@ -284,7 +297,7 @@ describeIntegration("Didit verification decisions against Postgres", () => {
     `;
     await sql`
       insert into profiles (user_id, handle, display_name, visibility)
-      values (${userId}, ${`age-${userId}`}, 'Age test', 'private')
+      values (${userId}, ${`age_${userId.replaceAll("-", "").slice(0, 24)}`}, 'Age test', 'private')
     `;
 
     try {
@@ -299,9 +312,9 @@ describeIntegration("Didit verification decisions against Postgres", () => {
       await repository.selectPendingAgeProvider?.({
         sessionId: reservation.id,
         provider: "yoti",
-        method: "reusable_age",
+        method: "age_estimation",
         assuranceLevel: "medium",
-        reusable: true
+        reusable: false
       });
       const approvedAt = new Date("2026-11-04T14:00:00.000Z");
       expect(await repository.applyProviderWebhook({

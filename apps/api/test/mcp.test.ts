@@ -279,7 +279,7 @@ describe("external MCP connector foundation", () => {
     expect(retry.statusCode).toBe(200);
     expect(contentRepository.createdDrafts[0]?.idempotencyKey).toBe(contentRepository.createdDrafts[1]?.idempotencyKey);
 
-    const expiredPoll = await app.inject({
+    const retiredPoll = await app.inject({
       method: "POST",
       url: "/mcp",
       headers: { authorization: `Bearer ${token}` },
@@ -300,11 +300,11 @@ describe("external MCP connector foundation", () => {
         }
       }
     });
-    expect(expiredPoll.statusCode).toBe(200);
-    expect(expiredPoll.json().error.message).toContain("future ISO date-time");
+    expect(retiredPoll.statusCode).toBe(200);
+    expect(retiredPoll.json().error.message).toContain("Unexpected input field: poll");
     expect(contentRepository.createdDrafts).toHaveLength(2);
 
-    const malformedPoll = await app.inject({
+    const retiredText = await app.inject({
       method: "POST",
       url: "/mcp",
       headers: { authorization: `Bearer ${token}` },
@@ -315,13 +315,13 @@ describe("external MCP connector foundation", () => {
         params: {
           name: "creator_create_private_draft",
           arguments: {
-            mediaType: "poll",
-            poll: { question: "When?", options: ["Soon", "Later"], closesAt: "tomorrow" }
+            mediaType: "text",
+            bodyText: "Retired standalone text"
           }
         }
       }
     });
-    expect(malformedPoll.json().error.message).toContain("future ISO date-time");
+    expect(retiredText.json().error.message).toContain("Unexpected input field: bodyText");
     expect(contentRepository.createdDrafts).toHaveLength(2);
 
     await app.close();

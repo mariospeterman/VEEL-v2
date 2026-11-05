@@ -1,14 +1,90 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { createAccessRepository } from "../src/modules/admin/admin-repository-access.js";
 import { createModerationRepository } from "../src/modules/admin/admin-repository-moderation.js";
 import { createSupportRepository } from "../src/modules/admin/admin-repository-support.js";
-import { createPostgresClient } from "../src/shared/postgres.js";
+import { createPostgresClient, type PostgresSql } from "../src/shared/postgres.js";
 import { guardedIntegrationDatabaseUrl } from "./integration-database.js";
 
 const enabled = ["1", "true"].includes(process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS ?? "");
 const describeIntegration = enabled ? describe : describe.skip;
 
 describeIntegration("admin compound pagination against migrated Postgres", () => {
+  it("walks more than 100 user rows at distinct microseconds within one millisecond", async () => {
+    const sql = createPostgresClient(guardedIntegrationDatabaseUrl());
+    const rollback = new Error("ROLLBACK_MICROSECOND_PAGINATION_FIXTURE");
+    const suffix = randomUUID().replaceAll("-", "").slice(0, 12);
+    const users = Array.from({ length: 121 }, (_, index) => ({
+      id: randomUUID(),
+      state: "active",
+      created_at: `2026-11-04T12:30:00.123${index.toString().padStart(3, "0")}Z`
+    })).map((user) => ({ ...user, supabase_user_id: user.id }));
+
+    try {
+      await sql.begin(async (transaction) => {
+        const tx = transaction as unknown as PostgresSql;
+        await tx`
+          insert into users ${tx(
+            users,
+            "id",
+            "supabase_user_id",
+            "state",
+            "created_at"
+          )}
+        `;
+        await tx`
+          insert into profiles (user_id, handle, display_name)
+          select
+            fixture.id,
+            ${`micro_page_${suffix}_`} || fixture.ordinal::text,
+            'Microsecond page fixture'
+          from unnest(${users.map((user) => user.id)}::uuid[]) with ordinality fixture(id, ordinal)
+        `;
+
+        const expectedRows = await tx<Array<{ id: string; exact_created_at: string }>>`
+          select
+            u.id,
+            to_char(
+              u.created_at at time zone 'UTC',
+              'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+            ) as exact_created_at
+          from users u
+          join profiles p on p.user_id = u.id
+          where p.handle like ${`micro_page_${suffix}_%`}
+          order by u.created_at desc, u.id desc
+        `;
+
+        const repository = createAccessRepository(tx);
+        const pages: string[][] = [];
+        let cursor: string | undefined;
+        do {
+          const page = await repository.listUsers({
+            query: `micro_page_${suffix}_`,
+            ...(cursor ? { cursor } : {})
+          });
+          pages.push(page.items.map((item) => item.id));
+          cursor = page.nextCursor ?? undefined;
+        } while (cursor);
+
+        const actualIds = pages.flat();
+        const expectedIds = expectedRows.map((row) => row.id);
+
+        expect(new Set(expectedRows.map((row) => row.exact_created_at))).toHaveLength(users.length);
+        expect(new Set(expectedRows.map((row) => row.exact_created_at.slice(0, 23))))
+          .toEqual(new Set(["2026-11-04T12:30:00.123"]));
+        expect(pages.map((items) => items.length)).toEqual([50, 50, 21]);
+        expect(actualIds).toEqual(expectedIds);
+        expect(new Set(actualIds)).toHaveLength(users.length);
+
+        throw rollback;
+      });
+    } catch (error) {
+      if (error !== rollback) throw error;
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
   it("walks priority transitions, timestamp ties, and updated-at policy pages exactly once", async () => {
     const sql = createPostgresClient(guardedIntegrationDatabaseUrl());
     const moderationRepository = createModerationRepository(sql);

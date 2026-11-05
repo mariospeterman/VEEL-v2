@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { address, createNoopSigner, type Instruction as KitInstruction } from "@solana/kit";
-import { getTransferRecurringOverlayInstructionAsync } from "@solana/subscriptions";
+import {
+  getRecurringDelegationDecoder,
+  getTransferRecurringOverlayInstructionAsync
+} from "@solana/subscriptions";
 import {
   TOKEN_PROGRAM_ADDRESS,
   findAssociatedTokenPda,
@@ -19,6 +22,22 @@ import postgres from "postgres";
 
 const token2022ProgramAddress = address("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
+export type SubscriptionCollectionFailureCode =
+  | "subscription_collection_provider_not_configured"
+  | "subscription_collection_reconciliation_unavailable"
+  | "unsupported_native_sol_subscription"
+  | "collector_wallet_missing"
+  | "subscription_split_mismatch"
+  | "subscription_allocation_destination_unavailable"
+  | "creator_receiver_wallet_missing"
+  | "platform_receiver_wallet_missing"
+  | "subscription_delegation_account_missing"
+  | "subscription_delegation_owner_mismatch"
+  | "subscription_delegation_decode_failed"
+  | "subscription_delegation_terms_mismatch"
+  | "subscription_delegation_expired"
+  | "subscription_collection_rpc_failed";
+
 export type SubscriptionCollectionOutcome =
   | {
       state: "confirmed";
@@ -26,18 +45,24 @@ export type SubscriptionCollectionOutcome =
     }
   | {
       state: "failed";
-      failureCode: string;
+      failureCode: SubscriptionCollectionFailureCode;
       retryAt: Date;
     }
   | {
       state: "revoked";
-      failureCode: string;
+      failureCode: "subscription_delegation_expired";
     };
 
 export type SubscriptionCollectionReconciliation =
   | SubscriptionCollectionOutcome
   | { state: "not_found" }
-  | { state: "unknown"; failureCode: string; retryAt: Date };
+  | {
+      state: "unknown";
+      failureCode:
+        | "subscription_collection_reconciliation_unavailable"
+        | "subscription_collection_provider_not_configured";
+      retryAt: Date;
+    };
 
 export interface DueSubscriptionCollection {
   collectionId: string;
@@ -134,7 +159,7 @@ export async function processDueSubscriptionCollections(input: {
     const reconciliation = dueCollection.attemptCount > 1
       ? await input.provider.reconcile(dueCollection)
       : { state: "not_found" as const };
-    const outcome =
+    const outcome: SubscriptionCollectionOutcome =
       reconciliation.state === "confirmed" || reconciliation.state === "failed" || reconciliation.state === "revoked"
         ? reconciliation
         : reconciliation.state === "unknown"
@@ -239,7 +264,29 @@ export function createSolanaSubscriptionCollectionProvider(input: {
           "finalized"
         );
         if (!delegationInfo) {
-          return { state: "revoked", failureCode: "subscription_delegation_revoked" };
+          return retry("subscription_delegation_account_missing");
+        }
+        if (!delegationInfo.owner.equals(new PublicKey(collection.programId))) {
+          return retry("subscription_delegation_owner_mismatch");
+        }
+        let delegation;
+        try {
+          delegation = getRecurringDelegationDecoder().decode(delegationInfo.data);
+        } catch {
+          return retry("subscription_delegation_decode_failed");
+        }
+        if (
+          delegation.header.delegator !== collection.subscriberWallet ||
+          delegation.header.delegatee !== collection.collectorAddress ||
+          delegation.subscriptionAuthority !== collection.authorityAddress ||
+          delegation.mint !== collection.tokenMint ||
+          delegation.amountPerPeriod !== collection.amountAtomic ||
+          delegation.periodLengthS !== BigInt(collection.periodSeconds)
+        ) {
+          return retry("subscription_delegation_terms_mismatch");
+        }
+        if (delegation.expiryTs <= BigInt(Math.floor(Date.now() / 1000))) {
+          return { state: "revoked", failureCode: "subscription_delegation_expired" };
         }
         if (
           collection.creatorAmountAtomic +
@@ -296,11 +343,7 @@ export function createSolanaSubscriptionCollectionProvider(input: {
           preflightCommitment: "confirmed"
         });
         return { state: "confirmed", collectionSignature: signature };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "subscription_collection_failed";
-        if (/closed|not found|invalid account data|expired/i.test(message)) {
-          return { state: "revoked", failureCode: "subscription_delegation_unavailable" };
-        }
+      } catch {
         return retry("subscription_collection_rpc_failed");
       }
     }
@@ -378,7 +421,7 @@ function hasCollectionEvidence(
   return hasProgram && hasMemo && keys[0]?.toBase58() === collection.collectorAddress;
 }
 
-function retry(failureCode: string): SubscriptionCollectionOutcome {
+function retry(failureCode: SubscriptionCollectionFailureCode): SubscriptionCollectionOutcome {
   return {
     state: "failed",
     failureCode,
@@ -387,9 +430,11 @@ function retry(failureCode: string): SubscriptionCollectionOutcome {
 }
 
 export function createPostgresSubscriptionCollectionRepository(
-  databaseUrl?: string
+  input?: string | { databaseUrl?: string; sql?: postgres.Sql }
 ): SubscriptionCollectionRepository {
-  if (!databaseUrl) {
+  const databaseUrl = typeof input === "string" ? input : input?.databaseUrl;
+  const injectedSql = typeof input === "string" ? undefined : input?.sql;
+  if (!databaseUrl && !injectedSql) {
     return {
       async expireCancelledDueSubscriptions() {
         return 0;
@@ -403,11 +448,12 @@ export function createPostgresSubscriptionCollectionRepository(
     };
   }
 
-  const sql = postgres(databaseUrl, {
-    max: 3,
-    idle_timeout: 20,
-    prepare: false
-  });
+  const ownsSql = !injectedSql;
+  const sql = injectedSql ?? postgres(databaseUrl as string, {
+      max: 3,
+      idle_timeout: 20,
+      prepare: false
+    });
 
   return {
     async expireCancelledDueSubscriptions(input) {
@@ -568,8 +614,21 @@ export function createPostgresSubscriptionCollectionRepository(
             sp.period_days,
             coalesce(s.amount_atomic, sp.amount_atomic, sp.amount_minor) as amount_atomic,
             coalesce(s.period_seconds, sp.period_seconds, sp.period_days * 86400) as period_seconds,
-            coalesce(s.current_period_ends_at, ${input.now}) as period_starts_at,
-            coalesce(s.current_period_ends_at, ${input.now}) + (sp.period_days || ' days')::interval as period_ends_at,
+            coalesce(
+              pending_collection.period_starts_at,
+              s.current_period_ends_at,
+              s.verified_at,
+              s.start_at,
+              s.created_at
+            ) as period_starts_at,
+            coalesce(
+              pending_collection.period_ends_at,
+              coalesce(s.current_period_ends_at, s.verified_at, s.start_at, s.created_at)
+                + (
+                  coalesce(s.period_seconds, sp.period_seconds, sp.period_days * 86400)
+                  || ' seconds'
+                )::interval
+            ) as period_ends_at,
             s.authority_address,
             s.delegation_address,
             s.subscriber_token_account,
@@ -588,6 +647,16 @@ export function createPostgresSubscriptionCollectionRepository(
           left join lateral private.resolve_recipient_monetisation_policy(
             s.creator_user_id, 'creator_subscription'
           ) policy on s.scope = 'creator'
+          left join lateral (
+            select
+              collection.period_starts_at,
+              collection.period_ends_at
+            from subscription_collections collection
+            where collection.subscription_id = s.id
+              and collection.state in ('due', 'processing', 'failed')
+            order by collection.created_at desc, collection.id desc
+            limit 1
+          ) pending_collection on true
           where s.state in ('active', 'renewal_pending', 'grace_period')
             and s.renewal_mode = 'delegated_solana_subscription'
             and s.cancel_at_period_end = false
@@ -621,7 +690,7 @@ export function createPostgresSubscriptionCollectionRepository(
             )
           order by s.next_collection_at asc
           limit ${input.limit}
-          for update skip locked
+          for update of s skip locked
         `;
 
         const leased: DueSubscriptionCollection[] = [];
@@ -796,10 +865,23 @@ export function createPostgresSubscriptionCollectionRepository(
           await transaction`
             update subscriptions
             set
-              state = 'active',
-              current_period_starts_at = ${row.period_starts_at},
-              current_period_ends_at = ${row.period_ends_at},
-              next_collection_at = ${row.period_ends_at},
+              state = case
+                when cancelled_at is not null or state = 'cancelled' then 'cancelled'
+                when revoked_at is not null or state = 'revoked' then 'revoked'
+                else 'active'
+              end,
+              current_period_starts_at = case
+                when cancelled_at is null and revoked_at is null then ${row.period_starts_at}
+                else current_period_starts_at
+              end,
+              current_period_ends_at = case
+                when cancelled_at is null and revoked_at is null then ${row.period_ends_at}
+                else current_period_ends_at
+              end,
+              next_collection_at = case
+                when cancelled_at is null and revoked_at is null then ${row.period_ends_at}
+                else null
+              end,
               failure_reason = null,
               updated_at = now()
             where id = ${input.subscriptionId}
@@ -834,8 +916,8 @@ export function createPostgresSubscriptionCollectionRepository(
           await transaction`
             update subscriptions
             set
-              state = 'revoked',
-              revoked_at = coalesce(revoked_at, now()),
+              state = case when cancelled_at is not null then state else 'revoked' end,
+              revoked_at = case when cancelled_at is null then coalesce(revoked_at, now()) else revoked_at end,
               next_collection_at = null,
               failure_reason = ${input.outcome.failureCode},
               updated_at = now()
@@ -871,8 +953,16 @@ export function createPostgresSubscriptionCollectionRepository(
         await transaction`
           update subscriptions
           set
-            state = ${row.attempt_count >= input.maxAttempts ? "suspended" : "grace_period"},
-            next_collection_at = ${row.attempt_count >= input.maxAttempts ? null : input.outcome.retryAt},
+            state = case
+              when cancelled_at is not null or state = 'cancelled' then 'cancelled'
+              when revoked_at is not null or state = 'revoked' then 'revoked'
+              else ${row.attempt_count >= input.maxAttempts ? "suspended" : "grace_period"}
+            end,
+            next_collection_at = case
+              when cancelled_at is not null or revoked_at is not null
+                or state in ('cancelled', 'revoked') then null
+              else ${row.attempt_count >= input.maxAttempts ? null : input.outcome.retryAt}
+            end,
             failure_reason = ${input.outcome.failureCode},
             updated_at = now()
           where id = ${input.subscriptionId}
@@ -892,7 +982,7 @@ export function createPostgresSubscriptionCollectionRepository(
     },
 
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsSql) await sql.end({ timeout: 5 });
     }
   };
 }

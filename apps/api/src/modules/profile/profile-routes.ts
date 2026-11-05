@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-import { createClient } from "@supabase/supabase-js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import { findAgeStatusForUser, type AgeRepository } from "../age/types.js";
@@ -250,7 +248,17 @@ export async function registerProfileRoutes(
     }
   );
 
-  app.patch("/v1/profiles/me", { schema: contractRouteSchema("updateMyProfile") }, async (request, reply) => {
+  app.patch("/v1/profiles/me", {
+    schema: contractRouteSchema("updateMyProfile"),
+    preValidation: async (request, reply) => {
+      if (hasAvatarUrlProperty(request.body)) {
+        await reply.code(400).send({
+          code: "validation_failed",
+          message: "Profile pictures must be changed through the private avatar authority"
+        });
+      }
+    }
+  }, async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
     if (!verifiedSession) {
@@ -266,9 +274,7 @@ export async function registerProfileRoutes(
     }
 
     const body = request.body as UpdateProfileRequest | undefined;
-    const validationError = getUpdateProfileValidationError(body, {
-      allowLocalAvatarUrl: app.config.NODE_ENV !== "production"
-    });
+    const validationError = getUpdateProfileValidationError(body);
 
     if (validationError) {
       return reply.code(400).send({
@@ -278,14 +284,13 @@ export async function registerProfileRoutes(
     }
 
     const updateProfile = body as Required<Pick<UpdateProfileRequest, "handle">> &
-      Pick<UpdateProfileRequest, "displayName" | "avatarUrl" | "bio" | "locationLabel" | "links">;
+      Pick<UpdateProfileRequest, "displayName" | "bio" | "locationLabel" | "links">;
 
     try {
       const user = await options.profileRepository.upsertMyProfile(verifiedSession.userId, {
         idempotencyKey,
         handle: updateProfile.handle.toLowerCase(),
         ...(Object.hasOwn(updateProfile, "displayName") ? { displayName: updateProfile.displayName } : {}),
-        ...(Object.hasOwn(updateProfile, "avatarUrl") ? { avatarUrl: updateProfile.avatarUrl } : {}),
         ...(Object.hasOwn(updateProfile, "bio") ? { bio: updateProfile.bio } : {}),
         ...(Object.hasOwn(updateProfile, "locationLabel") ? { locationLabel: updateProfile.locationLabel } : {}),
         ...(Object.hasOwn(updateProfile, "links") ? { links: updateProfile.links } : {})
@@ -346,56 +351,13 @@ export async function registerProfileRoutes(
         });
       }
 
-      const supabaseUrl = app.config.SUPABASE_URL;
-      const supabaseKey = app.config.SUPABASE_SECRET_KEY ?? app.config.SUPABASE_SERVICE_ROLE_KEY;
-
-      if (!supabaseUrl || !supabaseKey) {
-        request.log.warn("Profile avatar upload is not configured");
-        return reply.code(503).send({
-          code: "service_unavailable",
-          message: "Profile avatar upload is not configured"
-        });
-      }
-
-      const contentType = body?.contentType as string;
-      const decoded = Buffer.from(body?.dataBase64 as string, "base64");
-
-      if (decoded.byteLength > maxAvatarBytes) {
-        return reply.code(400).send({
-          code: "validation_failed",
-          message: "Profile picture must be 5MB or smaller"
-        });
-      }
-
-      const extension = avatarExtension(contentType);
-      const objectPath = `profiles/${verifiedSession.userId}/${randomUUID()}.${extension}`;
-      const supabase = createClient(supabaseUrl, supabaseKey, {
-        auth: {
-          persistSession: false
-        }
-      });
-      const upload = await supabase.storage
-        .from(app.config.PROFILE_AVATAR_BUCKET)
-        .upload(objectPath, decoded, {
-          cacheControl: "31536000",
-          contentType,
-          upsert: false
-        });
-
-      if (upload.error) {
-        request.log.warn({ error: upload.error }, "Profile avatar upload failed");
-        return reply.code(503).send({
-          code: "service_unavailable",
-          message: "Profile avatar upload is unavailable"
-        });
-      }
-
-      const { data } = supabase.storage
-        .from(app.config.PROFILE_AVATAR_BUCKET)
-        .getPublicUrl(objectPath);
-
-      return reply.code(201).send({
-        avatarUrl: data.publicUrl
+      request.log.warn(
+        { userId: verifiedSession.userId },
+        "Profile avatar upload is disabled until the private sanitized release lifecycle is configured"
+      );
+      return reply.code(503).send({
+        code: "service_unavailable",
+        message: "Profile pictures are temporarily unavailable; continue without one"
       });
     }
   );
@@ -431,12 +393,13 @@ async function requireCreatorDashboardAccess(
   };
 }
 
-function getUpdateProfileValidationError(
-  body: UpdateProfileRequest | undefined,
-  options: { allowLocalAvatarUrl: boolean }
-): string | null {
+function getUpdateProfileValidationError(body: UpdateProfileRequest | undefined): string | null {
   if (!body || typeof body !== "object") {
     return "Request body is required";
+  }
+
+  if (hasAvatarUrlProperty(body)) {
+    return "Profile pictures must be changed through the private avatar authority";
   }
 
   const normalizedHandle = body.handle?.toLowerCase();
@@ -446,14 +409,6 @@ function getUpdateProfileValidationError(
 
   if (body.displayName !== undefined && (!body.displayName || body.displayName.length > 80)) {
     return "Display name must be 80 characters or fewer";
-  }
-
-  if (
-    body.avatarUrl !== undefined &&
-    body.avatarUrl !== null &&
-    !isSafeAvatarUrl(body.avatarUrl, options)
-  ) {
-    return "Avatar URL must be a valid HTTPS URL";
   }
 
   if (body.bio && body.bio.length > 500) {
@@ -487,6 +442,10 @@ function getUpdateProfileValidationError(
   return null;
 }
 
+function hasAvatarUrlProperty(body: unknown): boolean {
+  return Boolean(body && typeof body === "object" && Object.hasOwn(body, "avatarUrl"));
+}
+
 function isSafeHttpsUrl(value: string): boolean {
   if (value.length > 2048) {
     return false;
@@ -495,23 +454,6 @@ function isSafeHttpsUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function isSafeAvatarUrl(value: string, options: { allowLocalAvatarUrl: boolean }): boolean {
-  if (isSafeHttpsUrl(value)) {
-    return true;
-  }
-
-  if (!options.allowLocalAvatarUrl || value.length > 2048) {
-    return false;
-  }
-
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1");
   } catch {
     return false;
   }
@@ -544,10 +486,4 @@ function getAvatarUploadValidationError(body: AvatarUploadRequest | undefined): 
   }
 
   return null;
-}
-
-function avatarExtension(contentType: string): "jpg" | "png" | "webp" {
-  if (contentType === "image/png") return "png";
-  if (contentType === "image/webp") return "webp";
-  return "jpg";
 }

@@ -37,6 +37,21 @@ describe("Didit V3 webhook verification", () => {
     );
   });
 
+  it("accepts the documented previous-secret signature header during rotation overlap", () => {
+    expect(
+      verifyDiditV3Webhook({
+        body: documentedEnvelope,
+        headers: {
+          "x-signature-v2": "0".repeat(64),
+          "x-signature-v2-previous": fixtureSignature,
+          "x-timestamp": String(documentedEnvelope.timestamp)
+        },
+        secret: fixtureSecret,
+        now: new Date((documentedEnvelope.timestamp + 60) * 1000)
+      })
+    ).toBe(fixtureSignature);
+  });
+
   it("rejects a stale webhook even when its documented V2 signature is valid", () => {
     expect(verifyAt(documentedEnvelope, String(documentedEnvelope.timestamp), 301)).toBeNull();
   });

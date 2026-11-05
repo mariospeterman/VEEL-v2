@@ -25,6 +25,7 @@ import {
 
 export function MessagesWorkspace(input: {
   actorUserId: string | null;
+  clientSessionScope: string | null;
   initialConversations: ConversationList;
   initialConversationId: string | null;
   initialMessages: MessagePage;
@@ -193,6 +194,7 @@ export function MessagesWorkspace(input: {
             </div>
             <MessageComposer
               actorUserId={input.actorUserId}
+              clientSessionScope={input.clientSessionScope}
               conversation={selected}
               initialSharedContentItemId={input.initialSharedContentItemId}
               key={selected.id}

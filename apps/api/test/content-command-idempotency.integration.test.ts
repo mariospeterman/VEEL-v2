@@ -42,11 +42,22 @@ describeIntegration("durable content and event commands against migrated Postgre
           id, creator_user_id, media_type, state, visibility, caption,
           body_text, nsfw_label, moderation_state, publish_state
         ) values
-          (${contentA}, ${userId}, 'text', 'ready', 'private', 'Initial A', 'A', 'none', 'pending', 'draft'),
-          (${contentB}, ${userId}, 'text', 'ready', 'private', 'Initial B', 'B', 'none', 'pending', 'draft'),
-          (${publishA}, ${userId}, 'text', 'ready', 'public', 'Publish A', 'A', 'none', 'pending', 'draft'),
-          (${publishB}, ${userId}, 'text', 'ready', 'public', 'Publish B', 'B', 'none', 'pending', 'draft')
+          (${contentA}, ${userId}, 'vod', 'ready', 'private', 'Initial A', null, 'none', 'pending', 'draft'),
+          (${contentB}, ${userId}, 'vod', 'ready', 'private', 'Initial B', null, 'none', 'pending', 'draft')
       `;
+      await sql.begin(async (transaction) => {
+        // Completed publish receipts for retired rows must continue to replay.
+        // These fixtures model rows created before the retirement trigger.
+        await transaction`set local session_replication_role = replica`;
+        await transaction`
+          insert into content_items (
+            id, creator_user_id, media_type, state, visibility, caption,
+            body_text, nsfw_label, moderation_state, publish_state
+          ) values
+            (${publishA}, ${userId}, 'text', 'ready', 'public', 'Publish A', 'A', 'none', 'pending', 'draft'),
+            (${publishB}, ${userId}, 'text', 'ready', 'public', 'Publish B', 'B', 'none', 'pending', 'draft')
+        `;
+      });
       await sql`
         insert into media_safety_cases (
           content_item_id, declared_rating, state, decision_source,
@@ -148,6 +159,34 @@ describeIntegration("durable content and event commands against migrated Postgre
         scheduledFor: null,
         scheduledForProvided: false
       };
+      await sql`
+        insert into mutation_command_receipts (
+          actor_user_id,
+          action,
+          target_type,
+          target_id,
+          idempotency_key,
+          request_version,
+          request_body_hash,
+          response_status,
+          response_body
+        ) values (
+          ${userId},
+          'content.publish',
+          'content',
+          ${publishA},
+          ${publishKey},
+          1,
+          ${hashIdempotencyPayload({
+            contentId: publishA,
+            scheduledFor: null,
+            scheduledForProvided: false,
+            requestHash: publishInput.requestHash
+          })},
+          200,
+          ${sql.json({ id: publishA })}::jsonb
+        )
+      `;
       const firstPublish = await publishRepository.publishOwnedContent!(publishInput);
       expect(firstPublish).toMatchObject({ id: publishA });
       await sql`update content_items set caption = 'Newer caption' where id = ${publishA}`;

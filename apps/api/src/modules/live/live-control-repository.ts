@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor,
   keysetPage
@@ -35,7 +36,11 @@ export function createLiveControlRepositoryMethods(
 > {
   return {
     async listOwnedRooms(input) {
-      const cursor = decodeTimestampIdCursor(ownedRoomsCursorScope, input.cursor);
+      const cursorScope = bindCursorScope(ownedRoomsCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<LiveRoomRow[]>`
         with target_user as (
           select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
@@ -57,7 +62,7 @@ export function createLiveControlRepositoryMethods(
         rows,
         input.limit,
         toLiveRoom,
-        (row) => encodeTimestampIdCursor(ownedRoomsCursorScope, row.created_at, row.id)
+        (row) => encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
       );
     },
     async revealHostConnection(input) {

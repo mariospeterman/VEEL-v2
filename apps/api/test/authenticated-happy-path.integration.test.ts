@@ -1006,7 +1006,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(followingFeedResponse.json()).toMatchObject({
         mode: "following",
         surface: "home",
-        rankingVersion: "deterministic_v1"
+        rankingVersion: "chronological_v1"
       });
       const stableFollowingPage = followingFeedResponse.json<{
         items: Array<{
@@ -1017,10 +1017,22 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }>;
         nextCursor: string | null;
       }>();
-      expect(stableFollowingPage.items.find((item) => item.id === seededContentId)).toMatchObject({
+      expect(stableFollowingPage.nextCursor).toEqual(expect.any(String));
+      const followingProjectionResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/feed?mode=following&surface=home&cursor=${encodeURIComponent(stableFollowingPage.nextCursor!)}`,
+        headers: authenticatedHeaders(`following-feed-projection-${runId}`)
+      });
+      expect(followingProjectionResponse.statusCode, followingProjectionResponse.body).toBe(200);
+      const followingProjectionPage = followingProjectionResponse.json<{
+        items: Array<{
+          id: string;
+          mediaAssets?: Array<{ id: string; position: number; posterUrl: string | null }>;
+        }>;
+      }>();
+      expect(followingProjectionPage.items.find((item) => item.id === seededContentId)).toMatchObject({
         mediaAssets: [{ id: seededMediaAssetId, position: 0, posterUrl: null }]
       });
-      expect(stableFollowingPage.nextCursor).toEqual(expect.any(String));
       const revokedSnapshotContentId = feedFixtureIds.find(
         (contentId) => !stableFollowingPage.items.some((item) => item.id === contentId)
       );
@@ -1712,316 +1724,130 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       const sfwContentId = createContentResponse.json().id as string;
 
-      const textDraftResponse = await app.inject({
-        method: "POST",
-        url: "/v1/content",
-        headers: authenticatedHeaders(`text-content-create-${runId}`),
-        payload: {
-          mediaType: "text",
-          visibility: "public",
-          nsfwLabel: "none",
-          representationMode: "self_only",
-          contentSafetyPolicyAccepted: true,
-          bodyText: `  Structured text ${runId}  `
-        }
-      });
-      expect(textDraftResponse.statusCode, textDraftResponse.body).toBe(201);
-      expect(textDraftResponse.json()).toMatchObject({
-        mediaType: "text",
-        bodyText: `Structured text ${runId}`
-      });
-
-      const pollClosesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-      const pollDraftResponse = await app.inject({
-        method: "POST",
-        url: "/v1/content",
-        headers: authenticatedHeaders(`poll-content-create-${runId}`),
-        payload: {
-          mediaType: "poll",
-          visibility: "public",
-          nsfwLabel: "none",
-          representationMode: "self_only",
-          contentSafetyPolicyAccepted: true,
-          poll: {
-            question: "  Which format next?  ",
-            options: ["  Photos  ", "Video", "Text"],
-            closesAt: pollClosesAt
-          }
-        }
-      });
-      expect(pollDraftResponse.statusCode, pollDraftResponse.body).toBe(201);
-      expect(pollDraftResponse.json()).toMatchObject({
-        mediaType: "poll",
-        poll: {
-          question: "Which format next?",
-          state: "open",
-          totalVoteCount: 0,
-          closesAt: pollClosesAt,
-          viewerOptionId: null,
-          options: [
-            expect.objectContaining({ position: 0, text: "Photos", voteCount: 0 }),
-            expect.objectContaining({ position: 1, text: "Video", voteCount: 0 }),
-            expect.objectContaining({ position: 2, text: "Text", voteCount: 0 })
-          ]
-        }
-      });
-
-      const textDetailResponse = await app.inject({
-        method: "GET",
-        url: `/v1/content/${textDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(`text-content-detail-${runId}`)
-      });
-      expect(textDetailResponse.statusCode, textDetailResponse.body).toBe(200);
-      expect(textDetailResponse.json()).toMatchObject({
-        id: textDraftResponse.json().id,
-        mediaType: "text",
-        bodyText: `Structured text ${runId}`,
-        compositionRevision: 1
-      });
-
-      const textAutosaveKey = `text-content-autosave-${runId}`;
-      const textAutosaveResponse = await app.inject({
-        method: "PATCH",
-        url: `/v1/content/${textDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(textAutosaveKey),
-        payload: {
-          bodyText: `  Revised structured text ${runId}  `,
-          expectedCompositionRevision: 1
-        }
-      });
-      expect(textAutosaveResponse.statusCode, textAutosaveResponse.body).toBe(200);
-      expect(textAutosaveResponse.json()).toMatchObject({
-        bodyText: `Revised structured text ${runId}`,
-        compositionRevision: 2
-      });
-
-      const textAutosaveReplay = await app.inject({
-        method: "PATCH",
-        url: `/v1/content/${textDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(textAutosaveKey),
-        payload: {
-          bodyText: `  Revised structured text ${runId}  `,
-          expectedCompositionRevision: 1
-        }
-      });
-      expect(textAutosaveReplay.statusCode, textAutosaveReplay.body).toBe(200);
-      expect(textAutosaveReplay.json()).toMatchObject({ compositionRevision: 2 });
-
-      const changedTextAutosaveReplay = await app.inject({
-        method: "PATCH",
-        url: `/v1/content/${textDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(textAutosaveKey),
-        payload: { bodyText: "Changed key reuse", expectedCompositionRevision: 2 }
-      });
-      expect(changedTextAutosaveReplay.statusCode, changedTextAutosaveReplay.body).toBe(409);
-
-      const staleTextAutosave = await app.inject({
-        method: "PATCH",
-        url: `/v1/content/${textDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(`text-content-stale-${runId}`),
-        payload: { bodyText: "Stale overwrite", expectedCompositionRevision: 1 }
-      });
-      expect(staleTextAutosave.statusCode, staleTextAutosave.body).toBe(409);
-
-      const pollDetailResponse = await app.inject({
-        method: "GET",
-        url: `/v1/content/${pollDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(`poll-content-detail-${runId}`)
-      });
-      expect(pollDetailResponse.statusCode, pollDetailResponse.body).toBe(200);
-      expect(pollDetailResponse.json()).toMatchObject({
-        id: pollDraftResponse.json().id,
-        mediaType: "poll",
-        poll: {
-          question: "Which format next?",
-          totalVoteCount: 0,
-          viewerOptionId: null,
-          options: [
-            expect.objectContaining({ position: 0, text: "Photos", voteCount: 0 }),
-            expect.objectContaining({ position: 1, text: "Video", voteCount: 0 }),
-            expect.objectContaining({ position: 2, text: "Text", voteCount: 0 })
-          ]
-        }
-      });
-
-      const pollContentId = pollDraftResponse.json().id as string;
-      const pollOptions = pollDraftResponse.json().poll.options as Array<{ id: string }>;
-      const firstPollOptionId = pollOptions[0]?.id;
-      const secondPollOptionId = pollOptions[1]?.id;
-      const thirdPollOptionId = pollOptions[2]?.id;
-      if (!firstPollOptionId || !secondPollOptionId || !thirdPollOptionId) {
-        throw new Error("Integration poll options were not created");
-      }
-      await sql`
-        update profiles
-        set visibility = 'public', updated_at = now()
-        where user_id = ${buyerSupabaseUserId}
-      `;
-      await sql`
-        update media_safety_cases
-        set
-          state = 'approved',
-          decision_source = 'staff',
-          reason_code = 'integration_fixture_approved',
-          provider_release_allowed = true,
-          decided_at = now(),
-          updated_at = now()
-        where content_item_id = ${pollContentId}
-      `;
-      const pollReleaseReadiness = await sql<{ ready: boolean }[]>`
-        select private.content_safety_release_ready(${pollContentId}) as ready
-      `;
-      expect(pollReleaseReadiness[0]?.ready).toBe(true);
-      await sql`
-        update content_items
-        set
-          state = 'ready',
-          moderation_state = 'approved',
-          publish_state = 'published',
-          published_at = now(),
-          updated_at = now()
-        where id = ${pollContentId}
-      `;
-
-      const publicPollProfile = await app.inject({
-        method: "GET",
-        url: `/v1/profiles/${buyerHandle}`
-      });
-      expect(publicPollProfile.statusCode, publicPollProfile.body).toBe(200);
-      expect(publicPollProfile.json().recentContent).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          id: pollContentId,
-          mediaType: "poll",
-          accessState: "free",
-          poll: expect.objectContaining({
-            question: "Which format next?",
-            options: expect.arrayContaining([
-              expect.objectContaining({ id: firstPollOptionId, text: "Photos", voteCount: 0 })
-            ])
-          })
-        })
-      ]));
-
-      const firstPollVoteKey = `poll-vote-first-${runId}`;
-      const firstPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(firstPollVoteKey),
-        payload: { optionId: firstPollOptionId }
-      });
-      expect(firstPollVote.statusCode, firstPollVote.body).toBe(200);
-      expect(firstPollVote.json()).toMatchObject({
-        totalVoteCount: 1,
-        viewerOptionId: firstPollOptionId,
-        options: expect.arrayContaining([
-          expect.objectContaining({ id: firstPollOptionId, voteCount: 1 })
-        ])
-      });
-
-      const replayedPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(firstPollVoteKey),
-        payload: { optionId: firstPollOptionId }
-      });
-      expect(replayedPollVote.statusCode, replayedPollVote.body).toBe(200);
-      expect(replayedPollVote.json()).toEqual(firstPollVote.json());
-
-      const conflictingPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(firstPollVoteKey),
-        payload: { optionId: secondPollOptionId }
-      });
-      expect(conflictingPollVote.statusCode, conflictingPollVote.body).toBe(409);
-
-      const changedPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(`poll-vote-change-${runId}`),
-        payload: { optionId: secondPollOptionId }
-      });
-      expect(changedPollVote.statusCode, changedPollVote.body).toBe(200);
-      expect(changedPollVote.json()).toMatchObject({
-        totalVoteCount: 1,
-        viewerOptionId: secondPollOptionId,
-        options: expect.arrayContaining([
-          expect.objectContaining({ id: firstPollOptionId, voteCount: 0 }),
-          expect.objectContaining({ id: secondPollOptionId, voteCount: 1 })
-        ])
-      });
-
-      const invalidPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(`poll-vote-invalid-${runId}`),
-        payload: { optionId: randomUUID() }
-      });
-      expect(invalidPollVote.statusCode, invalidPollVote.body).toBe(404);
-
-      await sql`update profiles set visibility = 'private', updated_at = now() where user_id = ${buyerSupabaseUserId}`;
-      const ineligiblePollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(`poll-vote-ineligible-${runId}`),
-        payload: { optionId: firstPollOptionId }
-      });
-      expect(ineligiblePollVote.statusCode, ineligiblePollVote.body).toBe(404);
-      await sql`update profiles set visibility = 'public', updated_at = now() where user_id = ${buyerSupabaseUserId}`;
-
-      await sql`update content_polls set state = 'closed', updated_at = now() where content_item_id = ${pollContentId}`;
-      const closedPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(`poll-vote-closed-${runId}`),
-        payload: { optionId: firstPollOptionId }
-      });
-      expect(closedPollVote.statusCode, closedPollVote.body).toBe(409);
-      await sql`update content_polls set state = 'open', updated_at = now() where content_item_id = ${pollContentId}`;
-
-      const concurrentPollVotes = await Promise.all([
+      const retiredCreateRequests = [
         app.inject({
           method: "POST",
-          url: `/v1/content/${pollContentId}/poll-votes`,
-          headers: authenticatedHeaders(`poll-vote-concurrent-a-${runId}`),
-          payload: { optionId: firstPollOptionId }
+          url: "/v1/content",
+          headers: authenticatedHeaders(`text-content-create-${runId}`),
+          payload: {
+            mediaType: "text",
+            visibility: "private",
+            nsfwLabel: "none",
+            representationMode: "self_only",
+            contentSafetyPolicyAccepted: true,
+            bodyText: `Structured text ${runId}`
+          }
         }),
         app.inject({
           method: "POST",
-          url: `/v1/content/${pollContentId}/poll-votes`,
-          headers: authenticatedHeaders(`poll-vote-concurrent-b-${runId}`),
-          payload: { optionId: thirdPollOptionId }
+          url: "/v1/content",
+          headers: authenticatedHeaders(`poll-content-create-${runId}`),
+          payload: {
+            mediaType: "poll",
+            visibility: "private",
+            nsfwLabel: "none",
+            representationMode: "self_only",
+            contentSafetyPolicyAccepted: true,
+            poll: { question: "Which format next?", options: ["Photos", "Video"] }
+          }
+        })
+      ];
+      for (const response of await Promise.all(retiredCreateRequests)) {
+        expect(response.statusCode, response.body).toBe(410);
+        expect(response.json()).toMatchObject({ code: "content_format_retired" });
+      }
+
+      const historicalTextId = randomUUID();
+      const historicalPollId = randomUUID();
+      const historicalPollOptionId = randomUUID();
+      await sql.begin(async (transaction) => {
+        // Historical fixtures simulate rows that predate the retirement
+        // trigger; normal post-migration inserts must fail closed.
+        await transaction`set local session_replication_role = replica`;
+        await transaction`
+          insert into content_items (
+            id, creator_user_id, media_type, state, visibility, nsfw_label,
+            moderation_state, publish_state, body_text
+          ) values
+            (${historicalTextId}, ${buyerSupabaseUserId}, 'text', 'draft', 'private', 'none',
+              'pending', 'draft', ${`Historical text ${runId}`}),
+            (${historicalPollId}, ${buyerSupabaseUserId}, 'poll', 'draft', 'private', 'none',
+              'pending', 'draft', null)
+        `;
+      });
+      await sql.begin(async (transaction) => {
+        await transaction`
+          insert into content_polls (content_item_id, question, state)
+          values (${historicalPollId}, 'Historical poll', 'closed')
+        `;
+        await transaction`
+          insert into content_poll_options (id, content_item_id, position, option_text)
+          values
+            (${historicalPollOptionId}, ${historicalPollId}, 0, 'Archived answer'),
+            (${randomUUID()}, ${historicalPollId}, 1, 'Other answer')
+        `;
+      });
+
+      const historicalTextDetail = await app.inject({
+        method: "GET",
+        url: `/v1/content/${historicalTextId}`,
+        headers: authenticatedHeaders(`historical-text-detail-${runId}`)
+      });
+      expect(historicalTextDetail.statusCode, historicalTextDetail.body).toBe(200);
+      expect(historicalTextDetail.json()).toMatchObject({
+        id: historicalTextId,
+        mediaType: "text",
+        bodyText: `Historical text ${runId}`
+      });
+
+      await expect(sql`
+        update content_items
+        set media_type = 'image'
+        where id = ${historicalTextId}
+      `).rejects.toMatchObject({ code: "23514" });
+      const retainedHistoricalFormat = await sql<{ media_type: string }[]>`
+        select media_type
+        from content_items
+        where id = ${historicalTextId}
+      `;
+      expect(retainedHistoricalFormat[0]?.media_type).toBe("text");
+
+      const historicalPollDetail = await app.inject({
+        method: "GET",
+        url: `/v1/content/${historicalPollId}`,
+        headers: authenticatedHeaders(`historical-poll-detail-${runId}`)
+      });
+      expect(historicalPollDetail.statusCode, historicalPollDetail.body).toBe(200);
+      expect(historicalPollDetail.json()).toMatchObject({
+        id: historicalPollId,
+        mediaType: "poll",
+        poll: {
+          question: "Historical poll",
+          state: "closed",
+          options: expect.arrayContaining([
+            expect.objectContaining({ id: historicalPollOptionId, text: "Archived answer" })
+          ])
+        }
+      });
+
+      const retiredWrites = await Promise.all([
+        app.inject({
+          method: "PATCH",
+          url: `/v1/content/${historicalTextId}`,
+          headers: authenticatedHeaders(`historical-text-edit-${runId}`),
+          payload: { caption: "No new edits" }
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/content/${historicalPollId}/poll-votes`,
+          headers: authenticatedHeaders(`historical-poll-vote-${runId}`),
+          payload: { optionId: historicalPollOptionId }
         })
       ]);
-      expect(concurrentPollVotes.map((response) => response.statusCode)).toEqual([200, 200]);
-      const persistedPollVotes = await sql<{ total_votes: string; counted_votes: string }[]>`
-        select
-          (select count(*)::text from content_poll_votes where content_item_id = ${pollContentId}) as total_votes,
-          (select coalesce(sum(vote_count), 0)::text from content_poll_options where content_item_id = ${pollContentId}) as counted_votes
-      `;
-      expect(persistedPollVotes[0]).toEqual({ total_votes: "1", counted_votes: "1" });
-
-      const universalDraftRows = await sql<{
-        media_type: string;
-        body_text: string | null;
-        poll_option_count: number;
-      }[]>`
-        select
-          content.media_type,
-          content.body_text,
-          (
-            select count(*)::integer
-            from content_poll_options option
-            where option.content_item_id = content.id
-          ) as poll_option_count
-        from content_items content
-        where content.id in (${textDraftResponse.json().id as string}, ${pollDraftResponse.json().id as string})
-        order by content.media_type
-      `;
-      expect(universalDraftRows).toEqual([
-        { media_type: "poll", body_text: null, poll_option_count: 3 },
-        { media_type: "text", body_text: `Revised structured text ${runId}`, poll_option_count: 0 }
-      ]);
+      for (const response of retiredWrites) {
+        expect(response.statusCode, response.body).toBe(410);
+        expect(response.json()).toMatchObject({ code: "content_format_retired" });
+      }
 
       const imageDraftResponse = await app.inject({
         method: "POST",
@@ -3052,8 +2878,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(playbackSessionResponse.json()).toMatchObject({
         state: "active",
         consumedSeconds: 0,
+        reservedSeconds: 900,
+        leaseExpiresAt: expect.any(String),
         usage: {
-          publicMediaSeconds: 0,
+          publicMediaSeconds: 900,
           limitReached: false
         }
       });
@@ -3072,7 +2900,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         state: "active",
         consumedSeconds: 1,
         usage: {
-          publicMediaSeconds: 1
+          publicMediaSeconds: 900
         }
       });
 
@@ -3086,7 +2914,31 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(replayedHeartbeatResponse.statusCode, replayedHeartbeatResponse.body).toBe(200);
       expect(replayedHeartbeatResponse.json()).toMatchObject({
         consumedSeconds: 1,
-        usage: { publicMediaSeconds: 1 }
+        usage: { publicMediaSeconds: 900 }
+      });
+
+      await sql`
+        update platform_playback_sessions
+        set consumed_seconds = allowance_reserved_seconds - 5,
+            last_heartbeat_at = now() - interval '1 minute'
+        where id = ${playbackSession.id}
+      `;
+      const finalAnalyticsHeartbeatResponse = await app.inject({
+        method: "POST",
+        url: `/v1/platform-usage/playback-sessions/${playbackSession.id}/heartbeats`,
+        headers: authenticatedHeaders(`playback-heartbeat-final-${runId}`),
+        payload: { sequence: 2, playedSeconds: 30 }
+      });
+
+      expect(
+        finalAnalyticsHeartbeatResponse.statusCode,
+        finalAnalyticsHeartbeatResponse.body
+      ).toBe(200);
+      expect(finalAnalyticsHeartbeatResponse.json()).toMatchObject({
+        state: "active",
+        consumedSeconds: 900,
+        reservedSeconds: 900,
+        usage: { publicMediaSeconds: 900 }
       });
 
       const persistedPlaybackRows = await sql<{
@@ -3116,9 +2968,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       `;
 
       expect(persistedPlaybackRows[0]).toEqual({
-        heartbeat_count: "1",
+        heartbeat_count: "2",
         session_count: "1",
-        usage_seconds: "1"
+        usage_seconds: "900"
       });
 
       const buyerRows = await sql<{ id: string }[]>`

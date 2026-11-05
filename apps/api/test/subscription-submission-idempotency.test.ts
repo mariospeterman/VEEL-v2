@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PostgresSql, PostgresTransaction } from "../src/shared/postgres.js";
 import {
+  applyAuthorizationVerificationToSubscription,
   findAuthorizationVerificationContext,
   submitAuthorization
 } from "../src/modules/subscription/subscription-authorization-verification-repository.js";
@@ -92,6 +93,26 @@ describe("subscription authorization command receipts", () => {
       body: { signature: "changed-signature" }
     })).rejects.toBeInstanceOf(MutationCommandIdempotencyConflictError);
     expect(mutationCount).toBe(1);
+  });
+
+  it("guards canonical progression against cancellation, revocation, and signature replacement", async () => {
+    let query = "";
+    const transaction = vi.fn((strings: TemplateStringsArray) => {
+      query = strings.join("?");
+      return Promise.resolve([{ id: uuidFor(3) }]);
+    }) as unknown as PostgresTransaction;
+
+    await expect(applyAuthorizationVerificationToSubscription(transaction, {
+      subscriptionId: uuidFor(3),
+      signature: "accepted-signature",
+      verification: submissionInput(uuidFor(2)).verification
+    })).resolves.toBe(true);
+
+    expect(query).toContain("s.state = 'authorization_pending'");
+    expect(query).toContain("s.cancel_at_period_end = false");
+    expect(query).toContain("s.cancelled_at is null");
+    expect(query).toContain("s.revoked_at is null");
+    expect(query).toContain("s.setup_signature is null or s.setup_signature = ?");
   });
 });
 

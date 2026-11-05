@@ -1,5 +1,6 @@
 import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor,
   keysetPage
@@ -129,7 +130,13 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
     },
 
     async listSubscriptions(input) {
-      const cursor = decodeTimestampIdCursor(subscriptionCursorScope, input.cursor);
+      const cursorScope = bindCursorScope(subscriptionCursorScope, {
+        actor: input.supabaseUserId,
+        scope: input.scope ?? "all",
+        sort: "created_at:desc,id:desc",
+        view: input.view
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<SubscriptionRow[]>`
         select
           s.id,
@@ -188,7 +195,7 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
         rows,
         input.limit,
         toSubscription,
-        (row) => encodeTimestampIdCursor(subscriptionCursorScope, row.created_at, row.id)
+        (row) => encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
       );
     },
 

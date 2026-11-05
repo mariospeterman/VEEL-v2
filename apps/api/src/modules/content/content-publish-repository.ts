@@ -1,6 +1,6 @@
 import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
 import { executeWithMutationCommandReceipt } from "../../shared/mutation-command-receipt.js";
-import { ContentPublishConflictError } from "./content-errors.js";
+import { ContentFormatRetiredError, ContentPublishConflictError } from "./content-errors.js";
 import { toContentItem } from "./content-repository-mappers.js";
 import type { ContentRow } from "./content-repository-rows.js";
 import type { ContentRepository } from "./types.js";
@@ -11,8 +11,12 @@ export function createContentPublishRepositoryMethods(
   return {
     async publishOwnedContent(input) {
       const result = await withPostgresTransaction(sql, async (transaction) => {
-        const lockedRows = await transaction<{ id: string; actor_user_id: string }[]>`
-          select ci.id, u.id as actor_user_id
+        const lockedRows = await transaction<{
+          id: string;
+          actor_user_id: string;
+          media_type: ContentRow["media_type"];
+        }[]>`
+          select ci.id, u.id as actor_user_id, ci.media_type
           from content_items ci
           join users u on u.id = ci.creator_user_id
           where ci.id = ${input.contentId}
@@ -41,6 +45,10 @@ export function createContentPublishRepositoryMethods(
           },
           responseStatus: 200
         }, async () => {
+        if (locked.media_type === "text" || locked.media_type === "poll") {
+          throw new ContentFormatRetiredError();
+        }
+
         const rows = await transaction<
           (ContentRow & {
             content_state: string;

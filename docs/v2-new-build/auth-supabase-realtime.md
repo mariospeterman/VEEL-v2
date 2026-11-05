@@ -93,14 +93,14 @@ erDiagram
 The user-facing public entry is one `Continue to WeVid` action, while the backend keeps login and onboarding cryptographically distinct. The required purpose is stored with the challenge, included in the exact signed message, checked at session creation, and consumed once. Login never creates identity state; `account_not_found` is the explicit handoff into onboarding.
 
 1. Account + Wallet: the user chooses a mainstream Privy method or an external wallet, receives/uses a Solana wallet, signs one domain-bound backend challenge, and receives the canonical WeVid session.
-2. Minimal Profile: the user claims a unique handle; display name and avatar are optional or safely prefilled. The profile stays provisional, non-discoverable, unable to publish/message/receive money, and excluded from search/feeds until age succeeds.
+2. Minimal Profile: the user claims a unique handle; display name is optional. A previously released avatar may be read, but avatar mutation is unavailable until the private sanitized image authority is approved. The profile stays provisional, non-discoverable, unable to publish/message/receive money, and excluded from search/feeds until age succeeds.
 3. Age Verification: a provider returns normalized over-threshold evidence; protected access then opens. Age does not grant KYC, earning, adult-publisher, performer, KYB, Enterprise, or paid-product capability.
 4. Fastify loads the universal profile, primary/linked wallets, age, restrictions, monetisation, and capability state and returns a frontend-safe session projection.
 
 Signup paths and onboarding order:
 
 - Step 1 of 3 combines provider entry, wallet create/retrieve/connect, ownership signature, user bootstrap, and session creation into one continuous action. The Privy target must not stop at “wallet created; continue again.”
-- Step 2 of 3 requires only `handle`; `displayName` and avatar are optional. The API normalizes handles to lowercase, rejects reserved names, and relies on the database unique index for concurrency safety.
+- Step 2 of 3 requires only `handle`; `displayName` is optional and no avatar is required. The API normalizes handles to lowercase, rejects reserved names, and relies on the database unique index for concurrency safety.
 - Step 3 of 3 completes third-party age assurance and activates eligible protected access.
 - Supabase email/social: optional recovery/account-management access. It is never ordinary API authority and can be linked only through a short-lived server-owned intent plus explicit recovery credential exchange.
 - External wallet: uses the signed wallet challenge without mandatory email, Privy, password, Supabase, KYC, or payment.
@@ -121,7 +121,7 @@ Implemented boundary:
 
 ## Profile Bootstrap
 
-Only successful Step 1 authentication may create a provisional WeVid user. Reads, recovery login, and email equality never create or merge users. `PATCH /v1/profiles/me` requires `handle` and an `Idempotency-Key`; display name and avatar are optional. The profile remains private while its user is provisional. A verified age webhook atomically activates the user and publishes the profile; a failed decision blocks the user and keeps the profile private.
+Only successful Step 1 authentication may create a provisional WeVid user. Reads, recovery login, and email equality never create or merge users. `PATCH /v1/profiles/me` requires `handle` and an `Idempotency-Key`; display name and other non-media profile fields are optional, and the contract rejects `avatarUrl`. Avatar changes belong only to `POST /v1/profiles/me/avatar`, which currently fails closed. The profile remains private while its user is provisional. A verified age webhook atomically activates the user and publishes the profile; a failed decision blocks the user and keeps the profile private.
 
 Supabase `user_metadata` is not a Veel profile source. Do not use editable metadata for handle, display name, role, age, wallet, admin, or access decisions.
 
@@ -225,7 +225,7 @@ Avoid:
 - Landing login never starts a Supabase session. Privy or an external wallet creates the application session; backend `/v1/session`, wallet readiness, and age verification remain access truth.
 - Landing onboarding exposes minimal profile completion after wallet setup. Profile submission sends `PATCH /v1/profiles/me` with the HttpOnly application cookie and an idempotency key; backend validation, handle uniqueness, and app-access state remain authoritative.
 - Landing onboarding and `/app/wallet` expose external Solana wallet handoff through Solana Wallet Adapter using the backend wallet challenge/proof endpoints. Wallet Adapter must provide `signMessage`; backend verification remains the auth truth.
-- Landing onboarding keeps age assurance on the story surface: the wallet-owned application session and unique handle are mandatory; display name, avatar, and Supabase recovery linking are optional; age assurance is mandatory before protected app access.
+- Landing onboarding keeps age assurance on the story surface: the wallet-owned application session and unique handle are mandatory; display name and Supabase recovery linking are optional; no avatar is required or mutable while the private avatar pipeline is disabled; age assurance is mandatory before protected app access.
 - `/age` / landing age assurance starts `POST /v1/age/sessions` with `providerPreference=reusable_first`. The preferred waterfall is reusable age ID first (`Didit`, `Yoti Digital ID`, `EUDI Wallet`, `Scytales`), then free/light age estimation or document proof (`Didit`, `Persona`) when reusable proof is unavailable. The UI may link users to create a reusable ID and return to the age check.
 - Sumsub and Veriff are not shown as ordinary viewer onboarding providers. Keep them for Studio/enterprise or creator-compliance escalation before creator publishing, monetized creator workflows, tax, merchant, fraud, or regulated partner handoff.
 - Age reverification is not recurring onboarding. Recheck only on provider credential expiry, jurisdiction/rule change, suspicious activity, admin/risk reason, or transition into creator/Studio/enterprise features.
@@ -258,7 +258,7 @@ Use these key classes:
 - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `DATABASE_URL` in the API.
 - `SUPABASE_SECRET_KEY` only for backend-only provider/admin work that explicitly needs it.
 - `SUPABASE_SERVICE_ROLE_KEY` only for legacy compatibility or narrowly reviewed backend work.
-- `PROFILE_AVATAR_BUCKET=profile-avatars` for server-owned profile avatar uploads. Migrations `0070_profile_avatar_storage_bucket.sql` and `0071_profile_avatar_storage_limit.sql` create or update this public Supabase Storage bucket with a 5 MB limit and JPEG/PNG/WebP MIME allowlist. The browser never receives storage write credentials.
+- `PROFILE_AVATAR_BUCKET` is reserved for a future server-owned avatar pipeline and is not an active production upload path. Legacy migrations `0070_profile_avatar_storage_bucket.sql` and `0071_profile_avatar_storage_limit.sql` provisioned a public Supabase Storage bucket, but the API now fails closed before decoding or storing bytes. Re-enabling avatars requires an approved private staging bucket, decoded-content validation and re-encoding, safety review, replay-safe promotion and cleanup, and a non-public delivery boundary. The browser never receives storage write credentials.
 - `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` only for local Supabase CLI/MCP tooling.
 - `ONRAMP_PROVIDER`, `ONRAMP_PURCHASE_CURRENCY`, `COINBASE_CDP_API_KEY_ID`, `COINBASE_CDP_API_KEY_SECRET`, `COINBASE_CDP_API_BASE_URL`, and `COINBASE_ONRAMP_DESTINATION_NETWORK` only in the API/worker environment for user-wallet funding sessions.
 

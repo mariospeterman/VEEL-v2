@@ -1,10 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PostgresSql } from "../src/shared/postgres.js";
-import { decodeTimestampKindIdCursor } from "../src/shared/keyset-pagination.js";
+import {
+  bindCursorScope,
+  decodeTimestampKindIdCursor
+} from "../src/shared/keyset-pagination.js";
 import { createPostgresReferralRepository } from "../src/modules/referral/referral-repository.js";
+import { cursorTimestamp } from "../src/shared/database-timestamp.js";
 
 const cursorScope = "GET /v1/referrals/activity";
 const kinds = ["share", "commission"] as const;
+const actorId = "00000000-0000-4000-8000-000000000099";
+const boundCursorScope = bindCursorScope(cursorScope, {
+  actor: actorId,
+  sort: "created_at:desc,activity_type:desc,id:desc"
+});
 
 describe("referral activity compound pagination", () => {
   it("walks 21 tied share/commission rows without gaps when a newer row arrives", async () => {
@@ -29,7 +38,7 @@ describe("referral activity compound pagination", () => {
 
     do {
       const page = await repository.listActivity({
-        supabaseUserId: "00000000-0000-4000-8000-000000000099",
+        supabaseUserId: actorId,
         limit: 5,
         ...(cursor ? { cursor } : {})
       });
@@ -46,7 +55,7 @@ describe("referral activity compound pagination", () => {
     expect(seen).toEqual(expected);
     expect(new Set(seen)).toHaveLength(21);
     expect(seen.filter((id) => id !== uuidFor(100))).toHaveLength(21);
-    expect(decodeTimestampKindIdCursor(cursorScope, firstCursor ?? undefined, kinds).id)
+    expect(decodeTimestampKindIdCursor(boundCursorScope, firstCursor ?? undefined, kinds).id)
       .toBe(expected[4]);
   });
 });
@@ -80,7 +89,7 @@ function afterCursor(
   cursor: { timestamp: string | null; kind: string | null; id: string | null }
 ): boolean {
   if (!cursor.timestamp) return true;
-  const timestamp = row.created_at.toISOString();
+  const timestamp = cursorTimestamp(row.created_at);
   if (!cursor.kind || !cursor.id) return timestamp <= cursor.timestamp;
   return timestamp < cursor.timestamp || (
     timestamp === cursor.timestamp && (

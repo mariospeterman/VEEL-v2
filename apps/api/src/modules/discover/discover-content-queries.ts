@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { keysetPage } from "../../shared/keyset-pagination.js";
+import { bindCursorScope, keysetPage } from "../../shared/keyset-pagination.js";
 import {
   accessStateForRule,
   toContentItem
@@ -27,7 +27,13 @@ export async function listContent(
   input: DiscoverListInput
 ): Promise<{ items: ContentItem[]; nextCursor: string | null }> {
   const search = normalizeSearch(input.query);
-  const cursor = decodeContentCursor(input.cursor);
+  const cursorScope = bindCursorScope("GET /v1/discover/content", {
+    actor: input.supabaseUserId,
+    query: search,
+    slug: input.slug ?? null,
+    sort: "created_at:desc,id:desc"
+  });
+  const cursor = decodeContentCursor(input.cursor, cursorScope);
   const rows = await sql<DiscoverContentRow[]>`
     with viewer as (
       select id
@@ -207,6 +213,7 @@ export async function listContent(
           ${cursor?.id ?? null}::uuid
         )
       )
+      and ci.media_type not in ('text', 'poll')
       and (
         ${search}::text is null
         or ci.caption ilike '%' || ${search} || '%'
@@ -240,6 +247,6 @@ export async function listContent(
     rows,
     input.limit,
     (row) => toContentItem(row, row.poster_url, accessStateForRule(row)),
-    (row) => encodeContentCursor(row.created_at, row.id)
+    (row) => encodeContentCursor(row.created_at, row.id, cursorScope)
   );
 }

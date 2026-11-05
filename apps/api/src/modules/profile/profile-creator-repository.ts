@@ -50,6 +50,7 @@ export function createProfileCreatorRepositoryMethods(
             from private.eligible_content(${appViewerUserId}, null) eligible
             join content_items ci on ci.id = eligible.content_item_id
             where ci.creator_user_id = u.id
+              and ci.media_type not in ('text', 'poll')
           ) as content_count,
           (
             select count(*)
@@ -214,6 +215,7 @@ export function createProfileCreatorRepositoryMethods(
           where poll.content_item_id = ci.id
         ) poll_projection on true
         where ci.creator_user_id = ${row.id}
+          and ci.media_type not in ('text', 'poll')
         order by ci.created_at desc
         limit 12
       `;

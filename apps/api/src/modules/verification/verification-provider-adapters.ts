@@ -31,6 +31,12 @@ interface VerificationProviderAdapter {
   createSession(input: CreateVerificationSessionInput): Promise<VerificationProviderSession>;
 }
 
+type SelectableVerificationProvider = VerificationProviderAdapter["provider"];
+
+interface StaticVerificationProviderWaterfallOptions {
+  ageAccessPrimaryProvider?: SelectableVerificationProvider | null;
+}
+
 export function createVerificationProviderWaterfall(env: ServerEnv): VerificationProviderWaterfall {
   return createStaticVerificationProviderWaterfall([
     createMockVerificationProviderAdapter(env),
@@ -39,7 +45,9 @@ export function createVerificationProviderWaterfall(env: ServerEnv): Verificatio
     createSumsubVerificationProviderAdapter(env),
     createPersonaVerificationProviderAdapter(env),
     createVeriffVerificationProviderAdapter(env)
-  ]);
+  ], {
+    ageAccessPrimaryProvider: configuredAgeAccessProvider(env)
+  });
 }
 
 const mockVerificationProviderReferencePrefix = "mock-verification:";
@@ -73,16 +81,17 @@ function createMockVerificationProviderAdapter(env: ServerEnv): VerificationProv
           reference: providerReference
         }),
         expiresAt: expiresInSeconds(15 * 60),
-        method: isOrganization ? "kyb_registry" : isAge ? "reusable_age" : "gov_id_selfie",
+        method: isOrganization ? "kyb_registry" : isAge ? "age_estimation" : "gov_id_selfie",
         assuranceLevel: isOrganization ? "business_verified" : isAge ? "medium" : "documentary",
-        reusable: true
+        reusable: false
       };
     }
   };
 }
 
 export function createStaticVerificationProviderWaterfall(
-  adapters: VerificationProviderAdapter[]
+  adapters: VerificationProviderAdapter[],
+  options: StaticVerificationProviderWaterfallOptions = {}
 ): VerificationProviderWaterfall {
   const byProvider = new Map<VerificationProviderAdapter["provider"], VerificationProviderAdapter[]>();
 
@@ -95,7 +104,13 @@ export function createStaticVerificationProviderWaterfall(
 
   return {
     async createSession(input) {
-      for (const provider of providerOrder(input.providerPreference)) {
+      const providers = input.purpose === "age_access"
+        ? options.ageAccessPrimaryProvider
+          ? [options.ageAccessPrimaryProvider]
+          : []
+        : providerOrder(input.providerPreference);
+
+      for (const provider of providers) {
         const providerAdapters = byProvider.get(provider) ?? [];
 
         for (const adapter of providerAdapters) {
@@ -107,7 +122,7 @@ export function createStaticVerificationProviderWaterfall(
             provider: adapter.provider,
             method: verificationMethod(input, adapter.provider),
             assuranceLevel: verificationAssurance(input, adapter.provider),
-            reusable: adapter.provider === "yoti"
+            reusable: false
           });
           // Once a provider call starts its outcome can be ambiguous (for example,
           // a remote session may exist even if the response is lost). Do not open a
@@ -262,6 +277,9 @@ function createYotiVerificationProviderAdapter(env: ServerEnv): VerificationProv
         body: JSON.stringify({
           type: "OVER",
           ttl: 900,
+          retry_enabled: true,
+          resume_enabled: true,
+          synchronous_checks: true,
           reference_id: providerSubjectReference(input),
           callback: { url: input.callbackUrl, auto: true },
           notification_url: `${input.webhookBaseUrl}/yoti`,
@@ -270,14 +288,22 @@ function createYotiVerificationProviderAdapter(env: ServerEnv): VerificationProv
             threshold: 18,
             age_estimation_allowed: true,
             age_estimation_threshold: 25,
+            retry_enabled: true,
             retry_limit: 3
           },
-          age_estimation: { allowed: true, threshold: 25, level: "PASSIVE", retry_limit: 3 },
+          age_estimation: {
+            allowed: true,
+            threshold: 25,
+            level: "PASSIVE",
+            retry_enabled: true,
+            retry_limit: 3
+          },
           doc_scan: {
             allowed: true,
             threshold: 18,
             authenticity: "AUTO",
             level: "PASSIVE",
+            retry_enabled: true,
             retry_limit: 3
           },
           credit_card: { allowed: false }
@@ -300,9 +326,9 @@ function createYotiVerificationProviderAdapter(env: ServerEnv): VerificationProv
           sdkId: env.YOTI_SDK_ID
         }),
         expiresAt: expiresInSeconds(900),
-        method: "reusable_age",
+        method: "age_estimation",
         assuranceLevel: "medium",
-        reusable: true
+        reusable: false
       };
     }
   };
@@ -457,6 +483,18 @@ function providerOrder(preference: CreateVerificationSessionInput["providerPrefe
   ];
 }
 
+function configuredAgeAccessProvider(env: ServerEnv): SelectableVerificationProvider | null {
+  if (env.AGE_VERIFICATION_DRIVER) {
+    return env.AGE_VERIFICATION_DRIVER;
+  }
+
+  if (env.NODE_ENV !== "production" && env.AGE_VERIFICATION_ALLOW_MOCK_PROVIDER) {
+    return "didit";
+  }
+
+  return null;
+}
+
 function sumsubLevelName(env: ServerEnv, input: CreateVerificationSessionInput) {
   if (input.purpose === "age_access") return env.SUMSUB_LEVEL_NAME;
   return input.purpose === "org_kyb"
@@ -490,7 +528,7 @@ function verificationMethod(
   if (input.purpose === "org_kyb") return "kyb_registry";
   if (input.purpose !== "age_access") return "gov_id_selfie";
   if (provider === "didit") return "age_estimation";
-  if (provider === "yoti") return "reusable_age";
+  if (provider === "yoti") return "age_estimation";
   if (provider === "persona") return "doc_scan";
   return "gov_id_selfie";
 }

@@ -80,7 +80,7 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
             ${input.jurisdiction ?? null},
             18,
             ${assurance},
-            ${input.provider === "yoti"},
+            ${ageEvidenceIsReusable(input.provider)},
             ${input.expiresAt}
           )
         `;
@@ -113,7 +113,7 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
             18,
             ${assurance},
             ${input.expiresAt},
-            ${input.provider === "yoti"},
+            ${ageEvidenceIsReusable(input.provider)},
             ${tx.json({ source: "age_session", rule: input.rule ?? "over_18" })}
           )
         `;
@@ -206,7 +206,7 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
                 then coalesce(provider_inquiry_id, ${providerSession.providerReference}) else provider_inquiry_id end,
               requested_method = ${ageMethod(providerSession.provider)},
               assurance_level = ${ageAssurance(providerSession.provider)},
-              reusable = ${providerSession.provider === "yoti"},
+              reusable = ${ageEvidenceIsReusable(providerSession.provider)},
               expires_at = ${providerSession.expiresAt}, launch_state = 'ready',
               status = case when status = 'created' then 'pending' else status end,
               updated_at = now()
@@ -219,7 +219,7 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
           set provider = ${providerSession.provider}, provider_reference = ${providerSession.providerReference},
               method = ${ageMethod(providerSession.provider)},
               assurance_level = ${ageAssurance(providerSession.provider)},
-              expires_at = ${providerSession.expiresAt}, reusable = ${providerSession.provider === "yoti"},
+              expires_at = ${providerSession.expiresAt}, reusable = ${ageEvidenceIsReusable(providerSession.provider)},
               updated_at = now()
           where metadata ->> 'sessionId' = ${input.sessionId}
             and metadata ->> 'source' = 'verification_session_reservation'
@@ -610,9 +610,13 @@ function toSessionStatus(state: Extract<AgeState, "pending" | "verified" | "fail
 
 function ageMethod(provider: AgeProvider) {
   if (provider === "didit") return "age_estimation";
-  if (provider === "yoti") return "reusable_age";
+  if (provider === "yoti") return "age_estimation";
   if (provider === "persona") return "doc_scan";
   return "gov_id_selfie";
+}
+
+function ageEvidenceIsReusable(_provider: AgeProvider) {
+  return false;
 }
 
 function ageAssurance(provider: AgeProvider) {

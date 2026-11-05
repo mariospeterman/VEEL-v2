@@ -59,7 +59,8 @@
     "lint": "eslint .",
     "smoke": "node scripts/run-local-tool.mjs playwright test",
     "typecheck": "pnpm -r typecheck",
-    "test": "node scripts/run-local-tool.mjs vitest run",
+    "test": "node scripts/run-local-tool.mjs vitest run && pnpm test:evidence",
+    "test:evidence": "node --test scripts/generate-audit-evidence.test.mjs scripts/capture-audit-execution.test.mjs",
     "test:integration:api": "VEEL_ENABLE_REAL_API_INTEGRATION_TESTS=1 node --env-file-if-exists=.env scripts/run-local-tool.mjs vitest run --no-file-parallelism apps/api/test/*.integration.test.ts"
   },
   "engines": {

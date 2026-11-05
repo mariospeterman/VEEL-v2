@@ -3,7 +3,7 @@ import type { CommentRow, PreferencesRow } from "./engagement-repository-rows.js
 
 export function toPreferences(row: PreferencesRow | undefined): FeedPreferences {
   return {
-    defaultMode: row?.default_feed_mode ?? "recommended",
+    defaultMode: row?.default_feed_mode ?? "latest",
     nsfwPreference: row?.nsfw_preference ?? "both",
     hiddenCreatorIds: row?.hidden_creator_ids ?? [],
     hiddenTopics: row?.hidden_topics ?? []

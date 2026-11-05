@@ -7,7 +7,9 @@ import {
   integrationDatabaseUrl
 } from "./integration-database.js";
 
-const enabled = process.env.RUN_API_INTEGRATION_TESTS === "1";
+const enabled = ["1", "true"].includes(
+  process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS ?? ""
+);
 const describeIntegration = enabled ? describe : describe.skip;
 const openClients: PostgresSql[] = [];
 

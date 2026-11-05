@@ -4,6 +4,7 @@ import {
   resolveMutationActorBySupabaseUserId
 } from "../../shared/mutation-command-receipt.js";
 import { withPostgresTransaction } from "../../shared/postgres.js";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import type { AdminRepository } from "./types.js";
 import {
   decodeTimestampKeyCursor,
@@ -29,7 +30,9 @@ export function createFeatureFlagRepository(
       return rows[0] ? toFeatureFlag(rows[0]) : null;
     },
     async listFeatureFlags(input) {
-      const cursorScope = "GET /v1/admin/feature-flags";
+      const cursorScope = bindCursorScope("GET /v1/admin/feature-flags", {
+        sort: "updated_at:desc,key:asc"
+      });
       const cursor = decodeTimestampKeyCursor(cursorScope, input.cursor);
       const rows = await sql<FeatureFlagRow[]>`
         select key, value, category, policy_boundary, state, updated_at

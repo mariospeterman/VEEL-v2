@@ -6,6 +6,12 @@ import {
   type Subscription,
   type SubscriptionPlan
 } from "@/api-client";
+import {
+  subscriptionCursor,
+  subscriptionPageHref,
+  type SubscriptionCursorKey,
+  type SubscriptionSearchParams
+} from "@/subscriptions/subscription-page-navigation";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { formatTwoDecimalMinorAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
@@ -15,21 +21,43 @@ import { SubscriptionCancelPanel } from "../../subscriptions/subscription-cancel
 
 export const dynamic = "force-dynamic";
 
-export default async function SubscriptionsPage() {
+export default async function SubscriptionsPage({ searchParams }: {
+  searchParams: Promise<SubscriptionSearchParams>;
+}) {
   await requireAppAccess("/app/subscriptions");
+  const query = await searchParams;
+  const platformCursor = subscriptionCursor(query, "platformCursor");
+  const creatorCursor = subscriptionCursor(query, "creatorCursor");
+  const historyCursor = subscriptionCursor(query, "historyCursor");
 
-  const [platformAccess, plans, subscriptions, subscriptionHistory] = await Promise.all([
+  const [
+    platformAccess,
+    plans,
+    platformSubscriptionResult,
+    creatorMembershipResult,
+    subscriptionHistory
+  ] = await Promise.all([
     getPlatformAccess(),
     getSubscriptionPlans(),
-    getSubscriptions(),
-    getSubscriptions({ view: "history" })
+    getSubscriptions({
+      scope: "platform",
+      ...(platformCursor ? { cursor: platformCursor } : {})
+    }),
+    getSubscriptions({
+      scope: "creator",
+      ...(creatorCursor ? { cursor: creatorCursor } : {})
+    }),
+    getSubscriptions({
+      view: "history",
+      ...(historyCursor ? { cursor: historyCursor } : {})
+    })
   ]);
   const platformPlans = plans.ok ? plans.data.items.filter((plan) => plan.scope === "platform") : [];
-  const platformSubscriptions = subscriptions.ok
-    ? subscriptions.data.items.filter((subscription) => subscription.scope === "platform")
+  const platformSubscriptions = platformSubscriptionResult.ok
+    ? platformSubscriptionResult.data.items
     : [];
-  const creatorMemberships = subscriptions.ok
-    ? subscriptions.data.items.filter((subscription) => subscription.scope === "creator")
+  const creatorMemberships = creatorMembershipResult.ok
+    ? creatorMembershipResult.data.items
     : [];
 
   return (
@@ -71,6 +99,21 @@ export default async function SubscriptionsPage() {
                 {platformSubscriptions.map((subscription) => (
                   <SubscriptionSummary subscription={subscription} key={subscription.id} />
                 ))}
+                {platformSubscriptionResult.ok ? (
+                  <SubscriptionContinuation
+                    cursor={platformSubscriptionResult.data.nextCursor}
+                    cursorKey="platformCursor"
+                    label="More platform subscriptions"
+                    searchParams={query}
+                  />
+                ) : null}
+                {!platformSubscriptionResult.ok ? (
+                  <ErrorState
+                    result={platformSubscriptionResult}
+                    title="Platform subscriptions unavailable"
+                    context="Platform subscriptions"
+                  />
+                ) : null}
               </div>
             ) : (
               <ErrorState result={platformAccess} title="Platform access unavailable" context="Platform access" />
@@ -79,18 +122,30 @@ export default async function SubscriptionsPage() {
 
           <Card className="p-4">
             <p className="text-sm font-medium">Joined memberships</p>
-            {subscriptions.ok ? (
+            {creatorMembershipResult.ok ? (
               creatorMemberships.length > 0 ? (
-                creatorMemberships.map((subscription) => (
-                  <SubscriptionSummary subscription={subscription} key={subscription.id} />
-                ))
+                <>
+                  {creatorMemberships.map((subscription) => (
+                    <SubscriptionSummary subscription={subscription} key={subscription.id} />
+                  ))}
+                  <SubscriptionContinuation
+                    cursor={creatorMembershipResult.data.nextCursor}
+                    cursorKey="creatorCursor"
+                    label="More creator memberships"
+                    searchParams={query}
+                  />
+                </>
               ) : (
                 <EmptyState title="No joined memberships">
                   Joined creator memberships will appear here after activation.
                 </EmptyState>
               )
             ) : (
-              <ErrorState result={subscriptions} title="Subscriptions unavailable" context="Subscriptions" />
+              <ErrorState
+                result={creatorMembershipResult}
+                title="Subscriptions unavailable"
+                context="Subscriptions"
+              />
             )}
           </Card>
 
@@ -98,9 +153,17 @@ export default async function SubscriptionsPage() {
             <p className="text-sm font-medium">Subscription history</p>
             {subscriptionHistory.ok ? (
               subscriptionHistory.data.items.length > 0 ? (
-                subscriptionHistory.data.items.map((subscription) => (
-                  <SubscriptionSummary subscription={subscription} key={subscription.id} />
-                ))
+                <>
+                  {subscriptionHistory.data.items.map((subscription) => (
+                    <SubscriptionSummary subscription={subscription} key={subscription.id} />
+                  ))}
+                  <SubscriptionContinuation
+                    cursor={subscriptionHistory.data.nextCursor}
+                    cursorKey="historyCursor"
+                    label="More subscription history"
+                    searchParams={query}
+                  />
+                </>
               ) : (
                 <p className="mt-3 text-sm text-(--muted)">No cancelled or interrupted subscriptions.</p>
               )
@@ -126,9 +189,37 @@ export default async function SubscriptionsPage() {
   );
 }
 
+function SubscriptionContinuation({
+  cursor,
+  cursorKey,
+  label,
+  searchParams
+}: {
+  cursor: string | null;
+  cursorKey: SubscriptionCursorKey;
+  label: string;
+  searchParams: SubscriptionSearchParams;
+}) {
+  if (!cursor) return null;
+  return (
+    <a
+      className="secondary-button mt-4 w-fit"
+      href={subscriptionPageHref({ searchParams, cursorKey, cursor })}
+    >
+      {label}
+    </a>
+  );
+}
+
 function SubscriptionSummary({ subscription }: { subscription: Subscription }) {
   return (
     <div className="mt-4 grid gap-3 text-sm">
+      {subscription.scope === "creator" && subscription.creator ? (
+        <Fact
+          label="Membership"
+          value={subscription.creator.displayName ?? `@${subscription.creator.handle}`}
+        />
+      ) : null}
       <Fact label="Status" value={friendlyState(subscription.state)} />
       <Fact label="Renewal" value="Automatic" />
       <Fact label="Next collection" value={subscription.nextCollectionAt ?? "pending authorization"} />

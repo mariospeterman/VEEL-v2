@@ -8,15 +8,19 @@ export function verifyDiditV3Webhook(input: {
   secret: string;
   now?: Date;
 }): string | null {
-  const signature = headerValue(input.headers["x-signature-v2"]);
+  const signatures = [
+    headerValue(input.headers["x-signature-v2"]),
+    headerValue(input.headers["x-signature-v2-previous"])
+  ].filter((signature): signature is string => signature !== null);
   const timestampHeader = headerValue(input.headers["x-timestamp"]);
-  if (!signature || !timestampHeader) return null;
+  if (signatures.length === 0 || !timestampHeader) return null;
 
   const expected = createHmac("sha256", input.secret)
     .update(canonicalDiditJson(input.body), "utf8")
     .digest("hex");
 
-  if (!secureEqualHex(expected, signature)) return null;
+  const signature = signatures.find((candidate) => secureEqualHex(expected, candidate));
+  if (!signature) return null;
 
   // Didit V3's documented envelope includes a Unix dispatch timestamp and
   // X-Signature-V2 authenticates the complete canonical body. Never derive

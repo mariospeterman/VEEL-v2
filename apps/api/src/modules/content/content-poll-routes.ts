@@ -1,7 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { hashIdempotencyPayload, readIdempotencyKey } from "../../shared/idempotency.js";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
-import { ContentPollVoteConflictError, ContentRepositoryConfigurationError } from "./content-repository.js";
+import {
+  ContentFormatRetiredError,
+  ContentPollVoteConflictError,
+  ContentRepositoryConfigurationError
+} from "./content-repository.js";
 import { verifyAppReadyAccess, type RegisterContentRoutesOptions } from "./content-route-shared.js";
 import type { VoteOnContentPollRequest } from "./types.js";
 
@@ -31,6 +35,12 @@ export async function registerContentPollRoutes(app: FastifyInstance, options: R
       if (!poll) return reply.code(404).send({ code: "not_found", message: "Poll or option not found" });
       return reply.code(200).send(poll);
     } catch (error) {
+      if (error instanceof ContentFormatRetiredError) {
+        return reply.code(410).send({
+          code: "content_format_retired",
+          message: "Text and poll content formats are retired"
+        });
+      }
       if (error instanceof ContentPollVoteConflictError) {
         return reply.code(409).send({
           code: "conflict",

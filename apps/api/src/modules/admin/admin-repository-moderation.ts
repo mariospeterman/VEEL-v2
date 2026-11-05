@@ -4,6 +4,7 @@ import {
   resolveMutationActorBySupabaseUserId
 } from "../../shared/mutation-command-receipt.js";
 import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import type { AdminRepository } from "./types.js";
 import { AdminRepositoryStateConflictError } from "./admin-repository-errors.js";
 import {
@@ -23,7 +24,9 @@ export function createModerationRepository(
 ): Pick<AdminRepository, "listContent" | "updateContentModeration" | "listReports" | "updateReport"> {
   return {
     async listContent(input) {
-      const cursorScope = "GET /v1/admin/content";
+      const cursorScope = bindCursorScope("GET /v1/admin/content", {
+        sort: "queue_priority:asc,created_at:desc,id:desc"
+      });
       const cursor = decodePriorityTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<Array<AdminContentRow & { queue_priority: number }>>`
         with content_queue as (
@@ -346,7 +349,9 @@ export function createModerationRepository(
       });
     },
     async listReports(input) {
-      const cursorScope = "GET /v1/admin/reports";
+      const cursorScope = bindCursorScope("GET /v1/admin/reports", {
+        sort: "queue_priority:asc,created_at:desc,id:desc"
+      });
       const cursor = decodePriorityTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<Array<AdminReportRow & { queue_priority: number }>>`
         with report_queue as (

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor,
   keysetPage
@@ -12,14 +13,29 @@ import type { CommentReplayRow, CommentRow } from "./engagement-repository-rows.
 import { visibleContentSql } from "./engagement-repository-sql.js";
 
 const mentionPattern = /(?:^|\s)@([a-z0-9_]{2,32})\b/gi;
-export const engagementCommentsCursorScope = "GET /v1/engagement/:contentId/comments";
+const engagementCommentsCursorRoute = "GET /v1/engagement/:contentId/comments";
+
+export function engagementCommentsCursorScope(
+  supabaseUserId: string,
+  contentId: string
+): string {
+  return bindCursorScope(engagementCommentsCursorRoute, {
+    actor: supabaseUserId,
+    content: contentId,
+    sort: "created_at:desc,id:desc"
+  });
+}
 
 export function createEngagementCommentRepositoryMethods(
   sql: postgres.Sql
 ): Pick<EngagementRepository, "listComments" | "createComment" | "toggleCommentLike"> {
   return {
     async listComments(input) {
-      const cursor = decodeTimestampIdCursor(engagementCommentsCursorScope, input.cursor);
+      const cursorScope = engagementCommentsCursorScope(
+        input.supabaseUserId,
+        input.contentId
+      );
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<CommentRow[]>`
         with actor as (
           select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
@@ -125,7 +141,7 @@ export function createEngagementCommentRepositoryMethods(
       `;
 
       return keysetPage(rows, input.limit, toComment, (row) =>
-        encodeTimestampIdCursor(engagementCommentsCursorScope, row.created_at, row.id)
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
       );
     },
     async createComment(input) {

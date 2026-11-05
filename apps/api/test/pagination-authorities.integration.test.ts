@@ -324,6 +324,7 @@ async function seedFixture(sql: PostgresSql, fixture: Fixture): Promise<void> {
         state = 'ready',
         moderation_state = 'approved',
         publish_state = 'published',
+        published_at = coalesce(published_at, ${fixture.createdAt}),
         updated_at = ${fixture.createdAt}
       where id = ${contentId}
     `;

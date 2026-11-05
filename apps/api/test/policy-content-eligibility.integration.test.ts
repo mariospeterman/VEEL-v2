@@ -400,7 +400,7 @@ describeIntegration("canonical policy and content eligibility against Postgres",
 
       await sql`
         insert into viewer_feed_preferences (user_id, default_feed_mode, nsfw_preference)
-        values (${viewerId}, 'recommended', 'both')
+        values (${viewerId}, 'latest', 'both')
       `;
       const both = await sql<Array<{ content_item_id: string }>>`
         select content_item_id from private.eligible_content(${viewerId}, null)

@@ -13,6 +13,7 @@ import type {
   LiveRepository,
   StoredLiveRoom
 } from "./types.js";
+import { livepeerPlaybackJwtSeconds } from "./livepeer-adapter.js";
 
 export interface RegisterLiveRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
@@ -193,6 +194,7 @@ export async function withSignedLivePlayback(input: {
   }
 
   let usage: NonNullable<StoredLiveRoom["playback"]>["usage"] | undefined;
+  let leaseExpiresAt: Date | null = null;
   const potentiallyAccounted =
     response.accessMode === "public" && response.creator.id !== input.appUserId;
 
@@ -221,8 +223,24 @@ export async function withSignedLivePlayback(input: {
           policy: "public_media_allowance",
           targetType: "live_room",
           targetId: response.id,
-          heartbeatIntervalSeconds: 15
+          heartbeatIntervalSeconds: 15,
+          leaseExpiresAt: decision.leaseExpiresAt
         };
+        if (decision.leaseRequired) {
+          leaseExpiresAt = decision.leaseExpiresAt
+            ? new Date(decision.leaseExpiresAt)
+            : null;
+          if (!leaseExpiresAt || leaseExpiresAt.getTime() <= Date.now()) {
+            return {
+              ...response,
+              playback: {
+                ...blockedPlayback,
+                blockReason: "playback_lease_required",
+                usage
+              }
+            };
+          }
+        }
       }
     } catch {
       return {
@@ -235,7 +253,8 @@ export async function withSignedLivePlayback(input: {
   try {
     const jwt = await input.liveProvider.createPlaybackJwt({
       playbackId: input.room.providerPlaybackId,
-      appUserId: input.appUserId
+      appUserId: input.appUserId,
+      ...(leaseExpiresAt ? { expiresAt: leaseExpiresAt } : {})
     });
 
     if (!jwt) {
@@ -253,6 +272,10 @@ export async function withSignedLivePlayback(input: {
         provider: "livepeer",
         resourceType: "hls",
         jwt,
+        expiresAt: new Date(Math.min(
+          leaseExpiresAt?.getTime() ?? Number.POSITIVE_INFINITY,
+          Date.now() + livepeerPlaybackJwtSeconds * 1_000
+        )).toISOString(),
         ...(usage ? { usage } : {})
       }
     };

@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import type { AdminRepository } from "./types.js";
 import { AdminRepositoryStateConflictError } from "./admin-repository-errors.js";
 import {
@@ -20,7 +21,9 @@ export function createOrganizationRepository(
 ): Pick<AdminRepository, "listOrganizations" | "provisionOrganization" | "updateOrganizationKyb" | "listOrganizationMembers" | "updateOrganizationMember"> {
   return {
     async listOrganizations(input) {
-      const cursorScope = "GET /v1/admin/organizations";
+      const cursorScope = bindCursorScope("GET /v1/admin/organizations", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<OrganizationRow[]>`
         select id, name, state, plan, kyb_state, created_at
@@ -195,8 +198,8 @@ export function createOrganizationRepository(
               updated_org.id,
               'organization_kyb_updated',
               jsonb_build_object(
-                'reason', ${input.body.reason},
-                'idempotencyKey', ${input.idempotencyKey},
+                'reason', ${input.body.reason}::text,
+                'idempotencyKey', ${input.idempotencyKey}::text,
                 'previousState', updated_org.previous_state,
                 'newState', updated_org.state,
                 'previousKybState', updated_org.previous_kyb_state,
@@ -238,7 +241,7 @@ export function createOrganizationRepository(
               ${input.body.reason},
               jsonb_build_object(
                 'source', 'admin_kyb_override',
-                'idempotencyKey', ${input.idempotencyKey},
+                'idempotencyKey', ${input.idempotencyKey}::text,
                 'auditEventId', audit_insert.id
               )
             from updated_org
@@ -256,7 +259,13 @@ export function createOrganizationRepository(
       return rows[0] ? toOrganization(rows[0]) : null;
     },
     async listOrganizationMembers(input) {
-      const cursorScope = `GET /v1/admin/organizations/${input.organizationId}/members`;
+      const cursorScope = bindCursorScope(
+        "GET /v1/admin/organizations/:organizationId/members",
+        {
+          organization: input.organizationId,
+          sort: "effective_at:desc,created_at:desc,id:desc"
+        }
+      );
       const cursor = decodeTwoTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<Array<OrganizationMemberRow & { pagination_timestamp: Date }>>`
         select
@@ -442,11 +451,11 @@ export function createOrganizationRepository(
               'organization_member_updated',
               jsonb_build_object(
                 'organizationId', updated_membership.organization_id,
-                'reason', ${input.body.reason},
-                'idempotencyKey', ${input.idempotencyKey},
-                'previousRole', ${locked.role},
+                'reason', ${input.body.reason}::text,
+                'idempotencyKey', ${input.idempotencyKey}::text,
+                'previousRole', ${locked.role}::text,
                 'newRole', updated_membership.role,
-                'previousState', ${locked.state},
+                'previousState', ${locked.state}::text,
                 'newState', updated_membership.state
               )
             from updated_membership

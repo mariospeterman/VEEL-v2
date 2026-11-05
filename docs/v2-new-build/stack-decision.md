@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: platform stack
-Last updated: 2026-08-15
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
@@ -29,7 +29,7 @@ DB/Auth:    Supabase Postgres/RLS + optional Supabase Auth recovery linking
 Realtime:   Supabase Realtime, selectively
 Workers:    TypeScript worker runtime with domain-owned Postgres lease tables; BullMQ/Redis only when measured scale requires it
 Contracts:  OpenAPI generated from schemas
-Payments:   Solana JS + Solana Pay; selected Commerce Kit Solana Pay codec in Slice 06; Solana Subscriptions/Allowances after staging approval
+Payments:   Solana JS + exact-pinned @solana/pay 1.0.26 codec island; Solana Subscriptions/Allowances after staging approval
 Wallets:    Privy embedded Solana wallet + intentional Solana Wallet Standard adapters
 Media:      Bunny Stream VOD, Livepeer live/replay
 PM:         pnpm workspaces
@@ -39,6 +39,14 @@ Deploy:     Docker first; serverless/edge only for proven slices
 
 Wallet onboarding presents one provider grid. Installed Solana Wallet Standard adapters that advertise `solana:signMessage` are direct cards, transaction-only or otherwise incompatible adapters remain in the adapter chooser fallback, and configured Privy is a peer card whose official surface owns its email/social/passkey choices. Both authentication paths sign the same WeVid backend challenge and converge on one application-session authority. Supabase remains Settings-only recovery. The embedded wallet mode must be noncustodial/user-controlled and must not create a WeVid-controlled balance. No second embedded-wallet runtime is part of the launch architecture.
 
+The retired Solana Commerce Kit package is not part of the stack. `@veel/solana-pay-codec` is the
+only Solana Pay dependency island: it exact-pins `@solana/pay` `1.0.26` with its compatible Solana
+Kit 6 dependency family and exact-pins server-side `qrcode` `1.5.4` for accessible SVG generation.
+No package type crosses the codec boundary. The API and worker keep their existing Solana Kit 7
+dependency family; they must not be downgraded or deduplicated across this peer-incompatible island.
+This replacement changes URL/QR interoperability only and does not change checkout, wallet,
+transaction composition, verification, settlement, entitlement, or order authority.
+
 ## Official Documentation Checked
 
 - Fastify validation and serialization: `https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/`
@@ -46,7 +54,8 @@ Wallet onboarding presents one provider grid. Installed Solana Wallet Standard a
 - Hono runtimes and Cloudflare Workers guide: `https://hono.dev/docs/`, `https://developers.cloudflare.com/workers/framework-guides/web-apps/more-web-frameworks/hono/`
 - Supabase architecture, RLS, Realtime authorization: `https://supabase.com/docs/architecture`, `https://supabase.com/docs/guides/database/postgres/row-level-security`, `https://supabase.com/docs/guides/realtime/authorization`
 - Solana Pay specification and transaction requests: `https://docs.solanapay.com/`, `https://solana.com/docs/tools/solana-pay/quickstart/transaction-requests`
-- Solana Commerce Kit package selection and source: `https://solana.com/docs/tools/commerce-kit`, `https://github.com/solana-foundation/commerce-kit/tree/main/packages/solana-pay`
+- Solana Pay implementation source: `https://github.com/solana-foundation/pay`
+- Retired Commerce Kit notice: `https://solana.com/docs/tools/commerce-kit/quickstart/payment-button`
 - Solana Subscriptions and Allowances: `https://solana.com/docs/payments/subscriptions/overview`, `https://solana.com/docs/payments/subscriptions/fixed-delegation`, `https://solana.com/docs/payments/subscriptions/recurring-delegation`, `https://solana.com/docs/payments/subscriptions/subscription-plan`
 - Embedded wallet launch provider: `https://docs.privy.io/`
 - Wallet funding/onramp paths to evaluate only for funding user-controlled wallets: `https://docs.cdp.coinbase.com/onramp/docs/welcome`

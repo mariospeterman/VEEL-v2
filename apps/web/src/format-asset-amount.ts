@@ -1,9 +1,13 @@
-export type AssetCurrency = "SOL" | "USDC";
+import {
+  formatAtomicAssetAmount,
+  formatAtomicAssetInputValue as formatAtomicAssetInputValueShared,
+  formatScaledInteger,
+  paymentAssetAtomicDecimals,
+  type PaymentAssetCurrency
+} from "@veel/config/asset-amount";
 
-const ATOMIC_DECIMALS: Record<AssetCurrency, number> = {
-  SOL: 9,
-  USDC: 6
-};
+export type AssetCurrency = PaymentAssetCurrency;
+export { formatAtomicAssetAmount };
 
 const MAX_SAFE_CONTRACT_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 
@@ -37,18 +41,11 @@ export class AssetAmountInputError extends Error {
   }
 }
 
-export function formatAtomicAssetAmount(
-  amountAtomic: number | string | bigint,
-  currency: AssetCurrency
-): string {
-  return `${formatScaledInteger(amountAtomic, ATOMIC_DECIMALS[currency], true)} ${currency}`;
-}
-
 export function formatAtomicAssetInputValue(
   amountAtomic: number | string | bigint,
   currency: AssetCurrency
 ): string {
-  return formatScaledInteger(amountAtomic, ATOMIC_DECIMALS[currency], false);
+  return formatAtomicAssetInputValueShared(amountAtomic, currency);
 }
 
 export function formatTwoDecimalMinorAmount(
@@ -69,7 +66,7 @@ export function parseAssetAmountToAtomic(
   currency: AssetCurrency,
   range: AtomicRange = {}
 ): bigint {
-  return parseDecimalToScaledInteger(input, ATOMIC_DECIMALS[currency], {
+  return parseDecimalToScaledInteger(input, paymentAssetAtomicDecimals[currency], {
     minimum: range.minimumAtomic ?? 0n,
     maximum: range.maximumAtomic ?? MAX_SAFE_CONTRACT_INTEGER,
     unitLabel: `${currency} atomic amount`
@@ -141,40 +138,4 @@ function parseDecimalToScaledInteger(
   }
 
   return scaled;
-}
-
-function formatScaledInteger(
-  input: number | string | bigint,
-  decimals: number,
-  groupWhole: boolean,
-  trimFraction = true
-): string {
-  const amount = toExactInteger(input);
-  const negative = amount < 0n;
-  const absolute = negative ? -amount : amount;
-  const divisor = 10n ** BigInt(decimals);
-  const whole = decimals === 0 ? absolute : absolute / divisor;
-  const rawFraction =
-    decimals === 0 ? "" : (absolute % divisor).toString().padStart(decimals, "0");
-  const fractional = trimFraction ? rawFraction.replace(/0+$/, "") : rawFraction;
-  const wholeText = groupWhole
-    ? whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-    : whole.toString();
-
-  return `${negative ? "-" : ""}${wholeText}${fractional ? `.${fractional}` : ""}`;
-}
-
-function toExactInteger(input: number | string | bigint): bigint {
-  if (typeof input === "number") {
-    if (!Number.isSafeInteger(input)) {
-      throw new RangeError("Amount numbers must be safe integers.");
-    }
-    return BigInt(input);
-  }
-
-  if (typeof input === "string" && !/^-?(0|[1-9]\d*)$/.test(input)) {
-    throw new RangeError("Amount strings must contain an exact base-10 integer.");
-  }
-
-  return BigInt(input);
 }

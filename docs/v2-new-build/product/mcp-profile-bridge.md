@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Convergence 07 remote MCP profile, analytics, and private-draft behavior
-Last updated: 2026-08-24
+Last updated: 2026-11-05
 Source of truth: yes for this bounded product slice
 
 Owns:
@@ -42,9 +42,17 @@ keys, provider payloads, auth tokens, private messages, and raw personal data ar
 
 ## Protocol and trust boundary
 
-- Tested MCP compatibility target: `2025-11-25`. MCP `2026-07-28` is the latest final specification,
-  but the current initialize-based endpoint does not implement its stateless discovery/routing/cache
-  contract and must reject that version until the migration and exact-client staging matrix pass.
+- Deliberate MCP compatibility target: the handshake-era `2025-11-25` specification. The official
+  current final specification is `2026-07-28`, but that revision replaces initialization with
+  stateless `server/discover` and per-request capability/version metadata. The current endpoint does
+  not implement that lifecycle and rejects an explicit `2026-07-28` protocol header; this is
+  intentional compatibility, not a claim of latest-version support.
+- The endpoint is a narrow, hand-written Fastify/JSON-RPC implementation; no
+  `@modelcontextprotocol/*` SDK is installed. `initialize` echoes `2025-06-18` only when that exact
+  revision is requested and otherwise offers `2025-11-25`. Post-initialization protocol headers
+  tolerate `2025-03-26`, `2025-06-18`, and `2025-11-25`, but that allowlist does not claim every
+  optional feature or official-SDK compatibility at those revisions. Real-client staging remains
+  mandatory.
 - OAuth authorization-code plus S256 PKCE, exact redirect matching, audience/resource binding,
   short-lived hash-only bearer tokens, revocation, and per-request authorization remain mandatory.
 - Streamable HTTP requests with an `Origin` header are accepted only from configured WeVid origins;

@@ -24,6 +24,8 @@ import {
   insertSubscriptionEvent
 } from "./subscription-repository-support.js";
 
+const delegationLifetimeMs = 366 * 24 * 60 * 60 * 1000;
+
 export async function createAuthorizationIntent(
   sql: postgres.Sql,
   input: Parameters<SubscriptionRepository["createAuthorizationIntent"]>[0]
@@ -129,9 +131,14 @@ export async function createAuthorizationIntent(
     throw new SubscriptionPolicyError("subscriber_wallet_required");
   }
 
+  if (!input.collectorAddress) {
+    throw new SubscriptionPolicyError("collector_wallet_missing");
+  }
+
   const subscriptionId = randomUUID();
   const intentId = randomUUID();
   const setupReference = randomUUID();
+  const delegationExpiresAt = new Date(input.expiresAt.getTime() + delegationLifetimeMs);
 
   const result = await sql.begin(async (transaction) => {
     if (plan.creator_user_id) {
@@ -158,6 +165,26 @@ export async function createAuthorizationIntent(
       }
     }
 
+    await transaction`
+      select pg_advisory_xact_lock(
+        hashtextextended(
+          ${`${subscriberWallet}:${plan.token_mint}:${input.collectorAddress}`},
+          0
+        )
+      )
+    `;
+    const nonceRows = await transaction<{ delegation_nonce: string | number }[]>`
+      select coalesce(max(delegation_nonce), 0) + 1 as delegation_nonce
+      from subscriptions
+      where subscriber_wallet = ${subscriberWallet}
+        and token_mint = ${plan.token_mint}
+        and collector_address = ${input.collectorAddress}
+    `;
+    const delegationNonce = Number(nonceRows[0]?.delegation_nonce);
+    if (!Number.isSafeInteger(delegationNonce) || delegationNonce <= 0) {
+      throw new SubscriptionRepositoryConfigurationError();
+    }
+
     const subscriptionRows = await transaction<SubscriptionRow[]>`
       insert into subscriptions (
         id,
@@ -174,6 +201,7 @@ export async function createAuthorizationIntent(
         token_mint,
         amount_atomic,
         period_seconds,
+        delegation_nonce,
         plan_pda,
         merchant_wallet
       )
@@ -192,6 +220,7 @@ export async function createAuthorizationIntent(
         ${plan.token_mint},
         ${Number(plan.amount_atomic ?? plan.amount_minor)},
         ${plan.period_seconds ?? plan.period_days * 86_400},
+        ${delegationNonce},
         ${plan.plan_pda},
         ${plan.merchant_wallet}
       )
@@ -238,6 +267,8 @@ export async function createAuthorizationIntent(
         request_hash,
         setup_reference,
         transaction_request_url,
+        delegation_nonce,
+        delegation_expires_at,
         expires_at
       )
       values (
@@ -247,6 +278,8 @@ export async function createAuthorizationIntent(
         ${input.requestHash},
         ${setupReference},
         null,
+        ${delegationNonce},
+        ${delegationExpiresAt},
         ${input.expiresAt}
       )
       returning

@@ -6,6 +6,7 @@ import {
   withPostgresTransaction
 } from "../../shared/postgres.js";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor,
   keysetPage
@@ -63,7 +64,11 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
 
   return {
     async listRequests(input) {
-      const cursor = decodeTimestampIdCursor(refundCursorScope, input.cursor);
+      const cursorScope = bindCursorScope(refundCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<RefundDisputeRow[]>`
         with target_user as (
           select id
@@ -111,7 +116,7 @@ export function createPostgresRefundRepository(database?: string | PostgresSql):
       `;
 
       return keysetPage(rows, pageSize, toRefundDisputeRequest, (row) =>
-        encodeTimestampIdCursor(refundCursorScope, row.created_at, row.id)
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
       );
     },
     async createRequest(input) {

@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: events, Event Access Passes, Solana payment, QR/check-in, admin ops
-Last updated: 2026-08-15
+Last updated: 2026-11-05
 Source of truth: yes for v2 Event Access
 
 Owns:
@@ -72,7 +72,7 @@ Avoid launch-facing language:
 - Paid Event Access uses noncustodial Solana-compatible payment intents.
 - Backend creates access entitlement, QR, receipt, and compliance ledger entry only after verified payment or approval.
 - Launch does not need a separate Solana ticketing provider. Use backend Event Access Pass entitlements plus Solana settlement.
-- Slice 06 uses the exact-pinned narrow `@solana-commerce/solana-pay` codec and shared WeVid checkout presentation for standards-compliant wallet/SVG-QR handoff only. Commerce Kit never owns pass pricing, reservation/capacity, settlement confirmation, entitlement, pass QR/check-in, refund, or access state.
+- Slice 06 uses exact-pinned `@solana/pay` `1.0.26` inside the narrow isolated codec plus Node `qrcode` `1.5.4` and the shared WeVid checkout presentation for standards-compliant wallet/SVG-QR handoff only. The codec never owns pass pricing, reservation/capacity, settlement confirmation, entitlement, pass QR/check-in, refund, or access state.
 - Future NFT/token passes, collectible passes, transferable passes, or third-party ticketing providers are separate ADRs, not the launch default.
 
 Noncustodial boundary:

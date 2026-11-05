@@ -4,6 +4,7 @@ import {
   ContentCompositionConflictError,
   ContentDraftPollCloseError,
   ContentDraftQuotaExceededError,
+  ContentFormatRetiredError,
   ContentEventDraftConflictError,
   ContentModerationAppealConflictError,
   ContentPublishConflictError,
@@ -18,6 +19,7 @@ import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-c
 import { validateEventDraft } from "../event/event-route-shared.js";
 import type {
   CreateContentRequest,
+  CreateContentDraftInput,
   CreateMediaModerationAppealRequest,
   PublishContentRequest,
   UpdateContentRequest
@@ -42,6 +44,16 @@ import {
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+type HistoricalCreateContentBody = Partial<Omit<CreateContentRequest, "mediaType">> & {
+  mediaType?: string;
+  bodyText?: unknown;
+  poll?: unknown;
+};
+
+type HistoricalUpdateContentBody = Partial<UpdateContentRequest> & {
+  bodyText?: unknown;
+};
+
 export async function registerContentCoreRoutes(
   app: FastifyInstance,
   options: RegisterContentRoutesOptions
@@ -62,7 +74,7 @@ export async function registerContentCoreRoutes(
       });
     }
 
-    const body = request.body as Partial<CreateContentRequest> | undefined;
+    const body = request.body as HistoricalCreateContentBody | undefined;
 
     if (
       !body ||
@@ -105,14 +117,14 @@ export async function registerContentCoreRoutes(
       const abusePolicy = await resolveContentCreationAbusePolicy(options.contentRepository);
       const poll = normalizePollDraft(body.poll);
       const draftBody = {
-        mediaType: body.mediaType,
+        mediaType: body.mediaType as CreateContentDraftInput["mediaType"],
         distributionMode: body.distributionMode === "moment" ? "moment" as const : "post" as const,
         scheduledFor: body.scheduledFor ?? null,
         caption: typeof body.caption === "string" ? body.caption : null,
         bodyText: typeof body.bodyText === "string" ? body.bodyText.trim() : null,
         ...(poll ? { poll } : {}),
         visibility: body.visibility,
-        nsfwLabel: body.nsfwLabel,
+        nsfwLabel: body.nsfwLabel as CreateContentDraftInput["nsfwLabel"],
         representationMode: body.representationMode as NonNullable<CreateContentRequest["representationMode"]>,
         contentSafetyPolicyAccepted: true
       };
@@ -128,6 +140,13 @@ export async function registerContentCoreRoutes(
 
       return reply.code(201).send(content);
     } catch (error) {
+      if (error instanceof ContentFormatRetiredError) {
+        return reply.code(410).send({
+          code: "content_format_retired",
+          message: "Text and poll content formats are retired"
+        });
+      }
+
       if (error instanceof ContentDraftIdempotencyConflictError) {
         return reply.code(409).send({
           code: "conflict",
@@ -233,7 +252,7 @@ export async function registerContentCoreRoutes(
           nextCursor: null,
           mode,
           surface,
-          rankingVersion: "deterministic_v1",
+          rankingVersion: "chronological_v1",
           generatedAt: new Date().toISOString()
         });
       }
@@ -245,7 +264,7 @@ export async function registerContentCoreRoutes(
       if (isStaleFeedCursorError(error)) {
         return reply.code(409).send({
           code: "feed_cursor_stale",
-          message: "Feed session expired; restart from the first page"
+          message: "This cursor belongs to the retired ranked feed; restart from the first page"
         });
       }
 
@@ -327,7 +346,7 @@ export async function registerContentCoreRoutes(
       });
     }
 
-    const body = request.body as Partial<UpdateContentRequest> | undefined;
+    const body = request.body as HistoricalUpdateContentBody | undefined;
     const validationError = validateUpdateContentBody(body);
 
     if (validationError) {
@@ -386,6 +405,13 @@ export async function registerContentCoreRoutes(
 
       return reply.code(200).send(content);
     } catch (error) {
+      if (error instanceof ContentFormatRetiredError) {
+        return reply.code(410).send({
+          code: "content_format_retired",
+          message: "Text and poll content formats are retired"
+        });
+      }
+
       if (error instanceof ContentEventDraftConflictError) {
         return reply.code(409).send({
           code: "conflict",
@@ -519,6 +545,13 @@ export async function registerContentCoreRoutes(
 
       return reply.code(200).send(content);
     } catch (error) {
+      if (error instanceof ContentFormatRetiredError) {
+        return reply.code(410).send({
+          code: "content_format_retired",
+          message: "Text and poll content formats are retired"
+        });
+      }
+
       if (error instanceof MutationCommandIdempotencyConflictError) {
         return reply.code(409).send({
           code: "conflict",
@@ -599,7 +632,7 @@ export async function registerContentCoreRoutes(
   });
 }
 
-function validateCreateCompositionBody(body: Partial<CreateContentRequest>): string | null {
+function validateCreateCompositionBody(body: HistoricalCreateContentBody): string | null {
   if (body.distributionMode === "moment" && !["bit", "clip", "image", "vod", "carousel"].includes(body.mediaType ?? "")) {
     return "Moments require image or video media";
   }
@@ -632,17 +665,18 @@ function validateCreateCompositionBody(body: Partial<CreateContentRequest>): str
     if (!body.poll || typeof body.poll !== "object" || Array.isArray(body.poll)) {
       return "poll must include a question and two to four options";
     }
+    const poll = body.poll as Record<string, unknown>;
     if (
-      typeof body.poll.question !== "string" ||
-      body.poll.question.trim().length < 1 ||
-      body.poll.question.trim().length > 500
+      typeof poll.question !== "string" ||
+      poll.question.trim().length < 1 ||
+      poll.question.trim().length > 500
     ) {
       return "poll question must be between 1 and 500 characters";
     }
-    if (!Array.isArray(body.poll.options) || body.poll.options.length < 2 || body.poll.options.length > 4) {
+    if (!Array.isArray(poll.options) || poll.options.length < 2 || poll.options.length > 4) {
       return "poll must include two to four options";
     }
-    const options = body.poll.options.map((option) =>
+    const options = poll.options.map((option) =>
       typeof option === "string" ? option.trim() : ""
     );
     if (options.some((option) => option.length < 1 || option.length > 200)) {
@@ -652,11 +686,11 @@ function validateCreateCompositionBody(body: Partial<CreateContentRequest>): str
       return "poll options must be unique";
     }
     if (
-      body.poll.closesAt !== undefined &&
-      body.poll.closesAt !== null &&
-      (typeof body.poll.closesAt !== "string" ||
-        Number.isNaN(Date.parse(body.poll.closesAt)) ||
-        Date.parse(body.poll.closesAt) <= Date.now())
+      poll.closesAt !== undefined &&
+      poll.closesAt !== null &&
+      (typeof poll.closesAt !== "string" ||
+        Number.isNaN(Date.parse(poll.closesAt)) ||
+        Date.parse(poll.closesAt) <= Date.now())
     ) {
       return "poll closesAt must be a future ISO date-time or null";
     }
@@ -666,13 +700,19 @@ function validateCreateCompositionBody(body: Partial<CreateContentRequest>): str
 }
 
 function normalizePollDraft(
-  poll: CreateContentRequest["poll"] | undefined
-): CreateContentRequest["poll"] | undefined {
-  if (!poll) return undefined;
+  poll: unknown
+): CreateContentDraftInput["poll"] {
+  if (!poll || typeof poll !== "object" || Array.isArray(poll)) return undefined;
+  const candidate = poll as Record<string, unknown>;
+  if (typeof candidate.question !== "string" || !Array.isArray(candidate.options)) return undefined;
+  const options = candidate.options.filter((option): option is string => typeof option === "string");
+  if (options.length !== candidate.options.length) return undefined;
   return {
-    question: poll.question.trim(),
-    options: poll.options.map((option) => option.trim()),
-    ...(poll.closesAt !== undefined ? { closesAt: poll.closesAt } : {})
+    question: candidate.question.trim(),
+    options: options.map((option) => option.trim()),
+    ...(candidate.closesAt === null || typeof candidate.closesAt === "string"
+      ? { closesAt: candidate.closesAt }
+      : {})
   };
 }
 
@@ -689,7 +729,7 @@ async function hasSchedulingCapability(
   }
 }
 
-function validateUpdateContentBody(body: Partial<UpdateContentRequest> | undefined): string | null {
+function validateUpdateContentBody(body: HistoricalUpdateContentBody | undefined): string | null {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return "Update body is required";
   }

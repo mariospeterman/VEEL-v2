@@ -45,6 +45,8 @@ describeIntegration("canonical rollback SQL against migrated Postgres", () => {
 
   it("rolls Moment schema down and reapplies it only while no Moment evidence exists", async () => {
     if (!sql) throw new Error("Rollback test database was not initialized");
+    const latestDown = migration("0130_media_core_scope_transition.down.sql");
+    const latestUp = migration("0130_media_core_scope_transition.sql");
     const down = migration("0117_moments_and_scheduled_publication.down.sql");
     const up = migration("0117_moments_and_scheduled_publication.sql");
     const moments = await sql<{ count: number }[]>`
@@ -53,6 +55,7 @@ describeIntegration("canonical rollback SQL against migrated Postgres", () => {
     expect(moments[0]?.count).toBe(0);
 
     await sql.begin(async (transaction) => {
+      await transaction.unsafe(latestDown);
       await transaction.unsafe(down);
     });
     expect(await columnExists(sql, "content_items", "distribution_mode")).toBe(false);
@@ -60,6 +63,7 @@ describeIntegration("canonical rollback SQL against migrated Postgres", () => {
 
     await sql.begin(async (transaction) => {
       await transaction.unsafe(up);
+      await transaction.unsafe(latestUp);
     });
     await expectMomentSchemaPresent(sql);
   });

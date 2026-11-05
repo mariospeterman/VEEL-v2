@@ -9,6 +9,15 @@ const enabled = ["1", "true"].includes(
 );
 const describeIntegration = enabled ? describe : describe.skip;
 
+const permissionScopedFinanceTables = [
+  "refunds_and_disputes",
+  "refund_remediation_evidence",
+  "organization_settlement_wallets",
+  "managed_creator_relationships",
+  "managed_creator_agreements",
+  "managed_creator_allocation_records"
+] as const;
+
 const serverOwnedTables = [
   "identity_verifications",
   "tax_profiles",
@@ -37,6 +46,7 @@ const serverOwnedTables = [
   "referral_abuse_flags",
   "tier_waivers",
   "organizations",
+  ...permissionScopedFinanceTables,
   "user_social_counts",
   "content_engagement_counters",
   "comments",
@@ -57,19 +67,28 @@ describeIntegration("server-owned Data API authority", () => {
 
     try {
       const privileges = await sql<
-        Array<{ anon_select: boolean; authenticated_select: boolean; table_name: string }>
+        Array<{
+          anon_select: boolean;
+          authenticated_select: boolean;
+          backend_select: boolean;
+          table_name: string;
+        }>
       >`
         select
           table_name,
           has_table_privilege('anon', format('public.%I', table_name), 'select') as anon_select,
           has_table_privilege(
             'authenticated', format('public.%I', table_name), 'select'
-          ) as authenticated_select
+          ) as authenticated_select,
+          has_table_privilege(
+            current_user, format('public.%I', table_name), 'select'
+          ) as backend_select
         from unnest(${serverOwnedTables}::text[]) as table_name
         order by table_name
       `;
       expect(privileges).toHaveLength(serverOwnedTables.length);
       expect(privileges.every((row) => !row.anon_select && !row.authenticated_select)).toBe(true);
+      expect(privileges.every((row) => row.backend_select)).toBe(true);
 
       const backendProbe = await sql<{ count: number }[]>`
         select count(*)::integer as count from content_items
@@ -82,9 +101,17 @@ describeIntegration("server-owned Data API authority", () => {
       `;
       await sql`
         insert into staff_memberships (id, user_id, role, state, granted_by_user_id)
-        values (${staffMembershipId}, ${staffUserId}, 'owner', 'active', ${staffUserId})
+        values (${staffMembershipId}, ${staffUserId}, 'ai_ops', 'active', ${staffUserId})
       `;
 
+      for (const table of permissionScopedFinanceTables) {
+        await expect(
+          sql.begin(async (transaction) => {
+            await assumeBrowserRole(transaction, "authenticated", staffUserId);
+            await transaction.unsafe(`select 1 from public.${table} limit 1`);
+          })
+        ).rejects.toMatchObject({ code: "42501" });
+      }
       await expect(
         sql.begin(async (transaction) => {
           await assumeBrowserRole(transaction, "authenticated", staffUserId);

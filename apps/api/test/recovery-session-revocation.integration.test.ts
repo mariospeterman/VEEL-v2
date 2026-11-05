@@ -160,7 +160,8 @@ describeIntegration("Supabase recovery-session revocation boundary", () => {
       sessionExpiresAt: new Date(Date.now() + 10 * 60 * 1000)
     };
 
-    await expect(repository.exchangeRecoveryIdentity(exchangeInput)).resolves.toMatchObject({
+    const issued = await repository.exchangeRecoveryIdentity(exchangeInput);
+    await expect(repository.verifySessionToken(issued.accessToken)).resolves.toMatchObject({
       authenticationMethod: "supabase_recovery"
     });
     await sql`delete from auth.sessions where id = ${fixture.providerSessionId}`;

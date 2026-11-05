@@ -1,5 +1,5 @@
 import type postgres from "postgres";
-import { keysetPage } from "../../shared/keyset-pagination.js";
+import { bindCursorScope, keysetPage } from "../../shared/keyset-pagination.js";
 import { toLiveRoom } from "../live/live-repository-mappers.js";
 import type { LiveRoomRow } from "../live/live-repository-rows.js";
 import { liveRoomSelectSql } from "../live/live-repository-sql.js";
@@ -28,10 +28,20 @@ import type {
 
 export async function listHashtags(
   sql: postgres.Sql,
-  input: { query?: string | undefined; cursor?: string | undefined; limit: number }
+  input: {
+    supabaseUserId: string;
+    query?: string | undefined;
+    cursor?: string | undefined;
+    limit: number;
+  }
 ): Promise<HashtagPage> {
   const search = normalizeSearch(input.query);
-  const cursor = decodeHashtagCursor(input.cursor);
+  const cursorScope = bindCursorScope("GET /v1/discover/hashtags", {
+    actor: input.supabaseUserId,
+    query: search,
+    sort: "slug:asc"
+  });
+  const cursor = decodeHashtagCursor(input.cursor, cursorScope);
   const rows = await sql<HashtagRow[]>`
     select slug, display_name, state
     from hashtags
@@ -50,16 +60,26 @@ export async function listHashtags(
       displayName: row.display_name,
       state: row.state
     }),
-    (row) => encodeHashtagCursor(row.slug)
+    (row) => encodeHashtagCursor(row.slug, cursorScope)
   );
 }
 
 export async function listCreators(
   sql: postgres.Sql,
-  input: { query?: string | undefined; cursor?: string | undefined; limit: number }
+  input: {
+    supabaseUserId: string;
+    query?: string | undefined;
+    cursor?: string | undefined;
+    limit: number;
+  }
 ): Promise<{ items: User[]; nextCursor: string | null }> {
   const search = normalizeSearch(input.query);
-  const cursor = decodeCreatorCursor(input.cursor);
+  const cursorScope = bindCursorScope("GET /v1/discover/creators", {
+    actor: input.supabaseUserId,
+    query: search,
+    sort: "handle:asc,id:asc"
+  });
+  const cursor = decodeCreatorCursor(input.cursor, cursorScope);
   const rows = await sql<CreatorRow[]>`
     select u.id, p.handle, p.display_name, p.avatar_url
     from profiles p
@@ -77,16 +97,26 @@ export async function listCreators(
     limit ${input.limit + 1}
   `;
   return keysetPage(rows, input.limit, toUser, (row) =>
-    encodeCreatorCursor(row.handle!, row.id)
+    encodeCreatorCursor(row.handle!, row.id, cursorScope)
   );
 }
 
 export async function listEvents(
   sql: postgres.Sql,
-  input: { query?: string | undefined; cursor?: string | undefined; limit: number }
+  input: {
+    supabaseUserId: string;
+    query?: string | undefined;
+    cursor?: string | undefined;
+    limit: number;
+  }
 ): Promise<EventPage> {
   const search = normalizeSearch(input.query);
-  const cursor = decodeEventCursor(input.cursor);
+  const cursorScope = bindCursorScope("GET /v1/discover/events", {
+    actor: input.supabaseUserId,
+    query: search,
+    sort: "starts_at:asc,id:asc"
+  });
+  const cursor = decodeEventCursor(input.cursor, cursorScope);
   const rows = await sql<EventRow[]>`
     select
       e.id,
@@ -135,7 +165,7 @@ export async function listEvents(
     limit ${input.limit + 1}
   `;
   return keysetPage(rows, input.limit, toEvent, (row) =>
-    encodeEventCursor(row.starts_at, row.id)
+    encodeEventCursor(row.starts_at, row.id, cursorScope)
   );
 }
 
@@ -145,9 +175,20 @@ type DiscoverLiveRoomRow = LiveRoomRow & {
 
 export async function listLive(
   sql: postgres.Sql,
-  input: { supabaseUserId: string; cursor?: string | undefined; limit: number }
+  input: {
+    supabaseUserId: string;
+    query?: string | undefined;
+    cursor?: string | undefined;
+    limit: number;
+  }
 ): Promise<DiscoverLiveRoomPage> {
-  const cursor = decodeLiveCursor(input.cursor);
+  const search = normalizeSearch(input.query);
+  const cursorScope = bindCursorScope("GET /v1/discover/live", {
+    actor: input.supabaseUserId,
+    query: search,
+    sort: "created_at:desc,id:desc"
+  });
+  const cursor = decodeLiveCursor(input.cursor, cursorScope);
   const rows = await sql<DiscoverLiveRoomRow[]>`
     with target_user as (
       select id
@@ -176,6 +217,12 @@ export async function listLive(
         )
       )
       and (
+        ${search}::text is null
+        or canonical_rooms.title ilike '%' || ${search} || '%'
+        or canonical_rooms.creator_handle ilike '%' || ${search} || '%'
+        or canonical_rooms.creator_display_name ilike '%' || ${search} || '%'
+      )
+      and (
         ${cursor?.createdAt ?? null}::timestamptz is null
         or (canonical_rooms.created_at, canonical_rooms.id) < (
           ${cursor?.createdAt ?? null}::timestamptz,
@@ -186,6 +233,6 @@ export async function listLive(
     limit ${input.limit + 1}
   `;
   return keysetPage(rows, input.limit, toLiveRoom, (row) =>
-    encodeLiveCursor(row.created_at, row.id)
+    encodeLiveCursor(row.created_at, row.id, cursorScope)
   );
 }

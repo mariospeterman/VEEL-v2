@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Launch 10 frontend convergence, accessibility, browser support, and installable PWA behavior
-Last updated: 2026-08-16
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
@@ -74,7 +74,7 @@ Real wallet extensions, embedded-wallet provider domains, push delivery, and iOS
 
 ## Performance And Bundle Boundary
 
-- Public landing first paint must not import Privy, Solana wallet adapter, Solana Web3, Commerce Kit, payment transaction, Realtime, or authenticated query runtimes.
+- Public landing first paint must not import Privy, Solana wallet adapter, Solana Web3, the Solana Pay codec/QR dependency, payment transaction, Realtime, or authenticated query runtimes.
 - Wallet and payment code is dynamically loaded at the narrow interaction boundary.
 - Fonts are self-hosted by the Next font pipeline and use the locked Manrope body and Space Grotesk display families.
 - Images use intentional dimensions and responsive sizing; no route may introduce avoidable layout shift.

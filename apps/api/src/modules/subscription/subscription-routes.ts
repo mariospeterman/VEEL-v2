@@ -371,7 +371,11 @@ export async function registerSubscriptionRoutes(
         planPda: verificationContext.planPda,
         subscriptionPda: verificationContext.subscriptionPda,
         merchantWallet: verificationContext.merchantWallet,
-        expiresAt: verificationContext.expiresAt
+        expiresAt: verificationContext.expiresAt,
+        acceptedAt:
+          verificationContext.submittedSignature === submitBody.signature
+            ? verificationContext.submittedAt
+            : null
       });
       const subscription = await options.subscriptionRepository.submitAuthorization({
         supabaseUserId: access.supabaseUserId,

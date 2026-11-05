@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Mutuals, interest signaling, safety, mutual chat
-Last updated: 2026-08-15
+Last updated: 2026-11-05
 Source of truth: yes for v2 Mutuals
 
 Owns:
@@ -42,7 +42,7 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 - Money, reporting, blocking, and Mutual actions always have visible controls, not gesture-only controls.
 - Paid content access, support, memberships, or platform plan status never imply romantic consent, social consent, visibility priority, or Mutuals interest.
 - Paid products never increase Mutuals feed position, match probability, message priority, social reputation, or eligibility to contact a person outside ordinary backend safety/access rules.
-- Commerce Kit and native Product Offers have no Mutuals role. Support or a purchase cannot activate Mutuals, create interest, imply consent or reply obligation, unlock contact, or change Mutuals eligibility/ranking.
+- The Solana Pay codec and native Product Offers have no Mutuals role. Support or a purchase cannot activate Mutuals, create interest, imply consent or reply obligation, unlock contact, or change Mutuals eligibility/ordering.
 
 ## Routes
 
@@ -69,10 +69,10 @@ Money can never buy access to people, visibility, matches, recommendations, or p
 - `/mutuals/feed` and `/mutuals` use typed API-backed projections through the
   canonical API routes `GET /v1/mutuals/feed` and `GET /v1/mutuals`; they fail
   closed when the API is unavailable instead of rendering fixture Mutuals data.
-- The Mutuals feed currently presents visual `bit`, `clip`, `image`, `vod`,
+- The Mutuals feed presents visual `bit`, historical `clip`, `image`, `vod`,
   `live_replay`, and `carousel` content. Its `mediaKind` is derived from the
-  canonical content type and selected cover asset; text and poll participation
-  requires a later explicit response-contract decision.
+  canonical content type and selected cover asset. Retired text and poll rows
+  are excluded rather than treated as future Mutuals formats.
 - The visible Interested and Not interested controls submit to
   `POST /v1/mutuals/interests`, retain one idempotency key across a lost-response
   retry, and render the canonical persisted action plus only the backend-owned

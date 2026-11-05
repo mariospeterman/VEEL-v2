@@ -41,7 +41,7 @@ export function MomentViewer({
     setPending(true);
     setError(null);
     try {
-      const next = await getFeedPage(page.mode === "following" ? "following" : "recommended", "moments", page.nextCursor);
+      const next = await getFeedPage(page.mode === "following" ? "following" : "latest", "moments", page.nextCursor);
       setPage((current) => ({ ...next, items: [...current.items, ...next.items] }));
       if (next.items.length > 0) setIndex(target);
     } catch (caught) {

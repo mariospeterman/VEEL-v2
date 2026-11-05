@@ -1,4 +1,9 @@
 import postgres from "postgres";
+import {
+  formatAtomicAssetAmount,
+  isPaymentAssetCurrency,
+  type ExactAtomicAmount
+} from "@veel/config/asset-amount";
 
 export type PaymentConfirmationEmailOutcome =
   | {
@@ -25,7 +30,7 @@ export interface QueuedPaymentConfirmationEmail {
   to: string;
   receiptNumber: string;
   productType: string;
-  amountMinor: number;
+  amountMinor: ExactAtomicAmount;
   currency: string;
   termsVersion: string;
   withdrawalWaiverVersion: string;
@@ -67,6 +72,7 @@ export interface ResendPaymentConfirmationEmailProviderOptions {
   from?: string | undefined;
   replyTo?: string | undefined;
   webUrl: string;
+  timeoutMs?: number | undefined;
   fetchImpl?: typeof fetch | undefined;
 }
 
@@ -77,11 +83,16 @@ export async function processPaymentConfirmationEmails(input: {
   limit?: number;
   leaseDurationMs?: number;
   maxAttempts?: number;
+  concurrency?: number;
 }): Promise<ProcessPaymentConfirmationEmailsResult> {
   const now = input.now ?? new Date();
   const limit = input.limit ?? 50;
   const leaseDurationMs = input.leaseDurationMs ?? 5 * 60 * 1000;
   const maxAttempts = input.maxAttempts ?? 8;
+  const concurrency = input.concurrency ?? 4;
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 16) {
+    throw new RangeError("Payment confirmation email concurrency must be between 1 and 16");
+  }
   const deliveries = await input.repository.leaseDueConfirmations({
     now,
     limit,
@@ -96,20 +107,28 @@ export async function processPaymentConfirmationEmails(input: {
     failed: 0
   };
 
-  for (const delivery of deliveries) {
-    const outcome = await input.provider.send(delivery);
-    await input.repository.recordDeliveryOutcome({
-      deliveryId: delivery.deliveryId,
-      leaseToken: delivery.leaseToken,
-      now,
-      maxAttempts,
-      outcome
-    });
+  let nextDeliveryIndex = 0;
+  const workerCount = Math.min(concurrency, deliveries.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (nextDeliveryIndex < deliveries.length) {
+        const delivery = deliveries[nextDeliveryIndex++];
+        if (!delivery) return;
+        const outcome = await input.provider.send(delivery);
+        await input.repository.recordDeliveryOutcome({
+          deliveryId: delivery.deliveryId,
+          leaseToken: delivery.leaseToken,
+          now,
+          maxAttempts,
+          outcome
+        });
 
-    if (outcome.state === "sent") result.sent += 1;
-    else if (outcome.state === "provider_not_configured") result.providerNotConfigured += 1;
-    else result.failed += 1;
-  }
+        if (outcome.state === "sent") result.sent += 1;
+        else if (outcome.state === "provider_not_configured") result.providerNotConfigured += 1;
+        else result.failed += 1;
+      }
+    })
+  );
 
   return result;
 }
@@ -131,6 +150,10 @@ export function createResendPaymentConfirmationEmailProvider(
 ): PaymentConfirmationEmailProvider {
   const isConfigured = Boolean(options.apiKey && options.from);
   const fetchImpl = options.fetchImpl ?? fetch;
+  const timeoutMs = options.timeoutMs ?? 10_000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60_000) {
+    throw new RangeError("Resend total timeout must be between 1 and 60000 milliseconds");
+  }
 
   return {
     isConfigured,
@@ -142,47 +165,70 @@ export function createResendPaymentConfirmationEmailProvider(
         };
       }
 
-      let response: Response;
+      const deadline = Symbol("resend_total_deadline");
+      const abortController = new AbortController();
+      let timeout: ReturnType<typeof setTimeout> | undefined;
       try {
-        response = await fetchImpl("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${options.apiKey}`,
-            "content-type": "application/json",
-            "idempotency-key": `payment-confirmation:${input.deliveryId}`
-          },
-          body: JSON.stringify({
-            from: options.from,
-            to: [input.to],
-            ...(options.replyTo ? { reply_to: options.replyTo } : {}),
-            subject: `WeVid receipt ${input.receiptNumber}`,
-            text: plainTextConfirmation(input, options.webUrl),
-            html: htmlConfirmation(input, options.webUrl)
-          })
+        const request = (async () => {
+          const response = await fetchImpl("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${options.apiKey}`,
+              "content-type": "application/json",
+              "idempotency-key": `payment-confirmation:${input.deliveryId}`
+            },
+            body: JSON.stringify({
+              from: options.from,
+              to: [input.to],
+              ...(options.replyTo ? { reply_to: options.replyTo } : {}),
+              subject: `WeVid receipt ${input.receiptNumber}`,
+              text: plainTextConfirmation(input, options.webUrl),
+              html: htmlConfirmation(input, options.webUrl)
+            }),
+            signal: abortController.signal
+          });
+          const body = await response.json().catch(() => ({})) as {
+            id?: unknown;
+            name?: unknown;
+          };
+          return { response, body };
+        })();
+        const timed = new Promise<typeof deadline>((resolve) => {
+          timeout = setTimeout(() => {
+            abortController.abort();
+            resolve(deadline);
+          }, timeoutMs);
         });
+        const completed = await Promise.race([request, timed]);
+        if (completed === deadline) {
+          return {
+            state: "failed",
+            failureCode: "resend_total_deadline_exceeded",
+            retryable: true
+          };
+        }
+
+        if (!completed.response.ok) {
+          const failure = classifyResendFailure(completed.response.status, completed.body.name);
+          return {
+            state: "failed",
+            ...failure
+          };
+        }
+
+        return {
+          state: "sent",
+          providerMessageId: typeof completed.body.id === "string" ? completed.body.id : null
+        };
       } catch {
         return {
           state: "failed",
           failureCode: "resend_transport_error",
           retryable: true
         };
+      } finally {
+        if (timeout) clearTimeout(timeout);
       }
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({})) as { name?: unknown };
-        const failure = classifyResendFailure(response.status, body.name);
-        return {
-          state: "failed",
-          ...failure
-        };
-      }
-
-      const body = await response.json().catch(() => ({}));
-      const id = typeof body?.id === "string" ? body.id : null;
-      return {
-        state: "sent",
-        providerMessageId: id
-      };
     }
   };
 }
@@ -295,7 +341,7 @@ export function createPostgresPaymentConfirmationEmailRepository(
           to: row.recipient_email,
           receiptNumber: row.receipt_number,
           productType: row.product_type,
-          amountMinor: Number(row.amount_minor),
+          amountMinor: row.amount_minor,
           currency: row.currency,
           termsVersion: row.terms_version,
           withdrawalWaiverVersion: row.withdrawal_waiver_version,
@@ -372,22 +418,24 @@ export function classifyResendFailure(
 }
 
 function plainTextConfirmation(input: QueuedPaymentConfirmationEmail, webUrl: string): string {
+  const amount = confirmationAmount(input);
   return [
     `Receipt: ${input.receiptNumber}`,
     `Product: ${input.productType}`,
-    `Amount: ${input.amountMinor} ${input.currency}`,
+    `Amount: ${amount}`,
     `Terms version: ${input.termsVersion}`,
     `Withdrawal waiver: ${input.withdrawalWaiverVersion}`,
     input.withdrawalWaiverAcceptedAt
       ? `Immediate digital access waiver accepted at: ${input.withdrawalWaiverAcceptedAt}`
       : "Immediate digital access waiver: not recorded",
-    `Activity: ${new URL("/activity", webUrl).toString()}`,
+    `Activity: ${new URL("/app/activity", webUrl).toString()}`,
     "Blockchain finality does not affect mandatory legal refund rights for non-delivery, defects, duplicate payment, fraud, misdescription, or applicable law."
   ].join("\n");
 }
 
 function htmlConfirmation(input: QueuedPaymentConfirmationEmail, webUrl: string): string {
-  const activityUrl = new URL("/activity", webUrl).toString();
+  const activityUrl = new URL("/app/activity", webUrl).toString();
+  const amount = confirmationAmount(input);
 
   return `<!doctype html>
 <html>
@@ -396,7 +444,7 @@ function htmlConfirmation(input: QueuedPaymentConfirmationEmail, webUrl: string)
     <p>Receipt <strong>${escapeHtml(input.receiptNumber)}</strong> is ready.</p>
     <ul>
       <li>Product: ${escapeHtml(input.productType)}</li>
-      <li>Amount: ${input.amountMinor} ${escapeHtml(input.currency)}</li>
+      <li>Amount: ${escapeHtml(amount)}</li>
       <li>Terms: ${escapeHtml(input.termsVersion)}</li>
       <li>Withdrawal waiver: ${escapeHtml(input.withdrawalWaiverVersion)}</li>
       <li>Waiver accepted: ${escapeHtml(input.withdrawalWaiverAcceptedAt ?? "not recorded")}</li>
@@ -405,6 +453,13 @@ function htmlConfirmation(input: QueuedPaymentConfirmationEmail, webUrl: string)
     <p>Blockchain finality does not affect mandatory legal refund rights for non-delivery, defects, duplicate payment, fraud, misdescription, or applicable law.</p>
   </body>
 </html>`;
+}
+
+function confirmationAmount(input: QueuedPaymentConfirmationEmail): string {
+  if (isPaymentAssetCurrency(input.currency)) {
+    return formatAtomicAssetAmount(input.amountMinor, input.currency);
+  }
+  return `${input.amountMinor.toString()} ${input.currency}`;
 }
 
 function escapeHtml(value: string): string {

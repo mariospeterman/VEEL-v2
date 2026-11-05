@@ -10,7 +10,7 @@ export default async function BitsPage() {
   await requireAppAccess("/app/bits");
   const preferences = await getFeedPreferences();
   const feed = await getHomeFeed(
-    preferences.ok ? preferences.data.defaultMode : "recommended",
+    preferences.ok ? preferences.data.defaultMode : "latest",
     "bits"
   );
 

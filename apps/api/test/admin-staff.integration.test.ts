@@ -314,6 +314,39 @@ describeIntegration("staff RBAC and lifecycle against migrated Postgres", () => 
       expect(rejection?.status === "rejected" ? rejection.reason : null)
         .toBeInstanceOf(AdminRepositoryStateConflictError);
 
+      const winningIndex = removals.findIndex((result) => result.status === "fulfilled");
+      expect(winningIndex).toBeGreaterThanOrEqual(0);
+      const winningMembershipId = membershipIds[winningIndex] as string;
+      const winningRequestHash = String(winningIndex + 1).repeat(64);
+      const winningBody = {
+        role: "member" as const,
+        state: "removed" as const,
+        reason: `Concurrent owner removal ${winningIndex}`
+      };
+
+      const replay = await repository.updateOrganizationMember({
+        supabaseUserId: actorUserId,
+        organizationId,
+        membershipId: winningMembershipId,
+        body: winningBody,
+        idempotencyKey: `owner-removal-${winningIndex}`,
+        requestHash: winningRequestHash
+      });
+      expect(replay).toMatchObject({
+        id: winningMembershipId,
+        role: "member",
+        state: "removed"
+      });
+
+      await expect(repository.updateOrganizationMember({
+        supabaseUserId: actorUserId,
+        organizationId,
+        membershipId: winningMembershipId,
+        body: { ...winningBody, reason: "Changed replay payload" },
+        idempotencyKey: `owner-removal-${winningIndex}`,
+        requestHash: "f".repeat(64)
+      })).rejects.toBeInstanceOf(AdminRepositoryStateConflictError);
+
       const activeOwners = await sql<Array<{ count: number }>>`
         select count(*)::int as count
         from organization_memberships
@@ -322,6 +355,26 @@ describeIntegration("staff RBAC and lifecycle against migrated Postgres", () => 
           and state = 'active'
       `;
       expect(activeOwners[0]?.count).toBe(1);
+
+      const memberStates = await sql<Array<{ id: string; role: string; state: string }>>`
+        select id, role, state
+        from organization_memberships
+        where organization_id = ${organizationId}::uuid
+        order by id
+      `;
+      expect(memberStates).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: winningMembershipId, role: "member", state: "removed" }),
+        expect.objectContaining({ role: "owner", state: "active" })
+      ]));
+
+      const auditRows = await sql<Array<{ count: number }>>`
+        select count(*)::int as count
+        from audit_events
+        where actor_user_id = ${actorUserId}::uuid
+          and action = 'organization_member_updated'
+          and subject_id = any(${membershipIds}::uuid[])
+      `;
+      expect(auditRows[0]?.count).toBe(1);
     } finally {
       await sql`delete from audit_events where actor_user_id = ${actorUserId}::uuid`;
       await sql`delete from enterprise_action_receipts where organization_id = ${organizationId}::uuid`;

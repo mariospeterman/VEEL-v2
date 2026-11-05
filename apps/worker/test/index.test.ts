@@ -11,6 +11,7 @@ import {
   runNotificationDeliveryTick,
   runPaymentConfirmationEmailTick,
   runProviderEventReplayTick,
+  runSubscriptionAuthorizationReconciliationTick,
   runSubscriptionCollectionTick
 } from "../src/index";
 import type {
@@ -45,7 +46,8 @@ import type {
 import {
   classifyResendFailure,
   createResendPaymentConfirmationEmailProvider,
-  createUnconfiguredPaymentConfirmationEmailProvider
+  createUnconfiguredPaymentConfirmationEmailProvider,
+  processPaymentConfirmationEmails
 } from "../src/payment-confirmation-email";
 import type {
   ProviderEventReplayAdapter,
@@ -76,6 +78,7 @@ describe("buildWorkerRuntime", () => {
       name: "veel-worker",
       queues: [
         "analytics-projections",
+        "subscription-authorization-reconciliation",
         "subscription-collections",
         "notification-deliveries",
         "payment-confirmation-emails",
@@ -90,6 +93,11 @@ describe("buildWorkerRuntime", () => {
           name: "analytics-projections",
           cadence: "every_minute",
           sourceIndex: "analytics_projection_jobs_lease_idx"
+        },
+        {
+          name: "subscription-authorization-reconciliation",
+          cadence: "every_minute",
+          sourceIndex: "subscription_authorization_intents_subscription_idx"
         },
         {
           name: "subscription-collections",
@@ -168,6 +176,9 @@ describe("runScheduledWorkerTick", () => {
         async scheduledPublications() {
           calls.push("scheduled-publications");
         },
+        async subscriptionAuthorizationReconciliation() {
+          calls.push("subscription-authorization-reconciliation");
+        },
         async subscriptionCollections() {
           calls.push("subscriptions");
         }
@@ -189,6 +200,7 @@ describe("runScheduledWorkerTick", () => {
       "notifications",
       "provider-replays",
       "scheduled-publications",
+      "subscription-authorization-reconciliation",
       "subscriptions"
     ]);
     expect(result).toEqual({
@@ -200,6 +212,7 @@ describe("runScheduledWorkerTick", () => {
       paymentConfirmationEmails: "failed",
       providerEventReplays: "completed",
       scheduledPublications: "completed",
+      subscriptionAuthorizationReconciliation: "completed",
       subscriptionCollections: "completed"
     });
     expect(errors).toEqual([
@@ -208,6 +221,39 @@ describe("runScheduledWorkerTick", () => {
         errorName: "Error"
       }
     ]);
+  });
+});
+
+describe("runSubscriptionAuthorizationReconciliationTick", () => {
+  it("runs the durable authorization evidence boundary with the configured batch limit", async () => {
+    const reconcileDue = vi.fn(async () => ({
+      claimed: 1,
+      verified: 0,
+      retrying: 1,
+      terminal: 0,
+      stale: 0
+    }));
+
+    await expect(runSubscriptionAuthorizationReconciliationTick({
+      repository: { reconcileDue },
+      verifier: {
+        async verifyAuthorization() {
+          return {
+            verified: false,
+            failureCode: "transaction_not_found",
+            retryable: true
+          };
+        }
+      },
+      now: new Date("2026-11-05T12:00:00.000Z"),
+      limit: 7
+    })).resolves.toMatchObject({ claimed: 1, retrying: 1 });
+
+    expect(reconcileDue).toHaveBeenCalledWith(expect.objectContaining({
+      now: new Date("2026-11-05T12:00:00.000Z"),
+      limit: 7,
+      retryDelayMs: 60_000
+    }));
   });
 });
 
@@ -921,6 +967,33 @@ describe("createResendPaymentConfirmationEmailProvider", () => {
   });
 
   it.each([
+    ["1000000000", "SOL", "1 SOL"],
+    ["1234567890", "SOL", "1.23456789 SOL"],
+    ["9007199254740991", "SOL", "9,007,199.254740991 SOL"],
+    ["1000000", "USDC", "1 USDC"],
+    ["1234567", "USDC", "1.234567 USDC"],
+    ["9007199254740991", "USDC", "9,007,199,254.740991 USDC"]
+  ])("renders %s atomic %s exactly in text and HTML", async (amountMinor, currency, expected) => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ id: "resend-message-amount" }), { status: 200 })
+    );
+    const provider = createResendPaymentConfirmationEmailProvider({
+      apiKey: "resend-api-key",
+      from: "WeVid Receipts <receipts@example.test>",
+      webUrl: "https://wevid.example.test",
+      fetchImpl
+    });
+
+    await provider.send(paymentConfirmationEmailFixture({ amountMinor, currency }));
+
+    const request = fetchImpl.mock.calls[0]?.[1];
+    const payload = JSON.parse(String(request?.body)) as { text: string; html: string };
+    expect(payload.text).toContain(`Amount: ${expected}`);
+    expect(payload.html).toContain(`<li>Amount: ${expected}</li>`);
+    expect(payload.text).toContain("https://wevid.example.test/app/activity");
+  });
+
+  it.each([
     [400, "validation_error", false, "resend_http_400"],
     [409, "resource_locked", true, "resend_resource_locked"],
     [409, "concurrent_idempotent_requests", true, "resend_concurrent_idempotent_requests"],
@@ -946,6 +1019,64 @@ describe("createResendPaymentConfirmationEmailProvider", () => {
       failureCode: "resend_transport_error",
       retryable: true
     });
+  });
+
+  it.each(["transport", "body"])(
+    "bounds a stalled Resend %s operation with one total deadline",
+    async (phase) => {
+      const fetchImpl = phase === "transport"
+        ? vi.fn(() => new Promise<Response>(() => undefined))
+        : vi.fn(async () => ({
+            ok: true,
+            status: 200,
+            json: () => new Promise<unknown>(() => undefined)
+          }) as Response);
+      const provider = createResendPaymentConfirmationEmailProvider({
+        apiKey: "resend-api-key",
+        from: "WeVid Receipts <receipts@example.test>",
+        webUrl: "https://wevid.example.test",
+        timeoutMs: 10,
+        fetchImpl
+      });
+
+      await expect(provider.send(paymentConfirmationEmailFixture())).resolves.toEqual({
+        state: "failed",
+        failureCode: "resend_total_deadline_exceeded",
+        retryable: true
+      });
+    }
+  );
+
+  it("lets later confirmations progress while an earlier provider call is stalled", async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstReleased = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const started: string[] = [];
+    const repository = fakePaymentConfirmationEmailRepository({
+      deliveries: [
+        paymentConfirmationEmailFixture({ deliveryId: "first" }),
+        paymentConfirmationEmailFixture({ deliveryId: "second" })
+      ]
+    });
+    const processing = processPaymentConfirmationEmails({
+      repository,
+      provider: {
+        isConfigured: true,
+        async send(delivery) {
+          started.push(delivery.deliveryId);
+          if (delivery.deliveryId === "first") await firstReleased;
+          return { state: "sent", providerMessageId: delivery.deliveryId };
+        }
+      },
+      concurrency: 2
+    });
+
+    await vi.waitFor(() => expect(started).toEqual(["first", "second"]));
+    await vi.waitFor(() => expect(repository.outcomes).toHaveLength(1));
+    expect(repository.outcomes[0]?.deliveryId).toBe("second");
+    releaseFirst?.();
+    await expect(processing).resolves.toMatchObject({ leased: 2, sent: 2 });
   });
 });
 

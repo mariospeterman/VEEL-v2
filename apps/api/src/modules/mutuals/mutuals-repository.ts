@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor,
   keysetPage
@@ -103,7 +104,11 @@ export function createPostgresMutualsRepository(database?: string | PostgresSql)
       return rows[0] ? toMutualsProfile(rows[0]) : null;
     },
     async listFeed(input) {
-      const cursor = decodeTimestampIdCursor(mutualsFeedCursorScope, input.cursor);
+      const cursorScope = bindCursorScope(mutualsFeedCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,content_id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<MutualsFeedRow[]>`
         with actor as (
           select u.id
@@ -177,12 +182,16 @@ export function createPostgresMutualsRepository(database?: string | PostgresSql)
       }
 
       return keysetPage(rows, input.limit, toMutualsFeedItem, (row) =>
-        encodeTimestampIdCursor(mutualsFeedCursorScope, row.created_at, row.content_id)
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.content_id)
       );
     },
     ...createMutualsInterestRepositoryMethods(sql),
     async listMutuals(input) {
-      const cursor = decodeTimestampIdCursor(mutualsListCursorScope, input.cursor);
+      const cursorScope = bindCursorScope(mutualsListCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<MutualRow[]>`
         with actor as (
           select id
@@ -224,7 +233,7 @@ export function createPostgresMutualsRepository(database?: string | PostgresSql)
       `;
 
       return keysetPage(rows, input.limit, toMutual, (row) =>
-        encodeTimestampIdCursor(mutualsListCursorScope, row.created_at, row.id)
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
       );
     },
     async archiveMutual(input) {

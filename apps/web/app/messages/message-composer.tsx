@@ -10,11 +10,12 @@ import {
   type Message
 } from "@/api-mutations";
 import {
+  claimOfflineMessageDelivery,
   claimOfflineMessageSession,
   classifyMessageFailure,
   createOfflineMessage,
   enqueueOfflineMessage,
-  isOfflineMessageStorageKey,
+  isOfflineMessageStorageKeyForScope,
   readOfflineMessages,
   removeOfflineMessage,
   updateOfflineMessage,
@@ -24,6 +25,7 @@ import {
 
 interface MessageComposerProps {
   actorUserId: string | null;
+  clientSessionScope: string | null;
   conversation: Conversation;
   initialSharedContentItemId: string | null;
   replyTo: Message | null;
@@ -36,6 +38,7 @@ const maxAutomaticAttempts = 5;
 
 export function MessageComposer({
   actorUserId,
+  clientSessionScope,
   conversation,
   initialSharedContentItemId,
   replyTo,
@@ -50,34 +53,39 @@ export function MessageComposer({
     initialSharedContentItemId && uuidPattern.test(initialSharedContentItemId) ? initialSharedContentItemId : ""
   );
   const [attachmentIds, setAttachmentIds] = useState("");
-  const [browserSessionId, setBrowserSessionId] = useState<string | null>(null);
+  const [browserTabId, setBrowserTabId] = useState<string | null>(null);
   const [outbox, setOutbox] = useState<OfflineMessageRecord[]>([]);
   const [queueRevision, setQueueRevision] = useState(0);
   const flushInFlight = useRef(false);
   const activeFlush = useRef<AbortController | null>(null);
+  const deliveryLeaseOwnerId = useRef<string | null>(null);
   const trimmedBody = body.trim();
 
   useEffect(() => {
-    if (!actorUserId) {
-      setBrowserSessionId(null);
+    if (!actorUserId || !clientSessionScope) {
+      setBrowserTabId(null);
       setOutbox([]);
       return;
     }
-    const nextBrowserSessionId = claimOfflineMessageSession(
+    deliveryLeaseOwnerId.current ??= crypto.randomUUID();
+    const nextBrowserTabId = claimOfflineMessageSession(
       window.localStorage,
       window.sessionStorage,
-      actorUserId
+      actorUserId,
+      clientSessionScope
     );
-    setBrowserSessionId(nextBrowserSessionId);
-  }, [actorUserId]);
+    setBrowserTabId(nextBrowserTabId);
+  }, [actorUserId, clientSessionScope]);
 
   useEffect(() => {
-    if (!actorUserId || !browserSessionId) return;
+    if (!actorUserId || !clientSessionScope || !browserTabId || !deliveryLeaseOwnerId.current) return;
     const scope: OfflineMessageScope = {
       actorUserId,
-      browserSessionId,
+      clientSessionScope,
+      browserTabId,
       conversationId: conversation.id
     };
+    const leaseOwnerId = deliveryLeaseOwnerId.current;
     let disposed = false;
 
     const syncOutbox = () => {
@@ -94,11 +102,13 @@ export function MessageComposer({
         );
         for (const item of queued) {
           if (disposed || !navigator.onLine) break;
-          const sending: OfflineMessageRecord = {
-            ...item,
-            state: item.attemptCount === 0 ? "sending" : "retrying"
-          };
-          if (!updateOfflineMessage(window.localStorage, scope, sending)) continue;
+          const sending = claimOfflineMessageDelivery(
+            window.localStorage,
+            scope,
+            item.clientMessageId,
+            leaseOwnerId
+          );
+          if (!sending) continue;
           syncOutbox();
 
           const controller = new AbortController();
@@ -106,9 +116,9 @@ export function MessageComposer({
           const timeout = window.setTimeout(() => controller.abort(), 10_000);
           try {
             await createMessage(
-              item.conversationId,
-              item.request,
-              item.idempotencyKey,
+              sending.conversationId,
+              sending.request,
+              sending.idempotencyKey,
               actorUserId,
               controller.signal
             );
@@ -116,16 +126,16 @@ export function MessageComposer({
             setState("ready");
             setMessage("Message sent.");
             await Promise.all([
-              queryClient.invalidateQueries({ queryKey: ["messages", "conversation", item.conversationId] }),
+              queryClient.invalidateQueries({ queryKey: ["messages", "conversation", sending.conversationId] }),
               queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] })
             ]);
           } catch (error) {
             if (disposed || controller.signal.aborted && !navigator.onLine) break;
             const disposition = classifyMessageFailure(error instanceof ApiMutationError ? error.status : undefined);
-            const attemptCount = item.attemptCount + 1;
+            const attemptCount = sending.attemptCount + 1;
             const retryable = disposition === "auto_retry" && attemptCount < maxAutomaticAttempts;
             const failed: OfflineMessageRecord = {
-              ...item,
+              ...sending,
               attemptCount,
               state: disposition === "pause_auth"
                 ? "paused_auth"
@@ -141,7 +151,9 @@ export function MessageComposer({
                   : "transport",
               nextAttemptAt: retryable
                 ? new Date(Date.now() + retryDelayMs(attemptCount)).toISOString()
-                : null
+                : null,
+              deliveryLeaseOwnerId: null,
+              deliveryLeaseExpiresAt: null
             };
             updateOfflineMessage(window.localStorage, scope, failed);
             setState(disposition === "auto_retry" ? "queued" : "error");
@@ -165,9 +177,9 @@ export function MessageComposer({
     };
 
     const onStorage = (event: StorageEvent) => {
-      if (!isOfflineMessageStorageKey(event.key)) return;
-      activeFlush.current?.abort();
+      if (!isOfflineMessageStorageKeyForScope(event.key, scope)) return;
       syncOutbox();
+      void flush();
     };
     const onVisible = () => {
       if (document.visibilityState === "visible") void flush();
@@ -187,11 +199,11 @@ export function MessageComposer({
       window.removeEventListener("storage", onStorage);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [actorUserId, browserSessionId, conversation.id, queryClient, queueRevision]);
+  }, [actorUserId, browserTabId, clientSessionScope, conversation.id, queryClient, queueRevision]);
 
   function currentScope(): OfflineMessageScope | null {
-    return actorUserId && browserSessionId
-      ? { actorUserId, browserSessionId, conversationId: conversation.id }
+    return actorUserId && clientSessionScope && browserTabId
+      ? { actorUserId, clientSessionScope, browserTabId, conversationId: conversation.id }
       : null;
   }
 
@@ -246,7 +258,9 @@ export function MessageComposer({
       state: "queued",
       attemptCount: 0,
       nextAttemptAt: new Date().toISOString(),
-      lastFailureKind: null
+      lastFailureKind: null,
+      deliveryLeaseOwnerId: null,
+      deliveryLeaseExpiresAt: null
     });
     setQueueRevision((revision) => revision + 1);
   }
@@ -279,6 +293,11 @@ export function MessageComposer({
           value={body}
         />
       </label>
+      {sharedContentItemId ? (
+        <p className="mt-2 rounded border border-(--line) bg-(--background) px-3 py-2 text-sm text-(--muted)" role="status">
+          Post added to this message draft. Add a message, review it, then select Send. Nothing is delivered until sending succeeds.
+        </p>
+      ) : null}
       {replyTo ? (
         <div className="mt-2 flex items-center justify-between rounded border border-(--line) px-3 py-2 text-xs text-(--muted)">
           <span>Replying to {replyTo.sender.displayName}: {replyTo.body.slice(0, 80)}</span>
@@ -296,7 +315,7 @@ export function MessageComposer({
       <div className="mt-3 flex flex-wrap gap-2">
         <button
           className="rounded bg-(--foreground) px-3 py-2 text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={!trimmedBody || !conversation.canSend || !actorUserId || !browserSessionId}
+          disabled={!trimmedBody || !conversation.canSend || !actorUserId || !clientSessionScope || !browserTabId}
           onClick={sendVisibleMessage}
           type="button"
         >

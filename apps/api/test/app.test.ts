@@ -21,8 +21,8 @@ import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
 import { StaleFeedCursorError } from "../src/modules/content/content-feed-cursor";
 import {
-  ContentDraftPollCloseError,
   ContentDraftQuotaExceededError,
+  ContentFormatRetiredError,
   ContentImageUploadConflictError
 } from "../src/modules/content/content-repository";
 import type {
@@ -457,6 +457,10 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       authenticated: true,
+      clientSessionScope: createHash("sha256")
+        .update("wevid-client-session-scope:v1\0", "utf8")
+        .update("00000000-0000-4000-8000-000000000099", "utf8")
+        .digest("base64url"),
       appAccessState: {
         allowed: true,
         reason: "ready"
@@ -1129,6 +1133,10 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       authenticated: true,
+      clientSessionScope: createHash("sha256")
+        .update("wevid-client-session-scope:v1\0", "utf8")
+        .update("00000000-0000-4000-8000-000000000099", "utf8")
+        .digest("base64url"),
       appAccessState: {
         allowed: false,
         reason: "identity_required"
@@ -1226,7 +1234,7 @@ describe("buildApi", () => {
   });
 
   it("starts a configured Yoti age session through the real provider adapter", async () => {
-    vi.stubEnv("AGE_VERIFICATION_DRIVER", "yoti_digital_id");
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "yoti");
     vi.stubEnv("YOTI_SDK_ID", "yoti-sdk-id");
     vi.stubEnv("YOTI_API_TOKEN", "yoti-api-token");
     vi.stubEnv("YOTI_API_BASE_URL", "https://age.yoti.example/api/v1");
@@ -1313,6 +1321,7 @@ describe("buildApi", () => {
   });
 
   it("starts a configured Didit age session through the real provider adapter", async () => {
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "didit");
     vi.stubEnv("DIDIT_API_KEY", "didit-api-key");
     vi.stubEnv("DIDIT_AGE_WORKFLOW_ID", "didit-age-workflow");
     vi.stubEnv("DIDIT_API_BASE_URL", "https://verification.didit.example");
@@ -1414,6 +1423,7 @@ describe("buildApi", () => {
 
   it("creates a Sumsub hosted WebSDK link instead of exposing an SDK token on the callback URL", async () => {
     vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "sumsub");
     vi.stubEnv("SUMSUB_APP_TOKEN", "sumsub-app-token");
     vi.stubEnv("SUMSUB_SECRET_KEY", "sumsub-secret");
     vi.stubEnv("SUMSUB_LEVEL_NAME", "sumsub-age-level");
@@ -1823,7 +1833,7 @@ describe("buildApi", () => {
       const signedPayload = {
         method: "AGE_ESTIMATION",
         age: 22,
-        session_key: "69db8ad4-c983-40b3-b95a-a8fa576e70a6",
+        session_key: "test-session-key",
         reference_id: "age-yoti-test-1",
         id: "2480375e-ddc0-4832-9b82-b1d14af5cf75",
         timestamp: 1_793_792_000,
@@ -1856,7 +1866,7 @@ describe("buildApi", () => {
         {
           provider: "yoti",
           providerEventId: "2480375e-ddc0-4832-9b82-b1d14af5cf75",
-          providerReference: "69db8ad4-c983-40b3-b95a-a8fa576e70a6",
+          providerReference: "test-session-key",
           state: "verified"
         }
       ]);
@@ -2140,7 +2150,7 @@ describe("buildApi", () => {
           providerReference: expect.stringContaining("mock-verification:creator_kyc"),
           method: "gov_id_selfie",
           assuranceLevel: "documentary",
-          reusable: true
+          reusable: false
         }
       }
     ]);
@@ -2733,7 +2743,6 @@ describe("buildApi", () => {
       payload: {
         handle: "maki",
         displayName: "Maki",
-        avatarUrl: "https://media.example.test/avatar.jpg",
         links: [{ label: "Website", url: "https://veel.example.test/maki" }],
         bio: "Building Veel v2"
       }
@@ -2745,9 +2754,35 @@ describe("buildApi", () => {
       id: "00000000-0000-4000-8000-000000000010",
       handle: "maki",
       displayName: "Maki",
-      avatarUrl: "https://media.example.test/avatar.jpg",
+      avatarUrl: null,
       badges: []
     });
+
+    await app.close();
+  });
+
+  it("rejects profile avatar URL mutation outside the private avatar authority", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      profileRepository: fakeProfileRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/profiles/me",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "profile-avatar-bypass"
+      },
+      payload: {
+        handle: "maki",
+        avatarUrl: "https://tracking.example.test/avatar.jpg"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: "validation_failed" });
 
     await app.close();
   });
@@ -2818,6 +2853,36 @@ describe("buildApi", () => {
     expect(response.json()).toMatchObject({
       code: "validation_failed"
     });
+
+    await app.close();
+  });
+
+  it("fails closed instead of publishing unsanitized profile avatars", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/profiles/me/avatar",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "profile-avatar-private-boundary-1"
+      },
+      payload: {
+        contentType: "image/png",
+        dataBase64: Buffer.from("claimed-not-decoded-image-bytes").toString("base64"),
+        fileName: "avatar.png"
+      }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      code: "service_unavailable",
+      message: "Profile pictures are temporarily unavailable; continue without one"
+    });
+    expect(response.body).not.toContain("avatarUrl");
 
     await app.close();
   });
@@ -3510,7 +3575,7 @@ describe("buildApi", () => {
       async listHomeFeed(input) {
         expect(input).toEqual({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
-          mode: "recommended",
+          mode: "latest",
           surface: "home",
           limit: 20
         });
@@ -3518,9 +3583,9 @@ describe("buildApi", () => {
         return {
           items: [homeFeedItem],
           nextCursor: null,
-          mode: "recommended",
+          mode: "latest",
           surface: "home",
-          rankingVersion: "deterministic_v1",
+          rankingVersion: "chronological_v1",
           generatedAt: "2026-06-05T12:00:00.000Z"
         };
       }
@@ -3557,9 +3622,9 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       items: [{ ...homeFeedItem, posterUrl: null }],
       nextCursor: null,
-      mode: "recommended",
+      mode: "latest",
       surface: "home",
-      rankingVersion: "deterministic_v1",
+      rankingVersion: "chronological_v1",
       generatedAt: "2026-06-05T12:00:00.000Z"
     });
 
@@ -3570,7 +3635,7 @@ describe("buildApi", () => {
     const storedPlaybackUrl =
       "https://vz-example.b-cdn.net/11111111-1111-4111-8111-111111111111/playlist.m3u8";
     const signedPlaybackUrl =
-      "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900";
+      "https://player.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900";
     const feedItem: ContentItem = {
       ...homeFeedItem,
       creator: {
@@ -3595,9 +3660,9 @@ describe("buildApi", () => {
         return {
           items: [feedItem],
           nextCursor: null,
-          mode: "recommended",
+          mode: "latest",
           surface: "home",
-          rankingVersion: "deterministic_v1",
+          rankingVersion: "chronological_v1",
           generatedAt: "2026-06-05T12:00:00.000Z"
         };
       }
@@ -3646,7 +3711,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("requires a first-page refresh when the bounded feed session expired", async () => {
+  it("requires a first-page refresh for a retired ranked-feed cursor", async () => {
     const contentRepository: ContentRepository = {
       async createDraft() { throw new Error("not implemented"); },
       async createMediaAsset() { throw new Error("not implemented"); },
@@ -3684,7 +3749,7 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({
       code: "feed_cursor_stale",
-      message: "Feed session expired; restart from the first page"
+      message: "This cursor belongs to the retired ranked feed; restart from the first page"
     });
     await app.close();
   });
@@ -3807,7 +3872,7 @@ describe("buildApi", () => {
 
         return {
           state: "full",
-          url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
+          url: "https://player.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
           provider: "bunny",
           resourceType: "embed",
           expiresAt: "2026-02-02T10:15:00.000Z"
@@ -3846,7 +3911,7 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().playback).toEqual({
       state: "full",
-      url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
+      url: "https://player.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
       provider: "bunny",
       resourceType: "embed",
       expiresAt: "2026-02-02T10:15:00.000Z"
@@ -3861,7 +3926,7 @@ describe("buildApi", () => {
     const storedUrl = (providerAssetId: string) =>
       `https://vz-example.b-cdn.net/${providerAssetId}/playlist.m3u8`;
     const signedUrl = (providerAssetId: string) =>
-      `https://iframe.mediadelivery.net/embed/123/${providerAssetId}?token=signed`;
+      `https://player.mediadelivery.net/embed/123/${providerAssetId}?token=signed`;
     const carousel: ContentItem = {
       ...homeFeedItem,
       mediaType: "carousel",
@@ -3949,7 +4014,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("attaches public-media accounting and blocks signed playback when allowance is exhausted", async () => {
+  it("requires an idempotent server lease before signed public playback and does not debit on repeated reads", async () => {
     const publicVod: ContentItem = {
       ...homeFeedItem,
       creator: {
@@ -3971,15 +4036,20 @@ describe("buildApi", () => {
       async createUploadSession() {
         throw new Error("not implemented");
       },
-      createPlaybackResource() {
+      createPlaybackResource(input) {
+        const issuedAt = input.now ?? new Date();
+        const expiresAt = input.expiresAt ?? new Date(issuedAt.getTime() + 900_000);
         return {
           state: "full",
-          url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
+          url: "https://player.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
           provider: "bunny",
-          resourceType: "embed"
+          resourceType: "embed",
+          expiresAt: expiresAt.toISOString()
         };
       }
     };
+    let leaseExpiresAt: string | null = null;
+    const sessionStarts: unknown[] = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -3989,11 +4059,50 @@ describe("buildApi", () => {
       mediaUploadProvider,
       subscriptionRepository: fakeSubscriptionRepository({
         async onGetPlatformPlaybackDecision() {
-          return { countsTowardAllowance: true, limitReached: false };
+          return {
+            countsTowardAllowance: true,
+            limitReached: false,
+            leaseRequired: true,
+            leaseExpiresAt
+          };
+        },
+        async onCreatePlatformPlaybackSession(input) {
+          sessionStarts.push(input);
+          leaseExpiresAt = new Date(Date.now() + 900_000).toISOString();
+          return platformPlaybackSessionFixture();
         }
       })
     });
     await app.ready();
+
+    const beforeLease = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(beforeLease.statusCode).toBe(200);
+    expect(beforeLease.json().playback).toMatchObject({
+      state: "blocked",
+      url: null,
+      usage: {
+        policy: "public_media_allowance",
+        targetType: "content",
+        targetId: publicVod.id,
+        heartbeatIntervalSeconds: 15,
+        leaseExpiresAt: null
+      }
+    });
+
+    const start = await app.inject({
+      method: "POST",
+      url: "/v1/platform-usage/playback-sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "public-vod-lease-1"
+      },
+      payload: { targetType: "content", targetId: publicVod.id }
+    });
+    expect(start.statusCode).toBe(201);
 
     const accounted = await app.inject({
       method: "GET",
@@ -4001,12 +4110,33 @@ describe("buildApi", () => {
       headers: { authorization: "Bearer valid-token" }
     });
     expect(accounted.statusCode).toBe(200);
-    expect(accounted.json().playback.usage).toEqual({
+    expect(accounted.json().playback).toMatchObject({
+      state: "full",
+      url: expect.stringContaining("token=signed"),
+      usage: {
       policy: "public_media_allowance",
       targetType: "content",
       targetId: publicVod.id,
-      heartbeatIntervalSeconds: 15
+        heartbeatIntervalSeconds: 15,
+        leaseExpiresAt
+      }
     });
+
+    const repeatedRead = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(repeatedRead.json().playback.state).toBe("full");
+    expect(sessionStarts).toHaveLength(1);
+
+    leaseExpiresAt = null;
+    const afterExpiry = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(afterExpiry.json().playback).toMatchObject({ state: "blocked", url: null });
 
     await app.close();
 
@@ -4019,7 +4149,12 @@ describe("buildApi", () => {
       mediaUploadProvider,
       subscriptionRepository: fakeSubscriptionRepository({
         async onGetPlatformPlaybackDecision() {
-          return { countsTowardAllowance: true, limitReached: true };
+          return {
+            countsTowardAllowance: true,
+            limitReached: true,
+            leaseRequired: true,
+            leaseExpiresAt: null
+          };
         }
       })
     });
@@ -4367,11 +4502,11 @@ describe("buildApi", () => {
   });
 
   it("uses canonical signed delivery and fails closed for restricted Discover media", async () => {
-    const rawBunnyUrl = "https://iframe.mediadelivery.net/embed/library/00000000-0000-4000-8000-000000000201";
+    const rawBunnyUrl = "https://player.mediadelivery.net/embed/library/00000000-0000-4000-8000-000000000201";
     const rawLiveUrl = "https://livepeercdn.studio/hls/provider-playback-discover/index.m3u8";
     const createPlaybackResource = vi.fn(() => ({
       state: "full" as const,
-      url: "https://iframe.mediadelivery.net/embed/library/00000000-0000-4000-8000-000000000201?token=signed",
+      url: "https://player.mediadelivery.net/embed/library/00000000-0000-4000-8000-000000000201?token=signed",
       provider: "bunny" as const,
       resourceType: "embed" as const,
       expiresAt: "2026-11-04T13:00:00.000Z"
@@ -4461,10 +4596,19 @@ describe("buildApi", () => {
       },
       subscriptionRepository: fakeSubscriptionRepository({
         async onGetPlatformPlaybackDecision(input) {
-          return {
-            countsTowardAllowance: false,
-            limitReached: input.targetId === exhaustedContent.id
-          };
+          return input.targetId === exhaustedContent.id
+            ? {
+                countsTowardAllowance: true,
+                limitReached: true,
+                leaseRequired: true,
+                leaseExpiresAt: null
+              }
+            : {
+                countsTowardAllowance: false,
+                limitReached: false,
+                leaseRequired: false,
+                leaseExpiresAt: null
+              };
         }
       })
     });
@@ -4712,7 +4856,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("validates universal text and poll draft inputs before repository mutation", async () => {
+  it("validates legacy text and poll payload structure before repository mutation", async () => {
     let createCalls = 0;
     const contentRepository: ContentRepository = {
       async createDraft() {
@@ -4806,10 +4950,12 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("casts an authenticated poll vote through the backend authority", async () => {
+  it("rejects an authenticated poll vote through the retired backend authority", async () => {
     const optionId = "00000000-0000-4000-8000-000000000021";
     const contentId = "00000000-0000-4000-8000-000000000020";
-    let receivedInput: unknown;
+    const voteOnPoll = vi.fn(async () => {
+      throw new ContentFormatRetiredError();
+    });
     const contentRepository: ContentRepository = {
       async createDraft() { throw new Error("not implemented"); },
       async createMediaAsset() { throw new Error("not implemented"); },
@@ -4817,20 +4963,7 @@ describe("buildApi", () => {
       async findContentUnlockOffer() { throw new Error("not implemented"); },
       async findOwnedContentForUpload() { throw new Error("not implemented"); },
       async listHomeFeed() { throw new Error("not implemented"); },
-      async voteOnPoll(input) {
-        receivedInput = input;
-        return {
-          question: "Choose one",
-          options: [
-            { id: optionId, position: 0, text: "Photo", voteCount: 1 },
-            { id: "00000000-0000-4000-8000-000000000022", position: 1, text: "Video", voteCount: 0 }
-          ],
-          state: "open",
-          totalVoteCount: 1,
-          closesAt: null,
-          viewerOptionId: optionId
-        };
-      }
+      voteOnPoll
     };
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -4851,14 +4984,103 @@ describe("buildApi", () => {
       payload: { optionId }
     });
 
-    expect(response.statusCode, JSON.stringify(response.json())).toBe(200);
-    expect(response.json()).toMatchObject({ totalVoteCount: 1, viewerOptionId: optionId });
-    expect(receivedInput).toMatchObject({
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(410);
+    expect(response.json()).toEqual({
+      code: "content_format_retired",
+      message: "Text and poll content formats are retired"
+    });
+    expect(voteOnPoll).toHaveBeenCalledWith(expect.objectContaining({
       appUserId: "00000000-0000-4000-8000-000000000010",
       contentId,
       optionId,
       idempotencyKey: "poll-vote-0001"
+    }));
+    await app.close();
+  });
+
+  it("maps retired text and poll write authorities to a deterministic gone response", async () => {
+    const retired = async () => {
+      throw new ContentFormatRetiredError();
+    };
+    const contentRepository: ContentRepository = {
+      ...contentRepositoryWithDetail(homeFeedItem),
+      createDraft: retired,
+      updateOwnedContent: retired,
+      async findOwnedContentForPublication() {
+        return {
+          id: contentId,
+          mediaType: "text",
+          caption: "Historical text",
+          nsfwLabel: "none"
+        };
+      },
+      publishOwnedContent: retired,
+      voteOnPoll: retired
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      contentRepository
     });
+    await app.ready();
+
+    const contentId = "00000000-0000-4000-8000-000000000020";
+    const optionId = "00000000-0000-4000-8000-000000000021";
+    const requests = [
+      app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "retired-create" },
+        payload: {
+          mediaType: "text",
+          bodyText: "A retired text post",
+          visibility: "private",
+          nsfwLabel: "none",
+          representationMode: "no_real_person",
+          contentSafetyPolicyAccepted: true
+        }
+      }),
+      app.inject({
+        method: "PATCH",
+        url: `/v1/content/${contentId}`,
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "retired-update" },
+        payload: { caption: "No new edits" }
+      }),
+      app.inject({
+        method: "POST",
+        url: `/v1/content/${contentId}/publish`,
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "retired-publish" },
+        payload: { confirmation: "submit_for_review" }
+      }),
+      app.inject({
+        method: "POST",
+        url: `/v1/content/${contentId}/poll-votes`,
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "retired-vote" },
+        payload: { optionId }
+      })
+    ];
+
+    for (const response of await Promise.all(requests)) {
+      expect(response.statusCode, response.body).toBe(410);
+      expect(response.json()).toEqual({
+        code: "content_format_retired",
+        message: "Text and poll content formats are retired"
+      });
+    }
+
     await app.close();
   });
 
@@ -4929,77 +5151,6 @@ describe("buildApi", () => {
     expect(response.json()).toMatchObject({
       code: "rate_limited",
       message: "Daily content draft quota has been reached"
-    });
-
-    await app.close();
-  });
-
-  it("maps a poll close-time race from the repository to validation failure", async () => {
-    const contentRepository: ContentRepository = {
-      async createDraft() {
-        throw new ContentDraftPollCloseError();
-      },
-      async createMediaAsset() {
-        throw new Error("not implemented");
-      },
-      async findContentDetail() {
-        throw new Error("not implemented");
-      },
-      async findContentUnlockOffer() {
-        throw new Error("not implemented");
-      },
-      async findOwnedContentForUpload() {
-        throw new Error("not implemented");
-      },
-      async listHomeFeed() {
-        throw new Error("not implemented");
-      }
-    };
-    const app = await buildApi({
-      authVerifier: fakeAuthVerifier,
-      sessionRepository: sessionRepositoryWithProfile({
-        async onFind() {
-          return {
-            id: "00000000-0000-4000-8000-000000000010",
-            state: "active",
-            handle: "maki",
-            displayName: "Maki",
-            avatarUrl: null
-          };
-        }
-      }),
-      ageRepository: verifiedAgeRepository,
-      walletRepository: walletRepositoryWithWallet,
-      verificationRepository: creatorVerifiedVerificationRepository(),
-      contentRepository
-    });
-    await app.ready();
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/v1/content",
-      headers: {
-        authorization: "Bearer valid-token",
-        "idempotency-key": "poll-close-race-1"
-      },
-      payload: {
-        mediaType: "poll",
-        visibility: "private",
-        nsfwLabel: "none",
-        representationMode: "no_real_person",
-        contentSafetyPolicyAccepted: true,
-        poll: {
-          question: "Still open?",
-          options: ["Yes", "No"],
-          closesAt: new Date(Date.now() + 60_000).toISOString()
-        }
-      }
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({
-      code: "validation_failed",
-      message: "poll closesAt must be a future ISO date-time or null"
     });
 
     await app.close();
@@ -5189,13 +5340,10 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("autosaves text drafts with an optimistic composition revision", async () => {
-    const updateOwnedContent = vi.fn(async () => ({
-      ...homeFeedItem,
-      mediaType: "text" as const,
-      bodyText: "Revised text",
-      compositionRevision: 2
-    }));
+  it("rejects text-draft autosave through the retired backend authority", async () => {
+    const updateOwnedContent = vi.fn(async () => {
+      throw new ContentFormatRetiredError();
+    });
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: sessionRepositoryWithProfile({ async onFind() {
@@ -5215,8 +5363,11 @@ describe("buildApi", () => {
       payload: { bodyText: " Revised text ", expectedCompositionRevision: 1 }
     });
 
-    expect(response.statusCode, response.body).toBe(200);
-    expect(response.json()).toMatchObject({ bodyText: "Revised text", compositionRevision: 2 });
+    expect(response.statusCode, response.body).toBe(410);
+    expect(response.json()).toEqual({
+      code: "content_format_retired",
+      message: "Text and poll content formats are retired"
+    });
     expect(updateOwnedContent).toHaveBeenCalledWith(expect.objectContaining({
       bodyText: "Revised text",
       bodyTextProvided: true,
@@ -7262,11 +7413,6 @@ describe("buildApi", () => {
         COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
         COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
         AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
-        AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: true,
-        AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: true,
-        AGE_VERIFICATION_REUSABLE_PROVIDERS: "didit_reusable,yoti_digital_id,eudi_wallet,scytales",
-        AGE_VERIFICATION_FALLBACK_PROVIDERS: "didit_age_estimation,persona_document",
-        AGE_VERIFICATION_FALLBACK_ORDER: "reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document",
         AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
         AGE_VERIFICATION_REVERIFY_DAYS: 365,
         SUMSUB_API_BASE_URL: "https://api.sumsub.com",
@@ -7376,11 +7522,6 @@ describe("buildApi", () => {
       COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
       COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
       AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
-      AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: true,
-      AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: true,
-      AGE_VERIFICATION_REUSABLE_PROVIDERS: "didit_reusable,yoti_digital_id,eudi_wallet,scytales",
-      AGE_VERIFICATION_FALLBACK_PROVIDERS: "didit_age_estimation,persona_document",
-      AGE_VERIFICATION_FALLBACK_ORDER: "reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document",
       AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
       AGE_VERIFICATION_REVERIFY_DAYS: 365,
       SUMSUB_API_BASE_URL: "https://api.sumsub.com",
@@ -7426,7 +7567,7 @@ describe("buildApi", () => {
 
     expect(playback).toEqual({
       state: "full",
-      url: `https://iframe.mediadelivery.net/embed/759/${providerAssetId}?token=${token}&expires=${expires}`,
+      url: `https://player.mediadelivery.net/embed/759/${providerAssetId}?token=${token}&expires=${expires}`,
       provider: "bunny",
       resourceType: "embed",
       expiresAt: "2026-06-04T00:15:00.000Z"
@@ -9794,7 +9935,7 @@ describe("buildApi", () => {
 
     const headers = {
       authorization: "Bearer valid-token",
-      "idempotency-key": "refund-validation-1"
+      "idempotency-key": "test-test-test-test"
     };
     const validBody = {
       paymentIntentId: "00000000-0000-4000-8000-000000000050",
@@ -11959,11 +12100,13 @@ describe("buildApi", () => {
     });
     await app.ready();
 
+    const playbackRequestStartedAt = Date.now();
     const response = await app.inject({
       method: "GET",
       url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa15",
       headers: { authorization: "Bearer valid-token" }
     });
+    const playbackRequestFinishedAt = Date.now();
 
     expect(response.statusCode).toBe(200);
     expect(response.json().playback).toEqual({
@@ -11971,7 +12114,133 @@ describe("buildApi", () => {
       url: "https://livepeercdn.studio/hls/livepeer-playback-15/index.m3u8",
       provider: "livepeer",
       resourceType: "hls",
-      jwt: "livepeer.jwt.token"
+      jwt: "livepeer.jwt.token",
+      expiresAt: expect.any(String)
+    });
+    const playbackExpiresAt = Date.parse(response.json().playback.expiresAt);
+    expect(playbackExpiresAt).toBeGreaterThanOrEqual(playbackRequestStartedAt + 5 * 60_000);
+    expect(playbackExpiresAt).toBeLessThanOrEqual(playbackRequestFinishedAt + 5 * 60_000);
+
+    await app.close();
+  });
+
+  it("requires a server-reserved lease before signing public Livepeer playback", async () => {
+    const roomId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa18";
+    let leaseExpiresAt: string | null = null;
+    const sessionStarts: unknown[] = [];
+    const createPlaybackJwt = vi.fn(async () => "livepeer.jwt.token");
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onFindRoom() {
+          return liveRoomFixture({
+            id: roomId,
+            state: "live",
+            creator: {
+              ...homeFeedItem.creator,
+              id: "00000000-0000-4000-8000-000000000011"
+            },
+            accessMode: "public",
+            accessState: "allowed",
+            hasPass: true,
+            providerPlaybackId: "livepeer-playback-18",
+            playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-18/index.m3u8"
+          });
+        }
+      }),
+      liveProvider: {
+        ...noopLiveProviderControls,
+        isConfigured: () => true,
+        async createRoom() { throw new Error("not implemented"); },
+        async getRoomStatus() { throw new Error("not implemented"); },
+        createPlaybackJwt
+      },
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformPlaybackDecision() {
+          return {
+            countsTowardAllowance: true,
+            limitReached: false,
+            leaseRequired: true,
+            leaseExpiresAt
+          };
+        },
+        async onCreatePlatformPlaybackSession(input) {
+          sessionStarts.push(input);
+          leaseExpiresAt = new Date(Date.now() + 900_000).toISOString();
+          return platformPlaybackSessionFixture({ leaseExpiresAt });
+        }
+      })
+    });
+    await app.ready();
+
+    const beforeLease = await app.inject({
+      method: "GET",
+      url: `/v1/live/rooms/${roomId}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(beforeLease.statusCode).toBe(200);
+    expect(beforeLease.json().playback).toMatchObject({
+      state: "blocked",
+      url: null,
+      blockReason: "playback_lease_required",
+      usage: {
+        targetType: "live_room",
+        targetId: roomId,
+        leaseExpiresAt: null
+      }
+    });
+    expect(createPlaybackJwt).not.toHaveBeenCalled();
+
+    const start = await app.inject({
+      method: "POST",
+      url: "/v1/platform-usage/playback-sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "public-live-lease-1"
+      },
+      payload: { targetType: "live_room", targetId: roomId }
+    });
+    expect(start.statusCode).toBe(201);
+
+    const accounted = await app.inject({
+      method: "GET",
+      url: `/v1/live/rooms/${roomId}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(accounted.statusCode).toBe(200);
+    expect(accounted.json().playback).toMatchObject({
+      state: "full",
+      jwt: "livepeer.jwt.token",
+      usage: { leaseExpiresAt }
+    });
+    expect(Date.parse(accounted.json().playback.expiresAt)).toBeLessThanOrEqual(
+      Date.parse(leaseExpiresAt!)
+    );
+    expect(createPlaybackJwt).toHaveBeenCalledWith({
+      playbackId: "livepeer-playback-18",
+      appUserId: "00000000-0000-4000-8000-000000000010",
+      expiresAt: new Date(leaseExpiresAt!)
+    });
+
+    await app.inject({
+      method: "GET",
+      url: `/v1/live/rooms/${roomId}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(sessionStarts).toHaveLength(1);
+
+    leaseExpiresAt = null;
+    const afterExpiry = await app.inject({
+      method: "GET",
+      url: `/v1/live/rooms/${roomId}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(afterExpiry.json().playback).toMatchObject({
+      state: "blocked",
+      blockReason: "playback_lease_required"
     });
 
     await app.close();
@@ -12608,7 +12877,7 @@ describe("buildApi", () => {
 
     expect(readResponse.statusCode).toBe(200);
     expect(readResponse.json()).toMatchObject({
-      defaultMode: "recommended",
+      defaultMode: "latest",
       nsfwPreference: "both"
     });
     expect(preferencesResponse.statusCode).toBe(200);
@@ -13773,7 +14042,9 @@ function fakeSubscriptionRepository(
     async getPlatformPlaybackDecision(input) {
       return overrides.onGetPlatformPlaybackDecision?.(input) ?? {
         countsTowardAllowance: false,
-        limitReached: false
+        limitReached: false,
+        leaseRequired: false,
+        leaseExpiresAt: null
       };
     },
     async createPlatformPlaybackSession(input) {
@@ -13804,6 +14075,8 @@ function fakeSubscriptionRepository(
       return {
         authorizationIntentId: input.authorizationIntentId,
         setupReference: "00000000-0000-4000-8000-000000000072",
+        submittedSignature: null,
+        submittedAt: null,
         delegationProgramId: input.delegationProgramId,
         collectorAddress: null,
         subscriberWallet: "11111111111111111111111111111111",
@@ -13813,7 +14086,7 @@ function fakeSubscriptionRepository(
         tokenMint: "USDC_MINT_CONFIG_REQUIRED",
         tokenProgram: "spl_token",
         amountMinor: 15000000,
-        amountAtomic: 15000000,
+        amountAtomic: "15000000",
         periodDays: 30,
         periodSeconds: 2592000,
         delegationNonce: 0,
@@ -13871,6 +14144,8 @@ function platformPlaybackSessionFixture(
     state: overrides.state ?? "active",
     heartbeatIntervalSeconds: overrides.heartbeatIntervalSeconds ?? 15,
     consumedSeconds: overrides.consumedSeconds ?? 0,
+    reservedSeconds: overrides.reservedSeconds ?? 900,
+    leaseExpiresAt: overrides.leaseExpiresAt ?? "2026-08-01T00:15:00.000Z",
     usage: overrides.usage ?? platformAccessFixture().usage
   };
 }
@@ -14238,7 +14513,7 @@ function fakeEngagementRepository(
     async getFeedPreferences(input) {
       await overrides.onGetFeedPreferences?.(input);
       return {
-        defaultMode: "recommended",
+        defaultMode: "latest",
         nsfwPreference: "both",
         hiddenCreatorIds: [],
         hiddenTopics: []
@@ -14247,7 +14522,7 @@ function fakeEngagementRepository(
     async updateFeedPreferences(input) {
       await overrides.onUpdateFeedPreferences?.(input);
       return {
-        defaultMode: input.body.defaultMode ?? "recommended",
+        defaultMode: input.body.defaultMode ?? "latest",
         nsfwPreference: input.body.nsfwPreference ?? "both",
         hiddenCreatorIds: [],
         hiddenTopics: []
@@ -14259,7 +14534,7 @@ function fakeEngagementRepository(
     async hideCreator(input) {
       await overrides.onHideCreator?.(input);
       return {
-        defaultMode: "recommended",
+        defaultMode: "latest",
         nsfwPreference: "both",
         hiddenCreatorIds: [input.creatorUserId],
         hiddenTopics: []
@@ -14268,7 +14543,7 @@ function fakeEngagementRepository(
     async hideTopic(input) {
       await overrides.onHideTopic?.(input);
       return {
-        defaultMode: "recommended",
+        defaultMode: "latest",
         nsfwPreference: "both",
         hiddenCreatorIds: [],
         hiddenTopics: [input.topic]
@@ -15877,7 +16152,6 @@ const fakeProfileRepository: ProfileRepository = {
     expect(input).toMatchObject({
       handle: "maki",
       displayName: "Maki",
-      avatarUrl: "https://media.example.test/avatar.jpg",
       links: [{ label: "Website", url: "https://veel.example.test/maki" }],
       bio: "Building Veel v2"
     });
@@ -15886,7 +16160,7 @@ const fakeProfileRepository: ProfileRepository = {
       id: "00000000-0000-4000-8000-000000000010",
       handle: input.handle,
       displayName: input.displayName ?? input.handle,
-      avatarUrl: input.avatarUrl ?? null,
+      avatarUrl: null,
       badges: []
     };
   },

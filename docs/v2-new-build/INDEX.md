@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: canonical architecture, current implementation truth, and production completion plan
-Last updated: 2026-08-25
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
@@ -53,7 +53,7 @@ pull-request truth comes from GitHub's single `wevid-active-slice` label.
 | Database shape | Ordered immutable files in `packages/database/migrations/` | Migration checks and real-Postgres repository/API tests prove the resulting schema. `schema-blueprint.sql` is retained historical planning material only. |
 | Money/access/referral/tax truth | `liability-compliance-audit.md`, `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
 | Payment/access/reporting/bookkeeping truth | `business-monetisation.md`, `liability-compliance-audit.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI, immutable migrations | Blockchain = payment truth; entitlements = access truth; compliance ledger = reporting truth; accounting integration = bookkeeping truth. No duplicate authority. |
-| Native creator commerce | `business-monetisation.md`, `payments-and-monetisation.md`, `providers/provider-map.md`, ADR 0002 | WeVid owns Product Offers and lightweight Orders/Fulfillment. Selected Solana Commerce Kit primitives provide payment presentation/interoperability only; no full commerce engine is canonical. |
+| Native creator commerce | `business-monetisation.md`, `payments-and-monetisation.md`, `providers/provider-map.md`, ADR 0002 | WeVid owns Product Offers and lightweight Orders/Fulfillment. The isolated exact-pinned `@solana/pay` codec provides transaction-request/QR interoperability only; Commerce Kit is retired and no full commerce engine is canonical. |
 | Provider boundaries | `providers/provider-map.md`, provider-specific docs, ADRs | Use official provider docs/SDKs first; adapters hide secrets. |
 | Universal identity and onboarding | `embedded-wallet-onboarding.md`, `auth-supabase-realtime.md`, `providers/identity-provider-wiring.md` | One WeVid user/profile; three visible steps; Privy or external wallet converge on one backend session; Supabase recovery is optional. |
 | Security/compliance | compliance docs, `safety-admin-ai.md`, ADRs | Age, moderation, audit, and privacy rules block launch if incomplete. |
@@ -77,6 +77,7 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 9. [Contracts and database authority guide](contracts-and-schema.md)
 10. [Infrastructure and research decisions](infra-decisions.md)
 11. [Render-safe diagrams](diagrams.md)
+12. [Add keys and test the core app](add-keys-and-test-core-app.md)
 
 ## Product And UX
 

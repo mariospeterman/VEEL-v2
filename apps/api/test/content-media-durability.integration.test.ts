@@ -117,6 +117,9 @@ describeIntegration("content media durability against migrated Postgres", () => 
         where provider = 'bunny' and webhook_type = 'media-status'
           and idempotency_key = ${providerEventId}
       `;
+      await sql`delete from media_upload_operations where content_item_id = ${contentId}`;
+      await sql`delete from media_assets where content_item_id = ${contentId}`;
+      await sql`delete from content_items where id = ${contentId}`;
       await sql`delete from users where id = ${userId}`;
       await sql.end({ timeout: 5 });
     }

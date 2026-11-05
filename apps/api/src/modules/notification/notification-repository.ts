@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { parseAes256GcmKey } from "@veel/config";
 import {
+  bindCursorScope,
   decodeTimestampIdCursor,
   encodeTimestampIdCursor
 } from "../../shared/keyset-pagination.js";
@@ -35,7 +36,11 @@ export function createPostgresNotificationRepository(
 
   return {
     async listNotifications(input) {
-      const cursor = decodeTimestampIdCursor(notificationCursorScope, input.cursor);
+      const cursorScope = bindCursorScope(notificationCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<NotificationRow[]>`
         with target_user as (
           select id
@@ -72,7 +77,7 @@ export function createPostgresNotificationRepository(
       `;
 
       return toNotificationPage(rows, input.limit, (row) =>
-        encodeTimestampIdCursor(notificationCursorScope, row.created_at, row.id)
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
       );
     },
     async markRead(input) {

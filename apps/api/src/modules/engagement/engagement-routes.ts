@@ -227,7 +227,10 @@ export async function registerEngagementRoutes(
     const query = request.query as { cursor?: string };
     const contentId = params.contentId;
     if (!isUuid(contentId)) return reply.code(400).send(validationResponse("contentId must be a UUID"));
-    decodeTimestampIdCursor(engagementCommentsCursorScope, query.cursor);
+    decodeTimestampIdCursor(
+      engagementCommentsCursorScope(access.supabaseUserId, contentId),
+      query.cursor
+    );
     return repositoryReply(request, reply, async () =>
       options.engagementRepository.listComments({
         supabaseUserId: access.supabaseUserId,

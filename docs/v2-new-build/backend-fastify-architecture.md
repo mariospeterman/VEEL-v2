@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: backend
-Last updated: 2026-06-12
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
@@ -141,17 +141,20 @@ For Bunny recovery, the worker reads the current provider playback projection an
 
 Solana payment replay binds its settlement write to the exact intent state and submitted signature observed during lookup. If concurrent evidence changes that boundary, replay never overwrites it: an unrelated signature is ignored, while still-relevant changed state is retried through a fresh lookup.
 
-Workers process:
+The executable scheduler currently starts and repeats these ten registered worker loops:
 
-- Helius/Solana webhook reconciliation
-- Bunny webhooks/status refresh
-- Livepeer webhooks/replay finalization
-- age/KYC webhooks
-- moderation scans
-- notification fanout
-- delayed entitlement expiry
-- stale upload cleanup
-- versioned Analytics Core projection recomputation and source-parity reconciliation
+- `analytics-projections`: versioned Analytics Core projection recomputation and source-parity reconciliation
+- `subscription-authorization-reconciliation`: exact accepted subscription-setup signatures whose finalized evidence is pending, not found, or temporarily unavailable
+- `subscription-collections`: eligible recurring subscription collection
+- `notification-deliveries`: notification delivery
+- `payment-confirmation-emails`: durable payment-confirmation email delivery
+- `provider-event-replays`: operator-requested replay through the canonical provider handlers
+- `scheduled-publications`: scheduled content publication
+- `live-safety`: provider health and suspension actions
+- `media-moderation`: media moderation jobs
+- `media-asset-cleanups`: retired media-asset provider cleanup
+
+Signed provider webhooks enter through the API. They may create or update durable work, but the worker does not expose a second webhook ingress or poll providers as an alternative source of truth. The recurring loop runs immediately at process startup and then every `WORKER_TICK_INTERVAL_MS` (60 seconds by default); `WORKER_BATCH_LIMIT` bounds each queue lease, task failures are isolated, and overlapping ticks are serialized.
 
 Analytics Core uses the existing worker process and Postgres queue authority. It leases a bounded
 UTC window, transactionally replaces typed daily projection rows from canonical facts, records

@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import type { AdminRepository } from "./types.js";
 import {
   ReferralProgramRow,
@@ -18,7 +19,9 @@ export function createGrowthRepository(
 ): Pick<AdminRepository, "listReferralPrograms" | "listPartnerCampaigns" | "listTierWaivers"> {
   return {
     async listReferralPrograms(input) {
-      const cursorScope = "GET /v1/admin/referrals/programs";
+      const cursorScope = bindCursorScope("GET /v1/admin/referrals/programs", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ReferralProgramRow[]>`
         select id, name, state, priority, commission_source, created_at
@@ -40,7 +43,9 @@ export function createGrowthRepository(
       );
     },
     async listPartnerCampaigns(input) {
-      const cursorScope = "GET /v1/admin/referrals/partner-campaigns";
+      const cursorScope = bindCursorScope("GET /v1/admin/referrals/partner-campaigns", {
+        sort: "created_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<PartnerCampaignRow[]>`
         select id, name, partner_name, state, contract_id, created_at
@@ -62,7 +67,9 @@ export function createGrowthRepository(
       );
     },
     async listTierWaivers(input) {
-      const cursorScope = "GET /v1/admin/tier-waivers";
+      const cursorScope = bindCursorScope("GET /v1/admin/tier-waivers", {
+        sort: "starts_at:desc,id:desc"
+      });
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<TierWaiverRow[]>`
         select id, subject_type, subject_id, tier_key, state, starts_at, ends_at

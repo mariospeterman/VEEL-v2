@@ -55,6 +55,7 @@ export function ProfileMediaGrid({ filter, page }: { filter: ProfileMediaFilter;
 
 function isVisibleInFilter(item: CreatorMediaItem, filter: ProfileMediaFilter) {
   if (item.publicationState !== "published") return false;
+  if (item.mediaType === "text" || item.mediaType === "poll") return false;
   if (filter === "moments") return item.distributionMode === "moment";
   if (filter === "bits") return item.mediaType === "bit" && item.distributionMode === "post";
   return item.distributionMode === "post" && item.mediaType !== "bit";

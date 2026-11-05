@@ -96,6 +96,8 @@ describe("Livepeer provider adapter", () => {
   });
 
   it("signs playback access with Livepeer's official JWT helper", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-05T12:00:00.000Z"));
     const keyPair = generateKeyPairSync("ec", { namedCurve: "P-256" });
     const privateKey = Buffer.from(
       keyPair.privateKey.export({ type: "pkcs8", format: "pem" }).toString()
@@ -109,7 +111,8 @@ describe("Livepeer provider adapter", () => {
 
     const token = await adapter.createPlaybackJwt({
       playbackId: "playback-1",
-      appUserId: "user-1"
+      appUserId: "user-1",
+      expiresAt: new Date("2026-11-05T12:00:37.900Z")
     });
     const payload = JSON.parse(
       Buffer.from(token?.split(".")[1] ?? "", "base64url").toString("utf8")
@@ -123,6 +126,18 @@ describe("Livepeer provider adapter", () => {
       video: "none",
       custom: { userId: "user-1" }
     });
+    expect(Number(payload.exp)).toBeLessThanOrEqual(
+      Math.floor(Date.parse("2026-11-05T12:00:37.900Z") / 1_000)
+    );
+    expect(Number(payload.exp)).toBeGreaterThan(
+      Math.floor(Date.now() / 1_000)
+    );
+    await expect(adapter.createPlaybackJwt({
+      playbackId: "playback-1",
+      appUserId: "user-1",
+      expiresAt: new Date("2026-11-05T12:00:00.500Z")
+    })).resolves.toBeNull();
+    vi.useRealTimers();
   });
 
   it("fails production configuration closed until live moderation is launch approved", () => {

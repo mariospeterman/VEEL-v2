@@ -53,7 +53,11 @@ export interface LiveProviderAdapter {
   createRoom(input: CreateLiveProviderRoomInput): Promise<CreatedLiveProviderRoom>;
   getRoomStatus(input: GetLiveProviderRoomStatusInput): Promise<LiveProviderRoomStatus>;
   getRoomHealth?(input: { providerStreamId: string; observedAt: Date }): Promise<LiveProviderRoomHealth>;
-  createPlaybackJwt(input: { playbackId: string; appUserId: string }): Promise<string | null>;
+  createPlaybackJwt(input: {
+    playbackId: string;
+    appUserId: string;
+    expiresAt?: Date;
+  }): Promise<string | null>;
   setRoomSuspended(input: { providerStreamId: string; suspended: boolean }): Promise<void>;
   terminateRoom(input: { providerStreamId: string }): Promise<void>;
 }

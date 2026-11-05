@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Bunny, Livepeer, media, live
-Last updated: 2026-11-04
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
@@ -22,12 +22,22 @@ Non-goals:
 
 Current implementation state:
 
-- `POST /v1/content` creates one server-owned content draft for app-ready users across video, image, carousel, text, and poll formats. Initial plain text and poll definitions are validated, normalized, and stored in the same transaction as the canonical `content_items` row; incomplete text/poll drafts remain private and fail closed at submission until their required shape is complete.
+- `POST /v1/content` creates one server-owned content draft for app-ready users across new video,
+  image, and carousel media. Fresh text/poll create, update, publish, scheduled-publish, and vote
+  writes are retired; authorized historical rows remain readable through their existing lifecycle.
+  A single video's provider-confirmed duration classifies it as Bit at 60 seconds or less and VOD
+  above 60 seconds. Browser-selected media type or duration is not publication truth.
 - Content draft creation persists a non-expiring server-only receipt keyed by actor, action, and `Idempotency-Key`. An exact replay returns the original draft, changed-input reuse fails with `409`, and retries never consume draft quota twice.
 - Adult/explicit draft creation requires a first-party representation declaration and explicit policy acceptance. `self_only` reuses the creator's valid Didit-backed adult-publisher identity and records one scoped consent; MCP cannot accept this declaration for the creator.
 - `POST /v1/content` enforces a backend-owned draft quota before inserting content. The default policy is 20 drafts per rolling 24 hours, and an active `safety.content_creation_abuse_policy` admin software-policy flag can tighten or relax the draft count/window without giving the browser, money, tiers, Mutuals, recommendations, messages, or moderation priority any control.
 - `POST /v1/media/uploads` binds the content id, filename, MIME type, byte size, and SHA-256 checksum to one actor/idempotency key and reserves `media_upload_operations` before touching Bunny. One claimed operation may create one Bunny VideoId under an opaque title derived from the reserved media asset id; the VideoId is durably recorded before media attachment, exact response retries re-sign that same VideoId, changed-file reuse fails with `409`, and an attach failure enters the canonical retired-asset cleanup queue before provider deletion is attempted. If Create Video commits but its response is lost, retries remain fail-closed instead of creating a duplicate and the opaque title is the operator reconciliation handle. The default policy is 30 upload sessions per rolling 24 hours, with the same active admin safety policy controlling launch operations.
-- `/create` now uses those backend endpoints for explicit draft creation, metadata/preview updates, upload-session creation, provider-status sync, and content projection refresh, then uploads bytes through `tus-js-client` using the server-issued Bunny TUS endpoint and headers. The browser displays progress, pause/resume state, safe upload headers, expiry, persisted media asset id, and frontend-safe content access/playback projection; it does not receive the Bunny API key, mutate moderation state, or publish content locally.
+- `/app/create` exposes only Add photos/videos and Go live. Its media path uses those backend
+  endpoints for draft creation, metadata/preview updates, upload-session creation, provider-status
+  sync, and content projection refresh, then uploads bytes through `tus-js-client` using the
+  server-issued Bunny TUS endpoint and headers. The browser displays progress, pause/resume state,
+  safe upload headers, expiry, persisted media asset id, and frontend-safe content access/playback
+  projection; it does not receive the Bunny API key, choose Bit/VOD classification, mutate
+  moderation state, or publish content locally.
 - `PATCH /v1/content/{contentId}` is creator-owned and idempotency-header gated. It updates caption, visibility, NSFW label, teaser start/end, thumbnail frame controls, and draft Event Access metadata/pass types for the same owned content item. It does not publish content, publish the event, approve moderation, grant access, or update provider playback truth.
 - `POST /v1/content/{contentId}/publish` is creator-owned and idempotency-header gated. It requires explicit `submit_for_review` confirmation and provider-ready media before moving `publish_state` to `submitted_for_review` or `published` if moderation was already approved. It does not approve moderation, grant access, or create paid visibility.
 - Browser upload completion is still provider-transfer completion only. Provider-ready playback, moderation approval, publish state, and public/discovery access remain backend-owned follow-up states.
@@ -39,15 +49,22 @@ Current implementation state:
 - `GET /v1/content/{contentId}` returns a frontend-safe media viewer projection backed by `content_access_rules`, creator profile data, and the first media poster.
 - `/content/[contentId]` consumes that projection through the web API helper and renders backend access/playback state only. Full backend-issued Bunny embed resources render in an iframe, direct/HLS resources render in the browser media element, and blocked/teaser/not-ready states stay gated; it does not create local payment or playback fixtures.
 - Access projection is conservative: free/teaser/pass/locked states are exposed, entitlement grants remain backend-settlement-owned, and provider management URLs are never exposed to the browser.
-- `GET /v1/content/{contentId}` fails full Bunny playback closed unless backend access is already `free`, `unlocked`, or `subscribed` and a short-lived Bunny embed token can be generated server-side.
+- `GET /v1/content/{contentId}` fails full Bunny playback closed unless backend access is already `free`, `unlocked`, or `subscribed` and a short-lived Bunny embed token can be generated server-side. Qualifying bounded-tier free public playback additionally requires an active server-reserved playback lease; the read returns lease-required context but never reserves usage itself.
 - `POST /v1/webhooks/media/{provider}` accepts Bunny Stream signed webhooks for the `bunny` provider and Livepeer signed stream webhooks for the `livepeer` provider, verifies raw-body HMAC signatures, and records the receipt plus normalized provider event in one database transaction. Redelivery repairs a legacy receipt-only interruption and reapplies an event whenever `processed_at` is still null, so neither a receipt commit nor a crash before asset apply can suppress recovery.
 - SFW live creation now reserves the canonical room and one atomic provider-creation claim before calling Livepeer. Concurrent retries cannot create two streams, and a created provider stream that cannot be attached is suspended and terminated as fail-closed compensation.
-- Creator OBS setup is available through an owner-only host workspace. The ordinary endpoint stays masked; the one-response reveal requires recent authentication, an explicit secret-handling acknowledgement, idempotency, no-store headers, and an audit/control receipt.
+- Browser camera/microphone broadcast is primary in the owner-only host workspace, using the
+  official Livepeer React broadcast components and `@livepeer/core` ingest helper. OBS remains an
+  Advanced setup option. The ordinary endpoint stays masked; the one-response reveal requires
+  recent authentication, explicit secret-handling acknowledgement, idempotency, no-store headers,
+  and an audit/control receipt. This is the narrow host-ingest credential exception: the workspace
+  may hold it in component memory for the active session, but must never persist, log, cache, or
+  expose it to a viewer.
 - Viewer playback receives the short-lived Livepeer JWT as a separate player credential, never as a URL query parameter. Ordinary viewer/list repository reads select neither the ingest URL nor stream key.
 - Creator end and staff suspend/resume are backend-owned, idempotent, audited controls. Local playback/access blocking happens before the provider call; resume stays blocked until provider recovery succeeds.
 - Live chat authorization and message idempotency are one atomic database operation. Only the sanitized chat table is published to Supabase Realtime; `live_rooms` and its provider secrets are not.
 - `recording.ready` creates a private replay content item, safety case, media asset, and moderation job. A room marked replay-ready still exposes no replay playback until the canonical content, safety, and provider-ready predicates all pass.
-- Bunny playback token issuing is backend-owned through embed-view token authentication; moderation state transitions and broader locked playback policy surfaces are deferred to their owning media/access slices.
+- Bunny playback token issuing is backend-owned through embed-view token authentication. Current embeds use `https://player.mediadelivery.net/embed/{libraryId}/{videoId}`; the deprecated legacy `iframe.mediadelivery.net` player is not supported. For allowance-backed public playback, `expires` is never later than the persisted playback-lease expiry.
+- Livepeer viewer JWT issuing is backend-owned. For allowance-backed public live playback, the JWT duration is the smaller of the provider TTL and whole seconds remaining in the persisted playback lease; issuance fails closed when less than one whole second remains.
 
 Official references checked:
 
@@ -56,12 +73,15 @@ Official references checked:
 - Bunny Stream webhooks and HMAC validation: https://docs.bunny.net/stream/webhooks
 - Bunny Stream security and token authentication: https://docs.bunny.net/stream/security
 - Bunny Stream embed view token authentication: https://docs.bunny.net/stream/token-authentication
+- Bunny Stream embedding: https://docs.bunny.net/stream/embedding
+- Bunny Stream current and legacy players: https://docs.bunny.net/stream/player
 - Livepeer webhook setup and signatures: https://docs.livepeer.org/developers/guides/setup-and-listen-to-webhooks
 - Livepeer stream event webhooks: https://docs.livepeer.org/developers/guides/listen-to-stream-events
 - Livepeer JWT access control: https://docs.livepeer.org/developers/guides/access-control-jwt
 - Livepeer create stream: https://docs.livepeer.org/api-reference/stream/create
 - Livepeer update/suspend stream: https://docs.livepeer.org/api-reference/stream/update
 - Livepeer terminate stream: https://docs.livepeer.org/api-reference/stream/terminate
+- Livepeer React broadcast SDK source: https://github.com/livepeer/ui-kit
 - Livepeer OBS ingest: https://docs.livepeer.org/developers/guides/stream-via-obs
 - Livepeer asset upload reference: https://docs.livepeer.org/api-reference/asset/upload
 - Bunny Storage HTTP API: https://docs.bunny.net/storage/http
@@ -72,7 +92,7 @@ Official references checked:
 - Bunny CDN token authentication: https://bunny.net/docs/cdn/security/token-authentication
 - Bunny advanced HMAC token authentication: https://bunny.net/docs/cdn/security/token-authentication/advanced
 
-The Bunny Stream create/delete, TUS, Storage HTTP, Stream security, CDN token-authentication, and Dynamic Images behavior above was rechecked against the official documentation on 2026-11-04. Provider approval state remains unchanged: no candidate production path is promoted by this recheck alone.
+The Bunny Stream create/delete, TUS, Storage HTTP, Stream security, current-player embedding, embed-token authentication, CDN token-authentication, and Dynamic Images behavior above was rechecked against the official documentation on 2026-11-05. Bunny documents `iframe.mediadelivery.net` as a legacy-player URL that depends on legacy mode and is scheduled for removal in early 2027; staging must use and prove the current player (`PlayerVersion=2`). Provider approval state remains unchanged: no candidate production path is promoted by this recheck alone.
 
 ## Provider Split
 
@@ -118,7 +138,7 @@ Rules:
 - Provider payload is sanitized before frontend response.
 - Paid full playback requires backend access state and backend-issued signed/tokenized Bunny playback.
 - Full locked Bunny playback is never exposed as an unsigned long-lived URL.
-- Bunny embed playback resources require `BUNNY_STREAM_EMBED_TOKEN_KEY` and use short-lived `token` and `expires` query parameters generated server-side from the provider video id. The frontend receives only the signed embed URL and expiry metadata.
+- Bunny embed playback resources require `BUNNY_STREAM_EMBED_TOKEN_KEY` and use the current `player.mediadelivery.net/embed` endpoint with short-lived `token` and `expires` query parameters generated server-side from the provider video id. The frontend receives only the signed embed URL and expiry metadata. When an allowance lease applies, the signed embed must expire no later than that lease.
 
 ## Livepeer Live Flow
 
@@ -136,7 +156,9 @@ sequenceDiagram
   API->>Livepeer: Create stream with Veel room id tag
   Livepeer-->>API: streamKey, ingest, playback
   API->>DB: Attach provider ids and host connection secrets
-  API-->>Creator: Room created; reveal OBS connection on demand
+  API-->>Creator: Room created; owner reveals host credential on demand
+  Creator->>Livepeer: Primary browser camera/microphone broadcast
+  Creator->>Livepeer: Advanced OBS ingest when selected
   Viewer->>API: Open viewer room
   API-->>Viewer: Safe playback/access state
   Livepeer->>API: Stream webhook
@@ -146,7 +168,11 @@ sequenceDiagram
 Rules:
 
 - Live room creation is DB-first: the API reserves a durable room id and idempotency record, then atomically claims the one provider-creation lease before creating a Livepeer stream and attaching provider ids and host connection fields. Concurrent use of the same idempotency key reuses the same room and cannot run two provider creates.
-- `GET /v1/live/rooms/:id/host-connection` stays masked. `POST /v1/live/rooms/:id/host-connection/reveal` is creator-only, recent-authenticated, idempotent, audited, and no-store. The host screen keeps the revealed key in component memory only.
+- `GET /v1/live/rooms/:id/host-connection` stays masked. `POST /v1/live/rooms/:id/host-connection/reveal` is creator-only, recent-authenticated, idempotent, audited, and no-store. The host screen keeps the revealed key in component memory only. The official `getIngest` helper derives the browser WHIP target from that memory value; no second provider route or stored browser credential is introduced.
+- Camera/microphone is the default host choice and uses the official Livepeer broadcast Root, Video,
+  source selection, enable controls, and status/error primitives. Camera permission denial or an SDK
+  error is explicit and recoverable. OBS instructions are hidden under Advanced setup and use the
+  same masked/reveal authority.
 - Viewer never receives stream key or ingest URL.
 - Replay state is separate from live state.
 - Paid playback access uses Livepeer JWT provider access from day one.
@@ -183,7 +209,9 @@ Current implementation slice:
 - `GET /v1/live/rooms/:id` returns viewer-safe mode, playback, membership/event access, chat, and replay projection.
 - `/live/[liveRoomId]` consumes that live-room projection through the web API helper and renders fail-closed unavailable state when the API or authorization path cannot return a viewer-safe resource.
 - Allowed Livepeer playback is signed server-side and returned as a short-lived HLS resource plus a separate write-only JWT player credential. If JWT signing keys are unavailable, full playback fails closed as `blocked` even when backend access is active.
-- `GET /v1/live/rooms/mine` lists creator rooms; the private `/app/live/[liveRoomId]` workspace owns OBS setup, status refresh, viewer preview, and creator end.
+- `GET /v1/live/rooms/mine` lists creator rooms; the private `/app/live/[liveRoomId]` workspace owns
+  camera-first browser broadcast, Advanced OBS setup, status refresh, viewer preview, and creator
+  end.
 - `GET /v1/live/rooms/:id/host-connection` returns masked host details; the explicit reveal mutation returns credentials once per response under recent-auth and audit controls.
 - `POST /v1/live/rooms/:id/end` blocks locally before provider termination. `POST /v1/admin/live/rooms/:id/suspension` gives owner/admin/trust-safety roles an audited provider-backed suspend/resume control.
 - `POST /v1/live/rooms/:id/sync` refreshes provider state and replay projection.
