@@ -20,7 +20,7 @@ describeIntegration("Didit verification decisions against Postgres", () => {
     await sql?.end({ timeout: 5 });
   });
 
-  it("derives age access from an approved documentary adult-publisher decision", async () => {
+  it("does not fabricate age access from an approved documentary adult-publisher decision", async () => {
     if (!sql) throw new Error("Postgres test client was not initialized");
     const userId = randomUUID();
     const supabaseUserId = userId;
@@ -76,18 +76,43 @@ describeIntegration("Didit verification decisions against Postgres", () => {
 
       expect(result).toBe("applied");
       const status = await repository.resolveCapabilities({ supabaseUserId });
-      expect(status.capabilities.canAccessApp).toBe(true);
-      expect(status.capabilities.canPublishAdultMedia).toBe(true);
+      expect(status.capabilities.canAccessApp).toBe(false);
+      expect(status.capabilities.canPublishAdultMedia).toBe(false);
       expect(status.capabilities.canMonetize).toBe(false);
+      expect(status.verificationSummary.adultPublisherEligibility).toMatchObject({
+        status: "valid",
+        thresholdAge: null,
+        resultOverThreshold: null
+      });
+
+      await sql`
+        insert into verification_records (
+          subject_type, subject_id, purpose, status, provider, method,
+          threshold_age, result_over_threshold, assurance_level, verified_at,
+          reusable, metadata
+        ) values (
+          'user', ${userId}, 'age_access', 'valid', 'manual', 'manual_review',
+          18, true, 'high', now(), false,
+          ${sql.json({ source: "integration_test_independent_age_fact" })}
+        )
+      `;
+
+      const statusWithIndependentAge = await repository.resolveCapabilities({ supabaseUserId });
+      expect(statusWithIndependentAge.capabilities.canAccessApp).toBe(true);
+      expect(statusWithIndependentAge.capabilities.canPublishMedia).toBe(true);
+      expect(statusWithIndependentAge.capabilities.canPublishAdultMedia).toBe(false);
 
       const derived = await sql<Array<{ derived_from_record_id: string | null }>>`
         select derived_from_record_id
         from verification_records
-        where subject_id = ${userId} and purpose = 'age_access' and status = 'valid'
+        where subject_id = ${userId}
+          and purpose = 'age_access'
+          and status = 'valid'
+          and derived_from_record_id is not null
         order by created_at desc
         limit 1
       `;
-      expect(derived[0]?.derived_from_record_id).toBeTruthy();
+      expect(derived).toEqual([]);
     } finally {
       const recordIds = await sql<Array<{ id: string }>>`
         select id from verification_records where subject_id = ${userId}
@@ -150,7 +175,11 @@ describeIntegration("Didit verification decisions against Postgres", () => {
       `;
       expect(reservedRows[0]).toEqual({ sessions: 1, records: 1 });
 
-      const approvedAt = new Date("2026-11-04T12:00:00.000Z");
+      const timeline = await sql<Array<{ approved_at: Date }>>`
+        select clock_timestamp() as approved_at
+      `;
+      const approvedAt = timeline[0]?.approved_at;
+      if (!approvedAt) throw new Error("Missing verification timeline anchor");
       const approved = await repository.applyProviderWebhook({
         provider: "sumsub",
         providerEventId: `sumsub:${"a".repeat(64)}`,
@@ -172,14 +201,14 @@ describeIntegration("Didit verification decisions against Postgres", () => {
           providerReference: reservation.subjectReference,
           providerExternalUserId: reservation.subjectReference,
           launchUrl: "https://in.sumsub.example/websdk/p/test",
-          expiresAt: new Date("2026-11-04T11:30:00.000Z"),
+          expiresAt: new Date(approvedAt.getTime() + 30 * 60 * 1000),
           method: "gov_id_selfie",
           assuranceLevel: "documentary",
           reusable: false
         }
       });
 
-      const blockedAt = new Date("2026-11-04T13:00:00.000Z");
+      const blockedAt = new Date(approvedAt.getTime() + 60 * 60 * 1000);
       const blocked = await repository.applyProviderWebhook({
         provider: "sumsub",
         providerEventId: `sumsub:${"b".repeat(64)}`,
@@ -205,7 +234,7 @@ describeIntegration("Didit verification decisions against Postgres", () => {
         status: "valid",
         signatureHash: "4".repeat(64),
         payloadHash: "c".repeat(64),
-        occurredAt: new Date("2026-11-04T12:30:00.000Z")
+        occurredAt: new Date(approvedAt.getTime() + 30 * 60 * 1000)
       });
       expect(lateApproval).toBe("duplicate");
 
@@ -316,7 +345,11 @@ describeIntegration("Didit verification decisions against Postgres", () => {
         assuranceLevel: "medium",
         reusable: false
       });
-      const approvedAt = new Date("2026-11-04T14:00:00.000Z");
+      const timeline = await sql<Array<{ approved_at: Date }>>`
+        select clock_timestamp() as approved_at
+      `;
+      const approvedAt = timeline[0]?.approved_at;
+      if (!approvedAt) throw new Error("Missing age-verification timeline anchor");
       expect(await repository.applyProviderWebhook({
         provider: "yoti",
         providerEventId: `yoti-${randomUUID()}`,
@@ -336,7 +369,7 @@ describeIntegration("Didit verification decisions against Postgres", () => {
           providerReference: `yoti-session-${userId}`,
           providerExternalUserId: reservation.subjectReference,
           launchUrl: "https://age.yoti.example/session/test",
-          expiresAt: new Date("2026-11-04T13:30:00.000Z"),
+          expiresAt: new Date(approvedAt.getTime() + 30 * 60 * 1000),
           rule: "over_18"
         }
       });
@@ -345,7 +378,7 @@ describeIntegration("Didit verification decisions against Postgres", () => {
         provider: "yoti"
       });
 
-      const failedAt = new Date("2026-11-04T15:00:00.000Z");
+      const failedAt = new Date(approvedAt.getTime() + 60 * 60 * 1000);
       expect(await repository.applyProviderWebhook({
         provider: "yoti",
         providerEventId: `yoti-${randomUUID()}`,
@@ -364,7 +397,7 @@ describeIntegration("Didit verification decisions against Postgres", () => {
         providerReference: `yoti-session-${userId}`,
         providerSubjectReference: reservation.subjectReference,
         state: "verified",
-        verifiedAt: new Date("2026-11-04T14:30:00.000Z")
+        verifiedAt: new Date(approvedAt.getTime() + 30 * 60 * 1000)
       })).toBe(false);
 
       const rows = await sql<Array<{

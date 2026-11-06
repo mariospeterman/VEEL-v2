@@ -1,6 +1,20 @@
 -- Retire new text/poll publication and move the primary media feed to a
 -- publication-time keyset. Historical content and vote records remain intact.
 
+-- Keep the legacy and replacement values valid while populated databases move
+-- between them. The final constraint is replaced only after the bridge has
+-- itself been validated, so the transition is never temporarily unconstrained.
+alter table viewer_feed_preferences
+  add constraint viewer_feed_preferences_default_feed_mode_transition_check
+    check (default_feed_mode in ('recommended', 'latest', 'following'))
+    not valid;
+
+alter table viewer_feed_preferences
+  validate constraint viewer_feed_preferences_default_feed_mode_transition_check;
+
+alter table viewer_feed_preferences
+  drop constraint if exists viewer_feed_preferences_default_feed_mode_check;
+
 update viewer_feed_preferences
 set default_feed_mode = 'latest', updated_at = now()
 where default_feed_mode = 'recommended';
@@ -9,11 +23,15 @@ alter table viewer_feed_preferences
   alter column default_feed_mode set default 'latest';
 
 alter table viewer_feed_preferences
-  drop constraint if exists viewer_feed_preferences_default_feed_mode_check;
+  add constraint viewer_feed_preferences_default_feed_mode_check
+    check (default_feed_mode in ('latest', 'following'))
+    not valid;
 
 alter table viewer_feed_preferences
-  add constraint viewer_feed_preferences_default_feed_mode_check
-    check (default_feed_mode in ('latest', 'following'));
+  validate constraint viewer_feed_preferences_default_feed_mode_check;
+
+alter table viewer_feed_preferences
+  drop constraint viewer_feed_preferences_default_feed_mode_transition_check;
 
 -- Old published rows predate the explicit publication clock. Preserve the best
 -- available immutable server chronology instead of sorting them by engagement.
@@ -47,7 +65,14 @@ set
 from content_items content
 where content.id = job.content_item_id
   and content.media_type in ('text', 'poll')
-  and job.state not in ('completed', 'dead_letter', 'cancelled');
+  and job.state not in ('completed', 'dead_letter');
+
+-- The publish-state rewrite queues the composer shape constraint trigger, which
+-- is intentionally deferred. Flush that named authority before building
+-- indexes on content_items; PostgreSQL refuses CREATE INDEX while the table has
+-- pending trigger events. Keeping this scoped to the one affected constraint
+-- avoids changing the transaction mode of unrelated deferred authorities.
+set constraints content_items_enforce_poll_shape immediate;
 
 create or replace function private.enforce_retired_content_write_boundary()
 returns trigger

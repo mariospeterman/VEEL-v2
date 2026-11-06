@@ -61,6 +61,19 @@ export function createAgeProviderWaterfall(env: ServerEnv): AgeProviderWaterfall
         if (error instanceof VerificationProviderHttpError) throw error;
         throw new AgeProviderUnavailableError();
       }
+    },
+    async reconcileSession(input) {
+      if (!verificationProviders.reconcileSession) throw new AgeProviderUnavailableError();
+      try {
+        return await verificationProviders.reconcileSession({
+          provider: input.provider,
+          providerReference: input.providerReference,
+          purpose: "age_access"
+        });
+      } catch (error) {
+        if (error instanceof VerificationProviderHttpError) throw error;
+        throw new AgeProviderUnavailableError();
+      }
     }
   };
 }

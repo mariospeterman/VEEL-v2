@@ -270,11 +270,47 @@ paths:
         $ref: "#/components/requestBodies/CreateAgeSession"
       responses:
         "201": { $ref: "#/components/responses/AgeSession" }
+        "202": { $ref: "#/components/responses/AgeSession" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/age/sessions/{sessionId}:
+    get:
+      operationId: getAgeSession
+      tags: [Age]
+      summary: Read the current durable age-assurance handoff
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { $ref: "#/components/responses/AgeSession" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/age/sessions/{sessionId}/resume:
+    post:
+      operationId: resumeAgeSession
+      tags: [Age]
+      summary: Reconcile and resume an existing age-assurance attempt without creating a second provider session
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/AgeSession" }
+        "202": { $ref: "#/components/responses/AgeSession" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/age/status:
     get:
@@ -1743,6 +1779,76 @@ paths:
         "409": { $ref: "#/components/responses/Conflict" }
         "429": { $ref: "#/components/responses/RateLimited" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/privacy/content-exports/{contentExportId}/cancel:
+    post:
+      operationId: cancelContentExport
+      tags: [Privacy]
+      summary: Request cancellation of an owned content export
+      parameters:
+        - $ref: "#/components/parameters/ContentExportId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/ContentExport" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/privacy/content-exports/{contentExportId}/retry:
+    post:
+      operationId: retryContentExport
+      tags: [Privacy]
+      summary: Retry an owned failed content export from its pinned snapshot
+      parameters:
+        - $ref: "#/components/parameters/ContentExportId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "200": { $ref: "#/components/responses/ContentExport" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/privacy/content-exports/{contentExportId}/download-grants:
+    post:
+      operationId: createContentExportDownloadGrant
+      tags: [Privacy]
+      summary: Create a short-lived owner-only content export download grant
+      parameters:
+        - $ref: "#/components/parameters/ContentExportId"
+        - $ref: "#/components/parameters/RequiredIdempotencyKey"
+      responses:
+        "201": { $ref: "#/components/responses/ContentExportDownloadGrant" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/privacy/content-exports/{contentExportId}/downloads/{grantId}:
+    get:
+      operationId: downloadContentExport
+      tags: [Privacy]
+      summary: Stream an owned content export through a current short-lived grant
+      parameters:
+        - $ref: "#/components/parameters/ContentExportId"
+        - $ref: "#/components/parameters/ContentExportGrantId"
+      responses:
+        "200":
+          description: Bounded tar archive of pinned creator-owned content
+          headers:
+            Content-Disposition: { schema: { type: string } }
+            Content-Digest: { schema: { type: string } }
+          content:
+            application/x-tar:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/messages/conversations:
     get:
       operationId: listConversations
@@ -2365,6 +2471,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/events:
     post:
@@ -3690,6 +3797,8 @@ components:
     SupportPolicyId: { name: supportPolicyId, in: path, required: true, schema: { type: string, format: uuid } }
     RefundDisputeId: { name: refundDisputeId, in: path, required: true, schema: { type: string, format: uuid } }
     DataRequestId: { name: dataRequestId, in: path, required: true, schema: { type: string, format: uuid } }
+    ContentExportId: { name: contentExportId, in: path, required: true, schema: { type: string, format: uuid } }
+    ContentExportGrantId: { name: grantId, in: path, required: true, schema: { type: string, format: uuid } }
     CommentId: { name: commentId, in: path, required: true, schema: { type: string, format: uuid } }
     OrganizationId: { name: organizationId, in: path, required: true, schema: { type: string, format: uuid } }
     MembershipId: { name: membershipId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -3865,6 +3974,8 @@ components:
     MuteState: { description: Mute state, content: { application/json: { schema: { $ref: "#/components/schemas/MuteState" } } } }
     PrivacySettings: { description: Self-service privacy state, content: { application/json: { schema: { $ref: "#/components/schemas/PrivacySettings" } } } }
     DataRequest: { description: Account data request, content: { application/json: { schema: { $ref: "#/components/schemas/DataRequest" } } } }
+    ContentExport: { description: Owner-visible content export progress without provider references, content: { application/json: { schema: { $ref: "#/components/schemas/ContentExport" } } } }
+    ContentExportDownloadGrant: { description: Short-lived owner-only export download grant, content: { application/json: { schema: { $ref: "#/components/schemas/ContentExportDownloadGrant" } } } }
     FollowState: { description: Canonical follow relationship and aggregate counts, content: { application/json: { schema: { $ref: "#/components/schemas/FollowState" } } } }
     ConversationList: { description: Conversations, content: { application/json: { schema: { type: object, required: [items, nextCursor], properties: { items: { type: array, items: { $ref: "#/components/schemas/Conversation" } }, nextCursor: { type: [string, "null"] } } } } } }
     Conversation: { description: Direct or matched conversation, content: { application/json: { schema: { $ref: "#/components/schemas/Conversation" } } } }
@@ -4310,12 +4421,19 @@ components:
         providerPreference: { type: string, enum: [reusable_first, didit, yoti, sumsub, veriff, persona] }
     AgeSession:
       type: object
-      required: [id, provider, launchUrl, expiresAt]
+      required: [id, provider, providerReference, launchUrl, expiresAt, launchState, status, resumable]
       properties:
-        id: { type: string, format: uuid }
-        provider: { type: string }
-        launchUrl: { type: string, format: uri }
-        expiresAt: { type: string, format: date-time }
+        id:
+          type: string
+          minLength: 1
+          description: Durable attempts use a WeVid UUID. A direct compatibility handoff may retain an opaque provider reference and is never resumable through the durable session routes.
+        provider: { type: [string, "null"] }
+        providerReference: { type: [string, "null"] }
+        launchUrl: { type: [string, "null"], format: uri }
+        expiresAt: { type: [string, "null"], format: date-time }
+        launchState: { type: string, enum: [reserved, reconciling, ready, failed] }
+        status: { type: string }
+        resumable: { type: boolean }
     AgeStatus:
       type: object
       required: [state]
@@ -4358,6 +4476,8 @@ components:
         status: { type: string, enum: [valid, invalid, pending, expired, revoked, blocked] }
         provider: { type: string }
         method: { type: string }
+        thresholdAge: { type: [integer, "null"], minimum: 0 }
+        resultOverThreshold: { type: [boolean, "null"] }
         assuranceLevel: { type: string }
         verifiedAt: { type: [string, "null"], format: date-time }
         expiresAt: { type: [string, "null"], format: date-time }
@@ -5612,10 +5732,48 @@ components:
       properties:
         id: { type: string, format: uuid }
         type: { type: string, enum: [export, delete] }
-        state: { type: string, enum: [requested, verifying, processing, completed, rejected] }
+        state: { type: string, enum: [requested, verifying, processing, completed, rejected, cancelled, failed] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: [string, "null"], format: date-time }
         completedAt: { type: [string, "null"], format: date-time }
+        contentExport:
+          anyOf:
+            - $ref: "#/components/schemas/ContentExport"
+            - type: "null"
+    ContentExport:
+      type: object
+      additionalProperties: false
+      required: [id, dataRequestId, state, progress, attemptCount, lastErrorCode, snapshotCreatedAt, archiveReadyAt, downloadableUntil, canCancel, canRetry, canDownload]
+      properties:
+        id: { type: string, format: uuid }
+        dataRequestId: { type: string, format: uuid }
+        state: { type: string, enum: [queued, processing, retry, ready, cancelled, dead_letter, expired] }
+        progress:
+          type: object
+          additionalProperties: false
+          required: [totalItems, completedItems, availableItems, unavailableItems]
+          properties:
+            totalItems: { type: integer, minimum: 0 }
+            completedItems: { type: integer, minimum: 0 }
+            availableItems: { type: integer, minimum: 0 }
+            unavailableItems: { type: integer, minimum: 0 }
+        attemptCount: { type: integer, minimum: 0, maximum: 8 }
+        lastErrorCode: { type: [string, "null"] }
+        snapshotCreatedAt: { type: string, format: date-time }
+        archiveReadyAt: { type: [string, "null"], format: date-time }
+        downloadableUntil: { type: [string, "null"], format: date-time }
+        canCancel: { type: boolean }
+        canRetry: { type: boolean }
+        canDownload: { type: boolean }
+    ContentExportDownloadGrant:
+      type: object
+      additionalProperties: false
+      required: [id, contentExportId, expiresAt, downloadUrl]
+      properties:
+        id: { type: string, format: uuid }
+        contentExportId: { type: string, format: uuid }
+        expiresAt: { type: string, format: date-time }
+        downloadUrl: { type: string, pattern: "^/v1/privacy/content-exports/" }
     CreateDataRequestRequest:
       type: object
       required: [type]
@@ -6131,7 +6289,7 @@ components:
         nextCursor: { type: [string, "null"] }
     SubscriptionPlan:
       type: object
-      required: [id, scope, label, description, benefits, amountMinor, currency, periodDays, billingMode, providerState, provider]
+      required: [id, scope, label, description, benefits, amountMinor, currency, assetDecimals, periodDays, billingMode, providerState, provider]
       properties:
         id: { type: string }
         scope: { type: string, enum: [platform, creator] }
@@ -6141,6 +6299,7 @@ components:
         benefits: { type: array, maxItems: 8, items: { type: string } }
         amountMinor: { type: integer }
         currency: { $ref: "#/components/schemas/Currency" }
+        assetDecimals: { type: integer, minimum: 0, maximum: 18 }
         periodDays: { type: integer }
         billingMode: { type: string, enum: [manual_solana_pay, delegated_solana_subscription] }
         providerState: { type: string, enum: [staging_required, launch_approved, disabled] }
@@ -6166,10 +6325,17 @@ components:
           items: { type: string, minLength: 1, maxLength: 120 }
     CreateSubscriptionIntentRequest:
       type: object
-      required: [planId]
+      additionalProperties: false
+      required: [planId, termsVersion, withdrawalWaiverVersion, immediateAccessAcknowledged]
       properties:
         planId: { type: string }
         creatorUserId: { type: string, format: uuid }
+        termsVersion: { type: string, enum: [subscription-recurring-terms-v1] }
+        withdrawalWaiverVersion: { type: string, enum: [subscription-initial-access-waiver-v1] }
+        immediateAccessAcknowledged:
+          type: boolean
+          enum: [true]
+          description: Explicit acknowledgement that first-period access begins after the verified initial collection.
     Subscription:
       type: object
       required: [id, scope, planId, state, renewalMode, failureReason]
@@ -7159,13 +7325,17 @@ components:
         resolvedAt: { type: [string, "null"], format: date-time }
     AdminDataRequest:
       type: object
-      required: [id, requesterUserId, type, state, privacyBoundary, createdAt, updatedAt]
+      required: [id, requesterUserId, type, state, privacyBoundary, contentExportJobId, contentExportJobState, contentExportCleanupState, contentExportArchiveUploadStartedAt, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         requesterUserId: { type: string, format: uuid }
         type: { type: string, enum: [export, delete] }
-        state: { type: string, enum: [requested, verifying, processing, completed, rejected] }
+        state: { type: string, enum: [requested, verifying, processing, completed, rejected, cancelled, failed] }
         privacyBoundary: { type: string, enum: [sanitized_identity_minimized_no_raw_exports] }
+        contentExportJobId: { type: [string, "null"], format: uuid }
+        contentExportJobState: { type: [string, "null"], enum: [queued, processing, retry, ready, cancelled, dead_letter, expired, null] }
+        contentExportCleanupState: { type: [string, "null"], enum: [not_ready, retained_private, manual_confirmation_required, manual_delete_confirmed, null] }
+        contentExportArchiveUploadStartedAt: { type: [string, "null"], format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: [string, "null"], format: date-time }
         completedAt: { type: [string, "null"], format: date-time }

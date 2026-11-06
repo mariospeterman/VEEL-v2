@@ -1,0 +1,44 @@
+{
+  "engine": "PGlite actual PostgreSQL WASM; reduced schemas matching repository query shapes, not full deployed schema",
+  "eventCreate": {
+    "responseRows": 0,
+    "persistedRows": 1
+  },
+  "eventUpdate": {
+    "responseTitle": "old",
+    "persistedTitle": "new"
+  },
+  "reactionReplay": {
+    "commands": [
+      "A",
+      "B",
+      "A"
+    ],
+    "states": [
+      "active",
+      "inactive",
+      "active"
+    ]
+  },
+  "mutualsColumnError": "42703",
+  "discoverTimestampAsUuidError": "22P02",
+  "pagination": {
+    "firstReturned": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    "nextCursor": 13,
+    "secondFirst": 14,
+    "omittedId": 13
+  }
+}

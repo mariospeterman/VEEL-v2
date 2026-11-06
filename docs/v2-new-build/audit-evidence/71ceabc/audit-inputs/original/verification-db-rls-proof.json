@@ -1,0 +1,70 @@
+{
+  "runtime": "PostgreSQL WASM PGlite0.5.15; minimal schema; exact staff function and exact RLS policy/grant from repo",
+  "eventOpsRead": {
+    "rows": [
+      {
+        "id": "00000000-0000-4000-8000-000000000099",
+        "user_id": "00000000-0000-4000-8000-000000000002",
+        "sensitive_tax_data": "unrelated-person-tax-record"
+      }
+    ],
+    "fields": [
+      {
+        "name": "id",
+        "dataTypeID": 2950
+      },
+      {
+        "name": "user_id",
+        "dataTypeID": 2950
+      },
+      {
+        "name": "sensitive_tax_data",
+        "dataTypeID": 25
+      }
+    ],
+    "command": "SELECT",
+    "affectedRows": 0,
+    "rowCount": 1
+  },
+  "suspendedRead": {
+    "rows": [],
+    "fields": [
+      {
+        "name": "id",
+        "dataTypeID": 2950
+      },
+      {
+        "name": "user_id",
+        "dataTypeID": 2950
+      },
+      {
+        "name": "sensitive_tax_data",
+        "dataTypeID": 25
+      }
+    ],
+    "command": "SELECT",
+    "affectedRows": 0,
+    "rowCount": 0
+  },
+  "unlinkedSubjectReadCounters": {
+    "rows": [
+      {
+        "content_item_id": "00000000-0000-4000-8000-000000000044",
+        "like_count": 2
+      }
+    ],
+    "fields": [
+      {
+        "name": "content_item_id",
+        "dataTypeID": 2950
+      },
+      {
+        "name": "like_count",
+        "dataTypeID": 20
+      }
+    ],
+    "command": "SELECT",
+    "affectedRows": 0,
+    "rowCount": 1
+  }
+}

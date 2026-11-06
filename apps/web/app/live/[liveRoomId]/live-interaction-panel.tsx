@@ -120,6 +120,7 @@ export function LiveInteractionPanel({ initialMessages, room }: { initialMessage
             idleCopy="Approve once in your wallet. We confirm settlement before recording support."
             pendingLabel="Preparing support"
             readyCopy="Open the wallet request to continue."
+            recoveryScope={`support:${room.creator.id}`}
           />
         </div>
       </section>

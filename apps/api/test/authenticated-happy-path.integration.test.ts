@@ -63,6 +63,16 @@ const subscriptionTokenAccount = randomBase58Address();
 const subscriptionPlanPda = randomBase58Address();
 const subscriptionMerchantWallet = randomBase58Address();
 const subscriptionProgramId = "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44";
+const subscriptionPlanContract = {
+  priceMinor: 1900,
+  amountAtomic: 19000000,
+  assetDecimals: 6,
+  periodDays: 30,
+  periodSeconds: 2592000,
+  termsVersion: "subscription-recurring-terms-v1",
+  withdrawalWaiverVersion: "subscription-initial-access-waiver-v1",
+  immediateAccessAcknowledged: true
+} as const;
 const creatorSettlementWallet = randomBase58Address();
 const validSolanaSignature = randomBase58Signature();
 const validEventAccessSolanaSignature = randomBase58Signature();
@@ -426,10 +436,27 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
 
       expect(ageSessionResponse.statusCode, ageSessionResponse.body).toBe(201);
-      expect(ageSessionResponse.json()).toMatchObject({
-        id: providerReference,
-        provider: "sumsub"
+      const ageSession = ageSessionResponse.json<{
+        id: string;
+        provider: string;
+        providerReference: string;
+        launchUrl: string;
+        launchState: string;
+        status: string;
+        resumable: boolean;
+      }>();
+      expect(ageSession).toMatchObject({
+        provider: "sumsub",
+        providerReference,
+        launchUrl: `https://age.example.test/sumsub/${providerReference}`,
+        launchState: "ready",
+        status: "pending",
+        resumable: true
       });
+      expect(ageSession.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
+      expect(ageSession.id).not.toBe(providerReference);
 
       const webhookPayload = JSON.stringify({
         type: "applicantReviewed",
@@ -1460,6 +1487,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       ]);
       expect(dataRequestResponses.map((response) => response.statusCode)).toEqual([201, 201]);
       expect(dataRequestResponses[1]?.json()).toEqual(dataRequestResponses[0]?.json());
+      expect(dataRequestResponses[0]?.json()).toMatchObject({
+        type: "export",
+        contentExport: {
+          state: "queued",
+          canCancel: true,
+          canRetry: false,
+          canDownload: false
+        }
+      });
       const duplicateActiveDataRequest = await app.inject({
         method: "POST",
         url: "/v1/privacy/data-requests",
@@ -4861,9 +4897,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           expect.objectContaining({
             id: seededSubscriptionPlanId,
             scope: "platform",
-            amountMinor: 19000000,
+            amountMinor: subscriptionPlanContract.priceMinor,
             currency: "USDC",
-            periodDays: 30,
+            periodDays: subscriptionPlanContract.periodDays,
             billingMode: "delegated_solana_subscription",
             tokenMint: subscriptionTokenMint,
             tokenProgram: "spl_token"
@@ -4876,7 +4912,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         url: "/v1/subscriptions/intents",
         headers: authenticatedHeaders(`subscription-intent-${runId}`),
         payload: {
-          planId: seededSubscriptionPlanId
+          planId: seededSubscriptionPlanId,
+          termsVersion: subscriptionPlanContract.termsVersion,
+          withdrawalWaiverVersion: subscriptionPlanContract.withdrawalWaiverVersion,
+          immediateAccessAcknowledged: subscriptionPlanContract.immediateAccessAcknowledged
         }
       });
 
@@ -4944,8 +4983,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           collectorAddress: subscriptionCollectorWallet,
           tokenMint: subscriptionTokenMint,
           tokenProgram: "spl_token",
-          amountMinor: 19000000,
-          periodDays: 30
+          amountMinor: subscriptionPlanContract.priceMinor,
+          periodDays: subscriptionPlanContract.periodDays
         })
       ]);
 
@@ -4959,11 +4998,19 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             async reconcile() {
               return { state: "not_found" };
             },
-            async collect(input) {
+            async collect(input, controls) {
               expect(input.subscriptionId).toBe(subscriptionIntent.subscription.id);
+              const collectionSignature = deterministicBase58Signature(170);
+              expect(await controls.authorize()).toBe(true);
+              expect(await controls.persist({
+                signature: collectionSignature,
+                transactionBase64: Buffer.from("integration-initial-collection").toString("base64"),
+                blockhash: randomBase58Address(),
+                lastValidBlockHeight: 1
+              })).toBe(true);
               return {
                 state: "confirmed",
-                collectionSignature: deterministicBase58Signature(170)
+                collectionSignature
               };
             }
           }
@@ -4973,7 +5020,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           leased: 1,
           confirmed: 1,
           failed: 0,
-          revoked: 0
+          revoked: 0,
+          reconciling: 0,
+          cancelled: 0
         });
       } finally {
         await initialCollectionRepository.close?.();
@@ -5070,12 +5119,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             async reconcile() {
               return { state: "not_found" };
             },
-            async collect(input) {
+            async collect(input, controls) {
               expect(input).toEqual(
                 expect.objectContaining({
                   subscriptionId: subscriptionIntent.subscription.id,
                   planId: seededSubscriptionPlanId,
-                  amountMinor: 19000000n,
+                  amountMinor: BigInt(subscriptionPlanContract.priceMinor),
                   currency: "USDC",
                   authorityAddress: subscriptionAuthorityAddress,
                   delegationAddress: subscriptionDelegationAddress,
@@ -5086,9 +5135,17 @@ describeIntegration("authenticated API happy path against Postgres", () => {
                 })
               );
 
+              const collectionSignature = deterministicBase58Signature(171);
+              expect(await controls.authorize()).toBe(true);
+              expect(await controls.persist({
+                signature: collectionSignature,
+                transactionBase64: Buffer.from("integration-renewal-collection").toString("base64"),
+                blockhash: randomBase58Address(),
+                lastValidBlockHeight: 2
+              })).toBe(true);
               return {
                 state: "confirmed",
-                collectionSignature: deterministicBase58Signature(171)
+                collectionSignature
               };
             }
           }
@@ -5099,7 +5156,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           leased: 1,
           confirmed: 1,
           failed: 0,
-          revoked: 0
+          revoked: 0,
+          reconciling: 0,
+          cancelled: 0
         });
       } finally {
         await collectionRepository.close?.();
@@ -6474,6 +6533,7 @@ async function seedPlatformSubscriptionPlan(
       scope,
       label,
       amount_minor,
+      asset_decimals,
       currency,
       period_days,
       billing_mode,
@@ -6494,9 +6554,10 @@ async function seedPlatformSubscriptionPlan(
       ${input.planId},
       'platform',
       'Integration Platform',
-      19000000,
+      ${subscriptionPlanContract.priceMinor},
+      ${subscriptionPlanContract.assetDecimals},
       'USDC',
-      30,
+      ${subscriptionPlanContract.periodDays},
       'delegated_solana_subscription',
       'launch_approved',
       ${subscriptionTokenMint},
@@ -6506,9 +6567,9 @@ async function seedPlatformSubscriptionPlan(
       ${subscriptionPlanPda},
       ${input.planId},
       ${subscriptionMerchantWallet},
-      19000000,
-      2592000,
-      19000000,
+      ${subscriptionPlanContract.amountAtomic},
+      ${subscriptionPlanContract.periodSeconds},
+      ${subscriptionPlanContract.amountAtomic},
       'active'
     )
   `;
@@ -6834,9 +6895,77 @@ async function cleanupRun(
           where subscription_id in ${tx(subscriptionIds)}
         `;
         await tx`
+          delete from payment_confirmation_deliveries
+          where receipt_id in (
+            select receipt.id
+            from receipts receipt
+            join subscription_collections collection
+              on collection.id = receipt.subscription_collection_id
+            where collection.subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from vat_invoices
+          where receipt_id in (
+            select receipt.id
+            from receipts receipt
+            join subscription_collections collection
+              on collection.id = receipt.subscription_collection_id
+            where collection.subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from receipt_lines
+          where receipt_id in (
+            select receipt.id
+            from receipts receipt
+            join subscription_collections collection
+              on collection.id = receipt.subscription_collection_id
+            where collection.subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from compliance_ledger_entries
+          where subscription_collection_id in (
+            select id from subscription_collections
+            where subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from wallet_transaction_records
+          where subscription_collection_id in (
+            select id from subscription_collections
+            where subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from subscription_finance_outbox_events
+          where subscription_collection_id in (
+            select id from subscription_collections
+            where subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from receipts
+          where subscription_collection_id in (
+            select id from subscription_collections
+            where subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
           delete from subscription_collections
           where subscription_id in ${tx(subscriptionIds)}
         `;
+        await tx`
+          delete from subscription_action_receipts
+          where subscription_id in ${tx(subscriptionIds)}
+        `;
+        await tx`set local session_replication_role = replica`;
+        await tx`
+          delete from subscription_billing_acceptances
+          where subscription_id in ${tx(subscriptionIds)}
+        `;
+        await tx`set local session_replication_role = origin`;
         await tx`
           delete from subscription_authorization_intents
           where subscription_id in ${tx(subscriptionIds)}
@@ -7358,6 +7487,29 @@ async function cleanupRun(
       `;
       await tx`
         delete from support_cases
+        where requester_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from content_export_download_grants
+        where requester_user_id in ${tx(userIds)}
+           or job_id in (
+             select id from content_export_jobs where requester_user_id in ${tx(userIds)}
+           )
+      `;
+      await tx`
+        delete from content_export_job_items
+        where job_id in (
+          select id from content_export_jobs where requester_user_id in ${tx(userIds)}
+        )
+      `;
+      await tx`
+        delete from content_export_job_contents
+        where job_id in (
+          select id from content_export_jobs where requester_user_id in ${tx(userIds)}
+        )
+      `;
+      await tx`
+        delete from content_export_jobs
         where requester_user_id in ${tx(userIds)}
       `;
       await tx`

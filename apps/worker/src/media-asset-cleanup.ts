@@ -40,6 +40,11 @@ export interface ProcessMediaAssetCleanupsResult {
   retrying: number;
 }
 
+export interface PostgresMediaAssetCleanupRepositoryOptions {
+  databaseUrl?: string;
+  sql?: postgres.Sql;
+}
+
 export async function processMediaAssetCleanups(input: {
   repository: MediaAssetCleanupRepository;
   provider: MediaAssetCleanupProvider;
@@ -83,15 +88,22 @@ export function createAdapterMediaAssetCleanupProvider(
 }
 
 export function createPostgresMediaAssetCleanupRepository(
-  databaseUrl?: string
+  databaseUrlOrOptions?: string | PostgresMediaAssetCleanupRepositoryOptions
 ): MediaAssetCleanupRepository {
-  if (!databaseUrl) {
+  const databaseUrl = typeof databaseUrlOrOptions === "string"
+    ? databaseUrlOrOptions
+    : databaseUrlOrOptions?.databaseUrl;
+  const injectedSql = typeof databaseUrlOrOptions === "string"
+    ? undefined
+    : databaseUrlOrOptions?.sql;
+  if (!databaseUrl && !injectedSql) {
     return {
       async leaseDueCleanups() { return []; },
       async recordCleanupOutcome() {}
     };
   }
-  const sql = postgres(databaseUrl, { max: 4 });
+  const ownsSql = !injectedSql;
+  const sql = injectedSql ?? postgres(databaseUrl!, { max: 4 });
   return {
     async leaseDueCleanups(input) {
       return sql.begin(async (transaction) => {
@@ -105,12 +117,20 @@ export function createPostgresMediaAssetCleanupRepository(
         }[]>`
           select id, content_item_id, provider, provider_asset_id, asset_kind,
             provider_cleanup_attempt_count
-          from media_assets
-          where retired_at is not null
-            and provider_cleanup_state in ('pending', 'retry')
-            and provider_cleanup_next_attempt_at <= ${input.now}
-            and (provider_cleanup_leased_until is null or provider_cleanup_leased_until <= ${input.now})
-          order by provider_cleanup_next_attempt_at, created_at, id
+          from media_assets asset
+          where asset.retired_at is not null
+            and asset.provider_cleanup_state in ('pending', 'retry')
+            and asset.provider_cleanup_next_attempt_at <= ${input.now}
+            and (asset.provider_cleanup_leased_until is null or asset.provider_cleanup_leased_until <= ${input.now})
+            and not exists (
+              select 1
+              from content_export_job_items export_item
+              join content_export_jobs export_job on export_job.id = export_item.job_id
+              where export_item.media_asset_id = asset.id
+                and export_job.source_hold_until > ${input.now}
+                and export_job.state in ('processing', 'queued', 'retry', 'dead_letter')
+            )
+          order by asset.provider_cleanup_next_attempt_at, asset.created_at, asset.id
           for update skip locked
           limit ${input.limit}
         `;
@@ -125,6 +145,14 @@ export function createPostgresMediaAssetCleanupRepository(
             where id = ${row.id}
               and retired_at is not null
               and provider_cleanup_state in ('pending', 'retry')
+              and not exists (
+                select 1
+                from content_export_job_items export_item
+                join content_export_jobs export_job on export_job.id = export_item.job_id
+                where export_item.media_asset_id = media_assets.id
+                  and export_job.source_hold_until > ${input.now}
+                  and export_job.state in ('processing', 'queued', 'retry', 'dead_letter')
+              )
             returning id
           `;
           if (!leased[0]) continue;
@@ -197,7 +225,7 @@ export function createPostgresMediaAssetCleanupRepository(
       });
     },
     async close() {
-      await sql.end({ timeout: 5 });
+      if (ownsSql) await sql.end({ timeout: 5 });
     }
   };
 }

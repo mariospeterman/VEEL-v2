@@ -28,6 +28,10 @@ export interface CreatorProfileRow extends ProfileRow {
   membership_benefits: string[] | null;
   membership_amount_minor: string | number | null;
   membership_amount_atomic: string | number | null;
+  membership_asset_decimals: number | null;
+  membership_creator_amount_atomic: string | number | null;
+  membership_platform_fee_amount_atomic: string | number | null;
+  membership_allocation_amount_atomic: string | number | null;
   membership_currency: components["schemas"]["Currency"] | null;
   membership_period_days: number | null;
   membership_period_seconds: number | null;

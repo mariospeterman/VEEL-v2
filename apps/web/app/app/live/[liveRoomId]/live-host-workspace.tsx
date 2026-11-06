@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { LiveRoom, RevealedHostConnection } from "@/api-mutations";
 import {
   ApiMutationError,
   endLiveRoom,
+  getCurrentSession,
   revealLiveHostConnection,
   syncLiveRoom
 } from "@/api-mutations";
@@ -13,6 +14,12 @@ import {
   detectBrowserBroadcastSupport,
   type BrowserBroadcastSupport
 } from "./livepeer-browser-broadcast-utils";
+import {
+  sameSessionAuthority,
+  sessionAuthority,
+  subscribeToUserScopeInvalidation,
+  type UserSessionAuthority
+} from "@/session/user-scope-invalidation";
 
 export function LiveHostWorkspace({ initialRoom }: { initialRoom: LiveRoom }) {
   const [room, setRoom] = useState(initialRoom);
@@ -20,30 +27,135 @@ export function LiveHostWorkspace({ initialRoom }: { initialRoom: LiveRoom }) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [obsVisible, setObsVisible] = useState(false);
   const [support, setSupport] = useState<BrowserBroadcastSupport | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionInvalidated, setSessionInvalidated] = useState(false);
   const [pending, setPending] = useState<"camera" | "obs" | "sync" | "end" | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const expectedSession = useRef<UserSessionAuthority | null>(null);
+  const credentialEpoch = useRef(0);
+  const invalidatedRef = useRef(false);
+  const roomRef = useRef(room);
+  const connectionRef = useRef(connection);
+  roomRef.current = room;
+  connectionRef.current = connection;
 
   useEffect(() => {
     setSupport(detectBrowserBroadcastSupport());
   }, []);
 
-  function clearHostCredential() {
+  const clearHostCredential = useCallback(() => {
+    credentialEpoch.current += 1;
     setCameraOpen(false);
     setObsVisible(false);
     setCopied(null);
     setConnection(null);
-  }
+  }, []);
+
+  const invalidateHostSession = useCallback((reason: string) => {
+    invalidatedRef.current = true;
+    setSessionInvalidated(true);
+    setSessionReady(false);
+    clearHostCredential();
+    setError(reason);
+  }, [clearHostCredential]);
+
+  useEffect(() => {
+    let disposed = false;
+    let checking = false;
+    const checkSession = async () => {
+      if (checking || disposed || invalidatedRef.current) return;
+      checking = true;
+      try {
+        const session = await getCurrentSession();
+        if (disposed) return;
+        const authority = sessionAuthority(session);
+        if (!authority) {
+          invalidateHostSession("This host session ended. Camera access and revealed credentials were cleared.");
+          return;
+        }
+        if (!expectedSession.current) {
+          expectedSession.current = authority;
+          setSessionReady(true);
+          return;
+        }
+        if (!sameSessionAuthority(expectedSession.current, session)) {
+          invalidateHostSession("The signed-in account or application session changed. Camera access and revealed credentials were cleared.");
+        }
+      } catch (caught) {
+        if (caught instanceof ApiMutationError && caught.status !== undefined && [401, 403].includes(caught.status)) {
+          invalidateHostSession("This host session is no longer authorized. Camera access and revealed credentials were cleared.");
+        }
+      } finally {
+        checking = false;
+      }
+    };
+    const invalidateFromAnotherTab = () => invalidateHostSession(
+      "A logout or account-security change was detected. Camera access and revealed credentials were cleared."
+    );
+    const onVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") void checkSession();
+    };
+
+    void checkSession();
+    const unsubscribe = subscribeToUserScopeInvalidation(invalidateFromAnotherTab);
+    const interval = window.setInterval(() => { void checkSession(); }, 10_000);
+    window.addEventListener("focus", onVisibilityOrFocus);
+    document.addEventListener("visibilitychange", onVisibilityOrFocus);
+    return () => {
+      disposed = true;
+      unsubscribe();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", onVisibilityOrFocus);
+    };
+  }, [invalidateHostSession]);
+
+  useEffect(() => {
+    if (!connection || sessionInvalidated) return;
+    let disposed = false;
+    let checking = false;
+    const checkRoomAuthority = async () => {
+      if (checking || disposed || invalidatedRef.current || !connectionRef.current) return;
+      checking = true;
+      try {
+        const nextRoom = await syncLiveRoom(roomRef.current.id);
+        if (disposed) return;
+        setRoom(nextRoom);
+        if (roomCannotBroadcast(nextRoom.state)) {
+          clearHostCredential();
+          setError("This room can no longer broadcast. Camera access and revealed credentials were cleared.");
+        }
+      } catch (caught) {
+        if (caught instanceof ApiMutationError && caught.status !== undefined && [401, 403, 404, 410].includes(caught.status)) {
+          invalidateHostSession("Host ownership or room access changed. Camera access and revealed credentials were cleared.");
+        }
+      } finally {
+        checking = false;
+      }
+    };
+    const interval = window.setInterval(() => { void checkRoomAuthority(); }, 30_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
+  }, [clearHostCredential, connection, invalidateHostSession, sessionInvalidated]);
 
   async function openCamera() {
+    if (!sessionReady || sessionInvalidated) {
+      setError("Sign in again before opening the camera.");
+      return;
+    }
     if (!support?.supported) {
       setError(support?.reason ?? "Camera support is still being checked.");
       return;
     }
     setPending("camera");
     setError(null);
+    const epoch = credentialEpoch.current;
     try {
       const revealed = await revealLiveHostConnection(room.id);
+      if (invalidatedRef.current || credentialEpoch.current !== epoch) return;
       setConnection(revealed);
       setObsVisible(false);
       setCameraOpen(true);
@@ -55,10 +167,16 @@ export function LiveHostWorkspace({ initialRoom }: { initialRoom: LiveRoom }) {
   }
 
   async function revealObs() {
+    if (!sessionReady || sessionInvalidated) {
+      setError("Sign in again before revealing the OBS connection.");
+      return;
+    }
     setPending("obs");
     setError(null);
+    const epoch = credentialEpoch.current;
     try {
       const revealed = connection ?? await revealLiveHostConnection(room.id);
+      if (invalidatedRef.current || credentialEpoch.current !== epoch) return;
       setConnection(revealed);
       setObsVisible(true);
     } catch (caught) {
@@ -135,7 +253,7 @@ export function LiveHostWorkspace({ initialRoom }: { initialRoom: LiveRoom }) {
             ) : null}
             <button
               className="min-h-12 justify-self-start rounded bg-(--foreground) px-5 py-3 font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={finished || pending !== null || support?.supported !== true}
+              disabled={finished || pending !== null || support?.supported !== true || !sessionReady || sessionInvalidated}
               onClick={openCamera}
               type="button"
             >
@@ -179,7 +297,7 @@ export function LiveHostWorkspace({ initialRoom }: { initialRoom: LiveRoom }) {
         ) : (
           <button
             className="mt-4 min-h-11 rounded border border-(--line) px-4 py-2 text-sm font-semibold disabled:opacity-50"
-            disabled={finished || pending !== null}
+            disabled={finished || pending !== null || !sessionReady || sessionInvalidated}
             onClick={revealObs}
             type="button"
           >

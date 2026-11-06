@@ -64,6 +64,13 @@ const supplementalReviewSources = Object.freeze({
     sha256: "9d2fbbb4e1a1bef6afcba744786da3edece12f0bb3bef91904f972e54a79e523",
     lineCount: 158,
     reviewedHead: "f46be653eed21541cb4cf82ebfb29ade058cef84"
+  }),
+  closureDoubleCheck: Object.freeze({
+    name: "WeVid_8505a69_Closure_Double_Check.txt",
+    trackedPath: `${evidenceDirectory}/audit-inputs/WeVid_8505a69_Closure_Double_Check.txt`,
+    sha256: "2ee902e3fc51d211c66aba7000c90106f1a53b7190d2e4abb74d7e9cec234c52",
+    lineCount: 105,
+    reviewedHead: "8505a69decabed50691557f255d2fc832fef6145"
   })
 });
 
@@ -1110,6 +1117,196 @@ const supplementalFindings = Object.freeze([
     source: { sourceKey: "continuationInstruction", startLine: 116, endLine: 117 },
     summary: "A bounded request is insufficient when response-body consumption can hang the sequential worker tick past its lease and fairness budget.",
     residualWork: ["Bound transport and body time, preserve idempotency/fencing, and prove retries, dead letters, and progress of unrelated queues during stalls."]
+  },
+  {
+    id: "PR134-013",
+    title: "The pending media-scope migration cannot upgrade populated preferences",
+    domain: "database-rls-schema-migrations",
+    relatedBaselineIds: ["DB-06", "MIGTEST-GAP-01", "ROLLBACK-01"],
+    affectedPaths: ["packages/database/migrations/0130_media_core_scope_transition.sql", "packages/database/test/rollbacks.integration.test.ts"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 34, endLine: 35 },
+    summary: "The reviewed 0130 order writes latest while the old recommended/following CHECK is still effective, aborting an ordinary populated upgrade with SQLSTATE 23514.",
+    residualWork: ["Retain native populated 0129-to-current, rollback/reapply, and legacy-value refusal evidence; confirm no retained/shared environment applied different 0130 bytes before deployment."]
+  },
+  {
+    id: "PR134-014",
+    title: "Canonical identity session and recovery tables retain broad browser-role access",
+    domain: "database-rls-schema-migrations",
+    relatedBaselineIds: ["DB-01", "AUTH-01"],
+    affectedPaths: ["packages/database/migrations/0133_canonical_identity_data_api_authority.sql", "apps/api/test/data-api-authority.integration.test.ts"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 37, endLine: 38 },
+    summary: "Low-privilege staff and retained legacy grants can expose cross-user identity links and opaque session/recovery metadata through direct Data API authority.",
+    residualWork: ["Preserve native effective-catalog and role-matrix proof, including retained grants, global future-function defaults, legitimate reviewed helpers, and no plaintext-credential overclaim."]
+  },
+  {
+    id: "PR134-015",
+    title: "Current verification decisions still diverge across consumers",
+    domain: "authentication-verification-admin-mcp",
+    relatedBaselineIds: ["AUTH-05", "CONTENT-20"],
+    affectedPaths: ["packages/database/migrations/0134_canonical_current_verification_decision.sql", "apps/api/src/modules/verification", "apps/api/src/modules/age", "apps/api/src/modules/profile", "apps/api/src/modules/organization"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 40, endLine: 41 },
+    summary: "Historical-valid-first queries can disagree with the current adverse or expired verification decision across onboarding, earning, KYB, performer, content, and admin consumers.",
+    residualWork: ["Use one authenticated-event-time, provenance-aware selector and deterministic adverse-first tie policy across every actual consumer, then retain native transition and delayed-event proof."]
+  },
+  {
+    id: "PR134-016",
+    title: "Adult publisher approval lacks a trustworthy age fact consumed by release policy",
+    domain: "authentication-verification-admin-mcp",
+    relatedBaselineIds: ["AUTH-05", "CONTENT-20"],
+    affectedPaths: ["apps/api/src/modules/verification/verification-repository.ts", "apps/api/src/modules/performer", "apps/api/src/modules/content/content-safety-repository.ts"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 43, endLine: 44 },
+    summary: "Adult-purpose approval records omit the threshold fact required by performer and publication eligibility, while document/liveness/face facts alone cannot establish age.",
+    residualWork: ["Obtain explicit authorization for the production-impacting policy migration, then require linked current authenticated adult and over-18 evidence through normalized provider outcome, performer release, exact revision, and publication denial/revocation tests."]
+  },
+  {
+    id: "PR134-017",
+    title: "Age and identity provider attempts cannot resume after ambiguous creation",
+    domain: "authentication-verification-admin-mcp",
+    relatedBaselineIds: ["AUTH-05", "RES-05"],
+    affectedPaths: ["apps/api/src/modules/age", "apps/api/src/modules/verification", "packages/contracts/openapi.yaml"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 46, endLine: 47 },
+    summary: "An identical reservation conflicts, a new key can start another remote session, and no authenticated current-attempt status/resume/reconciliation route persists a lost launch response.",
+    residualWork: ["Persist and return one active logical handoff, keep ambiguous creation reconciling without provider shopping, and use authenticated provider results for recovery and Yoti tied/reversed notification arbitration."]
+  },
+  {
+    id: "PR134-018",
+    title: "A lost payment acknowledgement can prompt a second wallet transfer",
+    domain: "payments-subscriptions-receipts-referrals",
+    relatedBaselineIds: ["PAY-13", "PAY-17"],
+    affectedPaths: ["apps/web/src/payment-wallet-bridge.tsx", "apps/web/src/payment-submission-recovery.ts", "apps/api/src/modules/payment"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 49, endLine: 50 },
+    summary: "The reviewed browser loses an already-broadcast signature when WeVid acknowledgement fails, then allows a retry to build and sign another transfer for the same intent.",
+    residualWork: ["Retain exact signed bytes/signature/actor/wallet/intent/terms before acknowledgement, recover only that attempt across reload/tabs, and keep real devnet/mobile-wallet/indexer proof separate."]
+  },
+  {
+    id: "PR134-019",
+    title: "Feed restoration can overwrite fresh authorization with stale resources",
+    domain: "frontend-client-privacy-product",
+    relatedBaselineIds: ["CONTENT-19", "FE-15"],
+    affectedPaths: ["apps/web/app/app/feed-experience.tsx", "apps/web/src/feed/authorized-feed-view-restore.ts"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 52, endLine: 53 },
+    summary: "A cached full page can replace newly authorized server data after sensitivity, hide, block, unpublish, release, or account-policy changes.",
+    residualWork: ["Cache only bounded view identity/geometry and reauthorize current visible IDs before rendering; retain browser proof for preference, hide, block, unpublish, and no-forbidden-flash cases."]
+  },
+  {
+    id: "PR134-020",
+    title: "Historical poll replay can expose a current private projection",
+    domain: "content-discovery-social-live-messages-organizations",
+    relatedBaselineIds: ["CONTENT-07", "AUTH-05"],
+    affectedPaths: ["apps/api/src/modules/content/content-poll-repository.ts", "apps/api/test/app.test.ts"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 55, endLine: 56 },
+    summary: "A completed vote receipt authorizes reading the current question/options/counts without current content visibility or eligibility.",
+    residualWork: ["Require fresh canonical eligibility for current projection or return only an immutable retained receipt; keep new voting and editing retired."]
+  },
+  {
+    id: "PR134-021",
+    title: "Paid member owner and live playback resources cannot renew",
+    domain: "frontend-client-privacy-product",
+    relatedBaselineIds: ["CONTENT-19", "FE-15"],
+    affectedPaths: ["apps/web/app/content/content-renderer.tsx", "apps/web/app/provider-playback.tsx", "apps/web/app/live"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 58, endLine: 59 },
+    summary: "Signed playback expiry renewal is reachable only when a public usage allowance exists, excluding legitimate paid, member, owner, and live resources.",
+    residualWork: ["Keep authorization renewal independent from allowance reservation, coalesce keyed retries, honor denial immediately, and retain actual provider/device proof as a separate gate."]
+  },
+  {
+    id: "PR134-022",
+    title: "Browser camera credentials outlive application session changes",
+    domain: "frontend-client-privacy-product",
+    relatedBaselineIds: ["CONTENT-20", "FE-09"],
+    affectedPaths: ["apps/web/app/app/live/[liveRoomId]/live-host-workspace.tsx", "apps/web/src/session/user-scope-invalidation.ts"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 61, endLine: 62 },
+    summary: "Exposed host capture state and ingest credentials are not cleared on cross-tab logout, account switch, revoked app session, or owner loss.",
+    residualWork: ["Retain browser cleanup regressions and document that provider ingest suspension/rotation/expiry and advanced OBS lifetime require distinct real-provider evidence."]
+  },
+  {
+    id: "PR134-023",
+    title: "Chronological feed still performs whole-corpus eligibility work",
+    domain: "content-discovery-social-live-messages-organizations",
+    relatedBaselineIds: ["CONTENT-14", "CONTENT-18"],
+    affectedPaths: ["apps/api/src/modules/content/content-feed-repository.ts", "apps/api/test/content-feed-query-policy.test.ts"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 64, endLine: 65 },
+    summary: "The reviewed query materializes all eligible content before applying its page limit, so chronological ordering alone does not bound canonical policy work.",
+    residualWork: ["Keep bounded indexed candidate/keyset selection plus canonical fresh eligibility, and capture representative native plans, p95/p99 latency, and memory before any scalability claim."]
+  },
+  {
+    id: "PR134-024",
+    title: "Private avatars and creator-original export remain incomplete",
+    domain: "frontend-client-privacy-product",
+    relatedBaselineIds: ["CONTENT-03", "FE-09", "RES-05"],
+    affectedPaths: ["apps/api/src/modules/profile", "apps/api/src/modules/engagement", "apps/worker/src", "apps/web/app/app/settings"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 67, endLine: 68 },
+    summary: "Avatar writes fail closed without the requested private lifecycle, while data-request tracking has no usable revision-pinned creator archive, protected delivery, cleanup, or restore path.",
+    residualWork: ["Implement or explicitly defer both accepted boundaries with private originals, current-owner access, bounded worker processing, replacement/expiry cleanup, and no third-party PII or identity evidence."]
+  },
+  {
+    id: "PR134-025",
+    title: "Closure evidence is stale and original inputs are not reconciled",
+    domain: "audit-evidence-integrity",
+    relatedBaselineIds: ["D-13"],
+    affectedPaths: [ledgerPath, manifestPath, `${evidenceDirectory}/audit-inputs`, "scripts/generate-audit-evidence.mjs"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 70, endLine: 71 },
+    summary: "The reviewed generated files are stale, the supplied original inputs are absent, unresolved and pending coverage remains, and no trusted attestation exists.",
+    residualWork: ["Validate and track supplied inputs, regenerate exact index-bound working artifacts, preserve unresolved coverage and trusted-attestation absence, and associate final CI without recursive SHA claims."]
+  },
+  {
+    id: "PR134-026",
+    title: "A JSON null feed cursor escapes the typed error boundary",
+    domain: "api-pagination",
+    relatedBaselineIds: ["AUTH-11", "CONTENT-07"],
+    affectedPaths: ["apps/api/src/modules/content/content-feed-cursor.ts", "apps/api/test/content-feed-cursor.test.ts", "apps/api/test/app.test.ts"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 73, endLine: 74 },
+    summary: "Decoded null/scalar/array cursor values can be dereferenced before shape validation and bypass the route's intended client-error mapping.",
+    residualWork: ["Retain decoder and HTTP regressions for non-plain values, malformed bounds, scope binding, timestamp precision, restart behavior, and stable ordering."]
+  },
+  {
+    id: "PR134-027",
+    title: "Asynchronous media preparation can overwrite a newer selection",
+    domain: "frontend-client-privacy-product",
+    relatedBaselineIds: ["CONTENT-03", "FE-09"],
+    affectedPaths: ["apps/web/app/create/image-composer.tsx", "apps/web/src/media/media-selection-coordinator.ts"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 76, endLine: 77 },
+    summary: "Video metadata completion commits a stale assets closure after later selection, removal, or unmount work.",
+    residualWork: ["Merge by stable asset ID against current state, cancel stale work, enforce the ten-asset bound atomically, and retain out-of-order/removal/reselect/unmount tests."]
+  },
+  {
+    id: "PR134-028",
+    title: "Installed backend Solana SDKs do not support the pinned Node runtime",
+    domain: "integration-runtime-authority",
+    relatedBaselineIds: ["ROOT-01", "D-04"],
+    affectedPaths: ["apps/api/package.json", "apps/worker/package.json", "pnpm-lock.yaml", ".nvmrc"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 79, endLine: 80 },
+    summary: "Exact installed program SDK metadata requires Node 24 while the application and launch containers pin Node 22; green imports do not establish a supported production contract.",
+    residualWork: ["Obtain explicit approval for the compatibility-sensitive SDK selection, then exercise the exact APIs, peers, lockfile, build, and runtime on the chosen supported Node path."]
+  },
+  {
+    id: "PR134-029",
+    title: "Accepted USDC decimals can diverge from displayed units",
+    domain: "payments-subscriptions-receipts-referrals",
+    relatedBaselineIds: ["PAY-09", "DM-13"],
+    affectedPaths: ["packages/config/src/index.ts", "packages/config/src/index.test.ts", "apps/web/src/format-asset-amount.ts"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 82, endLine: 83 },
+    summary: "Runtime quote and verification decimals can be configured differently from the fixed-six USDC formatter, silently mislabelling accepted units.",
+    residualWork: ["Constrain the currently supported USDC mint contract to six decimals or carry immutable mint/decimal facts through every historical quote, receipt, email, and display."]
+  },
+  {
+    id: "PR134-030",
+    title: "The short setup guide omits payment evidence and acceptance recovery",
+    domain: "architecture-provider-operations-docs",
+    relatedBaselineIds: ["D-04", "DM-15"],
+    affectedPaths: ["docs/v2-new-build/add-keys-and-test-core-app.md", "docs/v2-new-build/operator/provider-setup-and-demo-data.md"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 85, endLine: 86 },
+    summary: "The entry guide lacks the Helius signed webhook configuration and complete immutable quote, consent, wallet, verification, access/receipt, Activity, and delayed-ack journey.",
+    residualWork: ["Keep exact environment and callback names, distinguish local fixtures from real devnet/provider proof, and never offer another payment while a sent attempt is uncertain."]
+  },
+  {
+    id: "PR134-031",
+    title: "Disabled recurring payments still lack accepted local integrity invariants",
+    domain: "payments-subscriptions-receipts-referrals",
+    relatedBaselineIds: ["PAY-13", "PAY-17", "DM-15"],
+    affectedPaths: ["apps/api/src/modules/subscription", "apps/worker/src/subscription-collections.ts", "packages/database/migrations"],
+    source: { sourceKey: "closureDoubleCheck", startLine: 88, endLine: 88 },
+    summary: "The reconciliation worker does not by itself supply pre-broadcast cancellation fencing, immutable accepted commercial snapshots, durable nonce and period authority, exact delegation linkage, seed-unit correction, or measured selectors.",
+    residualWork: ["Keep subscriptions disabled while implementing the local invariants and preserve native concurrency separately from official-program devnet and device acceptance."]
   }
 ].map((finding) => Object.freeze({
   ...finding,
@@ -1396,6 +1593,19 @@ export function resolveSupplementalRecords(
     const status = registry.get(finding.id);
     const sourceDefinition = reviewSources[finding.source.sourceKey];
     if (!sourceDefinition) fail(`Unknown supplemental source key: ${finding.source.sourceKey}`);
+    const trackedSource = sourceDefinition.trackedPath
+      ? snapshot.entriesByPath.get(sourceDefinition.trackedPath)
+      : null;
+    if (sourceDefinition.trackedPath && !trackedSource) {
+      fail(`Tracked supplemental source is missing: ${sourceDefinition.trackedPath}`);
+    }
+    if (trackedSource) {
+      const lineCount = trackedSource.bytes.toString("utf8").split("\n").length -
+        (trackedSource.bytes.toString("utf8").endsWith("\n") ? 1 : 0);
+      if (trackedSource.sha256 !== sourceDefinition.sha256 || lineCount !== sourceDefinition.lineCount) {
+        fail(`Tracked supplemental source metadata mismatch: ${sourceDefinition.trackedPath}`);
+      }
+    }
     const executions = status.executions.map((execution) => resolveExecution(execution, receipts, snapshot));
     const evidenceRequired = status.finalDisposition === "fixed" || status.finalDisposition === "superseded";
     const allExecutionsVerified = executions.length > 0 && executions.every(executionSupportsClosure);
@@ -1417,7 +1627,7 @@ export function resolveSupplementalRecords(
         reviewedHead: sourceDefinition.reviewedHead,
         startLine: finding.source.startLine,
         endLine: finding.source.endLine,
-        sourceAvailableInTrackedIndex: false
+        sourceAvailableInTrackedIndex: Boolean(trackedSource)
       },
       resolution: {
         desiredDisposition: status.finalDisposition,

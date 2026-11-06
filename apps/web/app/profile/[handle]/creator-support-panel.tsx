@@ -59,6 +59,7 @@ export function CreatorSupportPanel({ profile }: CreatorSupportPanelProps) {
           idleCopy="Support is a voluntary payment. It does not buy visibility, access to people, recommendations, or message priority."
           pendingLabel="Creating support intent"
           readyCopy="Open the wallet request. Support is recorded after payment confirmation."
+          recoveryScope={`support:${profile.user.id}`}
         />
       </div>
     </section>

@@ -10,6 +10,8 @@ import {
   publicMutation
 } from "./api-mutation-transport";
 import type { DiscoverCursorSet, DiscoverPage } from "./api-client-types";
+import { browserApiUrl } from "./browser-api-url";
+import { readPublicWebEnv } from "@/public-env";
 export { ApiMutationError } from "./api-mutation-types";
 export type {
   OnboardingAnalyticsEventRequest,
@@ -22,6 +24,8 @@ export type {
   MuteState,
   PrivacySettings,
   DataRequest,
+  ContentExport,
+  ContentExportDownloadGrant,
   CreateDataRequestRequest,
   Comment,
   CommentPage,
@@ -137,6 +141,8 @@ import type {
   MuteState,
   PrivacySettings,
   DataRequest,
+  ContentExport,
+  ContentExportDownloadGrant,
   CreateDataRequestRequest,
   Comment,
   CommentPage,
@@ -244,6 +250,22 @@ import type {
 
 export async function createAgeSession(body: CreateAgeSessionRequest): Promise<AgeSession> {
   return authenticatedMutation<AgeSession>("/v1/age/sessions", "POST", body);
+}
+
+export async function getAgeSession(sessionId: string): Promise<AgeSession> {
+  return authenticatedGet<AgeSession>(`/v1/age/sessions/${encodeURIComponent(sessionId)}`);
+}
+
+export async function resumeAgeSession(
+  sessionId: string,
+  idempotencyKey?: string
+): Promise<AgeSession> {
+  return authenticatedMutation<AgeSession>(
+    `/v1/age/sessions/${encodeURIComponent(sessionId)}/resume`,
+    "POST",
+    {},
+    idempotencyKey
+  );
 }
 
 export async function getCurrentSession(): Promise<SessionState> {
@@ -614,6 +636,50 @@ export async function createDataRequest(
   );
 }
 
+export async function cancelContentExport(
+  contentExportId: string,
+  idempotencyKey: string
+): Promise<ContentExport> {
+  return authenticatedMutation<ContentExport>(
+    `/v1/privacy/content-exports/${encodeURIComponent(contentExportId)}/cancel`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function retryContentExport(
+  contentExportId: string,
+  idempotencyKey: string
+): Promise<ContentExport> {
+  return authenticatedMutation<ContentExport>(
+    `/v1/privacy/content-exports/${encodeURIComponent(contentExportId)}/retry`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
+export async function createContentExportDownloadGrant(
+  contentExportId: string,
+  idempotencyKey: string
+): Promise<ContentExportDownloadGrant> {
+  return authenticatedMutation<ContentExportDownloadGrant>(
+    `/v1/privacy/content-exports/${encodeURIComponent(contentExportId)}/download-grants`,
+    "POST",
+    {},
+    idempotencyKey
+  );
+}
+
+export function contentExportDownloadUrl(contentExportId: string, grantId: string): string {
+  const env = readPublicWebEnv();
+  return browserApiUrl(
+    `/v1/privacy/content-exports/${encodeURIComponent(contentExportId)}/downloads/${encodeURIComponent(grantId)}`,
+    env.NEXT_PUBLIC_API_BASE_URL
+  ).toString();
+}
+
 export async function getFeedPage(
   mode: "latest" | "following",
   surface: "home" | "bits" | "moments",
@@ -693,6 +759,12 @@ export async function createLiveRoom(
 
 export async function getMyLiveRoomsForMutation(cursor?: string): Promise<LiveRoomPage> {
   return authenticatedGet<LiveRoomPage>(withCursor("/v1/live/rooms/mine", cursor));
+}
+
+export async function getLiveRoomForMutation(liveRoomId: string): Promise<LiveRoom> {
+  return authenticatedGet<LiveRoom>(
+    `/v1/live/rooms/${encodeURIComponent(liveRoomId)}`
+  );
 }
 
 export async function getLiveHostConnection(liveRoomId: string): Promise<HostConnection> {

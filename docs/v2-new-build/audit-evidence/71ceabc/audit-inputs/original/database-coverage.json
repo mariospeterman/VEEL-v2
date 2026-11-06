@@ -1,0 +1,2556 @@
+{
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "scope": [
+    "packages/contracts/README.md",
+    "packages/contracts/openapi.yaml",
+    "packages/contracts/package.json",
+    "packages/contracts/src/generated/openapi.ts",
+    "packages/contracts/src/index.ts",
+    "packages/contracts/tsconfig.json",
+    "packages/database/README.md",
+    "packages/database/migrations/0001_foundation.down.sql",
+    "packages/database/migrations/0001_foundation.sql",
+    "packages/database/migrations/0002_age_verifications.down.sql",
+    "packages/database/migrations/0002_age_verifications.sql",
+    "packages/database/migrations/0003_wallets.down.sql",
+    "packages/database/migrations/0003_wallets.sql",
+    "packages/database/migrations/0004_wallet_link_challenges.down.sql",
+    "packages/database/migrations/0004_wallet_link_challenges.sql",
+    "packages/database/migrations/0005_age_provider_waterfall.down.sql",
+    "packages/database/migrations/0005_age_provider_waterfall.sql",
+    "packages/database/migrations/0006_content_feed_foundation.down.sql",
+    "packages/database/migrations/0006_content_feed_foundation.sql",
+    "packages/database/migrations/0007_media_upload_boundary.down.sql",
+    "packages/database/migrations/0007_media_upload_boundary.sql",
+    "packages/database/migrations/0008_content_access_projection.down.sql",
+    "packages/database/migrations/0008_content_access_projection.sql",
+    "packages/database/migrations/0009_payment_intents.down.sql",
+    "packages/database/migrations/0009_payment_intents.sql",
+    "packages/database/migrations/0010_content_unlock_entitlements.down.sql",
+    "packages/database/migrations/0010_content_unlock_entitlements.sql",
+    "packages/database/migrations/0011_tip_support_settlement_ledger.down.sql",
+    "packages/database/migrations/0011_tip_support_settlement_ledger.sql",
+    "packages/database/migrations/0012_referral_attribution_commissions.down.sql",
+    "packages/database/migrations/0012_referral_attribution_commissions.sql",
+    "packages/database/migrations/0013_bunny_vod_playback_projection.down.sql",
+    "packages/database/migrations/0013_bunny_vod_playback_projection.sql",
+    "packages/database/migrations/0014_livepeer_live_rooms_pass_chat_replay.down.sql",
+    "packages/database/migrations/0014_livepeer_live_rooms_pass_chat_replay.sql",
+    "packages/database/migrations/0015_messages_paid_messages.down.sql",
+    "packages/database/migrations/0015_messages_paid_messages.sql",
+    "packages/database/migrations/0016_activity_wallet_transactions.down.sql",
+    "packages/database/migrations/0016_activity_wallet_transactions.sql",
+    "packages/database/migrations/0017_rls_policy_baseline.down.sql",
+    "packages/database/migrations/0017_rls_policy_baseline.sql",
+    "packages/database/migrations/0018_foreign_key_performance_indexes.down.sql",
+    "packages/database/migrations/0018_foreign_key_performance_indexes.sql",
+    "packages/database/migrations/0019_creator_monetisation_settings.down.sql",
+    "packages/database/migrations/0019_creator_monetisation_settings.sql",
+    "packages/database/migrations/0020_admin_ops_indexes.down.sql",
+    "packages/database/migrations/0020_admin_ops_indexes.sql",
+    "packages/database/migrations/0021_events_ticketing.down.sql",
+    "packages/database/migrations/0021_events_ticketing.sql",
+    "packages/database/migrations/0022_event_ticketing_fk_indexes.down.sql",
+    "packages/database/migrations/0022_event_ticketing_fk_indexes.sql",
+    "packages/database/migrations/0023_dating_mode.down.sql",
+    "packages/database/migrations/0023_dating_mode.sql",
+    "packages/database/migrations/0024_dating_fk_indexes.down.sql",
+    "packages/database/migrations/0024_dating_fk_indexes.sql",
+    "packages/database/migrations/0025_ai_mcp_scoped_assistant.down.sql",
+    "packages/database/migrations/0025_ai_mcp_scoped_assistant.sql",
+    "packages/database/migrations/0026_ai_mcp_fk_indexes.down.sql",
+    "packages/database/migrations/0026_ai_mcp_fk_indexes.sql",
+    "packages/database/migrations/0027_engagement_feed_safety.down.sql",
+    "packages/database/migrations/0027_engagement_feed_safety.sql",
+    "packages/database/migrations/0028_subscription_foundation.down.sql",
+    "packages/database/migrations/0028_subscription_foundation.sql",
+    "packages/database/migrations/0029_subscription_fk_indexes.down.sql",
+    "packages/database/migrations/0029_subscription_fk_indexes.sql",
+    "packages/database/migrations/0030_compliance_tax_foundation.down.sql",
+    "packages/database/migrations/0030_compliance_tax_foundation.sql",
+    "packages/database/migrations/0031_compliance_tax_fk_indexes.down.sql",
+    "packages/database/migrations/0031_compliance_tax_fk_indexes.sql",
+    "packages/database/migrations/0032_discover_hashtags.down.sql",
+    "packages/database/migrations/0032_discover_hashtags.sql",
+    "packages/database/migrations/0033_wallet_onramp_sessions.down.sql",
+    "packages/database/migrations/0033_wallet_onramp_sessions.sql",
+    "packages/database/migrations/0034_notifications_foundation.down.sql",
+    "packages/database/migrations/0034_notifications_foundation.sql",
+    "packages/database/migrations/0035_organization_memberships.down.sql",
+    "packages/database/migrations/0035_organization_memberships.sql",
+    "packages/database/migrations/0036_organization_memberships_advisor_fixes.down.sql",
+    "packages/database/migrations/0036_organization_memberships_advisor_fixes.sql",
+    "packages/database/migrations/0037_notification_delivery_queue.down.sql",
+    "packages/database/migrations/0037_notification_delivery_queue.sql",
+    "packages/database/migrations/0038_notification_delivery_advisor_fixes.down.sql",
+    "packages/database/migrations/0038_notification_delivery_advisor_fixes.sql",
+    "packages/database/migrations/0039_realtime_projection_publication.down.sql",
+    "packages/database/migrations/0039_realtime_projection_publication.sql",
+    "packages/database/migrations/0040_organization_member_admin_workflow.down.sql",
+    "packages/database/migrations/0040_organization_member_admin_workflow.sql",
+    "packages/database/migrations/0041_support_case_policy_surface.down.sql",
+    "packages/database/migrations/0041_support_case_policy_surface.sql",
+    "packages/database/migrations/0042_support_case_advisor_fixes.down.sql",
+    "packages/database/migrations/0042_support_case_advisor_fixes.sql",
+    "packages/database/migrations/0043_refund_dispute_request_workflow.down.sql",
+    "packages/database/migrations/0043_refund_dispute_request_workflow.sql",
+    "packages/database/migrations/0044_admin_data_request_feature_flag_surfaces.down.sql",
+    "packages/database/migrations/0044_admin_data_request_feature_flag_surfaces.sql",
+    "packages/database/migrations/0045_seed_feature_flag_policy_defaults.down.sql",
+    "packages/database/migrations/0045_seed_feature_flag_policy_defaults.sql",
+    "packages/database/migrations/0046_admin_moderation_report_states.down.sql",
+    "packages/database/migrations/0046_admin_moderation_report_states.sql",
+    "packages/database/migrations/0047_provider_event_replay_requests.down.sql",
+    "packages/database/migrations/0047_provider_event_replay_requests.sql",
+    "packages/database/migrations/0048_provider_event_replay_request_advisor_fixes.down.sql",
+    "packages/database/migrations/0048_provider_event_replay_request_advisor_fixes.sql",
+    "packages/database/migrations/0049_event_access_mutuals_canonical_names.down.sql",
+    "packages/database/migrations/0049_event_access_mutuals_canonical_names.sql",
+    "packages/database/migrations/0050_event_access_payment_product_type.down.sql",
+    "packages/database/migrations/0050_event_access_payment_product_type.sql",
+    "packages/database/migrations/0051_live_room_provider_reservation.down.sql",
+    "packages/database/migrations/0051_live_room_provider_reservation.sql",
+    "packages/database/migrations/0052_content_preview_controls.down.sql",
+    "packages/database/migrations/0052_content_preview_controls.sql",
+    "packages/database/migrations/0053_content_publish_state.down.sql",
+    "packages/database/migrations/0053_content_publish_state.sql",
+    "packages/database/migrations/0054_event_content_link.down.sql",
+    "packages/database/migrations/0054_event_content_link.sql",
+    "packages/database/migrations/0055_content_creation_abuse_policy_seed.down.sql",
+    "packages/database/migrations/0055_content_creation_abuse_policy_seed.sql",
+    "packages/database/migrations/0056_event_access_purchase_request_state.down.sql",
+    "packages/database/migrations/0056_event_access_purchase_request_state.sql",
+    "packages/database/migrations/0057_refund_request_idempotency.down.sql",
+    "packages/database/migrations/0057_refund_request_idempotency.sql",
+    "packages/database/migrations/0058_payment_withdrawal_waiver_evidence.down.sql",
+    "packages/database/migrations/0058_payment_withdrawal_waiver_evidence.sql",
+    "packages/database/migrations/0059_payment_durable_confirmations.down.sql",
+    "packages/database/migrations/0059_payment_durable_confirmations.sql",
+    "packages/database/migrations/0060_payment_confirmation_email_delivery.down.sql",
+    "packages/database/migrations/0060_payment_confirmation_email_delivery.sql",
+    "packages/database/migrations/0061_provider_event_replay_payload.down.sql",
+    "packages/database/migrations/0061_provider_event_replay_payload.sql",
+    "packages/database/migrations/0062_refund_remediation_evidence.down.sql",
+    "packages/database/migrations/0062_refund_remediation_evidence.sql",
+    "packages/database/migrations/0063_creator_split_payment_settlement.down.sql",
+    "packages/database/migrations/0063_creator_split_payment_settlement.sql",
+    "packages/database/migrations/0064_solana_subscription_verifier_hardening.down.sql",
+    "packages/database/migrations/0064_solana_subscription_verifier_hardening.sql",
+    "packages/database/migrations/0065_external_mcp_connector_foundation.down.sql",
+    "packages/database/migrations/0065_external_mcp_connector_foundation.sql",
+    "packages/database/migrations/0066_mcp_oauth_completion.down.sql",
+    "packages/database/migrations/0066_mcp_oauth_completion.sql",
+    "packages/database/migrations/0067_wallet_first_auth.down.sql",
+    "packages/database/migrations/0067_wallet_first_auth.sql",
+    "packages/database/migrations/0068_profile_media_links.down.sql",
+    "packages/database/migrations/0068_profile_media_links.sql",
+    "packages/database/migrations/0069_normalized_verification_domain.down.sql",
+    "packages/database/migrations/0069_normalized_verification_domain.sql",
+    "packages/database/migrations/0070_profile_avatar_storage_bucket.down.sql",
+    "packages/database/migrations/0070_profile_avatar_storage_bucket.sql",
+    "packages/database/migrations/0071_profile_avatar_storage_limit.down.sql",
+    "packages/database/migrations/0071_profile_avatar_storage_limit.sql",
+    "packages/database/migrations/0072_platform_tier_authority.down.sql",
+    "packages/database/migrations/0072_platform_tier_authority.sql",
+    "packages/database/migrations/0073_live_access_modes.down.sql",
+    "packages/database/migrations/0073_live_access_modes.sql",
+    "packages/database/migrations/0074_supabase_advisor_fk_indexes.down.sql",
+    "packages/database/migrations/0074_supabase_advisor_fk_indexes.sql",
+    "packages/database/migrations/0075_platform_tier_policy_plan_index.down.sql",
+    "packages/database/migrations/0075_platform_tier_policy_plan_index.sql",
+    "packages/database/migrations/0076_revoke_exposed_wallet_sessions.down.sql",
+    "packages/database/migrations/0076_revoke_exposed_wallet_sessions.sql",
+    "packages/database/migrations/0077_universal_account_media_safety.down.sql",
+    "packages/database/migrations/0077_universal_account_media_safety.sql",
+    "packages/database/migrations/0078_legacy_age_archive_deny_policy.down.sql",
+    "packages/database/migrations/0078_legacy_age_archive_deny_policy.sql",
+    "packages/database/migrations/0079_worker_lease_reliability.down.sql",
+    "packages/database/migrations/0079_worker_lease_reliability.sql",
+    "packages/database/migrations/0080_worker_queue_recovery_private.down.sql",
+    "packages/database/migrations/0080_worker_queue_recovery_private.sql",
+    "packages/database/migrations/0081_worker_queue_recovery_actor_index.down.sql",
+    "packages/database/migrations/0081_worker_queue_recovery_actor_index.sql",
+    "packages/database/migrations/0082_payment_checkout_and_usdc.down.sql",
+    "packages/database/migrations/0082_payment_checkout_and_usdc.sql",
+    "packages/database/migrations/0083_platform_usage_accounting.down.sql",
+    "packages/database/migrations/0083_platform_usage_accounting.sql",
+    "packages/database/migrations/0084_message_idempotency.down.sql",
+    "packages/database/migrations/0084_message_idempotency.sql",
+    "packages/database/migrations/0085_audit_event_idempotency.down.sql",
+    "packages/database/migrations/0085_audit_event_idempotency.sql",
+    "packages/database/migrations/0086_adult_publisher_identity.down.sql",
+    "packages/database/migrations/0086_adult_publisher_identity.sql",
+    "packages/database/migrations/0087_recipient_monetisation_policy.down.sql",
+    "packages/database/migrations/0087_recipient_monetisation_policy.sql",
+    "packages/database/migrations/0088_media_safety_and_consent.down.sql",
+    "packages/database/migrations/0088_media_safety_and_consent.sql",
+    "packages/database/migrations/0089_media_safety_fk_indexes.down.sql",
+    "packages/database/migrations/0089_media_safety_fk_indexes.sql",
+    "packages/database/migrations/0090_monetisation_performer_enterprise_authorities.down.sql",
+    "packages/database/migrations/0090_monetisation_performer_enterprise_authorities.sql",
+    "packages/database/migrations/0091_canonical_identity_session_security.down.sql",
+    "packages/database/migrations/0091_canonical_identity_session_security.sql",
+    "packages/database/migrations/0092_sfw_publication_review_projection.down.sql",
+    "packages/database/migrations/0092_sfw_publication_review_projection.sql",
+    "packages/database/migrations/0093_media_appeal_idempotency_hash.down.sql",
+    "packages/database/migrations/0093_media_appeal_idempotency_hash.sql",
+    "packages/database/migrations/0094_social_graph_feed_projections.down.sql",
+    "packages/database/migrations/0094_social_graph_feed_projections.sql",
+    "packages/database/migrations/0095_realtime_messages_notifications.down.sql",
+    "packages/database/migrations/0095_realtime_messages_notifications.sql",
+    "packages/database/migrations/0096_one_time_monetisation_checkout.down.sql",
+    "packages/database/migrations/0096_one_time_monetisation_checkout.sql",
+    "packages/database/migrations/0097_sfw_live_controls_and_chat.down.sql",
+    "packages/database/migrations/0097_sfw_live_controls_and_chat.sql",
+    "packages/database/migrations/0098_recurring_membership_authority.down.sql",
+    "packages/database/migrations/0098_recurring_membership_authority.sql",
+    "packages/database/migrations/0099_enterprise_managed_creator_authority.down.sql",
+    "packages/database/migrations/0099_enterprise_managed_creator_authority.sql",
+    "packages/database/migrations/0100_content_draft_idempotency_lifetime.down.sql",
+    "packages/database/migrations/0100_content_draft_idempotency_lifetime.sql",
+    "packages/database/migrations/0101_payment_ledger_atomic_safety.down.sql",
+    "packages/database/migrations/0101_payment_ledger_atomic_safety.sql",
+    "packages/database/migrations/0102_checkout_consent_idempotency_lifetime.down.sql",
+    "packages/database/migrations/0102_checkout_consent_idempotency_lifetime.sql",
+    "packages/database/migrations/0103_payment_commercial_policy.down.sql",
+    "packages/database/migrations/0103_payment_commercial_policy.sql",
+    "packages/database/migrations/0104_provider_event_delivery_order.down.sql",
+    "packages/database/migrations/0104_provider_event_delivery_order.sql",
+    "packages/database/migrations/0105_live_room_provider_observation.down.sql",
+    "packages/database/migrations/0105_live_room_provider_observation.sql",
+    "packages/database/migrations/0106_media_release_evidence.down.sql",
+    "packages/database/migrations/0106_media_release_evidence.sql",
+    "packages/database/migrations/0107_canonical_access_identity.down.sql",
+    "packages/database/migrations/0107_canonical_access_identity.sql",
+    "packages/database/migrations/0108_policy_content_eligibility_convergence.down.sql",
+    "packages/database/migrations/0108_policy_content_eligibility_convergence.sql",
+    "packages/database/migrations/0109_universal_composer_authority.down.sql",
+    "packages/database/migrations/0109_universal_composer_authority.sql",
+    "packages/database/migrations/0110_analytics_core.down.sql",
+    "packages/database/migrations/0110_analytics_core.sql",
+    "packages/database/migrations/0111_auth_lifecycle_purpose.down.sql",
+    "packages/database/migrations/0111_auth_lifecycle_purpose.sql",
+    "packages/database/migrations/0112_realtime_messaging_live_safety.down.sql",
+    "packages/database/migrations/0112_realtime_messaging_live_safety.sql",
+    "packages/database/migrations/0113_consumer_social_privacy.down.sql",
+    "packages/database/migrations/0113_consumer_social_privacy.sql",
+    "packages/database/migrations/0114_mcp_profile_bridge.down.sql",
+    "packages/database/migrations/0114_mcp_profile_bridge.sql",
+    "packages/database/migrations/0115_mcp_media_provenance_bridge.down.sql",
+    "packages/database/migrations/0115_mcp_media_provenance_bridge.sql",
+    "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.down.sql",
+    "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.sql",
+    "packages/database/migrations/0117_moments_and_scheduled_publication.down.sql",
+    "packages/database/migrations/0117_moments_and_scheduled_publication.sql",
+    "packages/database/migrations/0118_landing_convergence_analytics.down.sql",
+    "packages/database/migrations/0118_landing_convergence_analytics.sql",
+    "packages/database/package.json",
+    "packages/database/schema-blueprint.sql",
+    "packages/database/scripts/check-migrations.mjs",
+    "packages/database/src/index.ts",
+    "packages/database/test/migrations.test.ts",
+    "packages/database/tsconfig.json",
+    "packages/database/vitest.config.ts",
+    "supabase/.gitignore",
+    "supabase/README.md",
+    "supabase/config.toml",
+    "supabase/migrations"
+  ],
+  "read": [
+    "packages/contracts/openapi.yaml",
+    "packages/contracts/src/generated/openapi.ts",
+    "packages/database/README.md",
+    "packages/database/migrations/0001_foundation.sql",
+    "packages/database/migrations/0002_age_verifications.sql",
+    "packages/database/migrations/0003_wallets.sql",
+    "packages/database/migrations/0004_wallet_link_challenges.sql",
+    "packages/database/migrations/0005_age_provider_waterfall.sql",
+    "packages/database/migrations/0006_content_feed_foundation.sql",
+    "packages/database/migrations/0007_media_upload_boundary.sql",
+    "packages/database/migrations/0008_content_access_projection.sql",
+    "packages/database/migrations/0009_payment_intents.sql",
+    "packages/database/migrations/0010_content_unlock_entitlements.sql",
+    "packages/database/migrations/0011_tip_support_settlement_ledger.sql",
+    "packages/database/migrations/0012_referral_attribution_commissions.sql",
+    "packages/database/migrations/0013_bunny_vod_playback_projection.sql",
+    "packages/database/migrations/0014_livepeer_live_rooms_pass_chat_replay.sql",
+    "packages/database/migrations/0015_messages_paid_messages.sql",
+    "packages/database/migrations/0016_activity_wallet_transactions.sql",
+    "packages/database/migrations/0017_rls_policy_baseline.sql",
+    "packages/database/migrations/0018_foreign_key_performance_indexes.sql",
+    "packages/database/migrations/0019_creator_monetisation_settings.sql",
+    "packages/database/migrations/0020_admin_ops_indexes.sql",
+    "packages/database/migrations/0021_events_ticketing.sql",
+    "packages/database/migrations/0022_event_ticketing_fk_indexes.sql",
+    "packages/database/migrations/0023_dating_mode.sql",
+    "packages/database/migrations/0024_dating_fk_indexes.sql",
+    "packages/database/migrations/0025_ai_mcp_scoped_assistant.sql",
+    "packages/database/migrations/0026_ai_mcp_fk_indexes.sql",
+    "packages/database/migrations/0027_engagement_feed_safety.sql",
+    "packages/database/migrations/0028_subscription_foundation.sql",
+    "packages/database/migrations/0029_subscription_fk_indexes.sql",
+    "packages/database/migrations/0030_compliance_tax_foundation.sql",
+    "packages/database/migrations/0031_compliance_tax_fk_indexes.sql",
+    "packages/database/migrations/0032_discover_hashtags.sql",
+    "packages/database/migrations/0033_wallet_onramp_sessions.sql",
+    "packages/database/migrations/0034_notifications_foundation.sql",
+    "packages/database/migrations/0035_organization_memberships.sql",
+    "packages/database/migrations/0036_organization_memberships_advisor_fixes.sql",
+    "packages/database/migrations/0037_notification_delivery_queue.sql",
+    "packages/database/migrations/0038_notification_delivery_advisor_fixes.sql",
+    "packages/database/migrations/0039_realtime_projection_publication.sql",
+    "packages/database/migrations/0040_organization_member_admin_workflow.sql",
+    "packages/database/migrations/0041_support_case_policy_surface.sql",
+    "packages/database/migrations/0042_support_case_advisor_fixes.sql",
+    "packages/database/migrations/0043_refund_dispute_request_workflow.sql",
+    "packages/database/migrations/0044_admin_data_request_feature_flag_surfaces.sql",
+    "packages/database/migrations/0045_seed_feature_flag_policy_defaults.sql",
+    "packages/database/migrations/0046_admin_moderation_report_states.sql",
+    "packages/database/migrations/0047_provider_event_replay_requests.sql",
+    "packages/database/migrations/0048_provider_event_replay_request_advisor_fixes.sql",
+    "packages/database/migrations/0049_event_access_mutuals_canonical_names.sql",
+    "packages/database/migrations/0050_event_access_payment_product_type.sql",
+    "packages/database/migrations/0051_live_room_provider_reservation.sql",
+    "packages/database/migrations/0052_content_preview_controls.sql",
+    "packages/database/migrations/0053_content_publish_state.sql",
+    "packages/database/migrations/0054_event_content_link.sql",
+    "packages/database/migrations/0055_content_creation_abuse_policy_seed.sql",
+    "packages/database/migrations/0056_event_access_purchase_request_state.sql",
+    "packages/database/migrations/0057_refund_request_idempotency.sql",
+    "packages/database/migrations/0058_payment_withdrawal_waiver_evidence.sql",
+    "packages/database/migrations/0059_payment_durable_confirmations.sql",
+    "packages/database/migrations/0060_payment_confirmation_email_delivery.sql",
+    "packages/database/migrations/0061_provider_event_replay_payload.sql",
+    "packages/database/migrations/0062_refund_remediation_evidence.sql",
+    "packages/database/migrations/0063_creator_split_payment_settlement.sql",
+    "packages/database/migrations/0064_solana_subscription_verifier_hardening.sql",
+    "packages/database/migrations/0065_external_mcp_connector_foundation.sql",
+    "packages/database/migrations/0066_mcp_oauth_completion.sql",
+    "packages/database/migrations/0067_wallet_first_auth.sql",
+    "packages/database/migrations/0068_profile_media_links.sql",
+    "packages/database/migrations/0069_normalized_verification_domain.sql",
+    "packages/database/migrations/0070_profile_avatar_storage_bucket.sql",
+    "packages/database/migrations/0071_profile_avatar_storage_limit.sql",
+    "packages/database/migrations/0072_platform_tier_authority.sql",
+    "packages/database/migrations/0073_live_access_modes.sql",
+    "packages/database/migrations/0074_supabase_advisor_fk_indexes.sql",
+    "packages/database/migrations/0075_platform_tier_policy_plan_index.sql",
+    "packages/database/migrations/0076_revoke_exposed_wallet_sessions.sql",
+    "packages/database/migrations/0077_universal_account_media_safety.sql",
+    "packages/database/migrations/0078_legacy_age_archive_deny_policy.sql",
+    "packages/database/migrations/0079_worker_lease_reliability.sql",
+    "packages/database/migrations/0080_worker_queue_recovery_private.sql",
+    "packages/database/migrations/0081_worker_queue_recovery_actor_index.sql",
+    "packages/database/migrations/0082_payment_checkout_and_usdc.sql",
+    "packages/database/migrations/0083_platform_usage_accounting.sql",
+    "packages/database/migrations/0084_message_idempotency.sql",
+    "packages/database/migrations/0085_audit_event_idempotency.sql",
+    "packages/database/migrations/0086_adult_publisher_identity.sql",
+    "packages/database/migrations/0087_recipient_monetisation_policy.sql",
+    "packages/database/migrations/0088_media_safety_and_consent.sql",
+    "packages/database/migrations/0089_media_safety_fk_indexes.sql",
+    "packages/database/migrations/0090_monetisation_performer_enterprise_authorities.sql",
+    "packages/database/migrations/0091_canonical_identity_session_security.sql",
+    "packages/database/migrations/0092_sfw_publication_review_projection.sql",
+    "packages/database/migrations/0093_media_appeal_idempotency_hash.sql",
+    "packages/database/migrations/0094_social_graph_feed_projections.sql",
+    "packages/database/migrations/0095_realtime_messages_notifications.sql",
+    "packages/database/migrations/0096_one_time_monetisation_checkout.sql",
+    "packages/database/migrations/0097_sfw_live_controls_and_chat.sql",
+    "packages/database/migrations/0098_recurring_membership_authority.sql",
+    "packages/database/migrations/0099_enterprise_managed_creator_authority.sql",
+    "packages/database/migrations/0100_content_draft_idempotency_lifetime.sql",
+    "packages/database/migrations/0101_payment_ledger_atomic_safety.sql",
+    "packages/database/migrations/0102_checkout_consent_idempotency_lifetime.sql",
+    "packages/database/migrations/0103_payment_commercial_policy.sql",
+    "packages/database/migrations/0104_provider_event_delivery_order.sql",
+    "packages/database/migrations/0105_live_room_provider_observation.sql",
+    "packages/database/migrations/0106_media_release_evidence.down.sql",
+    "packages/database/migrations/0106_media_release_evidence.sql",
+    "packages/database/migrations/0107_canonical_access_identity.sql",
+    "packages/database/migrations/0108_policy_content_eligibility_convergence.sql",
+    "packages/database/migrations/0109_universal_composer_authority.sql",
+    "packages/database/migrations/0110_analytics_core.sql",
+    "packages/database/migrations/0111_auth_lifecycle_purpose.sql",
+    "packages/database/migrations/0112_realtime_messaging_live_safety.sql",
+    "packages/database/migrations/0113_consumer_social_privacy.sql",
+    "packages/database/migrations/0114_mcp_profile_bridge.sql",
+    "packages/database/migrations/0115_mcp_media_provenance_bridge.sql",
+    "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.sql",
+    "packages/database/migrations/0117_moments_and_scheduled_publication.sql",
+    "packages/database/migrations/0118_landing_convergence_analytics.down.sql",
+    "packages/database/migrations/0118_landing_convergence_analytics.sql",
+    "packages/database/scripts/check-migrations.mjs",
+    "supabase/README.md",
+    "supabase/config.toml"
+  ],
+  "unread": [],
+  "notes": [],
+  "structurally_scanned": [
+    "packages/database/migrations/0001_foundation.down.sql",
+    "packages/database/migrations/0001_foundation.sql",
+    "packages/database/migrations/0002_age_verifications.down.sql",
+    "packages/database/migrations/0002_age_verifications.sql",
+    "packages/database/migrations/0003_wallets.down.sql",
+    "packages/database/migrations/0003_wallets.sql",
+    "packages/database/migrations/0004_wallet_link_challenges.down.sql",
+    "packages/database/migrations/0004_wallet_link_challenges.sql",
+    "packages/database/migrations/0005_age_provider_waterfall.down.sql",
+    "packages/database/migrations/0005_age_provider_waterfall.sql",
+    "packages/database/migrations/0006_content_feed_foundation.down.sql",
+    "packages/database/migrations/0006_content_feed_foundation.sql",
+    "packages/database/migrations/0007_media_upload_boundary.down.sql",
+    "packages/database/migrations/0007_media_upload_boundary.sql",
+    "packages/database/migrations/0008_content_access_projection.down.sql",
+    "packages/database/migrations/0008_content_access_projection.sql",
+    "packages/database/migrations/0009_payment_intents.down.sql",
+    "packages/database/migrations/0009_payment_intents.sql",
+    "packages/database/migrations/0010_content_unlock_entitlements.down.sql",
+    "packages/database/migrations/0010_content_unlock_entitlements.sql",
+    "packages/database/migrations/0011_tip_support_settlement_ledger.down.sql",
+    "packages/database/migrations/0011_tip_support_settlement_ledger.sql",
+    "packages/database/migrations/0012_referral_attribution_commissions.down.sql",
+    "packages/database/migrations/0012_referral_attribution_commissions.sql",
+    "packages/database/migrations/0013_bunny_vod_playback_projection.down.sql",
+    "packages/database/migrations/0013_bunny_vod_playback_projection.sql",
+    "packages/database/migrations/0014_livepeer_live_rooms_pass_chat_replay.down.sql",
+    "packages/database/migrations/0014_livepeer_live_rooms_pass_chat_replay.sql",
+    "packages/database/migrations/0015_messages_paid_messages.down.sql",
+    "packages/database/migrations/0015_messages_paid_messages.sql",
+    "packages/database/migrations/0016_activity_wallet_transactions.down.sql",
+    "packages/database/migrations/0016_activity_wallet_transactions.sql",
+    "packages/database/migrations/0017_rls_policy_baseline.down.sql",
+    "packages/database/migrations/0017_rls_policy_baseline.sql",
+    "packages/database/migrations/0018_foreign_key_performance_indexes.down.sql",
+    "packages/database/migrations/0018_foreign_key_performance_indexes.sql",
+    "packages/database/migrations/0019_creator_monetisation_settings.down.sql",
+    "packages/database/migrations/0019_creator_monetisation_settings.sql",
+    "packages/database/migrations/0020_admin_ops_indexes.down.sql",
+    "packages/database/migrations/0020_admin_ops_indexes.sql",
+    "packages/database/migrations/0021_events_ticketing.down.sql",
+    "packages/database/migrations/0021_events_ticketing.sql",
+    "packages/database/migrations/0022_event_ticketing_fk_indexes.down.sql",
+    "packages/database/migrations/0022_event_ticketing_fk_indexes.sql",
+    "packages/database/migrations/0023_dating_mode.down.sql",
+    "packages/database/migrations/0023_dating_mode.sql",
+    "packages/database/migrations/0024_dating_fk_indexes.down.sql",
+    "packages/database/migrations/0024_dating_fk_indexes.sql",
+    "packages/database/migrations/0025_ai_mcp_scoped_assistant.down.sql",
+    "packages/database/migrations/0025_ai_mcp_scoped_assistant.sql",
+    "packages/database/migrations/0026_ai_mcp_fk_indexes.down.sql",
+    "packages/database/migrations/0026_ai_mcp_fk_indexes.sql",
+    "packages/database/migrations/0027_engagement_feed_safety.down.sql",
+    "packages/database/migrations/0027_engagement_feed_safety.sql",
+    "packages/database/migrations/0028_subscription_foundation.down.sql",
+    "packages/database/migrations/0028_subscription_foundation.sql",
+    "packages/database/migrations/0029_subscription_fk_indexes.down.sql",
+    "packages/database/migrations/0029_subscription_fk_indexes.sql",
+    "packages/database/migrations/0030_compliance_tax_foundation.down.sql",
+    "packages/database/migrations/0030_compliance_tax_foundation.sql",
+    "packages/database/migrations/0031_compliance_tax_fk_indexes.down.sql",
+    "packages/database/migrations/0031_compliance_tax_fk_indexes.sql",
+    "packages/database/migrations/0032_discover_hashtags.down.sql",
+    "packages/database/migrations/0032_discover_hashtags.sql",
+    "packages/database/migrations/0033_wallet_onramp_sessions.down.sql",
+    "packages/database/migrations/0033_wallet_onramp_sessions.sql",
+    "packages/database/migrations/0034_notifications_foundation.down.sql",
+    "packages/database/migrations/0034_notifications_foundation.sql",
+    "packages/database/migrations/0035_organization_memberships.down.sql",
+    "packages/database/migrations/0035_organization_memberships.sql",
+    "packages/database/migrations/0036_organization_memberships_advisor_fixes.down.sql",
+    "packages/database/migrations/0036_organization_memberships_advisor_fixes.sql",
+    "packages/database/migrations/0037_notification_delivery_queue.down.sql",
+    "packages/database/migrations/0037_notification_delivery_queue.sql",
+    "packages/database/migrations/0038_notification_delivery_advisor_fixes.down.sql",
+    "packages/database/migrations/0038_notification_delivery_advisor_fixes.sql",
+    "packages/database/migrations/0039_realtime_projection_publication.down.sql",
+    "packages/database/migrations/0039_realtime_projection_publication.sql",
+    "packages/database/migrations/0040_organization_member_admin_workflow.down.sql",
+    "packages/database/migrations/0040_organization_member_admin_workflow.sql",
+    "packages/database/migrations/0041_support_case_policy_surface.down.sql",
+    "packages/database/migrations/0041_support_case_policy_surface.sql",
+    "packages/database/migrations/0042_support_case_advisor_fixes.down.sql",
+    "packages/database/migrations/0042_support_case_advisor_fixes.sql",
+    "packages/database/migrations/0043_refund_dispute_request_workflow.down.sql",
+    "packages/database/migrations/0043_refund_dispute_request_workflow.sql",
+    "packages/database/migrations/0044_admin_data_request_feature_flag_surfaces.down.sql",
+    "packages/database/migrations/0044_admin_data_request_feature_flag_surfaces.sql",
+    "packages/database/migrations/0045_seed_feature_flag_policy_defaults.down.sql",
+    "packages/database/migrations/0045_seed_feature_flag_policy_defaults.sql",
+    "packages/database/migrations/0046_admin_moderation_report_states.down.sql",
+    "packages/database/migrations/0046_admin_moderation_report_states.sql",
+    "packages/database/migrations/0047_provider_event_replay_requests.down.sql",
+    "packages/database/migrations/0047_provider_event_replay_requests.sql",
+    "packages/database/migrations/0048_provider_event_replay_request_advisor_fixes.down.sql",
+    "packages/database/migrations/0048_provider_event_replay_request_advisor_fixes.sql",
+    "packages/database/migrations/0049_event_access_mutuals_canonical_names.down.sql",
+    "packages/database/migrations/0049_event_access_mutuals_canonical_names.sql",
+    "packages/database/migrations/0050_event_access_payment_product_type.down.sql",
+    "packages/database/migrations/0050_event_access_payment_product_type.sql",
+    "packages/database/migrations/0051_live_room_provider_reservation.down.sql",
+    "packages/database/migrations/0051_live_room_provider_reservation.sql",
+    "packages/database/migrations/0052_content_preview_controls.down.sql",
+    "packages/database/migrations/0052_content_preview_controls.sql",
+    "packages/database/migrations/0053_content_publish_state.down.sql",
+    "packages/database/migrations/0053_content_publish_state.sql",
+    "packages/database/migrations/0054_event_content_link.down.sql",
+    "packages/database/migrations/0054_event_content_link.sql",
+    "packages/database/migrations/0055_content_creation_abuse_policy_seed.down.sql",
+    "packages/database/migrations/0055_content_creation_abuse_policy_seed.sql",
+    "packages/database/migrations/0056_event_access_purchase_request_state.down.sql",
+    "packages/database/migrations/0056_event_access_purchase_request_state.sql",
+    "packages/database/migrations/0057_refund_request_idempotency.down.sql",
+    "packages/database/migrations/0057_refund_request_idempotency.sql",
+    "packages/database/migrations/0058_payment_withdrawal_waiver_evidence.down.sql",
+    "packages/database/migrations/0058_payment_withdrawal_waiver_evidence.sql",
+    "packages/database/migrations/0059_payment_durable_confirmations.down.sql",
+    "packages/database/migrations/0059_payment_durable_confirmations.sql",
+    "packages/database/migrations/0060_payment_confirmation_email_delivery.down.sql",
+    "packages/database/migrations/0060_payment_confirmation_email_delivery.sql",
+    "packages/database/migrations/0061_provider_event_replay_payload.down.sql",
+    "packages/database/migrations/0061_provider_event_replay_payload.sql",
+    "packages/database/migrations/0062_refund_remediation_evidence.down.sql",
+    "packages/database/migrations/0062_refund_remediation_evidence.sql",
+    "packages/database/migrations/0063_creator_split_payment_settlement.down.sql",
+    "packages/database/migrations/0063_creator_split_payment_settlement.sql",
+    "packages/database/migrations/0064_solana_subscription_verifier_hardening.down.sql",
+    "packages/database/migrations/0064_solana_subscription_verifier_hardening.sql",
+    "packages/database/migrations/0065_external_mcp_connector_foundation.down.sql",
+    "packages/database/migrations/0065_external_mcp_connector_foundation.sql",
+    "packages/database/migrations/0066_mcp_oauth_completion.down.sql",
+    "packages/database/migrations/0066_mcp_oauth_completion.sql",
+    "packages/database/migrations/0067_wallet_first_auth.down.sql",
+    "packages/database/migrations/0067_wallet_first_auth.sql",
+    "packages/database/migrations/0068_profile_media_links.down.sql",
+    "packages/database/migrations/0068_profile_media_links.sql",
+    "packages/database/migrations/0069_normalized_verification_domain.down.sql",
+    "packages/database/migrations/0069_normalized_verification_domain.sql",
+    "packages/database/migrations/0070_profile_avatar_storage_bucket.down.sql",
+    "packages/database/migrations/0070_profile_avatar_storage_bucket.sql",
+    "packages/database/migrations/0071_profile_avatar_storage_limit.down.sql",
+    "packages/database/migrations/0071_profile_avatar_storage_limit.sql",
+    "packages/database/migrations/0072_platform_tier_authority.down.sql",
+    "packages/database/migrations/0072_platform_tier_authority.sql",
+    "packages/database/migrations/0073_live_access_modes.down.sql",
+    "packages/database/migrations/0073_live_access_modes.sql",
+    "packages/database/migrations/0074_supabase_advisor_fk_indexes.down.sql",
+    "packages/database/migrations/0074_supabase_advisor_fk_indexes.sql",
+    "packages/database/migrations/0075_platform_tier_policy_plan_index.down.sql",
+    "packages/database/migrations/0075_platform_tier_policy_plan_index.sql",
+    "packages/database/migrations/0076_revoke_exposed_wallet_sessions.down.sql",
+    "packages/database/migrations/0076_revoke_exposed_wallet_sessions.sql",
+    "packages/database/migrations/0077_universal_account_media_safety.down.sql",
+    "packages/database/migrations/0077_universal_account_media_safety.sql",
+    "packages/database/migrations/0078_legacy_age_archive_deny_policy.down.sql",
+    "packages/database/migrations/0078_legacy_age_archive_deny_policy.sql",
+    "packages/database/migrations/0079_worker_lease_reliability.down.sql",
+    "packages/database/migrations/0079_worker_lease_reliability.sql",
+    "packages/database/migrations/0080_worker_queue_recovery_private.down.sql",
+    "packages/database/migrations/0080_worker_queue_recovery_private.sql",
+    "packages/database/migrations/0081_worker_queue_recovery_actor_index.down.sql",
+    "packages/database/migrations/0081_worker_queue_recovery_actor_index.sql",
+    "packages/database/migrations/0082_payment_checkout_and_usdc.down.sql",
+    "packages/database/migrations/0082_payment_checkout_and_usdc.sql",
+    "packages/database/migrations/0083_platform_usage_accounting.down.sql",
+    "packages/database/migrations/0083_platform_usage_accounting.sql",
+    "packages/database/migrations/0084_message_idempotency.down.sql",
+    "packages/database/migrations/0084_message_idempotency.sql",
+    "packages/database/migrations/0085_audit_event_idempotency.down.sql",
+    "packages/database/migrations/0085_audit_event_idempotency.sql",
+    "packages/database/migrations/0086_adult_publisher_identity.down.sql",
+    "packages/database/migrations/0086_adult_publisher_identity.sql",
+    "packages/database/migrations/0087_recipient_monetisation_policy.down.sql",
+    "packages/database/migrations/0087_recipient_monetisation_policy.sql",
+    "packages/database/migrations/0088_media_safety_and_consent.down.sql",
+    "packages/database/migrations/0088_media_safety_and_consent.sql",
+    "packages/database/migrations/0089_media_safety_fk_indexes.down.sql",
+    "packages/database/migrations/0089_media_safety_fk_indexes.sql",
+    "packages/database/migrations/0090_monetisation_performer_enterprise_authorities.down.sql",
+    "packages/database/migrations/0090_monetisation_performer_enterprise_authorities.sql",
+    "packages/database/migrations/0091_canonical_identity_session_security.down.sql",
+    "packages/database/migrations/0091_canonical_identity_session_security.sql",
+    "packages/database/migrations/0092_sfw_publication_review_projection.down.sql",
+    "packages/database/migrations/0092_sfw_publication_review_projection.sql",
+    "packages/database/migrations/0093_media_appeal_idempotency_hash.down.sql",
+    "packages/database/migrations/0093_media_appeal_idempotency_hash.sql",
+    "packages/database/migrations/0094_social_graph_feed_projections.down.sql",
+    "packages/database/migrations/0094_social_graph_feed_projections.sql",
+    "packages/database/migrations/0095_realtime_messages_notifications.down.sql",
+    "packages/database/migrations/0095_realtime_messages_notifications.sql",
+    "packages/database/migrations/0096_one_time_monetisation_checkout.down.sql",
+    "packages/database/migrations/0096_one_time_monetisation_checkout.sql",
+    "packages/database/migrations/0097_sfw_live_controls_and_chat.down.sql",
+    "packages/database/migrations/0097_sfw_live_controls_and_chat.sql",
+    "packages/database/migrations/0098_recurring_membership_authority.down.sql",
+    "packages/database/migrations/0098_recurring_membership_authority.sql",
+    "packages/database/migrations/0099_enterprise_managed_creator_authority.down.sql",
+    "packages/database/migrations/0099_enterprise_managed_creator_authority.sql",
+    "packages/database/migrations/0100_content_draft_idempotency_lifetime.down.sql",
+    "packages/database/migrations/0100_content_draft_idempotency_lifetime.sql",
+    "packages/database/migrations/0101_payment_ledger_atomic_safety.down.sql",
+    "packages/database/migrations/0101_payment_ledger_atomic_safety.sql",
+    "packages/database/migrations/0102_checkout_consent_idempotency_lifetime.down.sql",
+    "packages/database/migrations/0102_checkout_consent_idempotency_lifetime.sql",
+    "packages/database/migrations/0103_payment_commercial_policy.down.sql",
+    "packages/database/migrations/0103_payment_commercial_policy.sql",
+    "packages/database/migrations/0104_provider_event_delivery_order.down.sql",
+    "packages/database/migrations/0104_provider_event_delivery_order.sql",
+    "packages/database/migrations/0105_live_room_provider_observation.down.sql",
+    "packages/database/migrations/0105_live_room_provider_observation.sql",
+    "packages/database/migrations/0106_media_release_evidence.down.sql",
+    "packages/database/migrations/0106_media_release_evidence.sql",
+    "packages/database/migrations/0107_canonical_access_identity.down.sql",
+    "packages/database/migrations/0107_canonical_access_identity.sql",
+    "packages/database/migrations/0108_policy_content_eligibility_convergence.down.sql",
+    "packages/database/migrations/0108_policy_content_eligibility_convergence.sql",
+    "packages/database/migrations/0109_universal_composer_authority.down.sql",
+    "packages/database/migrations/0109_universal_composer_authority.sql",
+    "packages/database/migrations/0110_analytics_core.down.sql",
+    "packages/database/migrations/0110_analytics_core.sql",
+    "packages/database/migrations/0111_auth_lifecycle_purpose.down.sql",
+    "packages/database/migrations/0111_auth_lifecycle_purpose.sql",
+    "packages/database/migrations/0112_realtime_messaging_live_safety.down.sql",
+    "packages/database/migrations/0112_realtime_messaging_live_safety.sql",
+    "packages/database/migrations/0113_consumer_social_privacy.down.sql",
+    "packages/database/migrations/0113_consumer_social_privacy.sql",
+    "packages/database/migrations/0114_mcp_profile_bridge.down.sql",
+    "packages/database/migrations/0114_mcp_profile_bridge.sql",
+    "packages/database/migrations/0115_mcp_media_provenance_bridge.down.sql",
+    "packages/database/migrations/0115_mcp_media_provenance_bridge.sql",
+    "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.down.sql",
+    "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.sql",
+    "packages/database/migrations/0117_moments_and_scheduled_publication.down.sql",
+    "packages/database/migrations/0117_moments_and_scheduled_publication.sql",
+    "packages/database/migrations/0118_landing_convergence_analytics.down.sql",
+    "packages/database/migrations/0118_landing_convergence_analytics.sql"
+  ],
+  "read_method": "Full-text semantic review of all118 forward SQL migrations in bounded chunks; effective catalog/role analysis and SQL execution. Other artifact coverage stated individually.",
+  "files": [
+    {
+      "path": "packages/contracts/README.md",
+      "bytes": 73,
+      "sha256": "3b35e9e0691838f8728035019fa387381bdbf3002b6db2fc84de16af3094e10f",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/contracts/openapi.yaml",
+      "bytes": 364473,
+      "sha256": "04d50c69cf442e172cd1cd2b298d03ac5f96e05e1e5d9b81a3b258708ddddcf0",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/contracts/package.json",
+      "bytes": 497,
+      "sha256": "3a2e7aba9da374d162f980e8667a0bc682fec1a2421367cf7cbbbb1ccbd69fa4",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/contracts/src/generated/openapi.ts",
+      "bytes": 484158,
+      "sha256": "c53e311d6ba3b6e5147a9b256e98c819fb200f4c456848462e1f1dfc57d1bc42",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/contracts/src/index.ts",
+      "bytes": 77,
+      "sha256": "e62249899c5a1e58cf6fa848d67d310bc16677f025cd53961df5ed60e0364b60",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/contracts/tsconfig.json",
+      "bytes": 166,
+      "sha256": "42f9d91ed9f6a5a1b34e00e849920f703fcb10e69c58d0a4fbcdd7db44dbe038",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/database/README.md",
+      "bytes": 3382,
+      "sha256": "ece59b2cc1fce77ccaef5bab485e4d08f43ae1cc36f0ff8c180bde14d4fc3fdd",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/database/migrations/0001_foundation.down.sql",
+      "bytes": 876,
+      "sha256": "5ced33088dccdf092d5785b9716822b7fb3cf53c4d1b152ef7a6c1f4ac2413c3",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0001_foundation.sql",
+      "bytes": 3518,
+      "sha256": "3c69fb825dc490ab8e00bb61866cf3d1e16a2a326fc57aebc0d45e5564f19961",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0002_age_verifications.down.sql",
+      "bytes": 181,
+      "sha256": "1e5e0e054be3bc2ef73955da8557da3cd1e4313a3572ac374141fa3438f9158e",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0002_age_verifications.sql",
+      "bytes": 791,
+      "sha256": "eca80a99e57761819870687e7b2377399f0b13dcfe653e5e225d47fea9b967d2",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0003_wallets.down.sql",
+      "bytes": 301,
+      "sha256": "70611a7cb373ce27455565362c92216ce4d5af76aaca3958e694c4015e2e8e8d",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0003_wallets.sql",
+      "bytes": 1136,
+      "sha256": "9ab9fae2cde7f3038a9784d7aeb04c0734605d66ea172dd135272801ceb7305f",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0004_wallet_link_challenges.down.sql",
+      "bytes": 230,
+      "sha256": "958a6af41ad90579e527f0dc9cd5dc39bffc8f62e40418d376472391273bd940",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0004_wallet_link_challenges.sql",
+      "bytes": 726,
+      "sha256": "dab26ee50dffd9fa5e8a26bd01bd076f5b6604ee803189839a18213eaac1d642",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0005_age_provider_waterfall.down.sql",
+      "bytes": 59,
+      "sha256": "d3d6f2318d9ec7b992271568a5eab03840223fe1121e7eb4282cc91ba0ff5230",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0005_age_provider_waterfall.sql",
+      "bytes": 265,
+      "sha256": "441d6e4f005cab3d7bb7f290f432a46d8b73d15bdb01bbf88bf87b35f09e0558",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0006_content_feed_foundation.down.sql",
+      "bytes": 300,
+      "sha256": "ccc8e394cfc95c7334aad7139887e27de31e2c76ce7fc29a289b4c425c782466",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0006_content_feed_foundation.sql",
+      "bytes": 1502,
+      "sha256": "957260f9dd4c3821b5cc1896dccb5493e3a1da82496638d21ba8f2d2f3ea7121",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0007_media_upload_boundary.down.sql",
+      "bytes": 54,
+      "sha256": "1c788ecf6ade7274eb94cac39c50a1186521ee58e4ec05e8037627a9dd6a9d86",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0007_media_upload_boundary.sql",
+      "bytes": 246,
+      "sha256": "6e826042f0f62e2c770908262308844e7da8d54f93cebb28cfb223a6d5a4155c",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0008_content_access_projection.down.sql",
+      "bytes": 97,
+      "sha256": "e776fdb654057b2f51ac95d56ed25e7312516ec3a03c0610a5d3fd3587182568",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0008_content_access_projection.sql",
+      "bytes": 637,
+      "sha256": "e12c1fabfe26e395b9fde8922862d18b620f1e750f0b2d9fe2e9517a82ccf5d7",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0009_payment_intents.down.sql",
+      "bytes": 277,
+      "sha256": "c9bee6064a354e45c1db953c8c4dc2d8fe1352ce346781775820a1491ff107b1",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0009_payment_intents.sql",
+      "bytes": 1529,
+      "sha256": "56488f93f5f36ee0a8cfe467bafa9d092a4ed33e482f5f9ce00f65ef60a1c1e4",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0010_content_unlock_entitlements.down.sql",
+      "bytes": 256,
+      "sha256": "65f6c8a02e5362e7fa341cea5de37ab42feb13f5a3c7fb1ef12d6787947dc4e5",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0010_content_unlock_entitlements.sql",
+      "bytes": 1457,
+      "sha256": "c812d842823e19a508a6a47cfefc2c13ec7bf3d3ca7b03e5c452a68294b7f108",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0011_tip_support_settlement_ledger.down.sql",
+      "bytes": 158,
+      "sha256": "e696ff57658bee69c9026c1b9ba711d0ace1ec564f22038b2545f650ec683425",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0011_tip_support_settlement_ledger.sql",
+      "bytes": 877,
+      "sha256": "5d96213cf8366274d4fa5fba94479fce71187964e4daf89fcda931f04372d065",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0012_referral_attribution_commissions.down.sql",
+      "bytes": 439,
+      "sha256": "30bdc9f698d1c108e441e05df4506312dda4ebbe1ea0da9d9cbed647b15ab2d6",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0012_referral_attribution_commissions.sql",
+      "bytes": 2453,
+      "sha256": "6b17f1f14bcff639574865a6b81851beff43797ff253732c0e9e3b0a84cc92c5",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0013_bunny_vod_playback_projection.down.sql",
+      "bytes": 239,
+      "sha256": "ea41ecf8200e900f73bd97fab6bc26ef31f1498158b5b37187df6d250223767f",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0013_bunny_vod_playback_projection.sql",
+      "bytes": 454,
+      "sha256": "b468ddfd3522f81efe20112df032503aa038581d800315301e3c0a4c35e20f76",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0014_livepeer_live_rooms_pass_chat_replay.down.sql",
+      "bytes": 481,
+      "sha256": "9b08754cca2bc0000add5c50fc438386a6f73ca08921f59936c0c457e312c8fb",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0014_livepeer_live_rooms_pass_chat_replay.sql",
+      "bytes": 3709,
+      "sha256": "49a41ee9a7ff411b8c01e7066638e489379d670dc2b06042e20d872ffc851d72",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0015_messages_paid_messages.down.sql",
+      "bytes": 409,
+      "sha256": "52b00f047500ee08f98b0f56f17662266ca61e639902ddb7d545716751cd4f0e",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0015_messages_paid_messages.sql",
+      "bytes": 2667,
+      "sha256": "312928f5687fd08a9be871f6eda9f9db3013bb5cf9d75dcf54972ef8e7070228",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0016_activity_wallet_transactions.down.sql",
+      "bytes": 315,
+      "sha256": "d1323f9fec915b99fbf355301f0c7528e4a7f1cf199350403f583d9de10ac4a6",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0016_activity_wallet_transactions.sql",
+      "bytes": 1609,
+      "sha256": "70809235eaf2ee020366a177832af8ae7200892d4f40378a031e2c4765656b68",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0017_rls_policy_baseline.down.sql",
+      "bytes": 3986,
+      "sha256": "399553cb2a256c50003e8f98eaaeb0fdb560da4e984643e306cd391d2e9b2521",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0017_rls_policy_baseline.sql",
+      "bytes": 11200,
+      "sha256": "66b30d457cb70b33e59539dc194133785fd3ad08edd50408380f2c92d499c596",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0018_foreign_key_performance_indexes.down.sql",
+      "bytes": 1176,
+      "sha256": "e6e37430944cf57524e7b1de97416e7b2d4dd560d3007eb730b63f693d74e621",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0018_foreign_key_performance_indexes.sql",
+      "bytes": 2344,
+      "sha256": "6d52027f09afef6a5e0b20d1737bb75cacf564d074a51b2d4957d1c15031fe7d",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0019_creator_monetisation_settings.down.sql",
+      "bytes": 284,
+      "sha256": "e4c6ef4e8c64fa37d0fc73729c5b8da53567cdbaf1108de5e483b65cc0816080",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0019_creator_monetisation_settings.sql",
+      "bytes": 1945,
+      "sha256": "29439213f36545f7b1dfd241ca14029a3e224d64774042dc113c98d84db77cb1",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0020_admin_ops_indexes.down.sql",
+      "bytes": 219,
+      "sha256": "adb21807b637d82761b6a7def64a377ea7473600ad1bef17e5c272b53012969d",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0020_admin_ops_indexes.sql",
+      "bytes": 388,
+      "sha256": "6f5e3147d772994b005f88f9b63c36af8279d3c01deea13b514d7984856d0c68",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0021_events_ticketing.down.sql",
+      "bytes": 1003,
+      "sha256": "4944f942b280e3083642d7e70fa03582639fdd9475bfcfd5607db6f354e79005",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0021_events_ticketing.sql",
+      "bytes": 6331,
+      "sha256": "a47ff827b659c980bd47dbfedda0f8427795f8c1916f805ddfe2bd30c7f5ed5f",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0022_event_ticketing_fk_indexes.down.sql",
+      "bytes": 306,
+      "sha256": "98df5ff17fdd3ecb77efe74c6bc0b869d543cc28bc458420baf117e01567c23b",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0022_event_ticketing_fk_indexes.sql",
+      "bytes": 676,
+      "sha256": "7c1c4f62823ed89a894bd5ef2f084798e4879887bce705db66ea718682d8a3db",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0023_dating_mode.down.sql",
+      "bytes": 345,
+      "sha256": "f6e3a4c568c5a15d969068f4234983d4418cd5f36287f7b63ce78c5fff780782",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0023_dating_mode.sql",
+      "bytes": 3447,
+      "sha256": "d9cb49eed2fd734934f16f42335a7cfcdb0b0477f08b55ed93d1392b3c70a1f4",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0024_dating_fk_indexes.down.sql",
+      "bytes": 117,
+      "sha256": "178cdec0d3c39d3aa3acfa78b2e33fd9dcc3803bcd31deba706229d331d7ff16",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0024_dating_fk_indexes.sql",
+      "bytes": 307,
+      "sha256": "2e98f57677ef09839164904661564faa1e3d6e6d4489a512c1677296ecb48276",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0025_ai_mcp_scoped_assistant.down.sql",
+      "bytes": 619,
+      "sha256": "e796c261d80f05abac3de4ac0f98616dc101d09528828a90fc826e4731beb0f6",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0025_ai_mcp_scoped_assistant.sql",
+      "bytes": 3861,
+      "sha256": "cd66c96c1a3907300cea4f3b68a16db71a7db194a8cfbca97e4ab663ed0de830",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0026_ai_mcp_fk_indexes.down.sql",
+      "bytes": 60,
+      "sha256": "8f963082c9df73d253e193b075265fc418c9d34fed82344071184ba3fa40e6bb",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0026_ai_mcp_fk_indexes.sql",
+      "bytes": 187,
+      "sha256": "c931992353d0fab874b68a6fe504e7b54b01ca4d44f42028eb1e2b278bafbe2d",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0027_engagement_feed_safety.down.sql",
+      "bytes": 2401,
+      "sha256": "57dc068b78c1a474c5b71e77bac907ca7e3b28dbb0746f6714246eeb5ca7d4c8",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0027_engagement_feed_safety.sql",
+      "bytes": 9218,
+      "sha256": "b7008de0f4df139097c860109b20ba1f747da38636d6ef9622718eb01de3a5ae",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0028_subscription_foundation.down.sql",
+      "bytes": 1722,
+      "sha256": "3f6e66faa8cf5144bce9a9f8d0286a4a3ac4493e8b6fa1ff97c0b53ede597bc2",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0028_subscription_foundation.sql",
+      "bytes": 9351,
+      "sha256": "4d121adaaaa2d1a2a5417b6c6ef8637653f82b69592049a4624098d7dbce7f02",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0029_subscription_fk_indexes.down.sql",
+      "bytes": 178,
+      "sha256": "6b9641c734daf05ebc4aeeb3db0fe9e323c57e46ee540e2a66de632950aaa71d",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0029_subscription_fk_indexes.sql",
+      "bytes": 434,
+      "sha256": "cbc62a81500c6766ce4ef06001375729dbf8a723f1ad271ec71bd605bb432448",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0030_compliance_tax_foundation.down.sql",
+      "bytes": 1194,
+      "sha256": "50ddd6143bd4537042c387344cfe1653fb0afb514519b5e99908a397c8c26923",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0030_compliance_tax_foundation.sql",
+      "bytes": 24175,
+      "sha256": "3bea1a9576189b1ef1e053a10a13b7b6ea50c6057161e09dbb0dc91e74739b34",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0031_compliance_tax_fk_indexes.down.sql",
+      "bytes": 1820,
+      "sha256": "406b7835804ed942d6fcb4fe3de6c61255462fbdaf6aed2e4a91cc218328f978",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0031_compliance_tax_fk_indexes.sql",
+      "bytes": 3983,
+      "sha256": "82c33317fec7fa07c99cf32788f292a9bdda7f212f4108a5f9f7d66e57b841c4",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0032_discover_hashtags.down.sql",
+      "bytes": 449,
+      "sha256": "271209aa3994b902c7ca9358714aa3af78b1814426b2d67b9f22587067589f6c",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0032_discover_hashtags.sql",
+      "bytes": 1936,
+      "sha256": "55fb9bc25b7a5bc79fd30a7bf82736f68f8f19ac05351fc8d374051e5e8bb146",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0033_wallet_onramp_sessions.down.sql",
+      "bytes": 313,
+      "sha256": "3cc8299003236b1287d3dc6688cf45c1bfb0807c7320f118ccb5b96c03e280bf",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0033_wallet_onramp_sessions.sql",
+      "bytes": 1468,
+      "sha256": "cf48b425246b88c0565f2f9f5bf86daecdb7ad238c080da2204545ee9c773a15",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0034_notifications_foundation.down.sql",
+      "bytes": 1544,
+      "sha256": "46f6eda5cdf7df4ae76f5df9daaa989e45366a2ab6dad94ae8dc649d92f8fdb6",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0034_notifications_foundation.sql",
+      "bytes": 5342,
+      "sha256": "f967494a05ff73edaae03b3da7d95caf64e8ce301026c6ac6bda4d89536e8259",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0035_organization_memberships.down.sql",
+      "bytes": 406,
+      "sha256": "bf009f0eca7c49a2fe2426ac31f58af8233b8b5dd3dbb6a8b6cc69874b70c7cc",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0035_organization_memberships.sql",
+      "bytes": 1675,
+      "sha256": "50c690ab2f7d8d1e453c729b91f03f366e59891a3e8f7cc83c3084fa7a046f36",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0036_organization_memberships_advisor_fixes.down.sql",
+      "bytes": 646,
+      "sha256": "b7fa9a008c105f3b1b12ef9ecc698956f05f7bb964f6dd21bb04e7fb135a956e",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0036_organization_memberships_advisor_fixes.sql",
+      "bytes": 748,
+      "sha256": "94dd69005f2bca2f2db3db443351375c02fdc04b03992821b8492894e6580566",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0037_notification_delivery_queue.down.sql",
+      "bytes": 686,
+      "sha256": "481309d2f89c81166861196c55fd47bd9fd420940a69ac0074691cf5812f5ad1",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0037_notification_delivery_queue.sql",
+      "bytes": 1750,
+      "sha256": "0f3b912e01b651fd9b37ec83a2aa42c133c907912d2ac309dac75be854cdfe24",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0038_notification_delivery_advisor_fixes.down.sql",
+      "bytes": 166,
+      "sha256": "3b402794e6cae4b806ec66abc5e1c2950a151419be7e700389ef04d872c178cd",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0038_notification_delivery_advisor_fixes.sql",
+      "bytes": 423,
+      "sha256": "4a618599134c814e89ba953dd40642a477dffe1d9b5a7b6247a29571b75d727f",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0039_realtime_projection_publication.down.sql",
+      "bytes": 218,
+      "sha256": "d3c8e9a137868f67a92202d2a95ea2b25e2391b0563d705ce1143067499494fd",
+      "review": "structural_scan_full_bytes"
+    },
+    {
+      "path": "packages/database/migrations/0039_realtime_projection_publication.sql",
+      "bytes": 542,
+      "sha256": "fec8950110e86865bd0e7c894a690e2cd99ad48c745599b0a42a25442b2eba48",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0040_organization_member_admin_workflow.down.sql",
+      "bytes": 130,
+      "sha256": "3f80225b94c1e3904447b2920dae645d7eba26f5699fc92d4237075fe4fa4e06",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0040_organization_member_admin_workflow.sql",
+      "bytes": 421,
+      "sha256": "2197b6792b758b54f87d816b1976f448785645d73153933688361c9905a5a182",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0041_support_case_policy_surface.down.sql",
+      "bytes": 601,
+      "sha256": "af82d4f56f11f2679973c1fb4b79e0bb4a6939af1605bbd07f4a1534cda3172b",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0041_support_case_policy_surface.sql",
+      "bytes": 2875,
+      "sha256": "75f7e2a431af68847646adfd05ab3ac5da69c0d4f427920819667a23c1870bd9",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0042_support_case_advisor_fixes.down.sql",
+      "bytes": 115,
+      "sha256": "025c80b1d2ebdba62e1f4078b7c2a91e0333d57b5e0700d417952f6c644f20f7",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0042_support_case_advisor_fixes.sql",
+      "bytes": 347,
+      "sha256": "e8cda81d390ac3f28c1a9775450e30c7c91fdf5cff2feae6634b8f782aa85143",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0043_refund_dispute_request_workflow.down.sql",
+      "bytes": 438,
+      "sha256": "62e76473dfe53b6007c9d49a848efb29944a576611c4be2c7db4aca5f088a404",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0043_refund_dispute_request_workflow.sql",
+      "bytes": 1941,
+      "sha256": "eec724a5c1e72e4b66a6f29ea0193e24c276df4f3bc9e9220b8767bf96bb86b1",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0044_admin_data_request_feature_flag_surfaces.down.sql",
+      "bytes": 456,
+      "sha256": "ce8b753b8bbddbead15a300e16a758dfdaeceeea10df142c5ebda04a93666dd2",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0044_admin_data_request_feature_flag_surfaces.sql",
+      "bytes": 2322,
+      "sha256": "1b47351f58913fc899cd650699c3f209872b038500f69d987dfd0c7a6770a714",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0045_seed_feature_flag_policy_defaults.down.sql",
+      "bytes": 201,
+      "sha256": "751c5810a98221cf2409810ba1d59664032e5aeb4e425fcfd63533898daa7950",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0045_seed_feature_flag_policy_defaults.sql",
+      "bytes": 575,
+      "sha256": "ae6bd1b96707a78bd86a259b3f519bde768709ba50d71ecde1f617f28f1e1511",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0046_admin_moderation_report_states.down.sql",
+      "bytes": 342,
+      "sha256": "f65eb1e8dfc6024982d118e2209c6bac2e39201cf8dc58712736a61e85543eb7",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0046_admin_moderation_report_states.sql",
+      "bytes": 353,
+      "sha256": "353cbd27c9bcc182e537e189a2acf3ed040a1448ee162b694b596929d2b8060e",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0047_provider_event_replay_requests.down.sql",
+      "bytes": 297,
+      "sha256": "eb4404f7aa9cd5ae7536091b1f074a78d814092bf85debd8d64a08695b113d05",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0047_provider_event_replay_requests.sql",
+      "bytes": 1378,
+      "sha256": "fc71d269e0d7d7f0d0fba3d1cab4ef0b21c570a710cac22ed8c0aaec3fd0cd98",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0048_provider_event_replay_request_advisor_fixes.down.sql",
+      "bytes": 75,
+      "sha256": "c37c60da12ed6fba401e528d44ee3d89ebfd4d322cddf562c76f902ffbd0efe8",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0048_provider_event_replay_request_advisor_fixes.sql",
+      "bytes": 126,
+      "sha256": "1e2b2688a19ade6a502cd3d3113a64db74bf25a44a3e375f3f3a179f0d0395fa",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0049_event_access_mutuals_canonical_names.down.sql",
+      "bytes": 6015,
+      "sha256": "d1391c34799bf606c0fa6bbd22be7a9760edc4827d9c8eddfeebeedf53f9066f",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0049_event_access_mutuals_canonical_names.sql",
+      "bytes": 6146,
+      "sha256": "980630f6b735cbacc6fe96d5f9ba4c0c5c251339e2b37ca5901d4b1a5ac09264",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0050_event_access_payment_product_type.down.sql",
+      "bytes": 99,
+      "sha256": "182c80b32a6248c18a5e2d5ad6507d98cddded4d5deeed74d3587e05eb530df9",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0050_event_access_payment_product_type.sql",
+      "bytes": 235,
+      "sha256": "1632db8c57fd3bb66363596540f8d92c84079bcbbd4ae2bbcc875c941056a998",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0051_live_room_provider_reservation.down.sql",
+      "bytes": 71,
+      "sha256": "350624869510916cd80b3604541f4dfb1799529d5963f74414a0a91718ca5b4b",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0051_live_room_provider_reservation.sql",
+      "bytes": 294,
+      "sha256": "dce36fe5b01b914323d3b7d8e386df87da78e27c0c30d16917a49087781f128f",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0052_content_preview_controls.down.sql",
+      "bytes": 69,
+      "sha256": "a7922b1990278e466a8d2d142acc871459aaa6632ef8a2ace1ac6f547a9ec27e",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0052_content_preview_controls.sql",
+      "bytes": 80,
+      "sha256": "a24661094c3895c27c96a104fef35572b8b622ba48c5d74fe854df65e7b3f384",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0053_content_publish_state.down.sql",
+      "bytes": 1980,
+      "sha256": "10dc8729ae93374521f4face9b29a6111bd0bfa89bce729d61e215526549de4d",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0053_content_publish_state.sql",
+      "bytes": 2429,
+      "sha256": "025e60960877bac01dae9f4eabf9eaf128b3370a2a88379248157277d62ff815",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0054_event_content_link.down.sql",
+      "bytes": 117,
+      "sha256": "8524f7508b83691933606137277f45f56f6a9182fe73d0ece126e940e8686237",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0054_event_content_link.sql",
+      "bytes": 233,
+      "sha256": "b5f5b24e09e9d19c52fe2d66ce84f96b1535681389198e790633d47a8f053fcd",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0055_content_creation_abuse_policy_seed.down.sql",
+      "bytes": 78,
+      "sha256": "932d3cf492417d11e9ac114b7335518b0f4ba550509fe3939d6da30bfc55a986",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0055_content_creation_abuse_policy_seed.sql",
+      "bytes": 758,
+      "sha256": "86b1e00e79391b404d2e8900bc08a174e04027ae432801f78c60b671a6c28bf8",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0056_event_access_purchase_request_state.down.sql",
+      "bytes": 484,
+      "sha256": "39ddc09b068a1a1873a3b15d9a6d0657682c0bc4bad189c0eb1a1a65f526790f",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0056_event_access_purchase_request_state.sql",
+      "bytes": 980,
+      "sha256": "dba746f95f2b26dd9df0df7a7bad3e324e24ceb9e78f0ee3886ba9cc4b050fa9",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0057_refund_request_idempotency.down.sql",
+      "bytes": 181,
+      "sha256": "af35f56e2bc545226bfb19d8c79dc6557554ebb7d1ffe38480d078772f9b8947",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0057_refund_request_idempotency.sql",
+      "bytes": 658,
+      "sha256": "13d649df68df080756bc5bd8a1bee8c55c039ed759aac08a0b8dba52fbc3cf03",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0058_payment_withdrawal_waiver_evidence.down.sql",
+      "bytes": 385,
+      "sha256": "d972ada025d2f83ccdb11f0a9177d1deaf4a47bd0b82cd1fe37e342c7078d4cd",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0058_payment_withdrawal_waiver_evidence.sql",
+      "bytes": 892,
+      "sha256": "58f065a0d029a40cadb62a4941032724e4f787d85268942d6c5d3eb1bef31b6e",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0059_payment_durable_confirmations.down.sql",
+      "bytes": 441,
+      "sha256": "821e917fdaddadeca56b79d8dd15e4edfb306930acd950dd2fa948a7254c93c0",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0059_payment_durable_confirmations.sql",
+      "bytes": 1736,
+      "sha256": "45dac0d75fb6659f125456297a50b9ad6476ee998471f536c2da70177d99a3d5",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0060_payment_confirmation_email_delivery.down.sql",
+      "bytes": 570,
+      "sha256": "d9bd99264f9243097483d49eedb8866d242b9c52d970f55a86344e4dfe5709d0",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0060_payment_confirmation_email_delivery.sql",
+      "bytes": 922,
+      "sha256": "4e1b47733e60acb1873abfd17f79763a7282cb8b8ed7f90d875dc0d6d9ceff91",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0061_provider_event_replay_payload.down.sql",
+      "bytes": 130,
+      "sha256": "6628c8e5a3f79bf670575971bc97b4a6f1958c0f5973b58e221666e9148eb9c8",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0061_provider_event_replay_payload.sql",
+      "bytes": 310,
+      "sha256": "b57b17d5854ff12f7ddf884e807b1f2460b1f7f6eef8a1c429ca0c06e4b80a4a",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0062_refund_remediation_evidence.down.sql",
+      "bytes": 441,
+      "sha256": "5cd366c9188d90ee0c3a4891ddae55015f63103cdb64fe4a604caf2d1d41d38b",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0062_refund_remediation_evidence.sql",
+      "bytes": 2429,
+      "sha256": "9809fd7e95b4edd6f5af8807b04ee3318dcfbc1584f40d58019f23d535f172c0",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0063_creator_split_payment_settlement.down.sql",
+      "bytes": 994,
+      "sha256": "958296d5a192ff282966f4cd392403bd923910a613d18e37cd632d1393741964",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0063_creator_split_payment_settlement.sql",
+      "bytes": 2506,
+      "sha256": "81a4d56e92fd7fb570fd4f87e593b9680b9705986c72ce050cf6751a5e9843a1",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0064_solana_subscription_verifier_hardening.down.sql",
+      "bytes": 3315,
+      "sha256": "bd43879330ed9326114fe55b01dd002461a8da0ff26030707ac23aeeda49a6b2",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0064_solana_subscription_verifier_hardening.sql",
+      "bytes": 8518,
+      "sha256": "eb1549cdbf2b06ab5f6ecdd870edcb6251cdb0e2904904692e113c23c77f715d",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0065_external_mcp_connector_foundation.down.sql",
+      "bytes": 232,
+      "sha256": "79f3d319a3633aab14c788d342087a2a4ec4fd4a1935df057a518b07ed9a87e9",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0065_external_mcp_connector_foundation.sql",
+      "bytes": 3375,
+      "sha256": "50e6252d0e0b391335630f5ce35db0e19663bd4a1e6695e6f80a2b0fee93c8b0",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0066_mcp_oauth_completion.down.sql",
+      "bytes": 886,
+      "sha256": "51b5697663f53f37668ed7f92efa51c80cf4d4c3db1c311a38e8e95a11f5ca08",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0066_mcp_oauth_completion.sql",
+      "bytes": 6841,
+      "sha256": "6e6d1e34a4999f4a8647b2e0261acd2e3d6eda1ae19b947e0659da2113f90022",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0067_wallet_first_auth.down.sql",
+      "bytes": 818,
+      "sha256": "3fc999d59c1a0a767c92e1d171fa70180a286f85364f2c4b77fd5483e3e2c396",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0067_wallet_first_auth.sql",
+      "bytes": 1842,
+      "sha256": "d9cb5e7f534112b9b6f53983dbd8a4836a939378e319114533420cec927d79a9",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0068_profile_media_links.down.sql",
+      "bytes": 122,
+      "sha256": "215b3fb0ca974ea796d41d2662dae479857332a04504b9e16e18e28af5e22463",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0068_profile_media_links.sql",
+      "bytes": 195,
+      "sha256": "4e1d4530092c694bc5272161a23804503abcc2a198421c1283698677b1674280",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0069_normalized_verification_domain.down.sql",
+      "bytes": 633,
+      "sha256": "9f5c8c6bca4886e33e2344812546a367ed1dc7d3b5483f743b90a42a2921ee00",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0069_normalized_verification_domain.sql",
+      "bytes": 9483,
+      "sha256": "c05876503e43804dfcf90efc3d6019366b80f5550b29550337658775c0845fd1",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0070_profile_avatar_storage_bucket.down.sql",
+      "bytes": 208,
+      "sha256": "94e4923b8b3a4c6d231154c2eb4414c7ca90e5e7baf3b80b229a592cff8d1590",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0070_profile_avatar_storage_bucket.sql",
+      "bytes": 811,
+      "sha256": "a8752209f5ce5627910b9c5f595f33f6d591b6b8b38d54594d0221a32160e941",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0071_profile_avatar_storage_limit.down.sql",
+      "bytes": 239,
+      "sha256": "752365260a386326145669e2b74e15fbd7c3688fcb29ae78dfc594ae52cb85bb",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0071_profile_avatar_storage_limit.sql",
+      "bytes": 308,
+      "sha256": "a77e09de988020fe778b9f294477bf1688abb55f4eebfb5946ae4cf4c3f53183",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0072_platform_tier_authority.down.sql",
+      "bytes": 856,
+      "sha256": "40e211288b142acdf50773e24021ec433610a479382d00c05c83bb336f626342",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0072_platform_tier_authority.sql",
+      "bytes": 5433,
+      "sha256": "8a08b11d265998bed466ef243e57580d07eb5b208a489d9a66598f090903dc48",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0073_live_access_modes.down.sql",
+      "bytes": 1508,
+      "sha256": "1e7ab097f548f2d793a07920a54ff54f738769eb0e0288e7c3bbf70fc67200ee",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0073_live_access_modes.sql",
+      "bytes": 1835,
+      "sha256": "36a427f81f5ab88f69ff9c05d287145fabd1a19cd4c4ab36b671081219278a2d",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0074_supabase_advisor_fk_indexes.down.sql",
+      "bytes": 668,
+      "sha256": "14a48eb2f53613c3f9a48bd63fbd6b86300b7807590c6424e62d8fb5458c7a70",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0074_supabase_advisor_fk_indexes.sql",
+      "bytes": 1192,
+      "sha256": "6980ce59057fa6936e3c698dd2f93526af506cc692ef89f49a70b869876dbde9",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0075_platform_tier_policy_plan_index.down.sql",
+      "bytes": 67,
+      "sha256": "28b36407030b05bc9800c18b970e0696f385dd48e9e19c65177c872c9d21d76d",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0075_platform_tier_policy_plan_index.sql",
+      "bytes": 188,
+      "sha256": "21aeca4d366e8ee5028b572c11011b8f9c95fc44c2c35b3bb4757dc830b4256d",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0076_revoke_exposed_wallet_sessions.down.sql",
+      "bytes": 84,
+      "sha256": "5e49516747226bede95b1749a6b1b84f559f5c56f253d202b49bcda7da6b9545",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0076_revoke_exposed_wallet_sessions.sql",
+      "bytes": 298,
+      "sha256": "07745efcc98942a6796d09ca393e7e5b637a218dea1e1437544ad824e5da5d8c",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0077_universal_account_media_safety.down.sql",
+      "bytes": 776,
+      "sha256": "0891e1c1d5ff5eb40ddb237047b4d8257e6e80195f2ded809f7d1767632cf96d",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0077_universal_account_media_safety.sql",
+      "bytes": 2434,
+      "sha256": "07fe922e665a30ffbcbb233d0dddec4333b713148fd74b0eca106c54400b19e5",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0078_legacy_age_archive_deny_policy.down.sql",
+      "bytes": 86,
+      "sha256": "ff967d9abb3cd33b991e82ae7e139fa491398ef4523bedc634da0e0e491862a2",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0078_legacy_age_archive_deny_policy.sql",
+      "bytes": 239,
+      "sha256": "5c128d2c7207b315b3be59247576167fc9991adc8ef5aafebdf75be38b0369b5",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0079_worker_lease_reliability.down.sql",
+      "bytes": 2076,
+      "sha256": "8b9a6be756a095995f7c4704c7672fc9deeec297648ef2b6ca26bec06b1f5eb7",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0079_worker_lease_reliability.sql",
+      "bytes": 3809,
+      "sha256": "24aeefd10535c2b392599db461fcfa66018ca85e1f43d5c52512db577a16727d",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0080_worker_queue_recovery_private.down.sql",
+      "bytes": 207,
+      "sha256": "bbc40a9e510ec811cf4db17c00c51bbdcf9d3d344407056aebbac25be5be934c",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0080_worker_queue_recovery_private.sql",
+      "bytes": 406,
+      "sha256": "dd75819ab9e82d12daf35ff4e8bc83d33fb8976d71e1b9295d6e10e72d96a1dd",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0081_worker_queue_recovery_actor_index.down.sql",
+      "bytes": 75,
+      "sha256": "9c448678ab45cdc116009ee092363d89cce279ad18594daa5c9500297b566603",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0081_worker_queue_recovery_actor_index.sql",
+      "bytes": 167,
+      "sha256": "a36b5100b5f5e153565a15ce8f9172574e9a5db5078fd946a3184d5b8e885921",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0082_payment_checkout_and_usdc.down.sql",
+      "bytes": 539,
+      "sha256": "0a86c877c6a8561f46f6769d37c051d4a37dbe25d7062cd795f8b5c99af6dcea",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0082_payment_checkout_and_usdc.sql",
+      "bytes": 1223,
+      "sha256": "2d9876521025e77c664bdd6d3e16b9f3a43902ebbc16ec0d8a24f85cf8b87e3a",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0083_platform_usage_accounting.down.sql",
+      "bytes": 302,
+      "sha256": "58f6d82f9d8ed2d186198f25f900fb0f583246eb69a57866b6644a6b8ab39312",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0083_platform_usage_accounting.sql",
+      "bytes": 2931,
+      "sha256": "9b038f6a12915af9b37a578bb1ae2efa72beec460080c3f5871ed0303154d0cc",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0084_message_idempotency.down.sql",
+      "bytes": 118,
+      "sha256": "3668f35cb9a704cb03fcc1967d24dc998387c0d6859de57e10964ee8c2b95a9e",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0084_message_idempotency.sql",
+      "bytes": 401,
+      "sha256": "88724d926d4c9da03c279d36fa6c12a751d9b2a32116827fd11a388b01ecb9fd",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0085_audit_event_idempotency.down.sql",
+      "bytes": 132,
+      "sha256": "15e1f8199e1bda496b8ba13293d134f32c1529f8c4314dc80507f53abe3a399c",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0085_audit_event_idempotency.sql",
+      "bytes": 278,
+      "sha256": "ad6be14feae3b80c331d0008e5280ac7660c3c80ff7df37b50baa3f99eb20942",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0086_adult_publisher_identity.down.sql",
+      "bytes": 1287,
+      "sha256": "26ffca24192eecfdb59530cb44abdd65d2462ce853d455b9d75242cd8ce62288",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0086_adult_publisher_identity.sql",
+      "bytes": 2633,
+      "sha256": "661e53f68718e7cb1eddf8fcfe024eae354eaab13d4f4d36b92941858d39554f",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0087_recipient_monetisation_policy.down.sql",
+      "bytes": 101,
+      "sha256": "43433d155dfe3d957300eba898d9100c36a91b5783671306dd7fc768f954f6de",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0087_recipient_monetisation_policy.sql",
+      "bytes": 3568,
+      "sha256": "664a07419b5d3944158a8cf7855bea31be4c695a7af31573e18821f37f88fcb8",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0088_media_safety_and_consent.down.sql",
+      "bytes": 641,
+      "sha256": "eecfc8d87fb90603d445dd446f244830d04ef1875b061f689981308e28122309",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0088_media_safety_and_consent.sql",
+      "bytes": 17596,
+      "sha256": "0bb4ac4d9adb2a451f4f5213825fe6824bfcbe80301d4ff70ccd0713ec15f4a7",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0089_media_safety_fk_indexes.down.sql",
+      "bytes": 585,
+      "sha256": "2b93ae1dda28702c28659c4eda28de39f2d9c594f39a9e14bb48406dcff85efe",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0089_media_safety_fk_indexes.sql",
+      "bytes": 1167,
+      "sha256": "00795161b836d3f8adee83b81914b88296dca591db89c86106f0a92481dfbbe5",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0090_monetisation_performer_enterprise_authorities.down.sql",
+      "bytes": 10288,
+      "sha256": "ebce328893b63d0753f6b3b4942c618a595f430e8bb618dc7d927fdd3084580d",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0090_monetisation_performer_enterprise_authorities.sql",
+      "bytes": 34854,
+      "sha256": "7d2447411a4bba40fae8e304962774c7051db1d7f0cd8dbcebd9e0e9d6e03494",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0091_canonical_identity_session_security.down.sql",
+      "bytes": 2790,
+      "sha256": "16044a328db6b9dc3d3faa6f0ada11edd5e3579effd52dc1875ced91c2980ade",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0091_canonical_identity_session_security.sql",
+      "bytes": 6572,
+      "sha256": "47b6a2e7599e5f9f6a19e29d51e87ceefbf13f34725c526df6634369bc2be613",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0092_sfw_publication_review_projection.down.sql",
+      "bytes": 812,
+      "sha256": "4ab0688296590d1aecc2a9e8d564eed01f2eb52a211f26e8492cd987eba48c15",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0092_sfw_publication_review_projection.sql",
+      "bytes": 1388,
+      "sha256": "8dffc42cd2146b8fcac1d22c9ee11e780461983cd10948545f662cfcc3941530",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0093_media_appeal_idempotency_hash.down.sql",
+      "bytes": 148,
+      "sha256": "0a2e2befe6505c4e0c019d4d8c383394e9e21665a54070f7cc4ee8132db867fd",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0093_media_appeal_idempotency_hash.sql",
+      "bytes": 548,
+      "sha256": "1207063fab136f96c1cc85b7533c09f7e17ae6299b5fa1fa8497cbebdc99760a",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0094_social_graph_feed_projections.down.sql",
+      "bytes": 2619,
+      "sha256": "6ce0d244e5b4941592f0d578371062ffaa42c690ec8eeb798e9e6fd6ec1588e2",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0094_social_graph_feed_projections.sql",
+      "bytes": 13053,
+      "sha256": "62e5bab9eef8c69d51a82563b4be96f98234bdbd675c50160b0a5be8759eb7da",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0095_realtime_messages_notifications.down.sql",
+      "bytes": 4774,
+      "sha256": "f613537b8da969acf81557a3697ac9ba3ffb54404635db4b6aef7e3b8de6d1bc",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0095_realtime_messages_notifications.sql",
+      "bytes": 9878,
+      "sha256": "b1b9a9b87d31e5f073e97fbfd691ec9f51d38c176b196db6dfaafb6fbe622fc0",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0096_one_time_monetisation_checkout.down.sql",
+      "bytes": 1735,
+      "sha256": "d9ffb4cc2711488721d9aec45cd6bca16d70fa65d8fdb6a380414f51ffa40301",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0096_one_time_monetisation_checkout.sql",
+      "bytes": 5008,
+      "sha256": "e67b052a23f6dcadb5c69afdfb31af2522605e11ee5b2d633ddc82e9339e8577",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0097_sfw_live_controls_and_chat.down.sql",
+      "bytes": 2077,
+      "sha256": "138bf3676f9fa8bffd3603f0e295435d52492727ca341e5b6545720e69e1e7cc",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0097_sfw_live_controls_and_chat.sql",
+      "bytes": 7110,
+      "sha256": "d47c6315fd26bb669f71ac80414cfda46b0c9eaf19209830740d1b40efec0f61",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0098_recurring_membership_authority.down.sql",
+      "bytes": 1204,
+      "sha256": "4985de185a43e64f738b3bb734b57f4f77bb56c6b36b6279549f35370b2a2b35",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0098_recurring_membership_authority.sql",
+      "bytes": 2607,
+      "sha256": "a093350a520832a807df04b60f185cd11acfda10d45f091790aa9c35b8d04533",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0099_enterprise_managed_creator_authority.down.sql",
+      "bytes": 2905,
+      "sha256": "fb2670ea2b34f65f54e7cb458c5c84618b04a43157e6c8e3395bb21899dda5f4",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0099_enterprise_managed_creator_authority.sql",
+      "bytes": 5450,
+      "sha256": "536f0a3d0227a1e73862abc5c99880fa6f6293936de1864fd79e4999cc759e11",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0100_content_draft_idempotency_lifetime.down.sql",
+      "bytes": 193,
+      "sha256": "768266ee68924ff4c5f3351695d11adccc771d8e0a686fbbf2615c07f58935f8",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0100_content_draft_idempotency_lifetime.sql",
+      "bytes": 365,
+      "sha256": "99780f4e1933cc7bed054962be11529f476048de92e88f08a4026145522cbeb8",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0101_payment_ledger_atomic_safety.down.sql",
+      "bytes": 116,
+      "sha256": "fdf41e2b5b319835c9b73145f5a446203f05433908a92ec57b99d77c6e9022fe",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0101_payment_ledger_atomic_safety.sql",
+      "bytes": 742,
+      "sha256": "b1226b4179bbead8a623842c507280e7bba04487513031943199f4500de1cc1e",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0102_checkout_consent_idempotency_lifetime.down.sql",
+      "bytes": 275,
+      "sha256": "2d08c546801219579ee55c08a689113df8e060c6431f0e79a73d7026dcd728fc",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0102_checkout_consent_idempotency_lifetime.sql",
+      "bytes": 389,
+      "sha256": "7d0e599e0ad02bbe7d76c1766f42621e82926545cfed0b67f4c6de97352bcfe8",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0103_payment_commercial_policy.down.sql",
+      "bytes": 1035,
+      "sha256": "774b60493a540461350eaced8b473000db03bc3cec1d3ee48f2bc4da45190cc4",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0103_payment_commercial_policy.sql",
+      "bytes": 3989,
+      "sha256": "0eec9ad4057af3148f41a8807c1bc186a97f1f7308e2bc28316892f526d16fb7",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0104_provider_event_delivery_order.down.sql",
+      "bytes": 197,
+      "sha256": "bab5204d34b30b2c40279faa5da1b8f3ecbc2142b6e2aece2715d3e86daff8f7",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0104_provider_event_delivery_order.sql",
+      "bytes": 1147,
+      "sha256": "cbb00555384a8df359e951872b181d5d7e89d7b0ec5fa2ff9a91f31f61496549",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0105_live_room_provider_observation.down.sql",
+      "bytes": 68,
+      "sha256": "1bb4441b7e5aa1a523649b547650ded6a6065375195f56613adbd419035f6e1b",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0105_live_room_provider_observation.sql",
+      "bytes": 731,
+      "sha256": "f9fe9321b6507c5075e34e4e523b7582bd79d83c1106941704e8c54fc8dbb159",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0106_media_release_evidence.down.sql",
+      "bytes": 2753,
+      "sha256": "c7dfd005b65f0dc3e076998135b3a0124da98231f3da0421acd3d44c3841d910",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0106_media_release_evidence.sql",
+      "bytes": 13141,
+      "sha256": "4391fab3f23aca7b657811d4d3ab527333f10b15b517af7653e0df1f0c182630",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0107_canonical_access_identity.down.sql",
+      "bytes": 88,
+      "sha256": "b356ddb177b8ac402455c31f79986213d5f7e991f19452b799a1a771796f4649",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0107_canonical_access_identity.sql",
+      "bytes": 1130,
+      "sha256": "bfd9fa83a7d656d88d230e82f0e1c1f12c117113f4ce92e9f2d836c08821366f",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0108_policy_content_eligibility_convergence.down.sql",
+      "bytes": 6010,
+      "sha256": "1e3412550333c0ca2de770b445fe50449cfc87aae00f72c4657ae213ab7d91c9",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0108_policy_content_eligibility_convergence.sql",
+      "bytes": 21655,
+      "sha256": "4ed2b686e5edb33a6cd199d3d30beefefc8e173ee0f963548508624c674b300f",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0109_universal_composer_authority.down.sql",
+      "bytes": 4946,
+      "sha256": "d6721b668db805df72f8629514639ebeb02442b5ab63096a89a97dbba312c807",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0109_universal_composer_authority.sql",
+      "bytes": 20593,
+      "sha256": "096df3fe9ed0894d684f2043a5706b92ca886034204b87f38b72b0dea31f7289",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0110_analytics_core.down.sql",
+      "bytes": 1979,
+      "sha256": "e42c5f2d963917a1cf67c6669e3b4f78d58387c4e11204d14cc2a4ad929e1847",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0110_analytics_core.sql",
+      "bytes": 19706,
+      "sha256": "c2a1c9ef9f959f7466e1b0ac66159e041e58942843af5c674d2c822f683605be",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0111_auth_lifecycle_purpose.down.sql",
+      "bytes": 208,
+      "sha256": "1f33dc1fa439bd88659abe99c8b91ebc8616f2840020bc42ff354c5f20ab6354",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0111_auth_lifecycle_purpose.sql",
+      "bytes": 765,
+      "sha256": "68c57f0d604b53256e0461c8d7a186435a783463b1a446123fdb97633f1997ca",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0112_realtime_messaging_live_safety.down.sql",
+      "bytes": 5563,
+      "sha256": "448f54700cc532e7d1f41c70289f687e13ab15b4910370e2bcbc4c93214323fc",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0112_realtime_messaging_live_safety.sql",
+      "bytes": 29031,
+      "sha256": "86c10a7509d4bfd9e50c4383e598b82d47ba2228803c583e9f836b4f320155c1",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0113_consumer_social_privacy.down.sql",
+      "bytes": 1716,
+      "sha256": "36aaffef8326b727c6d0a61e83d33c68adcb2f91877968007446c6de6a0d03bf",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0113_consumer_social_privacy.sql",
+      "bytes": 5409,
+      "sha256": "1ad27cc4aa5c1aafb7aa6fd0e0ca0b8bc2b0b9fa34558853d38d834d0623c7fb",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0114_mcp_profile_bridge.down.sql",
+      "bytes": 436,
+      "sha256": "bf939bf2e5d85fc3af1f70a0281efded9665d4143cc4febdbefa7c80d24ebb8e",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0114_mcp_profile_bridge.sql",
+      "bytes": 1629,
+      "sha256": "c63c93c068872c9173825d1becb05d54870ba137def1e4e7ebe28617e830d132",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0115_mcp_media_provenance_bridge.down.sql",
+      "bytes": 2368,
+      "sha256": "33d17ac003e754e1c7b5182d8c374330e5fc295809772404225b34458b3bbfc5",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0115_mcp_media_provenance_bridge.sql",
+      "bytes": 9947,
+      "sha256": "8acccabcded8221366ac4c56e6419a8336c4231769026985e443d39f17096116",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.down.sql",
+      "bytes": 399,
+      "sha256": "2197335037ef213c5ad8fa32505c72e92be1675efd5cd01c86c04ab7edb464f4",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.sql",
+      "bytes": 3256,
+      "sha256": "613824937efb2230e414f5aaa24d86f6853bc4bfde41fd76953f20b4d997a893",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0117_moments_and_scheduled_publication.down.sql",
+      "bytes": 1290,
+      "sha256": "a93a3e9943e039e0e344fb376db22b0b1a6c0f501143659a5899570e5fc45765",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0117_moments_and_scheduled_publication.sql",
+      "bytes": 5328,
+      "sha256": "3b3992f3a60b2d2e94eb77c6630340d79c59d4c1febcfb1ebdd55dc12218fb48",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/migrations/0118_landing_convergence_analytics.down.sql",
+      "bytes": 2676,
+      "sha256": "42a8c178d4e06e85aebf566c03b74d06c7b9c01608c6a058fcb89bde4433e086",
+      "review": "executed_rollback_sql"
+    },
+    {
+      "path": "packages/database/migrations/0118_landing_convergence_analytics.sql",
+      "bytes": 2258,
+      "sha256": "9b3d7d1dc1411863301e6fb6933e49da611972c0891faf5e78a8a3b4ac01a24a",
+      "review": "full_text_semantic_review_and_executed_forward_sql"
+    },
+    {
+      "path": "packages/database/package.json",
+      "bytes": 309,
+      "sha256": "2e488c7d7885341b34250d08d27b76addcf8fdba27b3440094a6229fe697e756",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/database/schema-blueprint.sql",
+      "bytes": 63793,
+      "sha256": "29b9e475e0f55d2c0278d425bb24d7fa4ce05c6f1b41a18a1726088cd157b6d7",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/database/scripts/check-migrations.mjs",
+      "bytes": 2612,
+      "sha256": "7f340b94524e50f2cdd72d0b6417538cce84fe24ab941f59e8d2a3a523cb8073",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/database/src/index.ts",
+      "bytes": 53,
+      "sha256": "5f5323dddc74d23d43dacd1acf9d46d5ab3b82635a91178ff4b856a3e34b9042",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/database/test/migrations.test.ts",
+      "bytes": 80867,
+      "sha256": "e425b1cd41b21fceb11499fabcb877f79962d5a202cfd6c3d555e2ef3b99f2a9",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/database/tsconfig.json",
+      "bytes": 166,
+      "sha256": "42f9d91ed9f6a5a1b34e00e849920f703fcb10e69c58d0a4fbcdd7db44dbe038",
+      "review": "semantic_review"
+    },
+    {
+      "path": "packages/database/vitest.config.ts",
+      "bytes": 155,
+      "sha256": "dfad60e59ab22a04d1c39104d25845ba9241421d2a05531291532986131a44af",
+      "review": "semantic_review"
+    },
+    {
+      "path": "supabase/.gitignore",
+      "bytes": 72,
+      "sha256": "507699eb91144818edf61d3a079212cacf31d8db520eae428e3b48fcf0d6919c",
+      "review": "semantic_review"
+    },
+    {
+      "path": "supabase/README.md",
+      "bytes": 3760,
+      "sha256": "6d48d8733d810f70a0d48f35ebf3719ab432587cdd9440c136f372ed644851d2",
+      "review": "semantic_review"
+    },
+    {
+      "path": "supabase/config.toml",
+      "bytes": 15573,
+      "sha256": "17e91f728252664dd222590f180839b6bd22c4058c290a84f92248b31538ad95",
+      "review": "semantic_review"
+    },
+    {
+      "path": "supabase/migrations",
+      "bytes": 20480,
+      "sha256": null,
+      "review": "semantic_review"
+    }
+  ],
+  "checks": [
+    "all118 forward migrations executed (PGlite/Postgres WASM+pgcrypto+auth stubs)",
+    "79 reverse migrations118\u21920040 executed;0039 fails42601",
+    "targeted RLS test event_ops reads unrelated tax record",
+    "targeted RLS test unlinked authenticated subject enumerates content counters",
+    "OpenAPI YAML parse221paths331schemas, all local refs resolve",
+    "JSON Schema2020-12 test:nullable true rejects null",
+    "database static migration checker passed",
+    "full-text semantic review all118 forward migrations complete",
+    "exact populated upgrade replay0046/0056/0077 fails23514 with valid historical rows",
+    "effective comments policy leaks private-comment bodies under documented existing Supabase default table grants; opt-in-grant baseline42501"
+  ],
+  "limitations": [
+    "Generated OpenAPI TypeScript484KB not semantically reviewed line-by-line; structural/full-byte inspection only.",
+    "No hosted Supabase Auth, Storage, Realtime end-to-end proof; no real provider keys.",
+    "Mac local uncommitted changes unavailable.",
+    "All118 forward migrations fully read semantically. Rollback full-text review delegated separately; this inventory retains original rollback execution status until parent merges that coverage."
+  ],
+  "semantic_reviewed_sections": {
+    "packages/database/migrations/0091_canonical_identity_session_security.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0095_realtime_messages_notifications.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0112_realtime_messaging_live_safety.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0117_moments_and_scheduled_publication.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0118_landing_convergence_analytics.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0118_landing_convergence_analytics.down.sql": [
+      "entire rollback"
+    ],
+    "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0113_consumer_social_privacy.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0108_policy_content_eligibility_convergence.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0094_social_graph_feed_projections.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0099_enterprise_managed_creator_authority.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0098_recurring_membership_authority.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0064_solana_subscription_verifier_hardening.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0028_subscription_foundation.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0030_compliance_tax_foundation.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0017_rls_policy_baseline.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0066_mcp_oauth_completion.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0067_wallet_first_auth.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0035_organization_memberships.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0036_organization_memberships_advisor_fixes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0021_events_ticketing.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0023_dating_mode.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0001_foundation.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0006_content_feed_foundation.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0015_messages_paid_messages.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0053_content_publish_state.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0101_payment_ledger_atomic_safety.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0104_provider_event_delivery_order.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0106_media_release_evidence.down.sql": [
+      "entire rollback"
+    ],
+    "packages/database/README.md": [
+      "entire document"
+    ],
+    "packages/database/scripts/check-migrations.mjs": [
+      "entire script"
+    ],
+    "packages/contracts/openapi.yaml": [
+      "YAML parser all objects and refs; nullable schemas targeted; not full semantic manual review"
+    ],
+    "packages/contracts/src/generated/openapi.ts": [
+      "full-byte structural scan; representative generated null union checks"
+    ],
+    "supabase/config.toml": [
+      "entire config"
+    ],
+    "supabase/README.md": [
+      "entire document"
+    ],
+    "packages/database/migrations/0114_mcp_profile_bridge.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0047_provider_event_replay_requests.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0062_refund_remediation_evidence.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0082_payment_checkout_and_usdc.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0010_content_unlock_entitlements.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0008_content_access_projection.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0012_referral_attribution_commissions.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0075_platform_tier_policy_plan_index.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0093_media_appeal_idempotency_hash.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0024_dating_fk_indexes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0105_live_room_provider_observation.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0045_seed_feature_flag_policy_defaults.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0079_worker_lease_reliability.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0084_message_idempotency.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0014_livepeer_live_rooms_pass_chat_replay.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0060_payment_confirmation_email_delivery.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0016_activity_wallet_transactions.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0111_auth_lifecycle_purpose.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0051_live_room_provider_reservation.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0056_event_access_purchase_request_state.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0004_wallet_link_challenges.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0089_media_safety_fk_indexes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0107_canonical_access_identity.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0009_payment_intents.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0007_media_upload_boundary.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0054_event_content_link.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0103_payment_commercial_policy.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0065_external_mcp_connector_foundation.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0073_live_access_modes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0025_ai_mcp_scoped_assistant.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0110_analytics_core.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0039_realtime_projection_publication.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0097_sfw_live_controls_and_chat.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0061_provider_event_replay_payload.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0042_support_case_advisor_fixes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0069_normalized_verification_domain.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0058_payment_withdrawal_waiver_evidence.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0071_profile_avatar_storage_limit.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0072_platform_tier_authority.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0020_admin_ops_indexes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0109_universal_composer_authority.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0044_admin_data_request_feature_flag_surfaces.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0059_payment_durable_confirmations.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0070_profile_avatar_storage_bucket.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0027_engagement_feed_safety.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0083_platform_usage_accounting.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0031_compliance_tax_fk_indexes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0013_bunny_vod_playback_projection.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0002_age_verifications.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0115_mcp_media_provenance_bridge.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0018_foreign_key_performance_indexes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0011_tip_support_settlement_ledger.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0049_event_access_mutuals_canonical_names.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0076_revoke_exposed_wallet_sessions.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0077_universal_account_media_safety.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0085_audit_event_idempotency.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0074_supabase_advisor_fk_indexes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0032_discover_hashtags.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0092_sfw_publication_review_projection.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0022_event_ticketing_fk_indexes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0041_support_case_policy_surface.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0090_monetisation_performer_enterprise_authorities.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0037_notification_delivery_queue.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0078_legacy_age_archive_deny_policy.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0038_notification_delivery_advisor_fixes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0063_creator_split_payment_settlement.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0088_media_safety_and_consent.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0100_content_draft_idempotency_lifetime.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0026_ai_mcp_fk_indexes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0086_adult_publisher_identity.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0106_media_release_evidence.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0087_recipient_monetisation_policy.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0096_one_time_monetisation_checkout.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0048_provider_event_replay_request_advisor_fixes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0102_checkout_consent_idempotency_lifetime.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0003_wallets.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0050_event_access_payment_product_type.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0068_profile_media_links.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0055_content_creation_abuse_policy_seed.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0019_creator_monetisation_settings.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0040_organization_member_admin_workflow.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0081_worker_queue_recovery_actor_index.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0029_subscription_fk_indexes.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0034_notifications_foundation.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0052_content_preview_controls.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0080_worker_queue_recovery_private.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0043_refund_dispute_request_workflow.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0005_age_provider_waterfall.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0046_admin_moderation_report_states.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0033_wallet_onramp_sessions.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ],
+    "packages/database/migrations/0057_refund_request_idempotency.sql": [
+      "entire forward migration, bounded full-text semantic review; executed against effective118-migration schema"
+    ]
+  },
+  "additional_cross_scope_executions": [
+    "Exact subscription-collections.ts repository function: two initial-period lease calls produce2processing rows against118-migration schema; evidence subscription-initial-period-proof.json",
+    "Performer invalid status triggers23514, but current normalized decline webhook mapsblocked; no reachable current webhook failure established, not promoted to finding."
+  ]
+}

@@ -254,7 +254,7 @@ describeIntegration("durable admin/profile command idempotency against migrated 
       `;
       await sql`
         insert into data_requests (id, requester_user_id, type, idempotency_key)
-        values (${dataRequestId}, ${requesterId}, 'export', ${`fixture-data-${suffix}`})
+        values (${dataRequestId}, ${requesterId}, 'delete', ${`fixture-data-${suffix}`})
       `;
 
       const reportInput = {

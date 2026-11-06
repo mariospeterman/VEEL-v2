@@ -1,6 +1,7 @@
 import { constants, createHash, createHmac, createVerify, timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { ServerEnv } from "@veel/config";
+import { parseDatabaseDate } from "../../shared/database-timestamp.js";
 import type { AgeProvider, AgeState } from "./types.js";
 
 export class AgeWebhookConfigurationError extends Error {
@@ -267,8 +268,8 @@ function parseProviderDate(value: string | null): Date | null {
     return null;
   }
 
-  const parsed = Date.parse(value.replace(" ", "T"));
-  return Number.isFinite(parsed) ? new Date(parsed) : null;
+  const parsed = parseDatabaseDate(value.replace(" ", "T"));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 

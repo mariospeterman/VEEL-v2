@@ -363,7 +363,13 @@ const walkDocs = (dir) => {
 };
 walkDocs("docs/v2-new-build");
 
-const activeDocs = docsFiles.filter((path) => !path.includes("/archive/"));
+// Hash-pinned audit inputs are immutable historical evidence, not current product
+// documentation. Their wording, status headers, and historical route examples are
+// validated by the audit-evidence importer rather than rewritten to satisfy active
+// documentation policy.
+const activeDocs = docsFiles.filter(
+  (path) => !path.includes("/archive/") && !path.includes("/audit-inputs/"),
+);
 const activeDocsText = activeDocs.map((path) => readFileSync(path, "utf8")).join("\n\n");
 
 const staleDocPatterns = [

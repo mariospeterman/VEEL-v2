@@ -153,7 +153,7 @@ jobs:
         shell: bash
         run: |
           eval "$(pnpm exec supabase status -o env)"
-          VEEL_ENABLE_REAL_ROLLBACK_TESTS=1 ROLLBACK_INTEGRATION_DATABASE_URL="$DB_URL" pnpm exec vitest run packages/database/test/rollbacks.integration.test.ts
+          VEEL_ENABLE_REAL_ROLLBACK_TESTS=1 ROLLBACK_INTEGRATION_DATABASE_URL="$DB_URL" pnpm exec vitest run --no-file-parallelism packages/database/test/rollbacks.integration.test.ts packages/database/test/content-export-locking.integration.test.ts
 
       - name: Stop isolated Supabase database
         if: always()

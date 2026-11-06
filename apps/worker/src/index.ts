@@ -1,9 +1,17 @@
 import { parseServerEnv } from "@veel/config";
 import { createCanonicalProviderReplayRuntime } from "@veel/api/provider-event-replay-runtime";
 import { createBunnyStreamUploadAdapter } from "@veel/api/media-upload-provider";
+import { createBunnyContentExportProvider } from "@veel/api/content-export-provider";
 import { createLivepeerProviderAdapter } from "@veel/api/live-provider";
 import { createSolanaSubscriptionAuthorizationVerifier } from "@veel/api/subscription-authorization-verifier-runtime";
 import { pathToFileURL } from "node:url";
+import {
+  createPostgresContentExportRepository,
+  processContentExports,
+  type ContentExportProvider,
+  type ContentExportRepository,
+  type ProcessContentExportsResult
+} from "./content-exports.js";
 import {
   createPostgresLiveSafetyRepository,
   processLiveSafety,
@@ -98,7 +106,8 @@ export const buildWorkerRuntime = () => {
       "scheduled-publications",
       "live-safety",
       "media-moderation",
-      "media-asset-cleanups"
+      "media-asset-cleanups",
+      "content-exports"
     ],
     schedules: [
       {
@@ -150,6 +159,11 @@ export const buildWorkerRuntime = () => {
         name: "media-asset-cleanups",
         cadence: "every_minute",
         sourceIndex: "media_assets_provider_cleanup_idx"
+      },
+      {
+        name: "content-exports",
+        cadence: "every_minute",
+        sourceIndex: "content_export_jobs_lease_due_idx"
       }
     ]
   };
@@ -430,6 +444,53 @@ export async function runMediaAssetCleanupTick(input: {
   }
 }
 
+export async function runContentExportTick(input: {
+  repository?: ContentExportRepository;
+  provider?: ContentExportProvider;
+  now?: Date;
+  limit?: number;
+} = {}): Promise<ProcessContentExportsResult> {
+  const config = parseServerEnv(process.env);
+  if (!input.repository && !input.provider && !config.CONTENT_EXPORTS_ENABLED) {
+    return {
+      leased: 0,
+      ready: 0,
+      retrying: 0,
+      deadLettered: 0,
+      cancelled: 0,
+      quarantined: 0,
+      sourceHoldsExpired: 0
+    };
+  }
+  const repository = input.repository ?? createPostgresContentExportRepository(config.DATABASE_URL);
+  const provider = input.provider ?? createBunnyContentExportProvider({
+    enabled: config.CONTENT_EXPORTS_ENABLED,
+    storageApiEndpoint: config.BUNNY_STORAGE_API_ENDPOINT,
+    ...(config.BUNNY_STORAGE_ACCESS_KEY
+      ? { storageAccessKey: config.BUNNY_STORAGE_ACCESS_KEY }
+      : {}),
+    ...(config.BUNNY_STORAGE_ZONE_NAME
+      ? { storageZoneName: config.BUNNY_STORAGE_ZONE_NAME }
+      : {}),
+    ...(config.BUNNY_STREAM_ORIGINAL_PULL_ZONE_URL
+      ? { streamOriginalPullZoneUrl: config.BUNNY_STREAM_ORIGINAL_PULL_ZONE_URL }
+      : {}),
+    ...(config.BUNNY_STREAM_CDN_TOKEN_KEY
+      ? { streamCdnTokenKey: config.BUNNY_STREAM_CDN_TOKEN_KEY }
+      : {})
+  });
+  try {
+    return await processContentExports({
+      repository,
+      provider,
+      ...(input.now ? { now: input.now } : {}),
+      ...(input.limit ? { limit: input.limit } : {})
+    });
+  } finally {
+    if (!input.repository) await repository.close?.();
+  }
+}
+
 export async function runScheduledPublicationTick(input: {
   repository?: ScheduledPublicationRepository;
   now?: Date;
@@ -450,6 +511,7 @@ export async function runScheduledPublicationTick(input: {
 
 export interface ScheduledWorkerTickResult {
   analyticsProjections: "completed" | "failed";
+  contentExports: "completed" | "failed";
   liveSafety: "completed" | "failed";
   mediaAssetCleanups: "completed" | "failed";
   mediaModeration: "completed" | "failed";
@@ -468,6 +530,7 @@ export interface WorkerLogger {
 
 export interface WorkerTickRunners {
   analyticsProjections(): Promise<unknown>;
+  contentExports(): Promise<unknown>;
   liveSafety(): Promise<unknown>;
   mediaAssetCleanups(): Promise<unknown>;
   mediaModeration(): Promise<unknown>;
@@ -496,6 +559,7 @@ export async function runScheduledWorkerTick(input: {
   const logger = input.logger ?? defaultWorkerLogger;
   const runners = input.runners ?? {
     analyticsProjections: () => runAnalyticsProjectionTick({ limit: config.WORKER_BATCH_LIMIT }),
+    contentExports: () => runContentExportTick({ limit: config.WORKER_BATCH_LIMIT }),
     liveSafety: () => runLiveSafetyTick({ limit: config.WORKER_BATCH_LIMIT }),
     mediaAssetCleanups: () => runMediaAssetCleanupTick({ limit: config.WORKER_BATCH_LIMIT }),
     mediaModeration: () => runMediaModerationTick({ limit: config.WORKER_BATCH_LIMIT }),
@@ -509,6 +573,7 @@ export async function runScheduledWorkerTick(input: {
   };
   const tasks = [
     ["analyticsProjections", runners.analyticsProjections],
+    ["contentExports", runners.contentExports],
     ["liveSafety", runners.liveSafety],
     ["mediaAssetCleanups", runners.mediaAssetCleanups],
     ["mediaModeration", runners.mediaModeration],
@@ -559,6 +624,7 @@ export function startWorkerProcess(input: {
     if (stopping) {
       return Promise.resolve<ScheduledWorkerTickResult>({
         analyticsProjections: "completed",
+        contentExports: "completed",
         liveSafety: "completed",
         mediaAssetCleanups: "completed",
         mediaModeration: "completed",

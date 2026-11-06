@@ -224,12 +224,7 @@ export function createProfileDashboardRepositoryMethods(
             when vr.status = 'pending' then 'pending'
             else 'failed'
           end as state
-          from verification_records vr
-          where vr.subject_type = 'user'
-            and vr.subject_id = u.id
-            and vr.purpose = 'age_access'
-          order by vr.created_at desc, vr.id desc
-          limit 1
+          from private.current_verification_decision('user', u.id, 'age_access') vr
         ) latest_age on true
         left join lateral (
           select w.id
@@ -343,16 +338,9 @@ export function createProfileDashboardRepositoryMethods(
           expires_at: Date | null;
         }[]>`
           select status, assurance_level, expires_at
-          from verification_records
-          where subject_type = 'user'
-            and subject_id = ${identity.id}
-            and purpose = 'creator_kyc'
-          order by (
-            status = 'valid'
-            and assurance_level in ('high', 'documentary')
-            and (expires_at is null or expires_at > now())
-          ) desc, created_at desc, id desc
-          limit 1
+          from private.current_verification_decision(
+            'user', ${identity.id}, 'creator_kyc'
+          )
         `;
         const kyc = kycRows[0];
         const kycState = resolveCreatorOnboardingKycState(kycRequired, kyc);
@@ -365,15 +353,12 @@ export function createProfileDashboardRepositoryMethods(
         }[]>`
           select
             (p.handle is not null) as has_profile,
-            exists (
-              select 1 from verification_records vr
-              where vr.subject_type = 'user'
-                and vr.subject_id = u.id
-                and vr.purpose = 'age_access'
-                and vr.status = 'valid'
+            coalesce((
+              select vr.status = 'valid'
                 and vr.result_over_threshold is true
                 and (vr.expires_at is null or vr.expires_at > now())
-            ) as age_verified,
+              from private.current_verification_decision('user', u.id, 'age_access') vr
+            ), false) as age_verified,
             cms.tax_profile_state,
             cms.state as settings_state
           from users u
@@ -453,12 +438,7 @@ export function createProfileDashboardRepositoryMethods(
               when vr.status = 'pending' then 'pending'
               else 'failed'
             end as state
-            from verification_records vr
-            where vr.subject_type = 'user'
-              and vr.subject_id = u.id
-              and vr.purpose = 'age_access'
-            order by vr.created_at desc, vr.id desc
-            limit 1
+            from private.current_verification_decision('user', u.id, 'age_access') vr
           ) latest_age on true
           left join lateral (
             select w.id from wallets w

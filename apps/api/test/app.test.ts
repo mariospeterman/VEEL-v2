@@ -19,7 +19,10 @@ import { MutationCommandIdempotencyConflictError } from "../src/shared/mutation-
 import type { AdminRepository } from "../src/modules/admin/types";
 import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
-import { StaleFeedCursorError } from "../src/modules/content/content-feed-cursor";
+import {
+  decodeFeedCursor,
+  StaleFeedCursorError
+} from "../src/modules/content/content-feed-cursor";
 import {
   ContentDraftQuotaExceededError,
   ContentFormatRetiredError,
@@ -1216,8 +1219,12 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       id: "age-session-provider-ref-1",
       provider: "yoti",
+      providerReference: "age-session-provider-ref-1",
       launchUrl: "https://age.example.test/session/age-session-provider-ref-1",
-      expiresAt: "2026-06-03T22:15:00.000Z"
+      expiresAt: "2026-06-03T22:15:00.000Z",
+      launchState: "ready",
+      status: "pending",
+      resumable: false
     });
     expect(createdPendingVerifications).toEqual([
       {
@@ -1297,8 +1304,12 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       id: "yoti-session-1",
       provider: "yoti",
+      providerReference: "yoti-session-1",
       launchUrl: "https://age.yoti.example?sessionId=yoti-session-1&sdkId=yoti-sdk-id",
-      expiresAt: "2026-06-03T22:15:00.000Z"
+      expiresAt: "2026-06-03T22:15:00.000Z",
+      launchState: "ready",
+      status: "pending",
+      resumable: false
     });
     expect(fetchCalls[0]?.url).toBe("https://age.yoti.example/api/v1/sessions");
     expect(fetchCalls[0]?.init?.method).toBe("POST");
@@ -1389,8 +1400,12 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       id: "didit-age-session-1",
       provider: "didit",
+      providerReference: "didit-age-session-1",
       launchUrl: "https://verification.didit.example/session/didit-age-session-1",
-      expiresAt: "2026-06-04T22:00:00.000Z"
+      expiresAt: "2026-06-04T22:00:00.000Z",
+      launchState: "ready",
+      status: "pending",
+      resumable: false
     });
     expect(fetchCalls[0]?.url).toBe("https://verification.didit.example/v3/session/");
     expect(fetchCalls[0]?.init?.method).toBe("POST");
@@ -1809,7 +1824,7 @@ describe("buildApi", () => {
     }
   );
 
-  it("acknowledges a valid Yoti age notification with the provider-required 200", async () => {
+  it("acknowledges Yoti only after authenticated result retrieval and ignores notification sequence/state", async () => {
     const keyDirectory = mkdtempSync(join(tmpdir(), "wevid-yoti-webhook-"));
     const publicKeyPath = join(keyDirectory, "notification-public.pem");
     const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -1818,12 +1833,30 @@ describe("buildApi", () => {
       publicKey.export({ type: "spki", format: "pem" })
     );
     vi.stubEnv("YOTI_NOTIFICATION_KEY_PATH", publicKeyPath);
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "yoti");
+    vi.stubEnv("YOTI_SDK_ID", "yoti-sdk-id");
+    vi.stubEnv("YOTI_API_TOKEN", "yoti-api-token");
+    vi.stubEnv("YOTI_API_BASE_URL", "https://age.yoti.example/api/v1");
+    vi.stubEnv("YOTI_LAUNCH_BASE_URL", "https://age.yoti.example");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      id: "test-session-key",
+      status: "COMPLETE",
+      result: "PASS",
+      method: "AGE_ESTIMATION",
+      reference_id: "age-yoti-test-1",
+      updated_at: "2026-11-06T12:00:00.123456Z",
+      expires_at: "2026-11-06T12:15:00.123456Z"
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
     const appliedEvents: unknown[] = [];
     const ageRepository: AgeRepository = {
       ...requiredAgeRepository,
-      async applyProviderWebhook(input) {
+      async applyProviderWebhook() {
+        throw new Error("Yoti notification state must not be applied directly");
+      },
+      async applyProviderReconciliation(input) {
         appliedEvents.push(input);
-        return "applied";
+        return true;
       }
     };
     const app = await buildApi({ authVerifier: fakeAuthVerifier, ageRepository });
@@ -1837,7 +1870,7 @@ describe("buildApi", () => {
         reference_id: "age-yoti-test-1",
         id: "2480375e-ddc0-4832-9b82-b1d14af5cf75",
         timestamp: 1_793_792_000,
-        state: "COMPLETE"
+        state: "FAIL"
       };
       const signature = sign(
         "sha256",
@@ -1853,7 +1886,7 @@ describe("buildApi", () => {
         method: "POST",
         url: "/v1/webhooks/age/yoti",
         headers: { "content-type": "application/json" },
-        payload: JSON.stringify({ ...signedPayload, sequence_number: 1, signature })
+        payload: JSON.stringify({ ...signedPayload, sequence_number: 999, signature })
       });
 
       expect(response.statusCode, JSON.stringify(response.json())).toBe(200);
@@ -1865,14 +1898,25 @@ describe("buildApi", () => {
       expect(appliedEvents).toMatchObject([
         {
           provider: "yoti",
-          providerEventId: "2480375e-ddc0-4832-9b82-b1d14af5cf75",
+          providerEventId: "test-session-key:authenticated:COMPLETE:2026-11-06T12:00:00.123456Z",
           providerReference: "test-session-key",
-          state: "verified"
+          status: "valid"
         }
       ]);
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://age.yoti.example/api/v1/sessions/test-session-key/result",
+        expect.objectContaining({
+          method: "GET",
+          headers: expect.objectContaining({
+            authorization: "Bearer yoti-api-token",
+            "yoti-sdk-id": "yoti-sdk-id"
+          })
+        })
+      );
     } finally {
       await app.close();
       vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
       rmSync(keyDirectory, { recursive: true, force: true });
     }
   });
@@ -3750,6 +3794,52 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       code: "feed_cursor_stale",
       message: "This cursor belongs to the retired ranked feed; restart from the first page"
+    });
+    await app.close();
+  });
+
+  it("maps a JSON-null feed cursor to the documented client error", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed(input) {
+        decodeFeedCursor(input.cursor ?? "", "test-feed-scope");
+        throw new Error("unreachable");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/content/feed?cursor=${Buffer.from("null").toString("base64url")}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      code: "validation_failed",
+      message: "Invalid feed cursor"
     });
     await app.close();
   });
@@ -7413,8 +7503,6 @@ describe("buildApi", () => {
         COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
         COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
         AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
-        AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
-        AGE_VERIFICATION_REVERIFY_DAYS: 365,
         SUMSUB_API_BASE_URL: "https://api.sumsub.com",
         DIDIT_API_BASE_URL: "https://verification.didit.me",
         YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
@@ -7522,8 +7610,6 @@ describe("buildApi", () => {
       COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
       COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
       AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
-      AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
-      AGE_VERIFICATION_REVERIFY_DAYS: 365,
       SUMSUB_API_BASE_URL: "https://api.sumsub.com",
       DIDIT_API_BASE_URL: "https://verification.didit.me",
       YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
@@ -10198,7 +10284,11 @@ describe("buildApi", () => {
     expect(dataRequests.statusCode).toBe(200);
     expect(dataRequests.json().items[0]).toMatchObject({
       type: "export",
-      privacyBoundary: "sanitized_identity_minimized_no_raw_exports"
+      privacyBoundary: "sanitized_identity_minimized_no_raw_exports",
+      contentExportJobId: "00000000-0000-4000-8000-000000000171",
+      contentExportJobState: "ready",
+      contentExportCleanupState: "retained_private",
+      contentExportArchiveUploadStartedAt: "2026-06-06T12:05:00.000Z"
     });
     expect(featureFlags.statusCode).toBe(200);
     expect(featureFlags.json().items[0]).toMatchObject({
@@ -10241,7 +10331,7 @@ describe("buildApi", () => {
       },
       payload: {
         state: "processing",
-        reason: "Identity verified; export job can be prepared"
+        reason: "Identity verified; deletion request can be prepared"
       }
     });
     const featureFlag = await app.inject({
@@ -10275,6 +10365,42 @@ describe("buildApi", () => {
     expect(featureFlagCalls[0]).toMatchObject({
       idempotencyKey: "feature-flag-1",
       featureFlagKey: "compliance.carf_exports"
+    });
+
+    await app.close();
+  });
+
+  it("returns a controlled conflict for generic admin export lifecycle mutation", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async updateDataRequest() {
+          throw new AdminRepositoryStateConflictError(
+            "Content export lifecycle is managed by the content export job"
+          );
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/data-requests/00000000-0000-4000-8000-000000000170",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "reject-content-export"
+      },
+      payload: {
+        state: "rejected",
+        reason: "Compliance review rejected the content export"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      code: "conflict",
+      message: "Content export lifecycle is managed by the content export job"
     });
 
     await app.close();
@@ -11218,6 +11344,48 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("does not mint another wallet capability after a payment signature is submitted", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return { ...storedPaymentIntent, state: "submitted" };
+      },
+      async recordTransactionRequest() {
+        throw new Error("must not create a second transaction after signature acceptance");
+      },
+      async recordSubmission() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/transaction-request`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: "conflict",
+      message: expect.stringContaining("resume verification")
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("records a payment submission and confirms only verified settlement", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
     const submissions: RecordPaymentSubmissionInput[] = [];
@@ -11299,10 +11467,82 @@ describe("buildApi", () => {
         idempotencyKey: "payment-submission-1",
         signature: validSolanaSignature,
         settlement: {
+          confirmed: false
+        },
+        writeGuard: {
+          state: "pending",
+          submittedSignature: null
+        }
+      },
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        paymentIntentId: storedPaymentIntent.id,
+        signature: validSolanaSignature,
+        settlement: {
           confirmed: true
+        },
+        writeGuard: {
+          state: "submitted",
+          submittedSignature: validSolanaSignature
         }
       }
     ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("retains an accepted payment signature when immediate RPC verification is unavailable", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return storedPaymentIntent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: {
+        async verifyTransfer() {
+          throw new Error("RPC timeout after acceptance");
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-submission-rpc-timeout"
+      },
+      payload: { signature: validSolanaSignature }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submissions).toEqual([{
+      supabaseUserId: "00000000-0000-4000-8000-000000000001",
+      paymentIntentId: storedPaymentIntent.id,
+      idempotencyKey: "payment-submission-rpc-timeout",
+      signature: validSolanaSignature,
+      settlement: { confirmed: false },
+      writeGuard: { state: "pending", submittedSignature: null }
+    }]);
 
     await app.close();
     vi.unstubAllEnvs();
@@ -13352,7 +13592,10 @@ describe("buildApi", () => {
       url: "/v1/subscriptions/intents",
       headers: { authorization: "Bearer valid-token", "idempotency-key": "sub-intent-1" },
       payload: {
-        planId: "platform_plus_monthly"
+        planId: "platform_plus_monthly",
+        termsVersion: "subscription-recurring-terms-v1",
+        withdrawalWaiverVersion: "subscription-initial-access-waiver-v1",
+        immediateAccessAcknowledged: true
       }
     });
     const submitResponse = await app.inject({
@@ -13967,6 +14210,7 @@ function subscriptionPlanFixture(overrides: Partial<SubscriptionPlan> = {}): Sub
     benefits: overrides.benefits ?? [],
     amountMinor: overrides.amountMinor ?? 15000000,
     currency: overrides.currency ?? "USDC",
+    assetDecimals: overrides.assetDecimals ?? 6,
     periodDays: overrides.periodDays ?? 30,
     billingMode: overrides.billingMode ?? "delegated_solana_subscription",
     providerState: overrides.providerState ?? "staging_required",
@@ -15217,6 +15461,10 @@ const fakeAdminRepository: AdminRepository = {
           type: "export",
           state: "requested",
           privacyBoundary: "sanitized_identity_minimized_no_raw_exports",
+          contentExportJobId: "00000000-0000-4000-8000-000000000171",
+          contentExportJobState: "ready",
+          contentExportCleanupState: "retained_private",
+          contentExportArchiveUploadStartedAt: "2026-06-06T12:05:00.000Z",
           createdAt: "2026-06-06T12:00:00.000Z",
           updatedAt: null,
           completedAt: null
@@ -15229,9 +15477,13 @@ const fakeAdminRepository: AdminRepository = {
     return {
       id: input.dataRequestId,
       requesterUserId: "00000000-0000-4000-8000-000000000011",
-      type: "export",
+      type: "delete",
       state: input.body.state,
       privacyBoundary: "sanitized_identity_minimized_no_raw_exports",
+      contentExportJobId: null,
+      contentExportJobState: null,
+      contentExportCleanupState: null,
+      contentExportArchiveUploadStartedAt: null,
       createdAt: "2026-06-06T12:00:00.000Z",
       updatedAt: "2026-06-06T12:30:00.000Z",
       completedAt:

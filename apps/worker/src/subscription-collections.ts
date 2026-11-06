@@ -1,22 +1,18 @@
-import { randomUUID } from "node:crypto";
-import { address, createNoopSigner, type Instruction as KitInstruction } from "@solana/kit";
+import { createHash, randomUUID } from "node:crypto";
+import { address, isSome } from "@solana/kit";
 import {
+  findRecurringDelegationPda,
+  findSubscriptionAuthorityPda,
   getRecurringDelegationDecoder,
-  getTransferRecurringOverlayInstructionAsync
+  getSubscriptionAuthorityDecoder
 } from "@solana/subscriptions";
 import {
+  AccountState,
   TOKEN_PROGRAM_ADDRESS,
-  findAssociatedTokenPda,
-  getCreateAssociatedTokenIdempotentInstructionAsync
+  getTokenDecoder,
+  getTokenSize
 } from "@solana-program/token";
-import {
-  Connection,
-  Keypair,
-  PublicKey,
-  Transaction,
-  TransactionInstruction,
-  sendAndConfirmTransaction
-} from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import bs58 from "bs58";
 import postgres from "postgres";
 
@@ -35,7 +31,18 @@ export type SubscriptionCollectionFailureCode =
   | "subscription_delegation_owner_mismatch"
   | "subscription_delegation_decode_failed"
   | "subscription_delegation_terms_mismatch"
+  | "subscription_authority_account_missing"
+  | "subscription_authority_owner_mismatch"
+  | "subscription_authority_decode_failed"
+  | "subscription_authority_address_mismatch"
+  | "subscription_authority_init_mismatch"
+  | "subscription_token_account_mismatch"
+  | "subscription_delegated_allowance_mismatch"
   | "subscription_delegation_expired"
+  | "subscription_collection_broadcast_fence_rejected"
+  | "subscription_collection_broadcast_evidence_rejected"
+  | "subscription_collection_broadcast_expired"
+  | "subscription_collection_transaction_failed"
   | "subscription_collection_rpc_failed";
 
 export type SubscriptionCollectionOutcome =
@@ -49,8 +56,19 @@ export type SubscriptionCollectionOutcome =
       retryAt: Date;
     }
   | {
+      state: "reconciling";
+      failureCode:
+        | "subscription_collection_reconciliation_unavailable"
+        | "subscription_collection_provider_not_configured";
+      retryAt: Date;
+    }
+  | {
       state: "revoked";
       failureCode: "subscription_delegation_expired";
+    }
+  | {
+      state: "cancelled";
+      failureCode: "subscriber_cancelled";
     };
 
 export type SubscriptionCollectionReconciliation =
@@ -90,7 +108,20 @@ export interface DueSubscriptionCollection {
   provider: string;
   programId: string;
   periodSeconds: number;
+  delegationNonce: number;
+  assetDecimals: number;
+  scope: "platform" | "creator";
+  creatorUserId: string | null;
   creatorReceiverWallet: string | null;
+  platformReceiverWallet: string;
+  termsVersion: string;
+  withdrawalWaiverVersion: string;
+  acceptedAt: Date;
+  solanaNetwork: "devnet" | "mainnet-beta";
+  broadcastSignature: string | null;
+  broadcastTransactionBase64: string | null;
+  broadcastBlockhash: string | null;
+  broadcastLastValidBlockHeight: number | null;
   recipientKycRequired: boolean;
   recipientKycPolicyMode: "disabled" | "risk_based" | "required";
   recipientKycPolicyVersion: string;
@@ -105,19 +136,45 @@ export interface SubscriptionCollectionRepository {
     leaseDurationMs: number;
     maxAttempts: number;
   }): Promise<DueSubscriptionCollection[]>;
+  authorizeCollectionBroadcast(input: {
+    collectionId: string;
+    subscriptionId: string;
+    leaseToken: string;
+  }): Promise<boolean>;
+  recordPreparedCollectionBroadcast(input: {
+    collectionId: string;
+    subscriptionId: string;
+    leaseToken: string;
+    prepared: PreparedSubscriptionCollectionBroadcast;
+  }): Promise<boolean>;
   recordCollectionOutcome(input: {
     collectionId: string;
     subscriptionId: string;
     leaseToken: string;
     maxAttempts: number;
     outcome: SubscriptionCollectionOutcome;
-  }): Promise<void>;
+  }): Promise<boolean>;
   close?(): Promise<void>;
 }
 
 export interface SubscriptionCollectionProvider {
   reconcile(input: DueSubscriptionCollection): Promise<SubscriptionCollectionReconciliation>;
-  collect(input: DueSubscriptionCollection): Promise<SubscriptionCollectionOutcome>;
+  collect(
+    input: DueSubscriptionCollection,
+    controls: SubscriptionCollectionBroadcastControls
+  ): Promise<SubscriptionCollectionOutcome>;
+}
+
+export interface PreparedSubscriptionCollectionBroadcast {
+  signature: string;
+  transactionBase64: string;
+  blockhash: string;
+  lastValidBlockHeight: number;
+}
+
+export interface SubscriptionCollectionBroadcastControls {
+  authorize(): Promise<boolean>;
+  persist(prepared: PreparedSubscriptionCollectionBroadcast): Promise<boolean>;
 }
 
 export interface ProcessSubscriptionCollectionsResult {
@@ -125,7 +182,9 @@ export interface ProcessSubscriptionCollectionsResult {
   leased: number;
   confirmed: number;
   failed: number;
+  reconciling: number;
   revoked: number;
+  cancelled: number;
 }
 
 export async function processDueSubscriptionCollections(input: {
@@ -152,19 +211,25 @@ export async function processDueSubscriptionCollections(input: {
     leased: dueCollections.length,
     confirmed: 0,
     failed: 0,
-    revoked: 0
+    reconciling: 0,
+    revoked: 0,
+    cancelled: 0
   };
 
   for (const dueCollection of dueCollections) {
-    const reconciliation = dueCollection.attemptCount > 1
+    const reconciliation = dueCollection.broadcastSignature
       ? await input.provider.reconcile(dueCollection)
       : { state: "not_found" as const };
     const outcome: SubscriptionCollectionOutcome =
-      reconciliation.state === "confirmed" || reconciliation.state === "failed" || reconciliation.state === "revoked"
+      reconciliation.state === "confirmed" ||
+      reconciliation.state === "failed" ||
+      reconciliation.state === "reconciling" ||
+      reconciliation.state === "revoked" ||
+      reconciliation.state === "cancelled"
         ? reconciliation
         : reconciliation.state === "unknown"
           ? {
-              state: "failed" as const,
+              state: "reconciling" as const,
               failureCode: reconciliation.failureCode,
               retryAt: reconciliation.retryAt
             }
@@ -181,8 +246,20 @@ export async function processDueSubscriptionCollections(input: {
               failureCode: "collector_wallet_missing",
               retryAt: new Date(now.getTime() + 5 * 60 * 1000)
             }
-          : await input.provider.collect(dueCollection);
-    await input.repository.recordCollectionOutcome({
+          : await input.provider.collect(dueCollection, {
+              authorize: () => input.repository.authorizeCollectionBroadcast({
+                collectionId: dueCollection.collectionId,
+                subscriptionId: dueCollection.subscriptionId,
+                leaseToken: dueCollection.leaseToken
+              }),
+              persist: (prepared) => input.repository.recordPreparedCollectionBroadcast({
+                collectionId: dueCollection.collectionId,
+                subscriptionId: dueCollection.subscriptionId,
+                leaseToken: dueCollection.leaseToken,
+                prepared
+              })
+            });
+    const applied = await input.repository.recordCollectionOutcome({
       collectionId: dueCollection.collectionId,
       subscriptionId: dueCollection.subscriptionId,
       leaseToken: dueCollection.leaseToken,
@@ -190,8 +267,12 @@ export async function processDueSubscriptionCollections(input: {
       outcome
     });
 
+    if (!applied) continue;
+
     if (outcome.state === "confirmed") result.confirmed += 1;
+    else if (outcome.state === "reconciling") result.reconciling += 1;
     else if (outcome.state === "revoked") result.revoked += 1;
+    else if (outcome.state === "cancelled") result.cancelled += 1;
     else result.failed += 1;
   }
 
@@ -231,23 +312,56 @@ export function createSolanaSubscriptionCollectionProvider(input: {
 
   return {
     async reconcile(collection) {
-      try {
-        const signatures = await connection.getSignaturesForAddress(
-          new PublicKey(collection.delegationAddress),
-          { limit: 25 },
-          "finalized"
-        );
-        for (const candidate of signatures) {
-          if (candidate.err) continue;
-          const transaction = await connection.getTransaction(candidate.signature, {
-            commitment: "finalized",
-            maxSupportedTransactionVersion: 0
-          });
-          if (transaction && hasCollectionEvidence(transaction, collection)) {
-            return { state: "confirmed", collectionSignature: candidate.signature };
-          }
-        }
+      if (!collection.broadcastSignature) {
         return { state: "not_found" };
+      }
+      try {
+        const status = (await connection.getSignatureStatuses(
+          [collection.broadcastSignature],
+          { searchTransactionHistory: true }
+        )).value[0];
+        if (!status) {
+          if (
+            collection.broadcastLastValidBlockHeight !== null &&
+            await connection.getBlockHeight("finalized") > collection.broadcastLastValidBlockHeight
+          ) {
+            return {
+              state: "failed",
+              failureCode: "subscription_collection_broadcast_expired",
+              retryAt: new Date(Date.now() + 5 * 60 * 1000)
+            };
+          }
+          return {
+            state: "unknown",
+            failureCode: "subscription_collection_reconciliation_unavailable",
+            retryAt: new Date(Date.now() + 5 * 60 * 1000)
+          };
+        }
+        if (status.confirmationStatus !== "finalized") {
+          return {
+            state: "unknown",
+            failureCode: "subscription_collection_reconciliation_unavailable",
+            retryAt: new Date(Date.now() + 5 * 60 * 1000)
+          };
+        }
+        if (status.err) {
+          return {
+            state: "failed",
+            failureCode: "subscription_collection_transaction_failed",
+            retryAt: new Date(Date.now() + 5 * 60 * 1000)
+          };
+        }
+        const transaction = await connection.getTransaction(collection.broadcastSignature, {
+          commitment: "finalized",
+          maxSupportedTransactionVersion: 0
+        });
+        return transaction && hasCollectionEvidence(transaction, collection)
+          ? { state: "confirmed", collectionSignature: collection.broadcastSignature }
+          : {
+              state: "unknown",
+              failureCode: "subscription_collection_reconciliation_unavailable",
+              retryAt: new Date(Date.now() + 5 * 60 * 1000)
+            };
       } catch {
         return {
           state: "unknown",
@@ -259,23 +373,67 @@ export function createSolanaSubscriptionCollectionProvider(input: {
 
     async collect(collection) {
       try {
-        const delegationInfo = await connection.getAccountInfo(
-          new PublicKey(collection.delegationAddress),
-          "finalized"
-        );
+        const [delegationInfo, authorityInfo, tokenAccountInfo] = await Promise.all([
+          connection.getAccountInfo(new PublicKey(collection.delegationAddress), "finalized"),
+          connection.getAccountInfo(new PublicKey(collection.authorityAddress), "finalized"),
+          connection.getAccountInfo(new PublicKey(collection.subscriberTokenAccount), "finalized")
+        ]);
         if (!delegationInfo) {
           return retry("subscription_delegation_account_missing");
+        }
+        if (!authorityInfo) {
+          return retry("subscription_authority_account_missing");
+        }
+        if (!tokenAccountInfo) {
+          return retry("subscription_token_account_mismatch");
         }
         if (!delegationInfo.owner.equals(new PublicKey(collection.programId))) {
           return retry("subscription_delegation_owner_mismatch");
         }
+        if (!authorityInfo.owner.equals(new PublicKey(collection.programId))) {
+          return retry("subscription_authority_owner_mismatch");
+        }
+        const tokenProgram = collection.tokenProgram === "token_2022"
+          ? token2022ProgramAddress
+          : TOKEN_PROGRAM_ADDRESS;
+        if (!tokenAccountInfo.owner.equals(new PublicKey(tokenProgram))) {
+          return retry("subscription_token_account_mismatch");
+        }
         let delegation;
+        let authority;
         try {
           delegation = getRecurringDelegationDecoder().decode(delegationInfo.data);
         } catch {
           return retry("subscription_delegation_decode_failed");
         }
+        try {
+          authority = getSubscriptionAuthorityDecoder().decode(authorityInfo.data);
+        } catch {
+          return retry("subscription_authority_decode_failed");
+        }
+        const [expectedAuthorityAddress] = await findSubscriptionAuthorityPda(
+          {
+            user: address(collection.subscriberWallet),
+            tokenMint: address(collection.tokenMint)
+          },
+          { programAddress: address(collection.programId) }
+        );
+        if (expectedAuthorityAddress !== collection.authorityAddress) {
+          return retry("subscription_authority_address_mismatch");
+        }
+        const [expectedDelegationAddress] = await findRecurringDelegationPda(
+          {
+            subscriptionAuthority: expectedAuthorityAddress,
+            delegator: address(collection.subscriberWallet),
+            delegatee: address(collection.collectorAddress),
+            nonce: collection.delegationNonce
+          },
+          { programAddress: address(collection.programId) }
+        );
         if (
+          expectedDelegationAddress !== collection.delegationAddress ||
+          authority.user !== collection.subscriberWallet ||
+          authority.tokenMint !== collection.tokenMint ||
           delegation.header.delegator !== collection.subscriberWallet ||
           delegation.header.delegatee !== collection.collectorAddress ||
           delegation.subscriptionAuthority !== collection.authorityAddress ||
@@ -284,6 +442,26 @@ export function createSolanaSubscriptionCollectionProvider(input: {
           delegation.periodLengthS !== BigInt(collection.periodSeconds)
         ) {
           return retry("subscription_delegation_terms_mismatch");
+        }
+        if (authority.initId !== delegation.header.initId) {
+          return retry("subscription_authority_init_mismatch");
+        }
+        const tokenAccount = getTokenDecoder().decode(
+          tokenAccountInfo.data.subarray(0, getTokenSize())
+        );
+        if (
+          tokenAccount.owner !== collection.subscriberWallet ||
+          tokenAccount.mint !== collection.tokenMint ||
+          tokenAccount.state !== AccountState.Initialized
+        ) {
+          return retry("subscription_token_account_mismatch");
+        }
+        if (
+          !isSome(tokenAccount.delegate) ||
+          tokenAccount.delegate.value !== collection.authorityAddress ||
+          tokenAccount.delegatedAmount < collection.amountAtomic
+        ) {
+          return retry("subscription_delegated_allowance_mismatch");
         }
         if (delegation.expiryTs <= BigInt(Math.floor(Date.now() / 1000))) {
           return { state: "revoked", failureCode: "subscription_delegation_expired" };
@@ -299,50 +477,17 @@ export function createSolanaSubscriptionCollectionProvider(input: {
         if (collection.allocationAmountAtomic > 0n) {
           return retry("subscription_allocation_destination_unavailable");
         }
-
-        const tokenProgram = collection.tokenProgram === "token_2022"
-          ? token2022ProgramAddress
-          : TOKEN_PROGRAM_ADDRESS;
-        const mint = address(collection.tokenMint);
-        const transaction = new Transaction();
-        transaction.feePayer = collector.publicKey;
-        transaction.recentBlockhash = (await connection.getLatestBlockhash("finalized")).blockhash;
-
-        if (collection.creatorAmountAtomic > 0n) {
-          if (!collection.creatorReceiverWallet) return retry("creator_receiver_wallet_missing");
-          await addRecurringTransfer({
-            transaction,
-            collection,
-            collector,
-            receiverWallet: collection.creatorReceiverWallet,
-            amount: collection.creatorAmountAtomic,
-            mint,
-            tokenProgram
-          });
-        }
-        if (collection.platformAmountAtomic > 0n) {
-          if (!input.platformWallet) return retry("platform_receiver_wallet_missing");
-          await addRecurringTransfer({
-            transaction,
-            collection,
-            collector,
-            receiverWallet: input.platformWallet,
-            amount: collection.platformAmountAtomic,
-            mint,
-            tokenProgram
-          });
+        if (
+          (collection.creatorAmountAtomic > 0n && !collection.creatorReceiverWallet) ||
+          !collection.platformReceiverWallet ||
+          collection.platformReceiverWallet !== input.platformWallet
+        ) {
+          return retry("platform_receiver_wallet_missing");
         }
 
-        transaction.add(new TransactionInstruction({
-          keys: [{ pubkey: new PublicKey(collection.delegationAddress), isSigner: false, isWritable: false }],
-          programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
-          data: Buffer.from(`wevid:subscription-collection:${collection.collectionId}`, "utf8")
-        }));
-        const signature = await sendAndConfirmTransaction(connection, transaction, [collector], {
-          commitment: "finalized",
-          preflightCommitment: "confirmed"
-        });
-        return { state: "confirmed", collectionSignature: signature };
+        // The exact account boundary is retained locally, but recurring debit
+        // broadcast remains deliberately unavailable until release approval.
+        return retry("subscription_collection_provider_not_configured");
       } catch {
         return retry("subscription_collection_rpc_failed");
       }
@@ -350,63 +495,34 @@ export function createSolanaSubscriptionCollectionProvider(input: {
   };
 }
 
-async function addRecurringTransfer(input: {
-  transaction: Transaction;
-  collection: DueSubscriptionCollection;
-  collector: Keypair;
-  receiverWallet: string;
-  amount: bigint;
-  mint: ReturnType<typeof address>;
-  tokenProgram: ReturnType<typeof address>;
-}) {
-  const receiver = address(input.receiverWallet);
-  const [receiverAta] = await findAssociatedTokenPda({
-    owner: receiver,
-    mint: input.mint,
-    tokenProgram: input.tokenProgram
-  });
-  input.transaction.add(
-    toLegacyInstruction(await getCreateAssociatedTokenIdempotentInstructionAsync({
-      payer: createNoopSigner(address(input.collector.publicKey.toBase58())),
-      ata: receiverAta,
-      owner: receiver,
-      mint: input.mint,
-      tokenProgram: input.tokenProgram
-    })),
-    toLegacyInstruction(await getTransferRecurringOverlayInstructionAsync({
-      amount: input.amount,
-      delegatee: createNoopSigner(address(input.collector.publicKey.toBase58())),
-      delegationPda: address(input.collection.delegationAddress),
-      delegator: address(input.collection.subscriberWallet),
-      delegatorAta: address(input.collection.subscriberTokenAccount),
-      receiverAta,
-      tokenMint: address(input.collection.tokenMint),
-      tokenProgram: input.tokenProgram,
-      programAddress: address(input.collection.programId)
-    }))
-  );
-}
-
-function toLegacyInstruction(instruction: KitInstruction): TransactionInstruction {
-  return new TransactionInstruction({
-    programId: new PublicKey(instruction.programAddress),
-    keys: (instruction.accounts ?? []).map((account) => {
-      const role = Number(account.role);
-      return {
-        pubkey: new PublicKey(account.address),
-        isSigner: role === 2 || role === 3,
-        isWritable: role === 1 || role === 3
-      };
-    }),
-    data: Buffer.from(instruction.data ?? new Uint8Array())
-  });
-}
-
 function hasCollectionEvidence(
   transaction: Awaited<ReturnType<Connection["getTransaction"]>>,
   collection: DueSubscriptionCollection
 ) {
-  if (!transaction || transaction.meta?.err) return false;
+  if (
+    !transaction ||
+    transaction.meta?.err ||
+    !collection.broadcastSignature ||
+    !collection.broadcastTransactionBase64
+  ) return false;
+  let prepared: Transaction;
+  try {
+    prepared = Transaction.from(
+      Buffer.from(collection.broadcastTransactionBase64, "base64")
+    );
+  } catch {
+    return false;
+  }
+  const preparedSignature = prepared.signatures[0]?.signature;
+  if (
+    !preparedSignature ||
+    bs58.encode(preparedSignature) !== collection.broadcastSignature ||
+    !Buffer.from(prepared.serializeMessage()).equals(
+      Buffer.from(transaction.transaction.message.serialize())
+    )
+  ) {
+    return false;
+  }
   const keys = transaction.transaction.message.getAccountKeys().staticAccountKeys;
   const expectedMemo = `wevid:subscription-collection:${collection.collectionId}`;
   const hasProgram = transaction.transaction.message.compiledInstructions.some(
@@ -442,8 +558,14 @@ export function createPostgresSubscriptionCollectionRepository(
       async leaseDueCollections() {
         return [];
       },
+      async authorizeCollectionBroadcast() {
+        return false;
+      },
+      async recordPreparedCollectionBroadcast() {
+        return false;
+      },
       async recordCollectionOutcome() {
-        return;
+        return false;
       }
     };
   }
@@ -467,7 +589,7 @@ export function createPostgresSubscriptionCollectionRepository(
           select due.id
           from subscriptions due
           where due.cancel_at_period_end = true
-            and due.state in ('active', 'renewal_pending', 'grace_period')
+            and due.state in ('active', 'renewal_pending', 'grace_period', 'suspended')
             and due.current_period_ends_at <= ${input.now}
           order by due.current_period_ends_at asc
           limit ${input.limit}
@@ -511,6 +633,7 @@ export function createPostgresSubscriptionCollectionRepository(
             leased_until = null
           where collection.state in ('due', 'failed', 'processing')
             and collection.attempt_count >= ${input.maxAttempts}
+            and collection.broadcast_signature is null
             and (
               collection.state <> 'processing'
               or collection.leased_until is null
@@ -544,7 +667,8 @@ export function createPostgresSubscriptionCollectionRepository(
               policy.policy_version,
               policy.decision_reason
             from subscriptions s
-            join subscription_plans sp on sp.id = s.plan_id
+            join subscription_billing_acceptances acceptance
+              on acceptance.subscription_id = s.id
             cross join lateral private.resolve_recipient_monetisation_policy(
               s.creator_user_id, 'creator_subscription'
             ) policy
@@ -552,18 +676,15 @@ export function createPostgresSubscriptionCollectionRepository(
               and s.state in ('active', 'renewal_pending', 'grace_period')
               and s.cancel_at_period_end = false
               and s.next_collection_at <= ${input.now}
-              and sp.state = 'active'
-              and sp.provider_state = 'launch_approved'
               and policy.kyc_required
-              and not exists (
-                select 1 from verification_records verification
-                where verification.subject_type = 'user'
-                  and verification.subject_id = s.creator_user_id
-                  and verification.purpose = 'creator_kyc'
-                  and verification.status = 'valid'
+              and not coalesce((
+                select verification.status = 'valid'
                   and verification.assurance_level in ('high', 'documentary')
                   and (verification.expires_at is null or verification.expires_at > ${input.now})
-              )
+                from private.current_verification_decision(
+                  'user', s.creator_user_id, 'creator_kyc'
+                ) verification
+              ), false)
             order by s.next_collection_at asc
             limit ${input.limit}
             for update of s skip locked
@@ -606,14 +727,14 @@ export function createPostgresSubscriptionCollectionRepository(
             s.subscriber_user_id,
             s.subscriber_wallet,
             s.plan_id,
-            sp.amount_minor,
-            sp.creator_amount_atomic,
-            sp.platform_fee_amount_atomic,
-            sp.allocation_amount_atomic,
-            sp.currency,
-            sp.period_days,
-            coalesce(s.amount_atomic, sp.amount_atomic, sp.amount_minor) as amount_atomic,
-            coalesce(s.period_seconds, sp.period_seconds, sp.period_days * 86400) as period_seconds,
+            acceptance.amount_minor,
+            acceptance.creator_amount_atomic,
+            acceptance.platform_amount_atomic as platform_fee_amount_atomic,
+            acceptance.allocation_amount_atomic,
+            acceptance.currency,
+            acceptance.period_days,
+            acceptance.amount_atomic,
+            acceptance.period_seconds,
             coalesce(
               pending_collection.period_starts_at,
               s.current_period_ends_at,
@@ -624,26 +745,33 @@ export function createPostgresSubscriptionCollectionRepository(
             coalesce(
               pending_collection.period_ends_at,
               coalesce(s.current_period_ends_at, s.verified_at, s.start_at, s.created_at)
-                + (
-                  coalesce(s.period_seconds, sp.period_seconds, sp.period_days * 86400)
-                  || ' seconds'
-                )::interval
+                + (acceptance.period_seconds || ' seconds')::interval
             ) as period_ends_at,
             s.authority_address,
             s.delegation_address,
             s.subscriber_token_account,
             s.collector_address,
-            sp.token_mint,
-            sp.token_program,
-            coalesce(s.provider, sp.provider) as provider,
-            coalesce(s.program_id, sp.program_id) as program_id,
-            s.merchant_wallet as creator_receiver_wallet,
+            acceptance.token_mint,
+            acceptance.token_program,
+            acceptance.provider,
+            acceptance.program_id,
+            acceptance.creator_receiver_wallet,
+            acceptance.platform_receiver_wallet,
+            acceptance.delegation_nonce,
+            acceptance.asset_decimals,
+            acceptance.scope,
+            acceptance.creator_user_id,
+            acceptance.terms_version,
+            acceptance.withdrawal_waiver_version,
+            acceptance.accepted_at,
+            acceptance.solana_network,
             coalesce(policy.kyc_required, false) as recipient_kyc_required,
             coalesce(policy.effective_kyc_mode, 'disabled') as recipient_kyc_policy_mode,
             coalesce(policy.policy_version, 'platform-plan-not-applicable') as recipient_kyc_policy_version,
             coalesce(policy.decision_reason, 'platform_plan_not_applicable') as recipient_kyc_decision_reason
           from subscriptions s
-          join subscription_plans sp on sp.id = s.plan_id
+          join subscription_billing_acceptances acceptance
+            on acceptance.subscription_id = s.id
           left join lateral private.resolve_recipient_monetisation_policy(
             s.creator_user_id, 'creator_subscription'
           ) policy on s.scope = 'creator'
@@ -653,7 +781,7 @@ export function createPostgresSubscriptionCollectionRepository(
               collection.period_ends_at
             from subscription_collections collection
             where collection.subscription_id = s.id
-              and collection.state in ('due', 'processing', 'failed')
+              and collection.state in ('due', 'processing', 'reconciling', 'failed')
             order by collection.created_at desc, collection.id desc
             limit 1
           ) pending_collection on true
@@ -661,32 +789,36 @@ export function createPostgresSubscriptionCollectionRepository(
             and s.renewal_mode = 'delegated_solana_subscription'
             and s.cancel_at_period_end = false
             and (s.expires_at is null or s.expires_at > ${input.now})
-            and sp.state = 'active'
-            and sp.provider_state = 'launch_approved'
-            and sp.provider = 'official_solana_subscription_program'
-            and sp.currency <> 'SOL'
+            and acceptance.provider = 'official_solana_subscription_program'
+            and acceptance.currency <> 'SOL'
             and s.next_collection_at <= ${input.now}
             and s.authority_address is not null
             and s.subscriber_wallet is not null
             and s.delegation_address is not null
             and s.subscriber_token_account is not null
             and s.collector_address is not null
-            and sp.token_mint is not null
-            and sp.token_program is not null
-            and coalesce(s.program_id, sp.program_id) is not null
-            and coalesce(s.amount_atomic, sp.amount_atomic, sp.amount_minor) <= sp.amount_atomic
+            and s.plan_id = acceptance.plan_id
+            and s.scope = acceptance.scope
+            and s.subscriber_user_id = acceptance.accepted_by_user_id
+            and s.creator_user_id is not distinct from acceptance.creator_user_id
+            and s.provider = acceptance.provider
+            and s.program_id = acceptance.program_id
+            and s.token_mint = acceptance.token_mint
+            and s.amount_atomic = acceptance.amount_atomic
+            and s.period_seconds = acceptance.period_seconds
+            and s.collector_address = acceptance.collector_address
+            and s.delegation_nonce = acceptance.delegation_nonce
             and (
               s.scope = 'platform'
               or not policy.kyc_required
-              or exists (
-                select 1 from verification_records verification
-                where verification.subject_type = 'user'
-                  and verification.subject_id = s.creator_user_id
-                  and verification.purpose = 'creator_kyc'
-                  and verification.status = 'valid'
+              or coalesce((
+                select verification.status = 'valid'
                   and verification.assurance_level in ('high', 'documentary')
                   and (verification.expires_at is null or verification.expires_at > ${input.now})
-              )
+                from private.current_verification_decision(
+                  'user', s.creator_user_id, 'creator_kyc'
+                ) verification
+              ), false)
             )
           order by s.next_collection_at asc
           limit ${input.limit}
@@ -710,6 +842,8 @@ export function createPostgresSubscriptionCollectionRepository(
               platform_fee_amount_atomic,
               allocation_amount_atomic,
               creator_receiver_wallet,
+              platform_receiver_wallet,
+              allocation_receiver_wallet,
               recipient_kyc_required,
               recipient_kyc_policy_mode,
               recipient_kyc_policy_version,
@@ -732,6 +866,8 @@ export function createPostgresSubscriptionCollectionRepository(
               ${row.platform_fee_amount_atomic},
               ${row.allocation_amount_atomic},
               ${row.creator_receiver_wallet},
+              ${row.platform_receiver_wallet},
+              null,
               ${row.recipient_kyc_required},
               ${row.recipient_kyc_policy_mode},
               ${row.recipient_kyc_policy_version},
@@ -753,16 +889,22 @@ export function createPostgresSubscriptionCollectionRepository(
               state = 'processing',
               lease_token = ${leaseToken},
               leased_until = ${leasedUntil},
-              attempt_count = collection.attempt_count + 1,
+              attempt_count = case
+                when collection.broadcast_signature is null then collection.attempt_count + 1
+                else collection.attempt_count
+              end,
               attempted_at = ${input.now},
               submitted_at = coalesce(collection.submitted_at, ${input.now}),
               failure_code = null
             where collection.subscription_id = ${row.subscription_id}
               and collection.period_starts_at = ${row.period_starts_at}
-              and collection.attempt_count < ${input.maxAttempts}
+              and (
+                collection.broadcast_signature is not null
+                or collection.attempt_count < ${input.maxAttempts}
+              )
               and (
                 (
-                  collection.state in ('due', 'failed')
+                  collection.state in ('due', 'reconciling', 'failed')
                   and collection.next_attempt_at <= ${input.now}
                 )
                 or (
@@ -770,7 +912,15 @@ export function createPostgresSubscriptionCollectionRepository(
                   and (collection.leased_until is null or collection.leased_until <= ${input.now})
                 )
               )
-            returning collection.id, collection.state, collection.attempt_count, collection.idempotency_key
+            returning
+              collection.id,
+              collection.state,
+              collection.attempt_count,
+              collection.idempotency_key,
+              collection.broadcast_signature,
+              collection.broadcast_transaction_base64,
+              collection.broadcast_blockhash,
+              collection.broadcast_last_valid_block_height
           `;
           const collection = collectionRows[0];
 
@@ -829,7 +979,23 @@ export function createPostgresSubscriptionCollectionRepository(
             provider: row.provider,
             programId: row.program_id,
             periodSeconds: Number(row.period_seconds),
+            delegationNonce: Number(row.delegation_nonce),
+            assetDecimals: row.asset_decimals,
+            scope: row.scope,
+            creatorUserId: row.creator_user_id,
             creatorReceiverWallet: row.creator_receiver_wallet,
+            platformReceiverWallet: row.platform_receiver_wallet,
+            termsVersion: row.terms_version,
+            withdrawalWaiverVersion: row.withdrawal_waiver_version,
+            acceptedAt: row.accepted_at,
+            solanaNetwork: row.solana_network,
+            broadcastSignature: collection.broadcast_signature,
+            broadcastTransactionBase64: collection.broadcast_transaction_base64,
+            broadcastBlockhash: collection.broadcast_blockhash,
+            broadcastLastValidBlockHeight:
+              collection.broadcast_last_valid_block_height === null
+                ? null
+                : Number(collection.broadcast_last_valid_block_height),
             recipientKycRequired: row.recipient_kyc_required,
             recipientKycPolicyMode: row.recipient_kyc_policy_mode,
             recipientKycPolicyVersion: row.recipient_kyc_policy_version,
@@ -841,8 +1007,125 @@ export function createPostgresSubscriptionCollectionRepository(
       });
     },
 
+    async authorizeCollectionBroadcast(input) {
+      return sql.begin(async (transaction) => {
+        const subscriptions = await transaction<Array<{
+          state: string;
+          cancel_at_period_end: boolean;
+          cancelled_at: Date | null;
+          revoked_at: Date | null;
+        }>>`
+          select state, cancel_at_period_end, cancelled_at, revoked_at
+          from subscriptions
+          where id = ${input.subscriptionId}
+          for update
+        `;
+        const subscription = subscriptions[0];
+        if (
+          !subscription ||
+          !["active", "renewal_pending", "grace_period"].includes(subscription.state) ||
+          subscription.cancel_at_period_end ||
+          subscription.cancelled_at ||
+          subscription.revoked_at
+        ) {
+          return false;
+        }
+
+        const collections = await transaction<Array<{
+          state: string;
+          lease_token: string | null;
+          broadcast_signature: string | null;
+        }>>`
+          select state, lease_token, broadcast_signature
+          from subscription_collections
+          where id = ${input.collectionId}
+            and subscription_id = ${input.subscriptionId}
+          for update
+        `;
+        const collection = collections[0];
+        if (
+          !collection ||
+          collection.state !== "processing" ||
+          collection.lease_token !== input.leaseToken ||
+          collection.broadcast_signature !== null
+        ) {
+          return false;
+        }
+
+        const rows = await transaction<{ id: string }[]>`
+          update subscription_collections
+          set
+            broadcast_started_at = now(),
+            broadcast_lease_token = ${input.leaseToken}
+          where id = ${input.collectionId}
+            and subscription_id = ${input.subscriptionId}
+            and state = 'processing'
+            and lease_token = ${input.leaseToken}
+            and broadcast_signature is null
+          returning id
+        `;
+        return rows.length === 1;
+      });
+    },
+
+    async recordPreparedCollectionBroadcast(input) {
+      return sql.begin(async (transaction) => {
+        const subscriptions = await transaction<Array<{
+          state: string;
+          cancel_at_period_end: boolean;
+          cancelled_at: Date | null;
+          revoked_at: Date | null;
+        }>>`
+          select state, cancel_at_period_end, cancelled_at, revoked_at
+          from subscriptions
+          where id = ${input.subscriptionId}
+          for update
+        `;
+        const subscription = subscriptions[0];
+        if (
+          !subscription ||
+          !["active", "renewal_pending", "grace_period"].includes(subscription.state) ||
+          subscription.cancel_at_period_end ||
+          subscription.cancelled_at ||
+          subscription.revoked_at
+        ) {
+          return false;
+        }
+
+        const rows = await transaction<{ id: string }[]>`
+          update subscription_collections
+          set
+            broadcast_signature = ${input.prepared.signature},
+            broadcast_transaction_base64 = ${input.prepared.transactionBase64},
+            broadcast_blockhash = ${input.prepared.blockhash},
+            broadcast_last_valid_block_height = ${input.prepared.lastValidBlockHeight},
+            broadcast_prepared_at = now()
+          where id = ${input.collectionId}
+            and subscription_id = ${input.subscriptionId}
+            and state = 'processing'
+            and lease_token = ${input.leaseToken}
+            and broadcast_lease_token = ${input.leaseToken}
+            and broadcast_started_at is not null
+            and broadcast_signature is null
+          returning id
+        `;
+        return rows.length === 1;
+      });
+    },
+
     async recordCollectionOutcome(input) {
-      await sql.begin(async (transaction) => {
+      return sql.begin(async (transaction) => {
+        // Match cancellation and broadcast fencing lock order: subscription
+        // first, then its collection. A chain outcome and a user cancellation
+        // therefore arbitrate on one row lock instead of deadlocking or
+        // observing half of each other's transition.
+        await transaction`
+          select id
+          from subscriptions
+          where id = ${input.subscriptionId}
+          for update
+        `;
+
         if (input.outcome.state === "confirmed") {
           const rows = await transaction<{ period_starts_at: Date; period_ends_at: Date }[]>`
             update subscription_collections
@@ -857,10 +1140,11 @@ export function createPostgresSubscriptionCollectionRepository(
               and subscription_id = ${input.subscriptionId}
               and state = 'processing'
               and lease_token = ${input.leaseToken}
+              and broadcast_signature = ${input.outcome.collectionSignature}
             returning period_starts_at, period_ends_at
           `;
           const row = rows[0];
-          if (!row) return;
+          if (!row) return false;
 
           await transaction`
             update subscriptions
@@ -887,6 +1171,230 @@ export function createPostgresSubscriptionCollectionRepository(
             where id = ${input.subscriptionId}
           `;
 
+          const immutableHash = createHash("sha256")
+            .update(`subscription_collection_settled:${input.collectionId}`)
+            .digest("hex");
+          const receiptNumber = `VEEL-SUB-${input.collectionId
+            .replaceAll("-", "")
+            .slice(0, 20)
+            .toUpperCase()}`;
+          await transaction`
+            with finance as (
+              select
+                collection.id as collection_id,
+                collection.amount_minor,
+                collection.amount_atomic,
+                floor(
+                  collection.platform_fee_amount_atomic::numeric
+                    * collection.amount_minor::numeric
+                    / collection.amount_atomic::numeric
+                )::bigint as platform_fee_minor,
+                collection.currency,
+                subscription.subscriber_user_id,
+                subscription.creator_user_id,
+                subscription.scope,
+                acceptance.asset_decimals,
+                acceptance.solana_network,
+                acceptance.terms_version,
+                acceptance.withdrawal_waiver_version,
+                acceptance.accepted_at
+              from subscription_collections collection
+              join subscriptions subscription on subscription.id = collection.subscription_id
+              join subscription_billing_acceptances acceptance
+                on acceptance.subscription_id = subscription.id
+              where collection.id = ${input.collectionId}
+                and collection.subscription_id = ${input.subscriptionId}
+                and collection.state = 'confirmed'
+                and collection.collection_signature = ${input.outcome.collectionSignature}
+            ),
+            receipt as (
+              insert into receipts (
+                id,
+                receipt_number,
+                buyer_user_id,
+                seller_user_id,
+                subscription_collection_id,
+                product_type,
+                gross_amount_minor,
+                currency
+              )
+              select
+                ${randomUUID()},
+                ${receiptNumber},
+                subscriber_user_id,
+                creator_user_id,
+                collection_id,
+                case when scope = 'creator' then 'creator_subscription' else 'platform_subscription' end,
+                amount_minor,
+                currency
+              from finance
+              on conflict (subscription_collection_id)
+                where subscription_collection_id is not null
+              do update set state = receipts.state
+              returning id
+            ),
+            receipt_line as (
+              insert into receipt_lines (
+                id, receipt_id, line_type, description, amount_minor, currency
+              )
+              select
+                ${randomUUID()},
+                receipt.id,
+                'purchase_total',
+                'Recurring subscription period',
+                finance.amount_minor,
+                finance.currency
+              from finance
+              join receipt on true
+              where not exists (
+                select 1
+                from receipt_lines existing
+                where existing.receipt_id = receipt.id
+                  and existing.line_type = 'purchase_total'
+              )
+              returning id
+            ),
+            wallet_record as (
+              insert into wallet_transaction_records (
+                id,
+                user_id,
+                wallet_id,
+                subscription_collection_id,
+                chain,
+                direction,
+                amount_minor,
+                currency,
+                state,
+                source,
+                signature,
+                reference_address,
+                submitted_at,
+                confirmed_at
+              )
+              select
+                ${randomUUID()},
+                finance.subscriber_user_id,
+                wallet.id,
+                finance.collection_id,
+                case
+                  when finance.solana_network = 'mainnet-beta' then 'solana_mainnet'
+                  else 'solana_devnet'
+                end,
+                'outgoing',
+                finance.amount_minor,
+                finance.currency,
+                'confirmed',
+                'subscription_collection',
+                ${input.outcome.collectionSignature},
+                finance.collection_id::text,
+                now(),
+                now()
+              from finance
+              left join lateral (
+                select id
+                from wallets
+                where user_id = finance.subscriber_user_id
+                order by is_primary desc, created_at asc
+                limit 1
+              ) wallet on true
+              on conflict (subscription_collection_id)
+                where subscription_collection_id is not null
+              do update set
+                state = excluded.state,
+                confirmed_at = coalesce(wallet_transaction_records.confirmed_at, excluded.confirmed_at),
+                updated_at = now()
+              returning id
+            ),
+            ledger as (
+              insert into compliance_ledger_entries (
+                id,
+                event_type,
+                product_type,
+                settlement_model,
+                seller_user_id,
+                buyer_user_id,
+                receipt_id,
+                subscription_collection_id,
+                gross_amount_minor,
+                platform_fee_minor,
+                creator_net_amount_minor,
+                tax_amount_minor,
+                currency,
+                fiat_currency,
+                seller_of_record,
+                metadata,
+                immutable_hash
+              )
+              select
+                ${randomUUID()},
+                'payment_settled',
+                case when finance.scope = 'creator' then 'creator_subscription' else 'platform_subscription' end,
+                case when finance.scope = 'creator' then 'user_to_creator_split' else 'user_to_platform' end,
+                finance.creator_user_id,
+                finance.subscriber_user_id,
+                receipt.id,
+                finance.collection_id,
+                finance.amount_minor,
+                finance.platform_fee_minor,
+                case
+                  when finance.scope = 'creator'
+                    then finance.amount_minor - finance.platform_fee_minor
+                  else null
+                end,
+                null,
+                finance.currency,
+                'USD',
+                case when finance.scope = 'creator' then 'creator' else 'veel' end,
+                jsonb_build_object(
+                  'confirmationVersion', 'subscription-collection-confirmation-v1',
+                  'settlementSignature', ${input.outcome.collectionSignature}::text,
+                  'assetDecimals', finance.asset_decimals,
+                  'termsVersion', finance.terms_version,
+                  'withdrawalWaiverVersion', finance.withdrawal_waiver_version,
+                  'acceptedAt', finance.accepted_at
+                ),
+                ${immutableHash}
+              from finance
+              join receipt on true
+              on conflict (subscription_collection_id)
+                where subscription_collection_id is not null
+              do nothing
+              returning id
+            ),
+            outbox as (
+              insert into subscription_finance_outbox_events (
+                id,
+                subscription_collection_id,
+                event_type,
+                amount_minor,
+                amount_atomic,
+                asset_decimals,
+                currency,
+                collection_signature,
+                terms_version
+              )
+              select
+                ${randomUUID()},
+                finance.collection_id,
+                'subscription_collection_confirmed',
+                finance.amount_minor,
+                finance.amount_atomic,
+                finance.asset_decimals,
+                finance.currency,
+                ${input.outcome.collectionSignature},
+                finance.terms_version
+              from finance
+              on conflict (subscription_collection_id) do nothing
+              returning id
+            )
+            select
+              (select count(*) from receipt),
+              (select count(*) from receipt_line),
+              (select count(*) from wallet_record),
+              (select count(*) from ledger),
+              (select count(*) from outbox)
+          `;
+
           await insertCollectionEvent(transaction, {
             subscriptionId: input.subscriptionId,
             collectionId: input.collectionId,
@@ -895,7 +1403,71 @@ export function createPostgresSubscriptionCollectionRepository(
               collectionSignature: input.outcome.collectionSignature
             }
           });
-          return;
+          return true;
+        }
+
+        if (input.outcome.state === "reconciling") {
+          const rows = await transaction<{ id: string }[]>`
+            update subscription_collections
+            set
+              state = 'reconciling',
+              failure_code = ${input.outcome.failureCode},
+              next_attempt_at = ${input.outcome.retryAt},
+              lease_token = null,
+              leased_until = null
+            where id = ${input.collectionId}
+              and subscription_id = ${input.subscriptionId}
+              and state = 'processing'
+              and lease_token = ${input.leaseToken}
+              and broadcast_signature is not null
+            returning id
+          `;
+          if (!rows[0]) return false;
+          await transaction`
+            update subscriptions
+            set
+              state = case
+                when cancelled_at is not null or state = 'cancelled' then 'cancelled'
+                when revoked_at is not null or state = 'revoked' then 'revoked'
+                else 'grace_period'
+              end,
+              next_collection_at = case
+                when cancelled_at is not null or revoked_at is not null
+                  or state in ('cancelled', 'revoked') then null
+                else ${input.outcome.retryAt}
+              end,
+              failure_reason = ${input.outcome.failureCode},
+              updated_at = now()
+            where id = ${input.subscriptionId}
+          `;
+          await insertCollectionEvent(transaction, {
+            subscriptionId: input.subscriptionId,
+            collectionId: input.collectionId,
+            action: "subscription.collection_reconciliation_deferred",
+            metadata: {
+              failureCode: input.outcome.failureCode,
+              retryAt: input.outcome.retryAt.toISOString()
+            }
+          });
+          return true;
+        }
+
+        if (input.outcome.state === "cancelled") {
+          const rows = await transaction<{ id: string }[]>`
+            update subscription_collections
+            set
+              state = 'cancelled',
+              failure_code = ${input.outcome.failureCode},
+              lease_token = null,
+              leased_until = null
+            where id = ${input.collectionId}
+              and subscription_id = ${input.subscriptionId}
+              and state = 'processing'
+              and lease_token = ${input.leaseToken}
+              and broadcast_signature is null
+            returning id
+          `;
+          return rows.length === 1;
         }
 
         if (input.outcome.state === "revoked") {
@@ -910,9 +1482,10 @@ export function createPostgresSubscriptionCollectionRepository(
               and subscription_id = ${input.subscriptionId}
               and state = 'processing'
               and lease_token = ${input.leaseToken}
+              and broadcast_signature is null
             returning id
           `;
-          if (rows.length === 0) return;
+          if (rows.length === 0) return false;
           await transaction`
             update subscriptions
             set
@@ -931,13 +1504,21 @@ export function createPostgresSubscriptionCollectionRepository(
               failureCode: input.outcome.failureCode
             }
           });
-          return;
+          return true;
         }
 
-        const rows = await transaction<{ attempt_count: number }[]>`
+        const rows = await transaction<Array<{
+          attempt_count: number;
+          broadcast_signature: string | null;
+          state: "reconciling" | "dead_letter" | "failed";
+        }>>`
           update subscription_collections
           set
-            state = case when attempt_count >= ${input.maxAttempts} then 'dead_letter' else 'failed' end,
+            state = case
+              when broadcast_signature is not null then 'reconciling'
+              when attempt_count >= ${input.maxAttempts} then 'dead_letter'
+              else 'failed'
+            end,
             failure_code = ${input.outcome.failureCode},
             next_attempt_at = ${input.outcome.retryAt},
             lease_token = null,
@@ -946,22 +1527,30 @@ export function createPostgresSubscriptionCollectionRepository(
             and subscription_id = ${input.subscriptionId}
             and state = 'processing'
             and lease_token = ${input.leaseToken}
-          returning attempt_count
+          returning attempt_count, broadcast_signature, state
         `;
         const row = rows[0];
-        if (!row) return;
+        if (!row) return false;
         await transaction`
           update subscriptions
           set
             state = case
               when cancelled_at is not null or state = 'cancelled' then 'cancelled'
               when revoked_at is not null or state = 'revoked' then 'revoked'
-              else ${row.attempt_count >= input.maxAttempts ? "suspended" : "grace_period"}
+              else ${
+                row.state === "dead_letter"
+                  ? "suspended"
+                  : "grace_period"
+              }
             end,
             next_collection_at = case
               when cancelled_at is not null or revoked_at is not null
                 or state in ('cancelled', 'revoked') then null
-              else ${row.attempt_count >= input.maxAttempts ? null : input.outcome.retryAt}
+              else ${
+                row.state === "dead_letter"
+                  ? null
+                  : input.outcome.retryAt
+              }
             end,
             failure_reason = ${input.outcome.failureCode},
             updated_at = now()
@@ -970,14 +1559,18 @@ export function createPostgresSubscriptionCollectionRepository(
         await insertCollectionEvent(transaction, {
           subscriptionId: input.subscriptionId,
           collectionId: input.collectionId,
-          action: "subscription.collection_failed",
+          action: row.state === "reconciling"
+            ? "subscription.collection_reconciliation_deferred"
+            : "subscription.collection_failed",
           metadata: {
             failureCode: input.outcome.failureCode,
             retryAt: input.outcome.retryAt.toISOString(),
             attemptCount: row.attempt_count,
-            deadLettered: row.attempt_count >= input.maxAttempts
+            deadLettered: row.state === "dead_letter",
+            signedEvidencePending: row.state === "reconciling"
           }
         });
+        return true;
       });
     },
 
@@ -1010,7 +1603,16 @@ interface DueSubscriptionRow {
   token_program: "spl_token" | "token_2022";
   provider: string;
   program_id: string;
+  delegation_nonce: string | number;
+  asset_decimals: number;
+  scope: "platform" | "creator";
+  creator_user_id: string | null;
   creator_receiver_wallet: string | null;
+  platform_receiver_wallet: string;
+  terms_version: string;
+  withdrawal_waiver_version: string;
+  accepted_at: Date;
+  solana_network: "devnet" | "mainnet-beta";
   recipient_kyc_required: boolean;
   recipient_kyc_policy_mode: "disabled" | "risk_based" | "required";
   recipient_kyc_policy_version: string;
@@ -1022,6 +1624,10 @@ interface CollectionLeaseRow {
   state: string;
   attempt_count: number;
   idempotency_key: string | null;
+  broadcast_signature: string | null;
+  broadcast_transaction_base64: string | null;
+  broadcast_blockhash: string | null;
+  broadcast_last_valid_block_height: string | number | null;
 }
 
 async function insertCollectionEvent(

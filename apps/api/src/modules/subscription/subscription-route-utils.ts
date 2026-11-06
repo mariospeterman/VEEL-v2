@@ -13,6 +13,10 @@ import type {
 } from "./types.js";
 import type { SubscriptionAuthorizationTransactionBuilder } from "./subscription-authorization-transaction.js";
 
+export const recurringSubscriptionTermsVersion = "subscription-recurring-terms-v1";
+export const recurringSubscriptionWithdrawalWaiverVersion =
+  "subscription-initial-access-waiver-v1";
+
 export interface RegisterSubscriptionRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
   sessionRepository: SessionRepository;
@@ -92,6 +96,18 @@ export function validateCreateSubscriptionIntent(
     (typeof body.creatorUserId !== "string" || body.creatorUserId.length === 0)
   ) {
     return "creatorUserId must be a non-empty string when provided";
+  }
+
+  if (body.termsVersion !== recurringSubscriptionTermsVersion) {
+    return "termsVersion is not current";
+  }
+
+  if (body.withdrawalWaiverVersion !== recurringSubscriptionWithdrawalWaiverVersion) {
+    return "withdrawalWaiverVersion is not current";
+  }
+
+  if (body.immediateAccessAcknowledged !== true) {
+    return "immediateAccessAcknowledged must be true";
   }
 
   return null;

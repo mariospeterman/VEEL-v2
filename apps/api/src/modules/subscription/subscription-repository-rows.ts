@@ -7,6 +7,7 @@ export interface PlanRow {
   description: string | null;
   benefits: string[];
   amount_minor: string | number;
+  asset_decimals: number;
   amount_atomic: string | number | null;
   currency: SubscriptionPlan["currency"];
   period_days: number;
@@ -23,6 +24,9 @@ export interface PlanRow {
   creator_handle: string | null;
   creator_display_name: string | null;
   creator_avatar_url: string | null;
+  creator_amount_atomic: string | number;
+  platform_fee_amount_atomic: string | number;
+  allocation_amount_atomic: string | number;
 }
 
 export interface SubscriptionRow {

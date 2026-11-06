@@ -19,6 +19,11 @@
       "development": "./src/media-upload-provider.ts",
       "default": "./dist/media-upload-provider.js"
     },
+    "./content-export-provider": {
+      "types": "./src/content-export-provider.ts",
+      "development": "./src/content-export-provider.ts",
+      "default": "./dist/content-export-provider.js"
+    },
     "./live-provider": {
       "types": "./src/live-provider.ts",
       "development": "./src/live-provider.ts",

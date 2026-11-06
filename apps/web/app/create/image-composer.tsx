@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import * as tus from "tus-js-client";
 import type { VerificationStatus } from "@/api-client";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
 import { createResumableVideoUploadKey } from "@/media/resumable-upload-key";
+import {
+  createMediaSelectionCoordinator,
+  MediaSelectionValidationError,
+  type MediaSelectionCoordinator
+} from "@/media/media-selection-coordinator";
 import { sha256File } from "@/media/sha256-file";
 import {
   ApiMutationError,
@@ -78,6 +83,10 @@ export function MediaAssetComposer({
   const activeUpload = useRef<tus.Upload | null>(null);
   const pauseCurrentUpload = useRef<(() => void) | null>(null);
   const activeHash = useRef<AbortController | null>(null);
+  const mounted = useRef(true);
+  const assetsRef = useRef<LocalAsset[]>([]);
+  const draftRef = useRef<ContentItem | null>(null);
+  const selectionCoordinator = useRef<MediaSelectionCoordinator<File[]> | null>(null);
   const draftKey = storageScope
     ? `wevid:create:${storageScope}:${initialDistributionMode === "moment" ? "moment-" : ""}media-draft-v2`
     : null;
@@ -86,11 +95,27 @@ export function MediaAssetComposer({
   const adultSelected = nsfwLabel !== "none";
   const adultPublishReady = verification?.capabilities.canPublishAdultMedia === true;
 
-  useEffect(() => () => {
-    activeHash.current?.abort();
-    void activeUpload.current?.abort();
-    for (const previewUrl of previewUrls.current) URL.revokeObjectURL(previewUrl);
-    previewUrls.current.clear();
+  const replaceAssets = useCallback((next: LocalAsset[] | ((current: LocalAsset[]) => LocalAsset[])) => {
+    const resolved = typeof next === "function" ? next(assetsRef.current) : next;
+    assetsRef.current = resolved;
+    if (mounted.current) setAssets(resolved);
+    return resolved;
+  }, []);
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      selectionCoordinator.current?.abort();
+      activeHash.current?.abort();
+      void activeUpload.current?.abort();
+      for (const previewUrl of previewUrls.current) URL.revokeObjectURL(previewUrl);
+      previewUrls.current.clear();
+    };
   }, []);
 
   useEffect(() => {
@@ -153,55 +178,42 @@ export function MediaAssetComposer({
     return assets[0]?.kind === "video" ? "Video" : "Photo";
   }, [assets]);
 
-  async function onFiles(event: ChangeEvent<HTMLInputElement>) {
+  function onFiles(event: ChangeEvent<HTMLInputElement>) {
     const selected = [...(event.currentTarget.files ?? [])];
     event.currentTarget.value = "";
     const invalid = selected.find((file) => !acceptedMediaTypes.has(file.type));
-    if (invalid || selected.length === 0 || assets.length + selected.length > 10) {
+    if (invalid || selected.length === 0 || selected.length > 10) {
       setError("Choose up to 10 JPEG, PNG, WebP, MP4, MOV, or WebM files.");
       return;
     }
-    const createdPreviewUrls: string[] = [];
-    let additions: LocalAsset[];
-    try {
-      additions = await Promise.all(selected.map(async (file) => {
-        const previewUrl = URL.createObjectURL(file);
-        createdPreviewUrls.push(previewUrl);
-        previewUrls.current.add(previewUrl);
-        const kind = acceptedImageTypes.has(file.type) ? "image" as const : "video" as const;
-        return {
-          key: `${file.name}:${file.size}:${file.lastModified}:${crypto.randomUUID()}`,
-          kind,
-          file,
-          previewUrl,
-          altText: "",
-          originClassification: "human_created" as Origin,
-          ...(kind === "video" ? { durationMs: await readVideoDurationMs(previewUrl) } : {})
-        };
-      }));
-    } catch {
-      for (const previewUrl of createdPreviewUrls) {
-        URL.revokeObjectURL(previewUrl);
-        previewUrls.current.delete(previewUrl);
+    selectionCoordinator.current ??= createMediaSelectionCoordinator<File[], LocalAsset>({
+      prepare: (files, signal) => prepareLocalAssets(files, signal, previewUrls),
+      readCurrent: () => assetsRef.current,
+      replace: (next) => replaceAssets(next),
+      validate: (next) => {
+        if (next.length > 10) return "Choose up to 10 JPEG, PNG, WebP, MP4, MOV, or WebM files.";
+        const currentDraft = draftRef.current;
+        if (currentDraft && !assetsCompatibleWithDraft([...next], currentDraft.mediaType)) {
+          return "This saved draft can only replace assets of its original format.";
+        }
+        return null;
+      },
+      onCommitted: () => {
+        if (!mounted.current) return;
+        setProgress(0);
+        setAccepted(false);
+        setSubmitted(false);
+        setError(null);
+        setNotice(null);
+      },
+      onError: (caught) => {
+        if (!mounted.current) return;
+        setError(caught instanceof MediaSelectionValidationError
+          ? caught.message
+          : "One video could not be read. Choose a supported MP4, MOV, or WebM file.");
       }
-      setError("One video could not be read. Choose a supported MP4, MOV, or WebM file.");
-      return;
-    }
-    const next = [...assets, ...additions];
-    if (draft && !assetsCompatibleWithDraft(next, draft.mediaType)) {
-      for (const asset of additions) {
-        URL.revokeObjectURL(asset.previewUrl);
-        previewUrls.current.delete(asset.previewUrl);
-      }
-      setError("This saved draft can only replace assets of its original format.");
-      return;
-    }
-    setAssets(next);
-    setProgress(0);
-    setAccepted(false);
-    setSubmitted(false);
-    setError(null);
-    setNotice(null);
+    });
+    void selectionCoordinator.current.enqueue(selected);
   }
 
   async function onUpload(event: FormEvent<HTMLFormElement>) {
@@ -268,7 +280,7 @@ export function MediaAssetComposer({
               checksumSha256
             }, idempotencyKey);
             nextAssets[index] = { ...localAsset, mediaAssetId: uploadSession.mediaAssetId, uploadSession };
-            setAssets([...nextAssets]);
+            replaceAssets([...nextAssets]);
           }
           mediaAssetId = uploadSession.mediaAssetId;
           await uploadVideo(localAsset.file, uploadSession, activeDraft.id, (assetProgress) => {
@@ -291,7 +303,7 @@ export function MediaAssetComposer({
           mediaAssetId,
           transferComplete: true
         };
-        setAssets([...nextAssets]);
+        replaceAssets([...nextAssets]);
         setProgress(Math.round(((index + 1) / nextAssets.length) * 100));
         refreshed = { ...refreshed, compositionRevision: updated.compositionRevision };
         activeDraft = refreshed;
@@ -314,7 +326,7 @@ export function MediaAssetComposer({
     if (target < 0 || target >= assets.length) return;
     const next = [...assets];
     [next[index], next[target]] = [next[target]!, next[index]!];
-    setAssets(next);
+    replaceAssets(next);
     if (!draft || !next.every((asset) => asset.mediaAssetId)) return;
     setPending("reorder");
     setError(null);
@@ -324,7 +336,7 @@ export function MediaAssetComposer({
         assetOrder: next.map((asset) => asset.mediaAssetId!)
       }));
     } catch (caught) {
-      setAssets(assets);
+      replaceAssets(assets);
       setError(messageFor(caught));
     } finally {
       setPending(null);
@@ -355,7 +367,7 @@ export function MediaAssetComposer({
     if (!asset.mediaAssetId) {
       URL.revokeObjectURL(asset.previewUrl);
       previewUrls.current.delete(asset.previewUrl);
-      setAssets((current) => current.filter((item) => item.key !== asset.key));
+      replaceAssets((current) => current.filter((item) => item.key !== asset.key));
       return;
     }
     if (!draft) return;
@@ -374,7 +386,7 @@ export function MediaAssetComposer({
       }, idempotencyKey);
       URL.revokeObjectURL(asset.previewUrl);
       previewUrls.current.delete(asset.previewUrl);
-      setAssets((current) => current.filter((item) => item.key !== asset.key));
+      replaceAssets((current) => current.filter((item) => item.key !== asset.key));
       setDraft({ ...draft, compositionRevision: removed.compositionRevision });
       setNotice(removed.cleanupState === "completed"
         ? "Media removed."
@@ -431,8 +443,8 @@ export function MediaAssetComposer({
           {assets.map((asset, index) => <li className="grid gap-3 rounded border border-(--line) bg-(--background) p-3" key={asset.key}>
             {asset.kind === "image" ? <img alt="" className="aspect-square w-full rounded bg-black object-contain" src={asset.previewUrl} /> : <video aria-label={`Video ${index + 1} preview`} className="aspect-square w-full rounded bg-black object-contain" controls muted playsInline src={asset.previewUrl} />}
             <div className="flex items-center justify-between gap-2 text-sm"><span className="font-semibold">{asset.kind === "image" ? "Photo" : "Video"} {index + 1}</span><span className="text-(--muted)">{asset.transferComplete ? "Stored privately" : asset.mediaAssetId ? "Upload resumable" : "Not uploaded"}</span></div>
-            <label className="grid gap-1 text-sm"><span className="text-(--muted)">Description</span><textarea className="min-h-20 rounded border border-(--line) bg-(--panel) px-3 py-2" maxLength={1000} onChange={(event) => { const altText = event.currentTarget.value; setAssets((current) => current.map((item) => item.key === asset.key ? { ...item, altText } : item)); }} value={asset.altText} /></label>
-            <Select label="How was this made?" onChange={(originClassification) => setAssets((current) => current.map((item) => item.key === asset.key ? { ...item, originClassification } : item))} optionLabel={originLabel} options={origins} value={asset.originClassification} />
+            <label className="grid gap-1 text-sm"><span className="text-(--muted)">Description</span><textarea className="min-h-20 rounded border border-(--line) bg-(--panel) px-3 py-2" maxLength={1000} onChange={(event) => { const altText = event.currentTarget.value; replaceAssets((current) => current.map((item) => item.key === asset.key ? { ...item, altText } : item)); }} value={asset.altText} /></label>
+            <Select label="How was this made?" onChange={(originClassification) => replaceAssets((current) => current.map((item) => item.key === asset.key ? { ...item, originClassification } : item))} optionLabel={originLabel} options={origins} value={asset.originClassification} />
             <div className="flex flex-wrap gap-2"><button aria-label={`Move item ${index + 1} earlier`} className="rounded border border-(--line) px-3 py-2 text-sm disabled:opacity-40" disabled={index === 0 || pending !== null} onClick={() => void moveAsset(index, -1)} type="button">Earlier</button><button aria-label={`Move item ${index + 1} later`} className="rounded border border-(--line) px-3 py-2 text-sm disabled:opacity-40" disabled={index === assets.length - 1 || pending !== null} onClick={() => void moveAsset(index, 1)} type="button">Later</button>{asset.mediaAssetId && asset.transferComplete ? <button className="rounded border border-(--line) px-3 py-2 text-sm disabled:opacity-40" disabled={pending !== null || !asset.altText.trim()} onClick={() => void saveAssetDetails(asset)} type="button">Save details</button> : null}<button className="ml-auto rounded border border-(--line) px-3 py-2 text-sm disabled:opacity-40" disabled={pending !== null} onClick={() => void removeAsset(asset)} type="button">{pending === "remove" ? "Removing…" : "Remove"}</button></div>
           </li>)}
         </ol> : null}
@@ -475,22 +487,77 @@ function assetsCompatibleWithDraft(assets: LocalAsset[], mediaType: ContentItem[
 
 class UploadPausedError extends Error {}
 
-function readVideoDurationMs(previewUrl: string): Promise<number> {
+async function prepareLocalAssets(
+  files: File[],
+  signal: AbortSignal,
+  previewUrls: { current: Set<string> }
+) {
+  const createdPreviewUrls: string[] = [];
+  const dispose = () => {
+    for (const previewUrl of createdPreviewUrls) {
+      URL.revokeObjectURL(previewUrl);
+      previewUrls.current.delete(previewUrl);
+    }
+  };
+
+  try {
+    const items = await Promise.all(files.map(async (file): Promise<LocalAsset> => {
+      if (signal.aborted) throw new DOMException("Media selection was cancelled", "AbortError");
+      const previewUrl = URL.createObjectURL(file);
+      createdPreviewUrls.push(previewUrl);
+      previewUrls.current.add(previewUrl);
+      const kind = acceptedImageTypes.has(file.type) ? "image" as const : "video" as const;
+      return {
+        key: `${file.name}:${file.size}:${file.lastModified}:${crypto.randomUUID()}`,
+        kind,
+        file,
+        previewUrl,
+        altText: "",
+        originClassification: "human_created",
+        ...(kind === "video" ? { durationMs: await readVideoDurationMs(previewUrl, signal) } : {})
+      };
+    }));
+    return { items, dispose };
+  } catch (error) {
+    dispose();
+    throw error;
+  }
+}
+
+function readVideoDurationMs(previewUrl: string, signal: AbortSignal): Promise<number> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
+    let settled = false;
+    const cleanup = () => {
+      video.onloadedmetadata = null;
+      video.onerror = null;
+      signal.removeEventListener("abort", onAbort);
+      video.removeAttribute("src");
+      video.load();
+    };
+    const finish = (result: { durationMs: number } | { error: Error | DOMException }) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if ("durationMs" in result) resolve(result.durationMs);
+      else reject(result.error);
+    };
+    const onAbort = () => finish({
+      error: new DOMException("Video metadata selection was cancelled", "AbortError")
+    });
+
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
     video.preload = "metadata";
     video.onloadedmetadata = () => {
       const durationMs = Math.round(video.duration * 1000);
-      video.removeAttribute("src");
-      video.load();
-      if (Number.isFinite(durationMs) && durationMs > 0) resolve(durationMs);
-      else reject(new Error("Video duration is unavailable"));
+      if (Number.isFinite(durationMs) && durationMs > 0) finish({ durationMs });
+      else finish({ error: new Error("Video duration is unavailable") });
     };
-    video.onerror = () => {
-      video.removeAttribute("src");
-      video.load();
-      reject(new Error("Video metadata could not be read"));
-    };
+    video.onerror = () => finish({ error: new Error("Video metadata could not be read") });
+    signal.addEventListener("abort", onAbort, { once: true });
     video.src = previewUrl;
   });
 }

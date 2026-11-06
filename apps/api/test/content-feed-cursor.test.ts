@@ -70,9 +70,17 @@ describe("content feed chronological cursor", () => {
     expect(() => decodeFeedCursor(legacy, scope)).toThrow(StaleFeedCursorError);
   });
 
-  it.each(["", "not base64!", Buffer.from("{}").toString("base64url")])(
-    "rejects malformed cursor %s",
-    (cursor) => {
+  it.each([
+    ["empty", ""],
+    ["invalid base64url", "not base64!"],
+    ["empty object", Buffer.from("{}").toString("base64url")],
+    ["JSON null", Buffer.from("null").toString("base64url")],
+    ["JSON scalar", Buffer.from("1").toString("base64url")],
+    ["JSON string", Buffer.from(JSON.stringify("cursor")).toString("base64url")],
+    ["JSON array", Buffer.from("[]").toString("base64url")]
+  ])(
+    "rejects malformed cursor shape %s with the typed error",
+    (_name, cursor) => {
       expect(() => decodeFeedCursor(cursor, scope)).toThrow(InvalidFeedCursorError);
     }
   );

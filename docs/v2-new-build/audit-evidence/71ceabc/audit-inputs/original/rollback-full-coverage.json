@@ -1,0 +1,1395 @@
+{
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "reviewer": "content_engagement_audit",
+  "scope": "all database rollback migration SQL",
+  "file_count": 118,
+  "total_bytes": 117469,
+  "total_lines": 2686,
+  "read_batches": [
+    "0001\u20130040",
+    "0041\u20130074",
+    "0075\u20130091",
+    "0092\u20130107",
+    "0108\u20130113",
+    "0114\u20130118"
+  ],
+  "execution": "Read-only semantic review. Database agent separately ran rollback sequence; no claim of all rollback paths executing successfully.",
+  "files": [
+    {
+      "path": "packages/database/migrations/0001_foundation.down.sql",
+      "bytes": 876,
+      "lines": 21,
+      "sha256": "5ced33088dccdf092d5785b9716822b7fb3cf53c4d1b152ef7a6c1f4ac2413c3",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        21
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0002_age_verifications.down.sql",
+      "bytes": 181,
+      "lines": 4,
+      "sha256": "1e5e0e054be3bc2ef73955da8557da3cd1e4313a3572ac374141fa3438f9158e",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        4
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0003_wallets.down.sql",
+      "bytes": 301,
+      "lines": 7,
+      "sha256": "70611a7cb373ce27455565362c92216ce4d5af76aaca3958e694c4015e2e8e8d",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        7
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0004_wallet_link_challenges.down.sql",
+      "bytes": 230,
+      "lines": 4,
+      "sha256": "958a6af41ad90579e527f0dc9cd5dc39bffc8f62e40418d376472391273bd940",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        4
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0005_age_provider_waterfall.down.sql",
+      "bytes": 59,
+      "lines": 1,
+      "sha256": "d3d6f2318d9ec7b992271568a5eab03840223fe1121e7eb4282cc91ba0ff5230",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0006_content_feed_foundation.down.sql",
+      "bytes": 300,
+      "lines": 7,
+      "sha256": "ccc8e394cfc95c7334aad7139887e27de31e2c76ce7fc29a289b4c425c782466",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        7
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0007_media_upload_boundary.down.sql",
+      "bytes": 54,
+      "lines": 1,
+      "sha256": "1c788ecf6ade7274eb94cac39c50a1186521ee58e4ec05e8037627a9dd6a9d86",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0008_content_access_projection.down.sql",
+      "bytes": 97,
+      "lines": 2,
+      "sha256": "e776fdb654057b2f51ac95d56ed25e7312516ec3a03c0610a5d3fd3587182568",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        2
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0009_payment_intents.down.sql",
+      "bytes": 277,
+      "lines": 5,
+      "sha256": "c9bee6064a354e45c1db953c8c4dc2d8fe1352ce346781775820a1491ff107b1",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        5
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0010_content_unlock_entitlements.down.sql",
+      "bytes": 256,
+      "lines": 5,
+      "sha256": "65f6c8a02e5362e7fa341cea5de37ab42feb13f5a3c7fb1ef12d6787947dc4e5",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        5
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0011_tip_support_settlement_ledger.down.sql",
+      "bytes": 158,
+      "lines": 3,
+      "sha256": "e696ff57658bee69c9026c1b9ba711d0ace1ec564f22038b2545f650ec683425",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        3
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0012_referral_attribution_commissions.down.sql",
+      "bytes": 439,
+      "lines": 8,
+      "sha256": "30bdc9f698d1c108e441e05df4506312dda4ebbe1ea0da9d9cbed647b15ab2d6",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        8
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0013_bunny_vod_playback_projection.down.sql",
+      "bytes": 239,
+      "lines": 6,
+      "sha256": "ea41ecf8200e900f73bd97fab6bc26ef31f1498158b5b37187df6d250223767f",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        6
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0014_livepeer_live_rooms_pass_chat_replay.down.sql",
+      "bytes": 481,
+      "lines": 11,
+      "sha256": "9b08754cca2bc0000add5c50fc438386a6f73ca08921f59936c0c457e312c8fb",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        11
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0015_messages_paid_messages.down.sql",
+      "bytes": 409,
+      "lines": 9,
+      "sha256": "52b00f047500ee08f98b0f56f17662266ca61e639902ddb7d545716751cd4f0e",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        9
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0016_activity_wallet_transactions.down.sql",
+      "bytes": 315,
+      "lines": 5,
+      "sha256": "d1323f9fec915b99fbf355301f0c7528e4a7f1cf199350403f583d9de10ac4a6",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        5
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0017_rls_policy_baseline.down.sql",
+      "bytes": 3986,
+      "lines": 56,
+      "sha256": "399553cb2a256c50003e8f98eaaeb0fdb560da4e984643e306cd391d2e9b2521",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        56
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0018_foreign_key_performance_indexes.down.sql",
+      "bytes": 1176,
+      "lines": 19,
+      "sha256": "e6e37430944cf57524e7b1de97416e7b2d4dd560d3007eb730b63f693d74e621",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        19
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0019_creator_monetisation_settings.down.sql",
+      "bytes": 284,
+      "lines": 4,
+      "sha256": "e4c6ef4e8c64fa37d0fc73729c5b8da53567cdbaf1108de5e483b65cc0816080",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        4
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0020_admin_ops_indexes.down.sql",
+      "bytes": 219,
+      "lines": 4,
+      "sha256": "adb21807b637d82761b6a7def64a377ea7473600ad1bef17e5c272b53012969d",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        4
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0021_events_ticketing.down.sql",
+      "bytes": 1003,
+      "lines": 19,
+      "sha256": "4944f942b280e3083642d7e70fa03582639fdd9475bfcfd5607db6f354e79005",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        19
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0022_event_ticketing_fk_indexes.down.sql",
+      "bytes": 306,
+      "lines": 5,
+      "sha256": "98df5ff17fdd3ecb77efe74c6bc0b869d543cc28bc458420baf117e01567c23b",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        5
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0023_dating_mode.down.sql",
+      "bytes": 345,
+      "lines": 7,
+      "sha256": "f6e3a4c568c5a15d969068f4234983d4418cd5f36287f7b63ce78c5fff780782",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        7
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0024_dating_fk_indexes.down.sql",
+      "bytes": 117,
+      "lines": 2,
+      "sha256": "178cdec0d3c39d3aa3acfa78b2e33fd9dcc3803bcd31deba706229d331d7ff16",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        2
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0025_ai_mcp_scoped_assistant.down.sql",
+      "bytes": 619,
+      "lines": 14,
+      "sha256": "e796c261d80f05abac3de4ac0f98616dc101d09528828a90fc826e4731beb0f6",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        14
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0026_ai_mcp_fk_indexes.down.sql",
+      "bytes": 60,
+      "lines": 1,
+      "sha256": "8f963082c9df73d253e193b075265fc418c9d34fed82344071184ba3fa40e6bb",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0027_engagement_feed_safety.down.sql",
+      "bytes": 2401,
+      "lines": 44,
+      "sha256": "57dc068b78c1a474c5b71e77bac907ca7e3b28dbb0746f6714246eeb5ca7d4c8",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        44
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0028_subscription_foundation.down.sql",
+      "bytes": 1722,
+      "lines": 29,
+      "sha256": "3f6e66faa8cf5144bce9a9f8d0286a4a3ac4493e8b6fa1ff97c0b53ede597bc2",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        29
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0029_subscription_fk_indexes.down.sql",
+      "bytes": 178,
+      "lines": 3,
+      "sha256": "6b9641c734daf05ebc4aeeb3db0fe9e323c57e46ee540e2a66de632950aaa71d",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        3
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0030_compliance_tax_foundation.down.sql",
+      "bytes": 1194,
+      "lines": 28,
+      "sha256": "50ddd6143bd4537042c387344cfe1653fb0afb514519b5e99908a397c8c26923",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        28
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0031_compliance_tax_fk_indexes.down.sql",
+      "bytes": 1820,
+      "lines": 29,
+      "sha256": "406b7835804ed942d6fcb4fe3de6c61255462fbdaf6aed2e4a91cc218328f978",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        29
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0032_discover_hashtags.down.sql",
+      "bytes": 449,
+      "lines": 11,
+      "sha256": "271209aa3994b902c7ca9358714aa3af78b1814426b2d67b9f22587067589f6c",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        11
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0033_wallet_onramp_sessions.down.sql",
+      "bytes": 313,
+      "lines": 5,
+      "sha256": "3cc8299003236b1287d3dc6688cf45c1bfb0807c7320f118ccb5b96c03e280bf",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        5
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0034_notifications_foundation.down.sql",
+      "bytes": 1544,
+      "lines": 27,
+      "sha256": "46f6eda5cdf7df4ae76f5df9daaa989e45366a2ab6dad94ae8dc649d92f8fdb6",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        27
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0035_organization_memberships.down.sql",
+      "bytes": 406,
+      "lines": 9,
+      "sha256": "bf009f0eca7c49a2fe2426ac31f58af8233b8b5dd3dbb6a8b6cc69874b70c7cc",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        9
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0036_organization_memberships_advisor_fixes.down.sql",
+      "bytes": 646,
+      "lines": 20,
+      "sha256": "b7fa9a008c105f3b1b12ef9ecc698956f05f7bb964f6dd21bb04e7fb135a956e",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        20
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0037_notification_delivery_queue.down.sql",
+      "bytes": 686,
+      "lines": 18,
+      "sha256": "481309d2f89c81166861196c55fd47bd9fd420940a69ac0074691cf5812f5ad1",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        18
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0038_notification_delivery_advisor_fixes.down.sql",
+      "bytes": 166,
+      "lines": 3,
+      "sha256": "3b402794e6cae4b806ec66abc5e1c2950a151419be7e700389ef04d872c178cd",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        3
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0039_realtime_projection_publication.down.sql",
+      "bytes": 218,
+      "lines": 3,
+      "sha256": "d3c8e9a137868f67a92202d2a95ea2b25e2391b0563d705ce1143067499494fd",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        3
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0040_organization_member_admin_workflow.down.sql",
+      "bytes": 130,
+      "lines": 2,
+      "sha256": "3f80225b94c1e3904447b2920dae645d7eba26f5699fc92d4237075fe4fa4e06",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        2
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0041_support_case_policy_surface.down.sql",
+      "bytes": 601,
+      "lines": 13,
+      "sha256": "af82d4f56f11f2679973c1fb4b79e0bb4a6939af1605bbd07f4a1534cda3172b",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        13
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0042_support_case_advisor_fixes.down.sql",
+      "bytes": 115,
+      "lines": 2,
+      "sha256": "025c80b1d2ebdba62e1f4078b7c2a91e0333d57b5e0700d417952f6c644f20f7",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        2
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0043_refund_dispute_request_workflow.down.sql",
+      "bytes": 438,
+      "lines": 10,
+      "sha256": "62e76473dfe53b6007c9d49a848efb29944a576611c4be2c7db4aca5f088a404",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        10
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0044_admin_data_request_feature_flag_surfaces.down.sql",
+      "bytes": 456,
+      "lines": 11,
+      "sha256": "ce8b753b8bbddbead15a300e16a758dfdaeceeea10df142c5ebda04a93666dd2",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        11
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0045_seed_feature_flag_policy_defaults.down.sql",
+      "bytes": 201,
+      "lines": 4,
+      "sha256": "751c5810a98221cf2409810ba1d59664032e5aeb4e425fcfd63533898daa7950",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        4
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0046_admin_moderation_report_states.down.sql",
+      "bytes": 342,
+      "lines": 14,
+      "sha256": "f65eb1e8dfc6024982d118e2209c6bac2e39201cf8dc58712736a61e85543eb7",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        14
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0047_provider_event_replay_requests.down.sql",
+      "bytes": 297,
+      "lines": 4,
+      "sha256": "eb4404f7aa9cd5ae7536091b1f074a78d814092bf85debd8d64a08695b113d05",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        4
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0048_provider_event_replay_request_advisor_fixes.down.sql",
+      "bytes": 75,
+      "lines": 1,
+      "sha256": "c37c60da12ed6fba401e528d44ee3d89ebfd4d322cddf562c76f902ffbd0efe8",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0049_event_access_mutuals_canonical_names.down.sql",
+      "bytes": 6015,
+      "lines": 125,
+      "sha256": "d1391c34799bf606c0fa6bbd22be7a9760edc4827d9c8eddfeebeedf53f9066f",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        125
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0050_event_access_payment_product_type.down.sql",
+      "bytes": 99,
+      "lines": 3,
+      "sha256": "182c80b32a6248c18a5e2d5ad6507d98cddded4d5deeed74d3587e05eb530df9",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        3
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0051_live_room_provider_reservation.down.sql",
+      "bytes": 71,
+      "lines": 2,
+      "sha256": "350624869510916cd80b3604541f4dfb1799529d5963f74414a0a91718ca5b4b",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        2
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0052_content_preview_controls.down.sql",
+      "bytes": 69,
+      "lines": 2,
+      "sha256": "a7922b1990278e466a8d2d142acc871459aaa6632ef8a2ace1ac6f547a9ec27e",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        2
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0053_content_publish_state.down.sql",
+      "bytes": 1980,
+      "lines": 52,
+      "sha256": "10dc8729ae93374521f4face9b29a6111bd0bfa89bce729d61e215526549de4d",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        52
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0054_event_content_link.down.sql",
+      "bytes": 117,
+      "lines": 4,
+      "sha256": "8524f7508b83691933606137277f45f56f6a9182fe73d0ece126e940e8686237",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        4
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0055_content_creation_abuse_policy_seed.down.sql",
+      "bytes": 78,
+      "lines": 2,
+      "sha256": "932d3cf492417d11e9ac114b7335518b0f4ba550509fe3939d6da30bfc55a986",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        2
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0056_event_access_purchase_request_state.down.sql",
+      "bytes": 484,
+      "lines": 12,
+      "sha256": "39ddc09b068a1a1873a3b15d9a6d0657682c0bc4bad189c0eb1a1a65f526790f",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        12
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0057_refund_request_idempotency.down.sql",
+      "bytes": 181,
+      "lines": 5,
+      "sha256": "af35f56e2bc545226bfb19d8c79dc6557554ebb7d1ffe38480d078772f9b8947",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        5
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0058_payment_withdrawal_waiver_evidence.down.sql",
+      "bytes": 385,
+      "lines": 9,
+      "sha256": "d972ada025d2f83ccdb11f0a9177d1deaf4a47bd0b82cd1fe37e342c7078d4cd",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        9
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0059_payment_durable_confirmations.down.sql",
+      "bytes": 441,
+      "lines": 10,
+      "sha256": "821e917fdaddadeca56b79d8dd15e4edfb306930acd950dd2fa948a7254c93c0",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        10
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0060_payment_confirmation_email_delivery.down.sql",
+      "bytes": 570,
+      "lines": 14,
+      "sha256": "d9bd99264f9243097483d49eedb8866d242b9c52d970f55a86344e4dfe5709d0",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        14
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0061_provider_event_replay_payload.down.sql",
+      "bytes": 130,
+      "lines": 4,
+      "sha256": "6628c8e5a3f79bf670575971bc97b4a6f1958c0f5973b58e221666e9148eb9c8",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        4
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0062_refund_remediation_evidence.down.sql",
+      "bytes": 441,
+      "lines": 9,
+      "sha256": "5cd366c9188d90ee0c3a4891ddae55015f63103cdb64fe4a604caf2d1d41d38b",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        9
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0063_creator_split_payment_settlement.down.sql",
+      "bytes": 994,
+      "lines": 22,
+      "sha256": "958296d5a192ff282966f4cd392403bd923910a613d18e37cd632d1393741964",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        22
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0064_solana_subscription_verifier_hardening.down.sql",
+      "bytes": 3315,
+      "lines": 73,
+      "sha256": "bd43879330ed9326114fe55b01dd002461a8da0ff26030707ac23aeeda49a6b2",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        73
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0065_external_mcp_connector_foundation.down.sql",
+      "bytes": 232,
+      "lines": 5,
+      "sha256": "79f3d319a3633aab14c788d342087a2a4ec4fd4a1935df057a518b07ed9a87e9",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        5
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0066_mcp_oauth_completion.down.sql",
+      "bytes": 886,
+      "lines": 21,
+      "sha256": "51b5697663f53f37668ed7f92efa51c80cf4d4c3db1c311a38e8e95a11f5ca08",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        21
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0067_wallet_first_auth.down.sql",
+      "bytes": 818,
+      "lines": 17,
+      "sha256": "3fc999d59c1a0a767c92e1d171fa70180a286f85364f2c4b77fd5483e3e2c396",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        17
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0068_profile_media_links.down.sql",
+      "bytes": 122,
+      "lines": 3,
+      "sha256": "215b3fb0ca974ea796d41d2662dae479857332a04504b9e16e18e28af5e22463",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        3
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0069_normalized_verification_domain.down.sql",
+      "bytes": 633,
+      "lines": 12,
+      "sha256": "9f5c8c6bca4886e33e2344812546a367ed1dc7d3b5483f743b90a42a2921ee00",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        12
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0070_profile_avatar_storage_bucket.down.sql",
+      "bytes": 208,
+      "lines": 9,
+      "sha256": "94e4923b8b3a4c6d231154c2eb4414c7ca90e5e7baf3b80b229a592cff8d1590",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        9
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0071_profile_avatar_storage_limit.down.sql",
+      "bytes": 239,
+      "lines": 10,
+      "sha256": "752365260a386326145669e2b74e15fbd7c3688fcb29ae78dfc594ae52cb85bb",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        10
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0072_platform_tier_authority.down.sql",
+      "bytes": 856,
+      "lines": 23,
+      "sha256": "40e211288b142acdf50773e24021ec433610a479382d00c05c83bb336f626342",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        23
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0073_live_access_modes.down.sql",
+      "bytes": 1508,
+      "lines": 43,
+      "sha256": "1e7ab097f548f2d793a07920a54ff54f738769eb0e0288e7c3bbf70fc67200ee",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        43
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0074_supabase_advisor_fk_indexes.down.sql",
+      "bytes": 668,
+      "lines": 11,
+      "sha256": "14a48eb2f53613c3f9a48bd63fbd6b86300b7807590c6424e62d8fb5458c7a70",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        11
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0075_platform_tier_policy_plan_index.down.sql",
+      "bytes": 67,
+      "lines": 1,
+      "sha256": "28b36407030b05bc9800c18b970e0696f385dd48e9e19c65177c872c9d21d76d",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0076_revoke_exposed_wallet_sessions.down.sql",
+      "bytes": 84,
+      "lines": 1,
+      "sha256": "5e49516747226bede95b1749a6b1b84f559f5c56f253d202b49bcda7da6b9545",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0077_universal_account_media_safety.down.sql",
+      "bytes": 776,
+      "lines": 21,
+      "sha256": "0891e1c1d5ff5eb40ddb237047b4d8257e6e80195f2ded809f7d1767632cf96d",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        21
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0078_legacy_age_archive_deny_policy.down.sql",
+      "bytes": 86,
+      "lines": 1,
+      "sha256": "ff967d9abb3cd33b991e82ae7e139fa491398ef4523bedc634da0e0e491862a2",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0079_worker_lease_reliability.down.sql",
+      "bytes": 2076,
+      "lines": 42,
+      "sha256": "8b9a6be756a095995f7c4704c7672fc9deeec297648ef2b6ca26bec06b1f5eb7",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        42
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0080_worker_queue_recovery_private.down.sql",
+      "bytes": 207,
+      "lines": 5,
+      "sha256": "bbc40a9e510ec811cf4db17c00c51bbdcf9d3d344407056aebbac25be5be934c",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        5
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0081_worker_queue_recovery_actor_index.down.sql",
+      "bytes": 75,
+      "lines": 1,
+      "sha256": "9c448678ab45cdc116009ee092363d89cce279ad18594daa5c9500297b566603",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0082_payment_checkout_and_usdc.down.sql",
+      "bytes": 539,
+      "lines": 14,
+      "sha256": "0a86c877c6a8561f46f6769d37c051d4a37dbe25d7062cd795f8b5c99af6dcea",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        14
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0083_platform_usage_accounting.down.sql",
+      "bytes": 302,
+      "lines": 9,
+      "sha256": "58f6d82f9d8ed2d186198f25f900fb0f583246eb69a57866b6644a6b8ab39312",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        9
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0084_message_idempotency.down.sql",
+      "bytes": 118,
+      "lines": 4,
+      "sha256": "3668f35cb9a704cb03fcc1967d24dc998387c0d6859de57e10964ee8c2b95a9e",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        4
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0085_audit_event_idempotency.down.sql",
+      "bytes": 132,
+      "lines": 4,
+      "sha256": "15e1f8199e1bda496b8ba13293d134f32c1529f8c4314dc80507f53abe3a399c",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        4
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0086_adult_publisher_identity.down.sql",
+      "bytes": 1287,
+      "lines": 45,
+      "sha256": "26ffca24192eecfdb59530cb44abdd65d2462ce853d455b9d75242cd8ce62288",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        45
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0087_recipient_monetisation_policy.down.sql",
+      "bytes": 101,
+      "lines": 1,
+      "sha256": "43433d155dfe3d957300eba898d9100c36a91b5783671306dd7fc768f954f6de",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        1
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0088_media_safety_and_consent.down.sql",
+      "bytes": 641,
+      "lines": 13,
+      "sha256": "eecfc8d87fb90603d445dd446f244830d04ef1875b061f689981308e28122309",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        13
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0089_media_safety_fk_indexes.down.sql",
+      "bytes": 585,
+      "lines": 10,
+      "sha256": "2b93ae1dda28702c28659c4eda28de39f2d9c594f39a9e14bb48406dcff85efe",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        10
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0090_monetisation_performer_enterprise_authorities.down.sql",
+      "bytes": 10288,
+      "lines": 237,
+      "sha256": "ebce328893b63d0753f6b3b4942c618a595f430e8bb618dc7d927fdd3084580d",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        237
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0091_canonical_identity_session_security.down.sql",
+      "bytes": 2790,
+      "lines": 79,
+      "sha256": "16044a328db6b9dc3d3faa6f0ada11edd5e3579effd52dc1875ced91c2980ade",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        79
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0092_sfw_publication_review_projection.down.sql",
+      "bytes": 812,
+      "lines": 28,
+      "sha256": "4ab0688296590d1aecc2a9e8d564eed01f2eb52a211f26e8492cd987eba48c15",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        28
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0093_media_appeal_idempotency_hash.down.sql",
+      "bytes": 148,
+      "lines": 3,
+      "sha256": "0a2e2befe6505c4e0c019d4d8c383394e9e21665a54070f7cc4ee8132db867fd",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        3
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0094_social_graph_feed_projections.down.sql",
+      "bytes": 2619,
+      "lines": 46,
+      "sha256": "6ce0d244e5b4941592f0d578371062ffaa42c690ec8eeb798e9e6fd6ec1588e2",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        46
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0095_realtime_messages_notifications.down.sql",
+      "bytes": 4774,
+      "lines": 122,
+      "sha256": "f613537b8da969acf81557a3697ac9ba3ffb54404635db4b6aef7e3b8de6d1bc",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        122
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0096_one_time_monetisation_checkout.down.sql",
+      "bytes": 1735,
+      "lines": 51,
+      "sha256": "d9ffb4cc2711488721d9aec45cd6bca16d70fa65d8fdb6a380414f51ffa40301",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        51
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0097_sfw_live_controls_and_chat.down.sql",
+      "bytes": 2077,
+      "lines": 56,
+      "sha256": "138bf3676f9fa8bffd3603f0e295435d52492727ca341e5b6545720e69e1e7cc",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        56
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0098_recurring_membership_authority.down.sql",
+      "bytes": 1204,
+      "lines": 32,
+      "sha256": "4985de185a43e64f738b3bb734b57f4f77bb56c6b36b6279549f35370b2a2b35",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        32
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0099_enterprise_managed_creator_authority.down.sql",
+      "bytes": 2905,
+      "lines": 86,
+      "sha256": "fb2670ea2b34f65f54e7cb458c5c84618b04a43157e6c8e3395bb21899dda5f4",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        86
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0100_content_draft_idempotency_lifetime.down.sql",
+      "bytes": 193,
+      "lines": 6,
+      "sha256": "768266ee68924ff4c5f3351695d11adccc771d8e0a686fbbf2615c07f58935f8",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        6
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0101_payment_ledger_atomic_safety.down.sql",
+      "bytes": 116,
+      "lines": 2,
+      "sha256": "fdf41e2b5b319835c9b73145f5a446203f05433908a92ec57b99d77c6e9022fe",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        2
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0102_checkout_consent_idempotency_lifetime.down.sql",
+      "bytes": 275,
+      "lines": 7,
+      "sha256": "2d08c546801219579ee55c08a689113df8e060c6431f0e79a73d7026dcd728fc",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        7
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0103_payment_commercial_policy.down.sql",
+      "bytes": 1035,
+      "lines": 19,
+      "sha256": "774b60493a540461350eaced8b473000db03bc3cec1d3ee48f2bc4da45190cc4",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        19
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0104_provider_event_delivery_order.down.sql",
+      "bytes": 197,
+      "lines": 6,
+      "sha256": "bab5204d34b30b2c40279faa5da1b8f3ecbc2142b6e2aece2715d3e86daff8f7",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        6
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0105_live_room_provider_observation.down.sql",
+      "bytes": 68,
+      "lines": 2,
+      "sha256": "1bb4441b7e5aa1a523649b547650ded6a6065375195f56613adbd419035f6e1b",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        2
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0106_media_release_evidence.down.sql",
+      "bytes": 2753,
+      "lines": 72,
+      "sha256": "c7dfd005b65f0dc3e076998135b3a0124da98231f3da0421acd3d44c3841d910",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        72
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0107_canonical_access_identity.down.sql",
+      "bytes": 88,
+      "lines": 2,
+      "sha256": "b356ddb177b8ac402455c31f79986213d5f7e991f19452b799a1a771796f4649",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        2
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0108_policy_content_eligibility_convergence.down.sql",
+      "bytes": 6010,
+      "lines": 157,
+      "sha256": "1e3412550333c0ca2de770b445fe50449cfc87aae00f72c4657ae213ab7d91c9",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        157
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0109_universal_composer_authority.down.sql",
+      "bytes": 4946,
+      "lines": 113,
+      "sha256": "d6721b668db805df72f8629514639ebeb02442b5ab63096a89a97dbba312c807",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        113
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0110_analytics_core.down.sql",
+      "bytes": 1979,
+      "lines": 40,
+      "sha256": "e42c5f2d963917a1cf67c6669e3b4f78d58387c4e11204d14cc2a4ad929e1847",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        40
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0111_auth_lifecycle_purpose.down.sql",
+      "bytes": 208,
+      "lines": 5,
+      "sha256": "1f33dc1fa439bd88659abe99c8b91ebc8616f2840020bc42ff354c5f20ab6354",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        5
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0112_realtime_messaging_live_safety.down.sql",
+      "bytes": 5563,
+      "lines": 108,
+      "sha256": "448f54700cc532e7d1f41c70289f687e13ab15b4910370e2bcbc4c93214323fc",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        108
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0113_consumer_social_privacy.down.sql",
+      "bytes": 1716,
+      "lines": 46,
+      "sha256": "36aaffef8326b727c6d0a61e83d33c68adcb2f91877968007446c6de6a0d03bf",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        46
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0114_mcp_profile_bridge.down.sql",
+      "bytes": 436,
+      "lines": 12,
+      "sha256": "bf939bf2e5d85fc3af1f70a0281efded9665d4143cc4febdbefa7c80d24ebb8e",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        12
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0115_mcp_media_provenance_bridge.down.sql",
+      "bytes": 2368,
+      "lines": 60,
+      "sha256": "33d17ac003e754e1c7b5182d8c374330e5fc295809772404225b34458b3bbfc5",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        60
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0116_staff_permission_registry_and_staging_fixtures.down.sql",
+      "bytes": 399,
+      "lines": 6,
+      "sha256": "2197335037ef213c5ad8fa32505c72e92be1675efd5cd01c86c04ab7edb464f4",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        6
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0117_moments_and_scheduled_publication.down.sql",
+      "bytes": 1290,
+      "lines": 29,
+      "sha256": "a93a3e9943e039e0e344fb376db22b0b1a6c0f501143659a5899570e5fc45765",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        29
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0118_landing_convergence_analytics.down.sql",
+      "bytes": 2676,
+      "lines": 60,
+      "sha256": "42a8c178d4e06e85aebf566c03b74d06c7b9c01608c6a058fcb89bde4433e086",
+      "coverage": "full semantic source read",
+      "read_range": [
+        1,
+        60
+      ]
+    }
+  ],
+  "supplemental_full_reads": [
+    {
+      "path": "packages/database/README.md",
+      "bytes": 3382,
+      "lines": 64,
+      "sha256": "ece59b2cc1fce77ccaef5bab485e4d08f43ae1cc36f0ff8c180bde14d4fc3fdd",
+      "coverage": "full semantic source read"
+    },
+    {
+      "path": "packages/database/schema-blueprint.sql",
+      "bytes": 63793,
+      "lines": 1895,
+      "sha256": "29b9e475e0f55d2c0278d425bb24d7fa4ce05c6f1b41a18a1726088cd157b6d7",
+      "coverage": "full semantic source read"
+    },
+    {
+      "path": "packages/database/scripts/check-migrations.mjs",
+      "bytes": 2612,
+      "lines": 83,
+      "sha256": "7f340b94524e50f2cdd72d0b6417538cce84fe24ab941f59e8d2a3a523cb8073",
+      "coverage": "full semantic source read"
+    },
+    {
+      "path": "packages/database/package.json",
+      "bytes": 309,
+      "lines": 14,
+      "sha256": "2e488c7d7885341b34250d08d27b76addcf8fdba27b3440094a6229fe697e756",
+      "coverage": "full semantic source read"
+    },
+    {
+      "path": "packages/database/src/index.ts",
+      "bytes": 53,
+      "lines": 1,
+      "sha256": "5f5323dddc74d23d43dacd1acf9d46d5ab3b82635a91178ff4b856a3e34b9042",
+      "coverage": "full semantic source read"
+    },
+    {
+      "path": "packages/database/tsconfig.json",
+      "bytes": 166,
+      "lines": 9,
+      "sha256": "42f9d91ed9f6a5a1b34e00e849920f703fcb10e69c58d0a4fbcdd7db44dbe038",
+      "coverage": "full semantic source read"
+    },
+    {
+      "path": "packages/database/vitest.config.ts",
+      "bytes": 155,
+      "lines": 8,
+      "sha256": "dfad60e59ab22a04d1c39104d25845ba9241421d2a05531291532986131a44af",
+      "coverage": "full semantic source read"
+    }
+  ],
+  "migration_test_coverage": "Delegated full semantic source read to migration_test_fullread; independent artifact migration-test-coverage.json.",
+  "supplemental_schema_blueprint_read_ranges": [
+    [
+      1,
+      240
+    ],
+    [
+      241,
+      720
+    ],
+    [
+      721,
+      1200
+    ],
+    [
+      1201,
+      1680
+    ],
+    [
+      1681,
+      1895
+    ]
+  ],
+  "confirmed_new_findings": [
+    "ROLLBACK-01"
+  ],
+  "runtime_proof": "rollback-moment-proof.json"
+}

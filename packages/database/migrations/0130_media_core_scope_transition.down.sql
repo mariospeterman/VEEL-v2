@@ -9,6 +9,14 @@ alter table content_items
   drop constraint if exists content_items_published_at_required_check;
 
 alter table viewer_feed_preferences
+  add constraint viewer_feed_preferences_default_feed_mode_transition_check
+    check (default_feed_mode in ('recommended', 'latest', 'following'))
+    not valid;
+
+alter table viewer_feed_preferences
+  validate constraint viewer_feed_preferences_default_feed_mode_transition_check;
+
+alter table viewer_feed_preferences
   drop constraint if exists viewer_feed_preferences_default_feed_mode_check;
 
 update viewer_feed_preferences
@@ -20,7 +28,14 @@ alter table viewer_feed_preferences
 
 alter table viewer_feed_preferences
   add constraint viewer_feed_preferences_default_feed_mode_check
-    check (default_feed_mode in ('recommended', 'following'));
+    check (default_feed_mode in ('recommended', 'following'))
+    not valid;
+
+alter table viewer_feed_preferences
+  validate constraint viewer_feed_preferences_default_feed_mode_check;
+
+alter table viewer_feed_preferences
+  drop constraint viewer_feed_preferences_default_feed_mode_transition_check;
 
 comment on column content_items.published_at is null;
 comment on table feed_ranking_sessions is

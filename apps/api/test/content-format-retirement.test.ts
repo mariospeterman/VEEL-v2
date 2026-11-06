@@ -213,6 +213,34 @@ describe("retired content formats", () => {
       viewerOptionId: optionId
     });
     expect(queries.some((query) => query.includes("insert into content_poll_votes"))).toBe(false);
+    expect(queries.some((query) => query.includes("from private.eligible_content"))).toBe(true);
+  });
+
+  it("does not reveal the current poll projection when a completed replay is no longer eligible", async () => {
+    const queries: string[] = [];
+    const transaction = transactionStub((query) => {
+      queries.push(query);
+      if (query.includes("select request_hash, response_body from idempotency_keys")) {
+        return [{
+          request_hash: "request-hash",
+          response_body: { contentId, optionId }
+        }];
+      }
+      if (query.includes("select jsonb_build_object")) return [];
+      return [];
+    });
+    const repository = createContentPollRepositoryMethods(sqlStub(transaction));
+
+    await expect(repository.voteOnPoll!({
+      appUserId: actorId,
+      contentId,
+      optionId,
+      idempotencyKey: "poll-vote-key",
+      requestHash: "request-hash"
+    })).resolves.toBeNull();
+
+    expect(queries.some((query) => query.includes("from private.eligible_content"))).toBe(true);
+    expect(queries.some((query) => query.includes("insert into content_poll_votes"))).toBe(false);
   });
 
   it("keeps changed-request poll receipt reuse as an idempotency conflict", async () => {

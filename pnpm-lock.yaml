@@ -228,6 +228,9 @@ importers:
       '@veel/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      bs58:
+        specifier: 6.0.0
+        version: 6.0.0
       fastestsmallesttextencoderdecoder:
         specifier: 1.0.22
         version: 1.0.22

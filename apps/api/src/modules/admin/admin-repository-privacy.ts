@@ -5,6 +5,7 @@ import {
   resolveMutationActorBySupabaseUserId
 } from "../../shared/mutation-command-receipt.js";
 import { withPostgresTransaction } from "../../shared/postgres.js";
+import { AdminRepositoryStateConflictError } from "./admin-repository-errors.js";
 import type { AdminRepository } from "./types.js";
 import {
   RefundDisputeRow,
@@ -228,24 +229,31 @@ export function createPrivacyRepository(
       const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<DataRequestRow[]>`
         select
-          id,
-          requester_user_id,
-          type,
-          state,
-          privacy_boundary,
-          created_at,
-          updated_at,
-          completed_at
-        from data_requests
+          request.id,
+          request.requester_user_id,
+          request.type,
+          request.state,
+          request.privacy_boundary,
+          export_job.id as content_export_job_id,
+          export_job.state as content_export_job_state,
+          export_job.cleanup_state as content_export_cleanup_state,
+          export_job.archive_upload_started_at as content_export_archive_upload_started_at,
+          request.created_at,
+          request.updated_at,
+          request.completed_at
+        from data_requests request
+        left join content_export_jobs export_job
+          on request.type = 'export'
+          and export_job.data_request_id = request.id
         where (
           ${cursor.timestamp}::timestamptz is null
-          or created_at < ${cursor.timestamp}::timestamptz
+          or request.created_at < ${cursor.timestamp}::timestamptz
           or (
-            created_at = ${cursor.timestamp}::timestamptz
-            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+            request.created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or request.id < ${cursor.id}::uuid)
           )
         )
-        order by created_at desc, id desc
+        order by request.created_at desc, request.id desc
         limit ${pageSize + 1}
       `;
 
@@ -262,6 +270,20 @@ export function createPrivacyRepository(
           input.supabaseUserId
         );
         if (!actorUserId) return null;
+
+        const requests = await transaction<Array<{ type: "delete" | "export" }>>`
+          select type
+          from data_requests
+          where id = ${input.dataRequestId}
+          for update
+        `;
+        const request = requests[0];
+        if (!request) return null;
+        if (request.type === "export") {
+          throw new AdminRepositoryStateConflictError(
+            "Content export lifecycle is managed by the content export job"
+          );
+        }
 
         return executeWithMutationCommandReceipt(transaction, {
           actorUserId,
@@ -331,15 +353,22 @@ export function createPrivacyRepository(
             returning id
           )
           select
-            id,
-            requester_user_id,
-            type,
-            state,
-            privacy_boundary,
-            created_at,
-            updated_at,
-            completed_at
+            updated_request.id,
+            updated_request.requester_user_id,
+            updated_request.type,
+            updated_request.state,
+            updated_request.privacy_boundary,
+            export_job.id as content_export_job_id,
+            export_job.state as content_export_job_state,
+            export_job.cleanup_state as content_export_cleanup_state,
+            export_job.archive_upload_started_at as content_export_archive_upload_started_at,
+            updated_request.created_at,
+            updated_request.updated_at,
+            updated_request.completed_at
           from updated_request
+          left join content_export_jobs export_job
+            on updated_request.type = 'export'
+            and export_job.data_request_id = updated_request.id
           where exists (select 1 from audit_insert)
         `;
 

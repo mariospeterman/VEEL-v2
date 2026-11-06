@@ -89,12 +89,18 @@ export function decodeFeedCursor(cursor: string, expectedScope: string): Decoded
     throw new InvalidFeedCursorError();
   }
 
-  let value: Partial<Omit<FeedCursorPayload, "version">> & { version?: number };
+  let parsed: unknown;
   try {
-    value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as typeof value;
+    parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
   } catch {
     throw new InvalidFeedCursorError();
   }
+
+  if (!isPlainCursorPayload(parsed)) {
+    throw new InvalidFeedCursorError();
+  }
+
+  const value = parsed;
 
   // Versions 1 and 2 encoded the retired scored feed and its short-lived
   // ranking-session position. Neither can be reinterpreted as a publication
@@ -123,6 +129,14 @@ export function decodeFeedCursor(cursor: string, expectedScope: string): Decoded
 
 function validScope(value: string): boolean {
   return value.length > 0 && value.length <= 160;
+}
+
+function isPlainCursorPayload(
+  value: unknown
+): value is Partial<Omit<FeedCursorPayload, "version">> & { version?: number } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function hasFeedCursorErrorCode(error: unknown, code: string): boolean {

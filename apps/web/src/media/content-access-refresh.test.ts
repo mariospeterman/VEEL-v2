@@ -3,7 +3,9 @@ import {
   coalesceContentAccessRefresh,
   contentAccessSourceKey,
   createContentAccessRetryScheduler,
-  isAuthoritativeContentAccessDenial
+  isAuthoritativeContentAccessDenial,
+  playbackAccessSourceKey,
+  playbackResourceRefreshSchedule
 } from "./content-access-refresh";
 
 describe("coalesceContentAccessRefresh", () => {
@@ -214,5 +216,41 @@ describe("coalesceContentAccessRefresh", () => {
     expect([401, 403, 404, 410].every(isAuthoritativeContentAccessDenial)).toBe(true);
     expect(isAuthoritativeContentAccessDenial(500)).toBe(false);
     expect(isAuthoritativeContentAccessDenial(undefined)).toBe(false);
+  });
+
+  it("renews signed playback before expiry and marks an expired capability immediately", () => {
+    const now = Date.parse("2026-11-06T12:00:00.000Z");
+    expect(playbackResourceRefreshSchedule("2026-11-06T12:00:30.000Z", now)).toEqual({
+      expiresInMs: 30_000,
+      renewInMs: 20_000
+    });
+    expect(playbackResourceRefreshSchedule("2026-11-06T11:59:59.000Z", now)).toEqual({
+      expiresInMs: 0,
+      renewInMs: 0
+    });
+    expect(playbackResourceRefreshSchedule(null, now)).toBeNull();
+  });
+
+  it("changes a live playback authority key across two signed renewals", () => {
+    const first = playbackAccessSourceKey("live:room-a", {
+      state: "full",
+      url: "https://live.example/room-a.m3u8",
+      jwt: "jwt-1",
+      expiresAt: "2026-11-06T12:00:30.000Z"
+    });
+    const second = playbackAccessSourceKey("live:room-a", {
+      state: "full",
+      url: "https://live.example/room-a.m3u8",
+      jwt: "jwt-2",
+      expiresAt: "2026-11-06T12:01:00.000Z"
+    });
+    const third = playbackAccessSourceKey("live:room-a", {
+      state: "full",
+      url: "https://live.example/room-a.m3u8",
+      jwt: "jwt-3",
+      expiresAt: "2026-11-06T12:01:30.000Z"
+    });
+
+    expect(new Set([first, second, third])).toHaveLength(3);
   });
 });

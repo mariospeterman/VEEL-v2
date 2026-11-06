@@ -33,11 +33,11 @@ export function createMutualsInterestRepositoryMethods(
             and mp.safety_state = 'clear'
             and mp.user_id <> (select id from actor)
             and exists (
-              select 1 from verification_records target_age
-              where target_age.subject_type = 'user'
-                and target_age.subject_id = mp.user_id
-                and target_age.purpose = 'age_access'
-                and target_age.status = 'valid'
+              select 1
+              from private.current_verification_decision(
+                'user', mp.user_id, 'age_access'
+              ) target_age
+              where target_age.status = 'valid'
                 and target_age.result_over_threshold is true
                 and (target_age.expires_at is null or target_age.expires_at > now())
             )

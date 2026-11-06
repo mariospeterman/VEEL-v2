@@ -276,6 +276,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/age/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the current durable age-assurance handoff */
+        get: operations["getAgeSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/age/sessions/{sessionId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reconcile and resume an existing age-assurance attempt without creating a second provider session */
+        post: operations["resumeAgeSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/age/status": {
         parameters: {
             query?: never;
@@ -1647,6 +1681,74 @@ export interface paths {
         put?: never;
         /** Request an account export or deletion workflow */
         post: operations["createDataRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy/content-exports/{contentExportId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request cancellation of an owned content export */
+        post: operations["cancelContentExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy/content-exports/{contentExportId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry an owned failed content export from its pinned snapshot */
+        post: operations["retryContentExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy/content-exports/{contentExportId}/download-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a short-lived owner-only content export download grant */
+        post: operations["createContentExportDownloadGrant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/privacy/content-exports/{contentExportId}/downloads/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stream an owned content export through a current short-lived grant */
+        get: operations["downloadContentExport"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4065,13 +4167,18 @@ export interface components {
             providerPreference: "reusable_first" | "didit" | "yoti" | "sumsub" | "veriff" | "persona";
         };
         AgeSession: {
-            /** Format: uuid */
+            /** @description Durable attempts use a WeVid UUID. A direct compatibility handoff may retain an opaque provider reference and is never resumable through the durable session routes. */
             id: string;
-            provider: string;
+            provider: string | null;
+            providerReference: string | null;
             /** Format: uri */
-            launchUrl: string;
+            launchUrl: string | null;
             /** Format: date-time */
-            expiresAt: string;
+            expiresAt: string | null;
+            /** @enum {string} */
+            launchState: "reserved" | "reconciling" | "ready" | "failed";
+            status: string;
+            resumable: boolean;
         };
         AgeStatus: {
             state: components["schemas"]["AgeState"];
@@ -4124,6 +4231,8 @@ export interface components {
             status: "valid" | "invalid" | "pending" | "expired" | "revoked" | "blocked";
             provider: string;
             method: string;
+            thresholdAge?: number | null;
+            resultOverThreshold?: boolean | null;
             assuranceLevel: string;
             /** Format: date-time */
             verifiedAt: string | null;
@@ -5257,13 +5366,48 @@ export interface components {
             /** @enum {string} */
             type: "export" | "delete";
             /** @enum {string} */
-            state: "requested" | "verifying" | "processing" | "completed" | "rejected";
+            state: "requested" | "verifying" | "processing" | "completed" | "rejected" | "cancelled" | "failed";
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt?: string | null;
             /** Format: date-time */
             completedAt?: string | null;
+            contentExport?: components["schemas"]["ContentExport"] | null;
+        };
+        ContentExport: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            dataRequestId: string;
+            /** @enum {string} */
+            state: "queued" | "processing" | "retry" | "ready" | "cancelled" | "dead_letter" | "expired";
+            progress: {
+                totalItems: number;
+                completedItems: number;
+                availableItems: number;
+                unavailableItems: number;
+            };
+            attemptCount: number;
+            lastErrorCode: string | null;
+            /** Format: date-time */
+            snapshotCreatedAt: string;
+            /** Format: date-time */
+            archiveReadyAt: string | null;
+            /** Format: date-time */
+            downloadableUntil: string | null;
+            canCancel: boolean;
+            canRetry: boolean;
+            canDownload: boolean;
+        };
+        ContentExportDownloadGrant: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            contentExportId: string;
+            /** Format: date-time */
+            expiresAt: string;
+            downloadUrl: string;
         };
         CreateDataRequestRequest: {
             /** @enum {string} */
@@ -5774,6 +5918,7 @@ export interface components {
             benefits: string[];
             amountMinor: number;
             currency: components["schemas"]["Currency"];
+            assetDecimals: number;
             periodDays: number;
             /** @enum {string} */
             billingMode: "manual_solana_pay" | "delegated_solana_subscription";
@@ -5800,6 +5945,15 @@ export interface components {
             planId: string;
             /** Format: uuid */
             creatorUserId?: string;
+            /** @enum {string} */
+            termsVersion: "subscription-recurring-terms-v1";
+            /** @enum {string} */
+            withdrawalWaiverVersion: "subscription-initial-access-waiver-v1";
+            /**
+             * @description Explicit acknowledgement that first-period access begins after the verified initial collection.
+             * @enum {boolean}
+             */
+            immediateAccessAcknowledged: true;
         };
         Subscription: {
             /** Format: uuid */
@@ -6692,9 +6846,17 @@ export interface components {
             /** @enum {string} */
             type: "export" | "delete";
             /** @enum {string} */
-            state: "requested" | "verifying" | "processing" | "completed" | "rejected";
+            state: "requested" | "verifying" | "processing" | "completed" | "rejected" | "cancelled" | "failed";
             /** @enum {string} */
             privacyBoundary: "sanitized_identity_minimized_no_raw_exports";
+            /** Format: uuid */
+            contentExportJobId: string | null;
+            /** @enum {string|null} */
+            contentExportJobState: "queued" | "processing" | "retry" | "ready" | "cancelled" | "dead_letter" | "expired" | null;
+            /** @enum {string|null} */
+            contentExportCleanupState: "not_ready" | "retained_private" | "manual_confirmation_required" | "manual_delete_confirmed" | null;
+            /** Format: date-time */
+            contentExportArchiveUploadStartedAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -7770,6 +7932,24 @@ export interface components {
                 "application/json": components["schemas"]["DataRequest"];
             };
         };
+        /** @description Owner-visible content export progress without provider references */
+        ContentExport: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ContentExport"];
+            };
+        };
+        /** @description Short-lived owner-only export download grant */
+        ContentExportDownloadGrant: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ContentExportDownloadGrant"];
+            };
+        };
         /** @description Canonical follow relationship and aggregate counts */
         FollowState: {
             headers: {
@@ -8836,6 +9016,8 @@ export interface components {
         SupportPolicyId: string;
         RefundDisputeId: string;
         DataRequestId: string;
+        ContentExportId: string;
+        ContentExportGrantId: string;
         CommentId: string;
         OrganizationId: string;
         MembershipId: string;
@@ -9570,10 +9752,52 @@ export interface operations {
         requestBody: components["requestBodies"]["CreateAgeSession"];
         responses: {
             201: components["responses"]["AgeSession"];
+            202: components["responses"]["AgeSession"];
             400: components["responses"]["ValidationFailed"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getAgeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AgeSession"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    resumeAgeSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                sessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AgeSession"];
+            202: components["responses"]["AgeSession"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
             429: components["responses"]["RateLimited"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -11590,6 +11814,105 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    cancelContentExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentExportId: components["parameters"]["ContentExportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ContentExport"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    retryContentExport: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentExportId: components["parameters"]["ContentExportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["ContentExport"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    createContentExportDownloadGrant: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required for replay-safe money, entitlement, Event Access, message, social, Mutuals, age, verification, moderation, and admin mutations. */
+                "Idempotency-Key": components["parameters"]["RequiredIdempotencyKey"];
+            };
+            path: {
+                contentExportId: components["parameters"]["ContentExportId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: components["responses"]["ContentExportDownloadGrant"];
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    downloadContentExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contentExportId: components["parameters"]["ContentExportId"];
+                grantId: components["parameters"]["ContentExportGrantId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bounded tar archive of pinned creator-owned content */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Digest"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-tar": string;
+                };
+            };
+            400: components["responses"]["ValidationFailed"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["RateLimited"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     listConversations: {
         parameters: {
             query?: {
@@ -12431,6 +12754,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };

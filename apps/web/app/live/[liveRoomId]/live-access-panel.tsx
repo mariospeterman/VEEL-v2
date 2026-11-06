@@ -65,6 +65,7 @@ export function LiveAccessPanel({ room }: { room: LiveRoom }) {
           onConfirmed={() => router.refresh()}
           pendingLabel="Creating event access"
           readyCopy="Open the wallet request. Your confirmed access will appear automatically."
+          recoveryScope={`live_event_access:${room.id}`}
         />
       </div>
     </section>

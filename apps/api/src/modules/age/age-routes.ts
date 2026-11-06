@@ -33,6 +33,7 @@ interface RegisterAgeRoutesOptions {
 }
 
 const ageProviderPreferences = new Set(["reusable_first", "didit", "yoti", "sumsub", "veriff", "persona"]);
+const definitiveProviderCreateRejections = new Set([400, 401, 403]);
 // Didit V3 uses one application-level webhook destination across workflows.
 // Route every Didit event through the normalized verification webhook so age,
 // adult eligibility, KYC, and KYB sessions share one idempotency boundary.
@@ -53,24 +54,26 @@ export async function registerAgeRoutes(
           headers: request.headers,
           env: app.config
         });
-        const result = await options.ageRepository.applyProviderWebhook({
-          provider: normalized.provider,
-          providerEventId: normalized.providerEventId,
-          eventType: normalized.eventType,
-          providerReference: normalized.providerReference,
-          providerSubjectReference: normalized.providerSubjectReference ?? null,
-          providerCorrelationId: normalized.providerCorrelationId ?? null,
-          state: normalized.state,
-          verifiedAt: normalized.occurredAt ?? null,
-          failureCode: normalized.failureCode ?? null,
-          signatureHash: normalized.signatureHash,
-          payloadHash: createHash("sha256").update(rawBody).digest("hex")
-        });
+        const result = provider === "yoti"
+          ? await applyAuthenticatedYotiResult(options, normalized.providerReference)
+          : await options.ageRepository.applyProviderWebhook({
+              provider: normalized.provider,
+              providerEventId: normalized.providerEventId,
+              eventType: normalized.eventType,
+              providerReference: normalized.providerReference,
+              providerSubjectReference: normalized.providerSubjectReference ?? null,
+              providerCorrelationId: normalized.providerCorrelationId ?? null,
+              state: normalized.state,
+              verifiedAt: normalized.occurredAt ?? null,
+              failureCode: normalized.failureCode ?? null,
+              signatureHash: normalized.signatureHash,
+              payloadHash: createHash("sha256").update(rawBody).digest("hex")
+            });
 
         return reply.code(provider === "yoti" ? 200 : 202).send({
           provider: normalized.provider,
           received: 1,
-          processed: result === "applied" ? 1 : 0
+          processed: result === "applied" || result === true ? 1 : 0
         });
       } catch (error) {
         if (error instanceof AgeWebhookSignatureError) {
@@ -86,7 +89,9 @@ export async function registerAgeRoutes(
 
         if (
           error instanceof AgeWebhookConfigurationError ||
-          error instanceof AgeRepositoryConfigurationError
+          error instanceof AgeRepositoryConfigurationError ||
+          error instanceof AgeProviderHttpError ||
+          error instanceof AgeProviderUnavailableError
         ) {
           request.log.warn({ error }, "Age webhook is not configured");
           return reply.code(503).send({
@@ -146,6 +151,7 @@ export async function registerAgeRoutes(
     }
 
     let reservedSessionId: string | null = null;
+    let providerRequestStarted = false;
     try {
       const latestAgeStatus = await findAgeStatusForUser(
         options.ageRepository,
@@ -168,10 +174,19 @@ export async function registerAgeRoutes(
         ? await options.ageRepository.reservePendingAgeVerification?.({
             userId: verifiedSession.userId,
             idempotencyKey,
-            requestHash: createHash("sha256").update(JSON.stringify({ providerPreference })).digest("hex")
+            requestHash: createHash("sha256").update(JSON.stringify({ providerPreference })).digest("hex"),
+            providerPreference
           })
         : null;
       reservedSessionId = reservation?.id ?? null;
+      if (
+        reservation?.attempt &&
+        reservation.shouldCreateProviderSession === false
+      ) {
+        return reply
+          .code(reservation.attempt.launchState === "reconciling" || reservation.attempt.launchState === "reserved" ? 202 : 200)
+          .send(reservation.attempt);
+      }
       const providerSession = await options.ageProviderWaterfall.createSession({
         supabaseUserId: verifiedSession.userId,
         providerPreference,
@@ -185,6 +200,7 @@ export async function registerAgeRoutes(
                 sessionId: reservation.id,
                 ...selection
               });
+              providerRequestStarted = true;
             } }
           : {})
       });
@@ -219,17 +235,49 @@ export async function registerAgeRoutes(
         });
       }
 
-      return reply.code(201).send({
-        id: providerSession.providerReference,
-        provider: providerSession.provider,
-        launchUrl: providerSession.launchUrl,
-        expiresAt: providerSession.expiresAt.toISOString()
-      });
+      return reply.code(201).send(reservation
+        ? {
+            id: reservation.id,
+            provider: providerSession.provider,
+            providerReference: providerSession.providerReference,
+            launchUrl: providerSession.launchUrl,
+            expiresAt: providerSession.expiresAt.toISOString(),
+            launchState: "ready",
+            status: "pending",
+            resumable: true
+          }
+        : {
+            id: providerSession.providerReference,
+            provider: providerSession.provider,
+            providerReference: providerSession.providerReference,
+            launchUrl: providerSession.launchUrl,
+            expiresAt: providerSession.expiresAt.toISOString(),
+            launchState: "ready",
+            status: "pending",
+            resumable: false
+          });
     } catch (error) {
-      if (reservedSessionId && options.ageRepository.failPendingAgeVerification) {
+      const definitiveProviderRejection =
+        error instanceof AgeProviderHttpError &&
+        definitiveProviderCreateRejections.has(error.status);
+      if (reservedSessionId && providerRequestStarted && !definitiveProviderRejection) {
+        await options.ageRepository.markPendingAgeVerificationReconciling?.({
+          sessionId: reservedSessionId,
+          reason: "provider_create_outcome_ambiguous"
+        }).catch(() => undefined);
+        const attempt = await options.ageRepository.findAgeVerificationAttempt?.({
+          userId: verifiedSession.userId,
+          sessionId: reservedSessionId
+        }).catch(() => null);
+        if (attempt) return reply.code(202).send(attempt);
+      } else if (reservedSessionId && options.ageRepository.failPendingAgeVerification) {
         await options.ageRepository.failPendingAgeVerification({
           sessionId: reservedSessionId,
-          reason: error instanceof Error ? error.name : "provider_session_failed"
+          reason: definitiveProviderRejection
+            ? `provider_create_rejected_${error.status}`
+            : error instanceof Error
+              ? error.name
+              : "provider_session_failed"
         }).catch(() => undefined);
       }
       if (error instanceof Error && ["IDEMPOTENCY_KEY_REUSED", "VERIFICATION_SESSION_ALREADY_RESERVED"].includes(error.message)) {
@@ -264,6 +312,104 @@ export async function registerAgeRoutes(
     }
   });
 
+  app.get(
+    "/v1/age/sessions/:sessionId",
+    { schema: contractRouteSchema("getAgeSession") },
+    async (request, reply) => {
+      const verifiedSession = await verifyRequestSession(request, options.authVerifier);
+      if (!verifiedSession) {
+        return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+      }
+      const { sessionId } = request.params as { sessionId?: string };
+      if (!sessionId || !isUuid(sessionId)) {
+        return reply.code(400).send({ code: "validation_failed", message: "sessionId must be a UUID" });
+      }
+      const attempt = await options.ageRepository.findAgeVerificationAttempt?.({
+        userId: verifiedSession.userId,
+        sessionId
+      });
+      if (!attempt) return reply.code(404).send({ code: "not_found", message: "Age session not found" });
+      return reply.code(200).send(attempt);
+    }
+  );
+
+  app.post(
+    "/v1/age/sessions/:sessionId/resume",
+    mutationRateLimit("ageMutation", "resumeAgeSession"),
+    async (request, reply) => {
+      const verifiedSession = await verifyRequestSession(request, options.authVerifier);
+      if (!verifiedSession) {
+        return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+      }
+      const idempotencyKey = request.headers["idempotency-key"];
+      if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+        return reply.code(400).send({
+          code: "validation_failed",
+          message: "Idempotency-Key header is required"
+        });
+      }
+      const { sessionId } = request.params as { sessionId?: string };
+      if (!sessionId || !isUuid(sessionId)) {
+        return reply.code(400).send({ code: "validation_failed", message: "sessionId must be a UUID" });
+      }
+      let attempt = await options.ageRepository.recordAgeVerificationReconciliationAttempt?.({
+        userId: verifiedSession.userId,
+        sessionId
+      });
+      if (!attempt) return reply.code(404).send({ code: "not_found", message: "Age session not found" });
+
+      try {
+        if (
+          attempt.launchState === "reconciling" &&
+          attempt.provider &&
+          attempt.providerReference &&
+          options.ageProviderWaterfall.reconcileSession &&
+          options.ageRepository.applyProviderReconciliation
+        ) {
+          const reconciliation = await options.ageProviderWaterfall.reconcileSession({
+            provider: attempt.provider,
+            providerReference: attempt.providerReference
+          });
+          if (reconciliation.launchUrl && reconciliation.expiresAt) {
+            await options.ageRepository.completePendingAgeVerification?.({
+              sessionId,
+              providerSession: {
+                provider: attempt.provider,
+                providerReference: reconciliation.providerReference,
+                ...(reconciliation.providerSubjectReference
+                  ? { providerExternalUserId: reconciliation.providerSubjectReference }
+                  : {}),
+                launchUrl: reconciliation.launchUrl,
+                expiresAt: reconciliation.expiresAt,
+                rule: "over_18"
+              }
+            });
+          }
+          await options.ageRepository.applyProviderReconciliation(reconciliation);
+          attempt = await options.ageRepository.findAgeVerificationAttempt?.({
+            userId: verifiedSession.userId,
+            sessionId
+          }) ?? attempt;
+        }
+      } catch (error) {
+        if (
+          error instanceof AgeProviderUnavailableError ||
+          error instanceof AgeProviderIntegrationPendingError ||
+          error instanceof AgeProviderHttpError
+        ) {
+          request.log.warn({ error, sessionId }, "Age verification reconciliation is unavailable");
+          return reply.code(503).send({
+            code: "service_unavailable",
+            message: "Age verification provider is unavailable"
+          });
+        }
+        throw error;
+      }
+
+      return reply.code(attempt.launchState === "reconciling" || attempt.launchState === "reserved" ? 202 : 200).send(attempt);
+    }
+  );
+
   app.get("/v1/age/status", { schema: contractRouteSchema("getAgeStatus") }, async (request, reply) => {
     const verifiedSession = await verifyRequestSession(request, options.authVerifier);
 
@@ -287,6 +433,24 @@ export async function registerAgeRoutes(
       throw error;
     }
   });
+}
+
+async function applyAuthenticatedYotiResult(
+  options: RegisterAgeRoutesOptions,
+  providerReference: string
+): Promise<boolean> {
+  if (!options.ageProviderWaterfall.reconcileSession || !options.ageRepository.applyProviderReconciliation) {
+    throw new AgeRepositoryConfigurationError();
+  }
+  const reconciliation = await options.ageProviderWaterfall.reconcileSession({
+    provider: "yoti",
+    providerReference
+  });
+  return options.ageRepository.applyProviderReconciliation(reconciliation);
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function rawBodyBuffer(rawBody: string | Buffer | undefined): Buffer {

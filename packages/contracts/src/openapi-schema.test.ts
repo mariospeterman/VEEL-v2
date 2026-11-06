@@ -164,6 +164,7 @@ describe("OpenAPI 3.1 schema semantics", () => {
         benefits: [],
         amountMinor: 500,
         currency: "SOL",
+        assetDecimals: 9,
         periodDays: 30,
         billingMode: "manual_solana_pay",
         providerState: "staging_required",
@@ -171,6 +172,37 @@ describe("OpenAPI 3.1 schema semantics", () => {
       },
     });
     expectInvalid(monetisation, { ...monetisationBase, membershipOffer: "plan-1" });
+  });
+
+  it("requires a complete age-session resource for durable and direct handoffs", () => {
+    const ageSession = compileComponent("AgeSession");
+
+    expectValid(ageSession, {
+      id: "00000000-0000-4000-8000-000000000138",
+      provider: null,
+      providerReference: null,
+      launchUrl: null,
+      expiresAt: null,
+      launchState: "reserved",
+      status: "created",
+      resumable: false,
+    });
+    expectValid(ageSession, {
+      id: "yoti-session-1",
+      provider: "yoti",
+      providerReference: "yoti-session-1",
+      launchUrl: "https://age.example.test/session/yoti-session-1",
+      expiresAt: "2026-06-03T22:15:00.000Z",
+      launchState: "ready",
+      status: "pending",
+      resumable: false,
+    });
+    expectInvalid(ageSession, {
+      id: "yoti-session-1",
+      provider: "yoti",
+      launchUrl: "https://age.example.test/session/yoti-session-1",
+      expiresAt: "2026-06-03T22:15:00.000Z",
+    });
   });
 
   it("keeps sensitive playback capabilities response-only", () => {

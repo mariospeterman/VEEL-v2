@@ -1,0 +1,29 @@
+{
+  "method": "Independent re-execution of actual compiled service/API plus exact scripts with dependency/transport fixtures; no network/hosted database/provider execution",
+  "runtime": "v24.22.1",
+  "sourceMatchesBetweenCheckouts": true,
+  "suppression": {
+    "bucketDate": null,
+    "value": null,
+    "numerator": null,
+    "denominator": null,
+    "sampleSize": "3",
+    "privacyDecision": "suppressed_minimum_cohort"
+  },
+  "error": {
+    "status": 500,
+    "message": "VERIFICATION_INTERNAL_SENTINEL"
+  },
+  "journey": {
+    "id": "admin.operational_readiness",
+    "status": "PASS",
+    "blockerClass": null,
+    "cleanup": "not_run"
+  },
+  "invalidEnterpriseEvidenceAccepted": "PROVIDER_PROVEN",
+  "enterpriseRequests": [
+    "https://staging.example/v1/organizations",
+    "https://staging.example/v1/managed-creator-relationships",
+    "https://staging.example/v1/managed-creator-relationships/rel1/reporting"
+  ]
+}

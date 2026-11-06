@@ -1,22 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Src } from "@livepeer/react";
 import * as Player from "@livepeer/react/player";
 import type { ContentItem, LiveRoom } from "@/api-client";
 import { playbackLeaseAction, usePlaybackUsage } from "@/playback-usage";
+import { playbackResourceRefreshSchedule } from "@/media/content-access-refresh";
 
 type Playback = NonNullable<ContentItem["playback"] | LiveRoom["playback"]>;
 type PlayerJsInstance = InstanceType<(typeof import("player.js"))["default"]["Player"]>;
 
 export function ProviderPlayback({
-  onLeaseStarted,
+  onAccessRefresh,
   playback,
   posterUrl,
   resourceKey,
   title
 }: {
-  onLeaseStarted?: (() => Promise<unknown>) | undefined;
+  onAccessRefresh?: (() => Promise<unknown>) | undefined;
   playback: Playback | null | undefined;
   posterUrl?: string | null | undefined;
   resourceKey: string;
@@ -25,7 +26,7 @@ export function ProviderPlayback({
   return (
     <ProviderPlaybackResource
       key={resourceKey}
-      onLeaseStarted={onLeaseStarted}
+      onAccessRefresh={onAccessRefresh}
       playback={playback}
       posterUrl={posterUrl}
       title={title}
@@ -34,12 +35,12 @@ export function ProviderPlayback({
 }
 
 function ProviderPlaybackResource({
-  onLeaseStarted,
+  onAccessRefresh,
   playback,
   posterUrl,
   title
 }: {
-  onLeaseStarted?: (() => Promise<unknown>) | undefined;
+  onAccessRefresh?: (() => Promise<unknown>) | undefined;
   playback: Playback | null | undefined;
   posterUrl?: string | null | undefined;
   title: string;
@@ -49,49 +50,76 @@ function ProviderPlaybackResource({
   );
   const [leaseStarting, setLeaseStarting] = useState(false);
   const [leaseStartFailed, setLeaseStartFailed] = useState(false);
-  const usage = usePlaybackUsage(playback?.usage);
+  const {
+    exhausted: usageExhausted,
+    setPlaying: setUsagePlaying,
+    startLease
+  } = usePlaybackUsage(playback?.usage);
+  const accessRefreshRef = useRef(onAccessRefresh);
+  const playbackUsageRef = useRef(playback?.usage);
+  const refreshInFlight = useRef(false);
+  const playing = useRef(false);
+  const hasAccessRefresh = Boolean(onAccessRefresh);
 
-  useEffect(() => {
-    if (!playback?.expiresAt) {
-      setResourceExpired(false);
-      return;
-    }
-    const delay = Math.max(0, Date.parse(playback.expiresAt) - Date.now());
-    setResourceExpired(delay === 0);
-    if (delay === 0) return;
-    const timeout = window.setTimeout(() => setResourceExpired(true), delay);
-    return () => window.clearTimeout(timeout);
-  }, [playback?.expiresAt, playback?.url]);
+  accessRefreshRef.current = onAccessRefresh;
+  playbackUsageRef.current = playback?.usage;
 
-  async function startOrRenewLease() {
-    if (!playback?.usage || leaseStarting) return;
+  const setPlaying = useCallback((next: boolean) => {
+    playing.current = next;
+    setUsagePlaying(next);
+  }, [setUsagePlaying]);
+
+  const startOrRenewLease = useCallback(async () => {
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
     setLeaseStarting(true);
     setLeaseStartFailed(false);
     try {
-      if (playbackLeaseAction(playback.usage) === "reserve") {
-        const session = await usage.startLease();
+      const usage = playbackUsageRef.current;
+      if (usage && playbackLeaseAction(usage) === "reserve") {
+        const session = await startLease();
         if (!session || session.state !== "active") throw new Error("PLAYBACK_LEASE_NOT_ACTIVE");
       }
-      if (onLeaseStarted) {
-        await onLeaseStarted();
-        setLeaseStarting(false);
-      } else {
-        window.location.reload();
-      }
+      if (accessRefreshRef.current) await accessRefreshRef.current();
+      else window.location.reload();
     } catch {
       setLeaseStartFailed(true);
+    } finally {
+      refreshInFlight.current = false;
       setLeaseStarting(false);
     }
-  }
+  }, [startLease]);
 
-  if (usage.exhausted) {
+  useEffect(() => {
+    const schedule = playbackResourceRefreshSchedule(playback?.expiresAt);
+    if (!schedule) {
+      setResourceExpired(false);
+      return;
+    }
+    setResourceExpired(schedule.expiresInMs === 0);
+    const renewal = hasAccessRefresh && schedule.expiresInMs > 0
+      ? window.setTimeout(() => { void startOrRenewLease(); }, schedule.renewInMs)
+      : null;
+    const expiry = schedule.expiresInMs > 0
+      ? window.setTimeout(() => {
+          setResourceExpired(true);
+          if (playbackUsageRef.current && playing.current) void startOrRenewLease();
+        }, schedule.expiresInMs)
+      : null;
+    return () => {
+      if (renewal !== null) window.clearTimeout(renewal);
+      if (expiry !== null) window.clearTimeout(expiry);
+    };
+  }, [hasAccessRefresh, playback?.expiresAt, playback?.url, startOrRenewLease]);
+
+  if (usageExhausted) {
     return <ProviderPlaceholder state="blocked" message="Your public-media allowance is used for this month." />;
   }
 
   if (resourceExpired || playback?.state !== "full" || !playback.url) {
     return (
       <ProviderPlaceholder
-        action={playback?.usage
+        action={playback?.usage || onAccessRefresh
           ? {
               disabled: leaseStarting,
               label: leaseStarting ? "Starting…" : resourceExpired ? "Renew playback" : "Start playback",
@@ -105,6 +133,8 @@ function ProviderPlaybackResource({
           ? "Your public-media allowance is used for this month."
           : playback?.usage
             ? "Starting playback reserves a short, backend-accounted viewing lease."
+          : onAccessRefresh
+            ? "Your current access will be checked before a new signed playback resource is issued."
           : undefined}
       />
     );
@@ -112,7 +142,7 @@ function ProviderPlaybackResource({
 
   if (playback.provider === "bunny") {
     if (playback.resourceType === "embed") {
-      return <BunnyEmbedPlayer onPlayingChange={usage.setPlaying} src={playback.url} title={title} />;
+      return <BunnyEmbedPlayer onPlayingChange={setPlaying} src={playback.url} title={title} />;
     }
 
     return (
@@ -127,7 +157,7 @@ function ProviderPlaybackResource({
     return (
       <LivepeerOfficialPlayer
         jwt={playback.jwt}
-        onPlayingChange={usage.setPlaying}
+        onPlayingChange={setPlaying}
         posterUrl={posterUrl}
         resourceType={playback.resourceType}
         src={playback.url}

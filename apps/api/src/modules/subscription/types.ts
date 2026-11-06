@@ -38,6 +38,9 @@ export interface CreateSubscriptionAuthorizationIntentInput {
   delegationProgramId: string;
   provider: string;
   supportedMints: string[];
+  platformReceiverWallet: string;
+  assetDecimals: number;
+  network: "devnet" | "mainnet-beta";
 }
 
 export interface SubmitSubscriptionAuthorizationInput {
@@ -124,6 +127,7 @@ export interface SubscriptionRepository {
     body: UpsertCreatorMembershipOfferRequest;
     tokenMint: string;
     programId: string;
+    assetDecimals: number;
     amountAtomic: number;
     creatorAmountAtomic: number;
     platformAmountAtomic: number;
@@ -169,6 +173,7 @@ export interface VerifySubscriptionAuthorizationInput {
   amountAtomic: string;
   periodDays: number;
   periodSeconds: number;
+  delegationNonce: number;
   delegationExpiresAt: Date;
   provider: string;
   planId: string;
@@ -192,8 +197,12 @@ export type SubscriptionVerificationFailureReason =
   | "plan_not_found"
   | "plan_terms_mismatch"
   | "authority_not_found"
+  | "authority_address_mismatch"
+  | "authority_init_mismatch"
   | "subscription_not_found"
   | "delegation_not_found"
+  | "delegation_address_mismatch"
+  | "delegated_allowance_mismatch"
   | "subscriber_mismatch"
   | "creator_mismatch"
   | "merchant_mismatch"

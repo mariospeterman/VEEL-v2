@@ -1,5 +1,7 @@
 import { clearPrivateMessageClientState } from "../messages/offline-message-queue";
+import { clearPaymentSubmissionRecovery } from "../payment-submission-recovery";
 import { clearRecentSearchClientState } from "../search/recent-searches";
+import { notifyUserScopeInvalidation } from "./user-scope-invalidation";
 
 interface BrowserStorage {
   readonly length: number;
@@ -14,7 +16,12 @@ export function clearUserScopedBrowserState(
   sessionStorage: BrowserStorage = window.sessionStorage
 ): void {
   runBestEffort(() => clearPrivateMessageClientState(localStorage, sessionStorage));
+  runBestEffort(() => clearPaymentSubmissionRecovery(localStorage));
   runBestEffort(() => clearRecentSearchClientState(sessionStorage, localStorage));
+  runBestEffort(() => notifyUserScopeInvalidation(
+    localStorage,
+    typeof window === "undefined" ? undefined : window
+  ));
 }
 
 function runBestEffort(cleanup: () => void): void {

@@ -1,0 +1,12 @@
+{
+  "engine": "PGlite PostgreSQL",
+  "scope": "Exact performer synchronization function/trigger from0090; reduced schema with production nullable age fields; webhook relevant insert field list as in verification-repository357-370",
+  "rows": [
+    {
+      "verification_status": "valid",
+      "result_over_18": null,
+      "satisfies_age_readiness": false
+    }
+  ],
+  "verdict": "Provider approval marks performer valid while leaving required over18 evidence null; canonical publication age predicate fails."
+}

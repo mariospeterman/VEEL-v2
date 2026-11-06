@@ -21,8 +21,8 @@ Non-goals:
 - behavioral recommendation scoring, paid visibility, a second eligibility system, or a second feed
 
 WeVid launches with a simple chronological media feed. The backend remains responsible for access,
-safety, visibility, and stable pagination, but it does not score, boost, shuffle, or freeze a bounded
-candidate window.
+safety, visibility, and stable pagination, but it does not score, boost, shuffle, or treat a bounded
+authorization-work batch as a ranking window or corpus ceiling.
 
 Discovery quality and safety must not depend on addictive dark patterns or frontend-only state.
 
@@ -40,6 +40,12 @@ Discovery quality and safety must not depend on addictive dark patterns or front
 - The canonical `private.eligible_content(...)` decision continues to apply current release,
   moderation, profile, age, visibility, entitlement, preference, hide, block, report, and Moment
   expiry policy before delivery.
+- The active page path first selects an indexed chronological candidate batch of 128–512 IDs inside
+  one repeatable-read, read-only transaction, then rechecks those IDs through that canonical policy
+  before hydrating delivery resources. A fully denied batch advances through its last chronological
+  key rather than scanning or returning stale authorization. This is a correctness/work-bounding
+  design, not measured scalability evidence; representative native plans, p95/p99 latency, and
+  long-session metadata/memory measurements remain required before a performance claim.
 - Playback and image resources are issued only after that current access decision. Locked,
   exhausted, rejected, quarantined, or revoked content does not receive a usable provider resource.
 - Engagement and relationship counts may be shown, but they never change ordering.

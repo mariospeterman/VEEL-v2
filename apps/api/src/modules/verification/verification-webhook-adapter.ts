@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { ServerEnv } from "@veel/config";
+import { parseDatabaseDate } from "../../shared/database-timestamp.js";
 import { verifyDiditV3Webhook } from "./didit-webhook.js";
 import type { NormalizedVerificationWebhook, VerificationProvider } from "./types.js";
 
@@ -304,8 +305,8 @@ function headerValue(value: string | string[] | undefined): string | null {
 
 function parseProviderDate(value: string | null): Date | null {
   if (!value) return null;
-  const parsed = Date.parse(value.replace(" ", "T"));
-  return Number.isFinite(parsed) ? new Date(parsed) : null;
+  const parsed = parseDatabaseDate(value.replace(" ", "T"));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function parseUnixSeconds(...values: unknown[]): Date | null {

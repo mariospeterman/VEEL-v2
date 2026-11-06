@@ -271,37 +271,48 @@ async function deriveReusablePerformerEvidence(
     insert into verification_records (
       subject_type, subject_id, purpose, status, provider, provider_reference,
       method, jurisdiction, threshold_age, result_over_threshold, assurance_level,
-      verified_at, expires_at, reusable, derived_from_record_id, metadata
+      verified_at, expires_at, reusable, derived_from_record_id, provider_event_at,
+      metadata
     )
     select
       'performer', ${performerSubjectId}, 'performer_eligibility', 'valid',
       source.provider, source.provider_reference, source.method, source.jurisdiction,
       18, true, source.assurance_level, source.verified_at, source.expires_at,
-      source.reusable, source.id, jsonb_build_object('evidence_reuse', true)
-    from verification_records source
-    where source.subject_type = 'user'
-      and source.subject_id = ${linkedUserId}
-      and source.status = 'valid'
+      source.reusable, source.id, source.provider_event_at,
+      jsonb_build_object('source', 'performer_evidence_reuse', 'evidence_reuse', true)
+    from (
+      select *
+      from private.current_verification_decision(
+        'user', ${linkedUserId}, 'adult_publisher_eligibility'
+      )
+      union all
+      select *
+      from private.current_verification_decision(
+        'user', ${linkedUserId}, 'creator_kyc'
+      )
+    ) source
+    where source.status = 'valid'
       and source.assurance_level in ('high', 'documentary')
-      and source.purpose in ('adult_publisher_eligibility', 'creator_kyc')
       and source.result_over_threshold is true
       and (source.expires_at is null or source.expires_at > now())
       and (
         source.purpose = 'adult_publisher_eligibility'
-        or exists (
-          select 1 from verification_records age
-          where age.subject_type = 'user' and age.subject_id = ${linkedUserId}
-            and age.purpose = 'age_access' and age.status = 'valid'
+        or coalesce((
+          select age.status = 'valid'
             and age.result_over_threshold is true
             and (age.expires_at is null or age.expires_at > now())
-        )
+          from private.current_verification_decision(
+            'user', ${linkedUserId}, 'age_access'
+          ) age
+        ), false)
       )
-      and not exists (
-        select 1 from verification_records existing
-        where existing.subject_type = 'performer' and existing.subject_id = ${performerSubjectId}
-          and existing.purpose = 'performer_eligibility' and existing.status = 'valid'
+      and not coalesce((
+        select existing.status = 'valid'
           and (existing.expires_at is null or existing.expires_at > now())
-      )
+        from private.current_verification_decision(
+          'performer', ${performerSubjectId}, 'performer_eligibility'
+        ) existing
+      ), false)
     order by (source.purpose = 'adult_publisher_eligibility') desc, source.verified_at desc
     limit 1
   `;

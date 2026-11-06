@@ -47,6 +47,27 @@ describe("server boolean environment parsing", () => {
 });
 
 describe("Solana environment authority", () => {
+  it("accepts only the approved six-decimal USDC contract", () => {
+    expect(serverEnvSchema.parse({
+      PAYMENT_USDC_DECIMALS: "6",
+      PAYMENT_USDC_MINT: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+    }).PAYMENT_USDC_DECIMALS)
+      .toBe(6);
+    expect(serverEnvSchema.safeParse({ PAYMENT_USDC_DECIMALS: "9" }).success)
+      .toBe(false);
+    expect(serverEnvSchema.safeParse({ PAYMENT_USDC_DECIMALS: "0" }).success)
+      .toBe(false);
+    expect(serverEnvSchema.safeParse({
+      SOLANA_CLUSTER: "devnet",
+      PAYMENT_USDC_MINT: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    }).success).toBe(false);
+    expect(serverEnvSchema.safeParse({
+      SOLANA_CLUSTER: "mainnet-beta",
+      SOLANA_RPC_URL: "https://mainnet-rpc.example",
+      PAYMENT_USDC_MINT: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    }).success).toBe(true);
+  });
+
   it("derives compatibility aliases from the canonical cluster", () => {
     const parsed = serverEnvSchema.parse({
       SOLANA_CLUSTER: "mainnet-beta",

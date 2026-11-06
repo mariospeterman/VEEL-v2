@@ -141,11 +141,11 @@ export function createAccessRepository(
         sql<WorkerQueueHealthRow[]>`
           select
             'subscription_collections'::text as name,
-            count(*) filter (where state in ('due', 'failed')) as pending_count,
-            count(*) filter (where state = 'processing') as processing_count,
+            count(*) filter (where state in ('due', 'reconciling', 'failed')) as pending_count,
+            count(*) filter (where state in ('processing', 'reconciling')) as processing_count,
             count(*) filter (where state = 'failed') as failed_count,
             count(*) filter (where state = 'dead_letter') as dead_letter_count,
-            min(next_attempt_at) filter (where state in ('due', 'failed')) as oldest_pending_at
+            min(next_attempt_at) filter (where state in ('due', 'reconciling', 'failed')) as oldest_pending_at
           from subscription_collections
           union all
           select
@@ -415,12 +415,7 @@ export function createAccessRepository(
             when status = 'pending' then 'pending'
             else 'failed'
           end as state
-          from verification_records
-          where subject_type = 'user'
-            and subject_id = u.id
-            and purpose = 'age_access'
-          order by created_at desc, id desc
-          limit 1
+          from private.current_verification_decision('user', u.id, 'age_access')
         ) latest_age on true
         left join lateral (
           select chain, address
@@ -471,12 +466,7 @@ export function createAccessRepository(
             when status = 'pending' then 'pending'
             else 'failed'
           end as state
-          from verification_records
-          where subject_type = 'user'
-            and subject_id = u.id
-            and purpose = 'age_access'
-          order by created_at desc, id desc
-          limit 1
+          from private.current_verification_decision('user', u.id, 'age_access')
         ) latest_age on true
         left join lateral (
           select chain, address

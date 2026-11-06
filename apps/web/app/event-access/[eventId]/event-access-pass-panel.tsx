@@ -106,6 +106,7 @@ function EventAccessPassOption({
           onConfirmed={() => router.refresh()}
           pendingLabel="Reserving Access Pass"
           readyCopy="Open the wallet request. Your pass appears after payment confirmation."
+          recoveryScope={`event_access_pass:${accessPassType.id}`}
         />
       </div>
     </article>

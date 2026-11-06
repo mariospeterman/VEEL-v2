@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: local and staging setup for the simple photo, video, and live core
-Last updated: 2026-11-05
+Last updated: 2026-11-06
 Source of truth: operational checklist; `.env.example`, `.env.staging.example`, config parsers, and provider runbooks remain authoritative for variable semantics
 
 Owns:
@@ -66,13 +66,23 @@ SOLANA_CLUSTER=devnet
 SOLANA_NETWORK=solana:devnet
 SOLANA_RPC_URL
 PAYMENT_PLATFORM_FEE_WALLET
+HELIUS_API_KEY
+HELIUS_WEBHOOK_SECRET
+HELIUS_CLUSTER=devnet
+HELIUS_RPC_URL
+HELIUS_WEBHOOK_CLUSTER=devnet
 NEXT_PUBLIC_PRIVY_APP_ID
 NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED
 ```
 
 Leave the two Privy values empty/`false` until that app and origin are approved. External wallets
 still use the canonical backend challenge. `SUBSCRIPTIONS_ENABLED=false` and
-`SUBSCRIPTIONS_PROVIDER=disabled` are the safe core defaults.
+`SUBSCRIPTIONS_PROVIDER=disabled` are the safe core defaults. There is no Solana Pay protocol API
+key. Helius is the optional RPC/indexer evidence provider: create its devnet webhook with
+`HELIUS_WEBHOOK_SECRET` as the dashboard `authHeader`, set the callback to
+`POST <API_URL>/v1/webhooks/solana-indexer`, and make its configured cluster agree with
+`SOLANA_CLUSTER=devnet`. The secret is server-only and is received as the webhook
+`Authorization` header; a valid header still does not replace backend settlement verification.
 
 Photo/video provider names:
 
@@ -174,6 +184,28 @@ Then verify in order:
    uses the same owner-only, no-store, memory-only reveal; a viewer never sees host credentials.
 7. Revocation, moderation, expiry, and access changes remove delivery immediately and remain visible
    to authorized operations staff.
+
+For one-time payment acceptance, use a funded devnet payer with enough devnet SOL for transaction
+fees (and the configured test asset when testing USDC), then verify this complete sequence:
+
+1. The backend creates an intent with an immutable quote, exact asset/decimals/splits, expiry, and
+   terms; the payer accepts the required consent and immediate-access acknowledgement where
+   applicable.
+2. The connected wallet or local Solana Pay QR signs and sends only that server-built intent. Wallet
+   approval is not payment proof.
+3. For a connected wallet, the browser persists the exact returned signature, signed transaction
+   bytes, payer/session/intent, quote/terms snapshot, and logical idempotency key before asking the
+   API to accept it. A lost or slow acknowledgement must recover that same signature across reloads
+   and tabs; it must not request another transfer while the outcome is uncertain.
+4. For an external-wallet QR, Helius delivers signed/authorized evidence to
+   `POST /v1/webhooks/solana-indexer`. Until the backend observes or definitively rejects the first
+   attempt, do not offer another QR or wallet payment for the same logical purchase.
+5. The backend independently reconciles the signature and exact devnet transaction facts before it
+   writes settlement, entitlement or Support receipt, compliance/outbox records, and confirmation
+   delivery once. Delayed RPC/indexer evidence remains recoverable; it does not grant early access.
+6. Confirm the resulting access or Support receipt and delayed confirmation state in
+   `/app/activity`; replay the same submission/webhook and confirm that no second settlement,
+   entitlement, receipt, or delivery is created.
 
 Run browser smoke separately:
 

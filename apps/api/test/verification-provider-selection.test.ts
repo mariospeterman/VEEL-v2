@@ -130,4 +130,107 @@ describe("age verification provider selection", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("https://age.yoti.example/api/v1/sessions");
   });
+
+  it("retrieves the current Yoti result with server credentials", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      id: "yoti-session-1",
+      status: "COMPLETE",
+      result: "PASS",
+      method: "AGE_ESTIMATION",
+      updated_at: "2026-11-06T12:00:00.123456Z",
+      expires_at: "2026-11-06T12:15:00.123456Z"
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const waterfall = createVerificationProviderWaterfall(parseServerEnv({
+      NODE_ENV: "test",
+      AGE_VERIFICATION_DRIVER: "yoti",
+      YOTI_SDK_ID: "yoti-sdk-id-1234",
+      YOTI_API_TOKEN: "yoti-api-token",
+      YOTI_API_BASE_URL: "https://age.yoti.example/api/v1",
+      YOTI_LAUNCH_BASE_URL: "https://age.yoti.example"
+    }));
+
+    const result = await waterfall.reconcileSession?.({
+      provider: "yoti",
+      providerReference: "yoti-session-1",
+      purpose: "age_access"
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://age.yoti.example/api/v1/sessions/yoti-session-1/result",
+      expect.objectContaining({ method: "GET" })
+    );
+    expect(result).toMatchObject({
+      provider: "yoti",
+      providerReference: "yoti-session-1",
+      status: "valid",
+      launchUrl: "https://age.yoti.example?sessionId=yoti-session-1&sdkId=yoti-sdk-id-1234"
+    });
+  });
+
+  it("keeps an authenticated Yoti FAIL recoverable for a later retry pass", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+      id: "yoti-session-retry",
+      status: "FAIL",
+      method: "AGE_ESTIMATION",
+      updated_at: "2026-11-06T12:00:00.000Z"
+    }), { status: 200, headers: { "content-type": "application/json" } })));
+    const waterfall = createVerificationProviderWaterfall(parseServerEnv({
+      NODE_ENV: "test",
+      AGE_VERIFICATION_DRIVER: "yoti",
+      YOTI_SDK_ID: "yoti-sdk-id-1234",
+      YOTI_API_TOKEN: "yoti-api-token",
+      YOTI_API_BASE_URL: "https://age.yoti.example/api/v1",
+      YOTI_LAUNCH_BASE_URL: "https://age.yoti.example"
+    }));
+
+    await expect(waterfall.reconcileSession?.({
+      provider: "yoti",
+      providerReference: "yoti-session-retry",
+      purpose: "age_access"
+    })).resolves.toMatchObject({
+      status: "pending",
+      failureReasonCode: "FAIL"
+    });
+  });
+
+  it("retrieves an exact Didit decision and preserves pending processing", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      session_id: "didit-session-1",
+      session_url: "https://verify.didit.example/session/didit-session-1",
+      status: "In Progress",
+      expires_at: "2026-11-07T12:00:00.000Z",
+      decision: {
+        id_verifications: [],
+        liveness_checks: [],
+        face_matches: []
+      }
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const waterfall = createVerificationProviderWaterfall(parseServerEnv({
+      NODE_ENV: "test",
+      DIDIT_API_KEY: "didit-api-key",
+      DIDIT_AGE_WORKFLOW_ID: "didit-age-workflow",
+      DIDIT_API_BASE_URL: "https://verification.didit.example"
+    }));
+
+    const result = await waterfall.reconcileSession?.({
+      provider: "didit",
+      providerReference: "didit-session-1",
+      purpose: "age_access"
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://verification.didit.example/v3/session/didit-session-1/decision/",
+      expect.objectContaining({
+        method: "GET",
+        headers: { "x-api-key": "didit-api-key" }
+      })
+    );
+    expect(result).toMatchObject({
+      provider: "didit",
+      status: "pending",
+      launchUrl: "https://verify.didit.example/session/didit-session-1"
+    });
+  });
 });

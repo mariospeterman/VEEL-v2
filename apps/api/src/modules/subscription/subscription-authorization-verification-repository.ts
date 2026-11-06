@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 import { executeWithMutationCommandReceipt } from "../../shared/mutation-command-receipt.js";
-import type { SubscriptionPlan, SubscriptionRepository } from "./types.js";
+import type { SubscriptionRepository } from "./types.js";
 import { SubscriptionRepositoryConfigurationError } from "./subscription-errors.js";
 import type { SubscriptionRow } from "./subscription-repository-rows.js";
 import {
@@ -50,26 +50,29 @@ export async function findAuthorizationVerificationContext(
       sai.authority_address,
       sai.delegation_address,
       sai.subscriber_token_account,
-      sp.token_mint,
-      sp.token_program,
-      sp.amount_minor,
-      sp.amount_atomic,
-      sp.period_days,
-      sp.period_seconds,
-      s.delegation_nonce,
+      acceptance.token_mint,
+      acceptance.token_program,
+      acceptance.amount_minor,
+      acceptance.amount_atomic,
+      acceptance.period_days,
+      acceptance.period_seconds,
+      acceptance.delegation_nonce,
       sai.delegation_expires_at,
-      coalesce(s.provider, sp.provider, 'official_solana_subscription_program') as provider,
-      sp.id as plan_id,
-      coalesce(s.plan_pda, sp.plan_pda) as plan_pda,
+      acceptance.provider,
+      acceptance.plan_id,
+      acceptance.plan_pda,
       s.subscription_pda,
-      coalesce(s.merchant_wallet, sp.merchant_wallet) as merchant_wallet,
+      acceptance.merchant_wallet,
       sai.expires_at
     from subscription_authorization_intents sai
     join subscriptions s on s.id = sai.subscription_id
-    join subscription_plans sp on sp.id = s.plan_id
+    join subscription_billing_acceptances acceptance
+      on acceptance.subscription_id = s.id
+      and acceptance.authorization_intent_id = sai.id
     join users u on u.id = s.subscriber_user_id
     where sai.id = ${input.authorizationIntentId}
       and u.supabase_user_id = ${input.supabaseUserId}
+      and acceptance.program_id = ${input.delegationProgramId}
       and sai.state in ('created', 'submitted', 'verified')
     limit 1
   `;
@@ -155,16 +158,7 @@ export async function submitAuthorization(
       responseStatus: 202
     }, async () => {
       const rows = await transaction<
-      (SubscriptionRow & {
-        authorization_intent_id: string;
-        plan_period_days: number;
-        plan_amount_minor: string | number;
-        plan_amount_atomic: string | number;
-        plan_creator_amount_atomic: string | number;
-        plan_platform_fee_amount_atomic: string | number;
-        plan_allocation_amount_atomic: string | number;
-        plan_currency: SubscriptionPlan["currency"];
-      })[]
+      (SubscriptionRow & { authorization_intent_id: string })[]
       >`
       update subscription_authorization_intents sai
       set
@@ -175,7 +169,6 @@ export async function submitAuthorization(
         submitted_at = coalesce(sai.submitted_at, now()),
         verified_at = case when ${input.verification.verified} then now() else sai.verified_at end
       from subscriptions s
-      join subscription_plans sp on sp.id = s.plan_id
       left join profiles p on p.user_id = s.creator_user_id
       where sai.id = ${input.authorizationIntentId}
         and sai.subscription_id = s.id
@@ -209,14 +202,7 @@ export async function submitAuthorization(
         p.handle as creator_handle,
         p.display_name as creator_display_name,
         p.avatar_url as creator_avatar_url,
-        sai.id as authorization_intent_id,
-        sp.period_days as plan_period_days,
-        sp.amount_minor as plan_amount_minor,
-        sp.amount_atomic as plan_amount_atomic,
-        sp.creator_amount_atomic as plan_creator_amount_atomic,
-        sp.platform_fee_amount_atomic as plan_platform_fee_amount_atomic,
-        sp.allocation_amount_atomic as plan_allocation_amount_atomic,
-        sp.currency as plan_currency
+        sai.id as authorization_intent_id
     `;
       const row = rows[0];
 

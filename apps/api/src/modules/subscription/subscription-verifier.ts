@@ -1,7 +1,10 @@
 import {
+  findRecurringDelegationPda,
+  findSubscriptionAuthorityPda,
   getRecurringDelegationDecoder,
   getSubscriptionAuthorityDecoder
 } from "@solana/subscriptions";
+import { address } from "@solana/kit";
 import { Connection, PublicKey } from "@solana/web3.js";
 import type { ServerEnv } from "@veel/config";
 import bs58 from "bs58";
@@ -63,6 +66,13 @@ async function verifyOnchainAuthorization(input: {
   rpcUrl: string;
 }): Promise<SubscriptionAuthorizationVerificationResult> {
   const { input: authorization } = input;
+  if (
+    !authorization.subscriberWallet ||
+    !authorization.tokenMint ||
+    !authorization.collectorAddress
+  ) {
+    return failed("provider_not_configured");
+  }
   const connection = new Connection(input.rpcUrl, "finalized");
   const statusResponse = await connection.getSignatureStatuses(
     [authorization.signature],
@@ -112,6 +122,28 @@ async function verifyOnchainAuthorization(input: {
 
   const authority = getSubscriptionAuthorityDecoder().decode(authorityInfo.data);
   const delegation = getRecurringDelegationDecoder().decode(delegationInfo.data);
+  const [expectedAuthorityAddress] = await findSubscriptionAuthorityPda(
+    {
+      user: address(authorization.subscriberWallet),
+      tokenMint: address(authorization.tokenMint)
+    },
+    { programAddress: address(authorization.delegationProgramId) }
+  );
+  if (expectedAuthorityAddress !== authorization.authorityAddress) {
+    return failed("authority_address_mismatch");
+  }
+  const [expectedDelegationAddress] = await findRecurringDelegationPda(
+    {
+      subscriptionAuthority: expectedAuthorityAddress,
+      delegator: address(authorization.subscriberWallet),
+      delegatee: address(authorization.collectorAddress),
+      nonce: authorization.delegationNonce
+    },
+    { programAddress: address(authorization.delegationProgramId) }
+  );
+  if (expectedDelegationAddress !== authorization.delegationAddress) {
+    return failed("delegation_address_mismatch");
+  }
   if (
     authority.user !== authorization.subscriberWallet ||
     delegation.header.delegator !== authorization.subscriberWallet
@@ -145,12 +177,29 @@ async function verifyOnchainAuthorization(input: {
   const tokenAccountInfo = await connection.getAccountInfo(expectedAta, "finalized");
   if (!tokenAccountInfo || !tokenAccountInfo.owner.equals(tokenProgram)) return failed("subscriber_mismatch");
   const tokenAccount = decodeTokenAccount(tokenAccountInfo.data);
-  if (
-    tokenAccount.owner !== authorization.subscriberWallet ||
-    tokenAccount.mint !== authorization.tokenMint
-  ) {
-    return failed("subscriber_mismatch");
-  }
+  const linkageFailure = validateSubscriptionAccountLinkage({
+    authority: {
+      user: authority.user,
+      tokenMint: authority.tokenMint,
+      initId: authority.initId
+    },
+    delegation: {
+      delegator: delegation.header.delegator,
+      delegatee: delegation.header.delegatee,
+      initId: delegation.header.initId,
+      subscriptionAuthority: delegation.subscriptionAuthority,
+      mint: delegation.mint
+    },
+    tokenAccount,
+    expected: {
+      subscriberWallet: authorization.subscriberWallet,
+      collectorAddress: authorization.collectorAddress,
+      tokenMint: authorization.tokenMint,
+      authorityAddress: authorization.authorityAddress,
+      amountAtomic: BigInt(authorization.amountAtomic)
+    }
+  });
+  if (linkageFailure) return failed(linkageFailure);
 
   return {
     verified: true,
@@ -172,6 +221,63 @@ async function verifyOnchainAuthorization(input: {
       verifiedAt: new Date().toISOString()
     }
   };
+}
+
+export function validateSubscriptionAccountLinkage(input: {
+  authority: { user: string; tokenMint: string; initId: bigint };
+  delegation: {
+    delegator: string;
+    delegatee: string;
+    initId: bigint;
+    subscriptionAuthority: string;
+    mint: string;
+  };
+  tokenAccount: {
+    owner: string;
+    mint: string;
+    delegate: string | null;
+    delegatedAmount: bigint;
+    initialized: boolean;
+  };
+  expected: {
+    subscriberWallet: string;
+    collectorAddress: string;
+    tokenMint: string;
+    authorityAddress: string;
+    amountAtomic: bigint;
+  };
+}): NonNullable<SubscriptionAuthorizationVerificationResult["failureCode"]> | null {
+  if (
+    input.authority.user !== input.expected.subscriberWallet ||
+    input.delegation.delegator !== input.expected.subscriberWallet ||
+    input.tokenAccount.owner !== input.expected.subscriberWallet
+  ) {
+    return "subscriber_mismatch";
+  }
+  if (
+    input.authority.tokenMint !== input.expected.tokenMint ||
+    input.delegation.mint !== input.expected.tokenMint ||
+    input.tokenAccount.mint !== input.expected.tokenMint
+  ) {
+    return "mint_mismatch";
+  }
+  if (input.delegation.subscriptionAuthority !== input.expected.authorityAddress) {
+    return "authority_address_mismatch";
+  }
+  if (input.authority.initId !== input.delegation.initId) {
+    return "authority_init_mismatch";
+  }
+  if (
+    !input.tokenAccount.initialized ||
+    input.tokenAccount.delegate !== input.expected.authorityAddress ||
+    input.tokenAccount.delegatedAmount < input.expected.amountAtomic
+  ) {
+    return "delegated_allowance_mismatch";
+  }
+  if (input.delegation.delegatee !== input.expected.collectorAddress) {
+    return "collector_mismatch";
+  }
+  return null;
 }
 
 export function classifySubscriptionAuthorizationSignatureStatus(

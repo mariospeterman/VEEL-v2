@@ -104,6 +104,7 @@ export function CommercialInteractionsPanel({ conversation }: { conversation: Co
                     onConfirmed={refresh}
                     pendingLabel="Preparing media offer"
                     readyCopy="The offered media becomes available after payment confirmation."
+                    recoveryScope={`creator_media_offer:${offer.id}`}
                   />
                 </div>
               ) : null}
@@ -137,6 +138,7 @@ export function CommercialInteractionsPanel({ conversation }: { conversation: Co
                     onConfirmed={refresh}
                     pendingLabel="Preparing creator request"
                     readyCopy="Verified settlement activates the delivery workspace; it does not guarantee personal attention or access."
+                    recoveryScope={`structured_creator_request:${request.id}`}
                   />
                 </div>
               ) : null}

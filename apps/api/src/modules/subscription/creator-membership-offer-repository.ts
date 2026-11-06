@@ -17,10 +17,13 @@ export function createCreatorMembershipOfferRepositoryMethods(
     async getCreatorOffer(input) {
       const rows = await sql<PlanRow[]>`
         select
-          sp.id, sp.scope, sp.label, sp.description, sp.benefits, sp.amount_minor,
+          sp.id, sp.scope, sp.label, sp.description, sp.benefits,
+          sp.price_minor as amount_minor, sp.asset_decimals,
           sp.amount_atomic, sp.currency, sp.period_days, sp.period_seconds,
           sp.billing_mode, sp.provider_state, sp.token_mint, sp.token_program,
           sp.provider, sp.program_id, sp.plan_pda, sp.merchant_wallet,
+          sp.creator_amount_atomic, sp.platform_fee_amount_atomic,
+          sp.allocation_amount_atomic,
           sp.creator_user_id, p.handle as creator_handle,
           p.display_name as creator_display_name, p.avatar_url as creator_avatar_url
         from subscription_plans sp
@@ -115,7 +118,7 @@ export function createCreatorMembershipOfferRepositoryMethods(
         const rows = await transaction<PlanRow[]>`
           insert into subscription_plans (
             id, scope, creator_user_id, label, description, benefits,
-            amount_minor, amount_atomic, currency, period_days, period_seconds,
+            amount_minor, asset_decimals, amount_atomic, currency, period_days, period_seconds,
             billing_mode, provider_state, token_mint, token_program, provider,
             program_id, plan_pda, merchant_wallet, creator_amount_atomic,
             platform_fee_amount_atomic, allocation_amount_atomic,
@@ -126,7 +129,7 @@ export function createCreatorMembershipOfferRepositoryMethods(
           values (
             ${planId}, 'creator', ${actor.id}, ${input.body.label.trim()},
             ${input.body.description?.trim() || null}, ${input.body.benefits.map((benefit) => benefit.trim())},
-            ${input.body.amountMinor}, ${input.amountAtomic}, 'USDC', 30, 2592000,
+            ${input.body.amountMinor}, ${input.assetDecimals}, ${input.amountAtomic}, 'USDC', 30, 2592000,
             'delegated_solana_subscription', 'staging_required', ${input.tokenMint}, 'spl_token',
             'official_solana_subscription_program', ${input.programId}, null,
             ${recipientWallet}, ${input.creatorAmountAtomic}, ${input.platformAmountAtomic},
@@ -137,10 +140,12 @@ export function createCreatorMembershipOfferRepositoryMethods(
             'disabled', now()
           )
           returning
-            id, scope, label, description, benefits, amount_minor, amount_atomic,
+            id, scope, label, description, benefits, price_minor as amount_minor,
+            asset_decimals, amount_atomic,
             currency, period_days, period_seconds, billing_mode, provider_state,
             token_mint, token_program, provider, program_id, plan_pda,
-            merchant_wallet, creator_user_id, ${actor.handle}::text as creator_handle,
+            merchant_wallet, creator_amount_atomic, platform_fee_amount_atomic,
+            allocation_amount_atomic, creator_user_id, ${actor.handle}::text as creator_handle,
             ${actor.display_name}::text as creator_display_name,
             ${actor.avatar_url}::text as creator_avatar_url
         `;

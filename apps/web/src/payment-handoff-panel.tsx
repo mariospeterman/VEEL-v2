@@ -1,9 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   acceptPaymentIntentTerms,
+  getCurrentSession,
   getPaymentIntent,
   getPaymentTransactionRequest,
   type PaymentIntent,
@@ -16,6 +17,14 @@ import {
   paymentProjectionCheckoutState,
   refreshPaymentProjection
 } from "@/payment-confirmation-projection";
+import {
+  paymentSubmissionRecoveryPrefix,
+  readPendingPaymentSubmission,
+  removePendingPaymentSubmission,
+  type PaymentSubmissionBrowserScope,
+  type PaymentSubmissionQuoteSnapshot,
+  type PendingPaymentSubmission
+} from "@/payment-submission-recovery";
 
 const PaymentWalletRuntime = dynamic(
   () => import("./payment-wallet-runtime").then((module) => module.PaymentWalletRuntime),
@@ -29,6 +38,7 @@ interface PaymentHandoffPanelProps {
   idleCopy: string;
   pendingLabel?: string;
   readyCopy: string;
+  recoveryScope: string;
   onConfirmed?: () => void | Promise<void>;
 }
 
@@ -49,7 +59,8 @@ export function PaymentHandoffPanel({
   idleCopy,
   onConfirmed,
   pendingLabel = "Preparing checkout",
-  readyCopy
+  readyCopy,
+  recoveryScope
 }: PaymentHandoffPanelProps) {
   const [state, setState] = useState<CheckoutState>("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -57,13 +68,83 @@ export function PaymentHandoffPanel({
   const [transaction, setTransaction] = useState<TransactionRequest | null>(null);
   const [consent, setConsent] = useState(false);
   const [waiverConsent, setWaiverConsent] = useState(false);
+  const [pendingSubmission, setPendingSubmission] = useState<PendingPaymentSubmission | null>(null);
   const checkoutAttempt = useRef<string | null>(null);
   const projectionRefresh = useRef(onConfirmed);
-  const activeIntentId = intent?.id;
+  const activeIntentId = intent?.id ?? pendingSubmission?.intentId;
 
   useEffect(() => {
     projectionRefresh.current = onConfirmed;
   }, [onConfirmed]);
+
+  const restorePendingCheckout = useCallback(async (): Promise<boolean> => {
+    const session = await getCurrentSession();
+    if (!session.authenticated || !session.user) return false;
+
+    const browserScope: PaymentSubmissionBrowserScope = {
+      actorUserId: session.user.id,
+      clientSessionScope: session.clientSessionScope,
+      recoveryScope
+    };
+    const record = readPendingPaymentSubmission(window.localStorage, browserScope);
+    if (!record) return false;
+
+    setPendingSubmission(record);
+    setState("submitted");
+    setMessage("A signed transaction is already pending. Reusing it without requesting another wallet payment.");
+
+    try {
+      const current = await getPaymentIntent(record.intentId);
+      setIntent(current);
+      const confirmedState = paymentProjectionCheckoutState(
+        current.state,
+        Boolean(projectionRefresh.current)
+      );
+      if (confirmedState) {
+        removeRecoveryRecord(record);
+        setPendingSubmission(null);
+        setState(confirmedState);
+        setMessage(
+          confirmedState === "awaiting_projection"
+            ? "Payment confirmed by the backend. Waiting for the canonical access record."
+            : readyCopy
+        );
+      } else if (["failed", "expired", "cancelled"].includes(current.state)) {
+        removeRecoveryRecord(record);
+        setPendingSubmission(null);
+        checkoutAttempt.current = null;
+        setState("error");
+        setMessage(`Payment ${current.state}`);
+      }
+    } catch {
+      // Keep the durable browser record and recovery-only runtime active. A temporary API failure
+      // must never reveal a second transaction-building path.
+    }
+
+    return true;
+  }, [readyCopy, recoveryScope]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void restorePendingCheckout().catch(() => {
+      // The normal checkout action performs the same check and exposes any actionable API error.
+    });
+
+    const onStorage = (event: StorageEvent) => {
+      if (
+        !cancelled &&
+        event.storageArea === window.localStorage &&
+        event.key?.startsWith(paymentSubmissionRecoveryPrefix)
+      ) {
+        void restorePendingCheckout();
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [restorePendingCheckout]);
 
   useEffect(() => {
     if (!activeIntentId || (state !== "wallet" && state !== "submitted")) return;
@@ -83,6 +164,8 @@ export function PaymentHandoffPanel({
             Boolean(projectionRefresh.current)
           );
           if (confirmedState) {
+            if (pendingSubmission) removeRecoveryRecord(pendingSubmission);
+            setPendingSubmission(null);
             checkoutAttempt.current = null;
             setState(confirmedState);
             setMessage(
@@ -97,12 +180,22 @@ export function PaymentHandoffPanel({
             current.state === "expired" ||
             current.state === "cancelled"
           ) {
+            if (pendingSubmission) removeRecoveryRecord(pendingSubmission);
+            setPendingSubmission(null);
+            checkoutAttempt.current = null;
             throw new Error(`Payment ${current.state}`);
           }
         } catch (error) {
           if (!cancelled) {
-            setState("error");
-            setMessage(safeMutationMessage(error, "Payment"));
+            if (pendingSubmission) {
+              setState("submitted");
+              setMessage(
+                "The signed transaction is retained while onchain verification is temporarily unavailable."
+              );
+            } else {
+              setState("error");
+              setMessage(safeMutationMessage(error, "Payment"));
+            }
           }
           return;
         }
@@ -117,7 +210,7 @@ export function PaymentHandoffPanel({
     return () => {
       cancelled = true;
     };
-  }, [activeIntentId, readyCopy, state]);
+  }, [activeIntentId, pendingSubmission, readyCopy, state]);
 
   useEffect(() => {
     if (state !== "awaiting_projection") return;
@@ -144,12 +237,13 @@ export function PaymentHandoffPanel({
   async function prepareCheckout() {
     setState("creating");
     setMessage(null);
-    setIntent(null);
-    setTransaction(null);
-    setConsent(false);
-    setWaiverConsent(false);
 
     try {
+      if (await restorePendingCheckout()) return;
+      setIntent(null);
+      setTransaction(null);
+      setConsent(false);
+      setWaiverConsent(false);
       checkoutAttempt.current ??= createMutationIdempotencyKey();
       const paymentIntent = await createIntent(checkoutAttempt.current);
       if (!paymentIntent) {
@@ -177,6 +271,7 @@ export function PaymentHandoffPanel({
     setState("wallet");
     setMessage(null);
     try {
+      if (await restorePendingCheckout()) return;
       await acceptPaymentIntentTerms(intent.id, {
         termsVersion: intent.refundPolicy.termsVersion,
         withdrawalWaiverVersion: intent.refundPolicy.withdrawalWaiverVersion,
@@ -191,9 +286,11 @@ export function PaymentHandoffPanel({
     }
   }
 
-  function directWalletSubmitted() {
+  function directWalletSubmitted(record: PendingPaymentSubmission) {
+    setPendingSubmission(record);
+    if (intent?.id !== record.intentId) setIntent(null);
     setState("submitted");
-    setMessage("Wallet submission received. WeVid is verifying settlement onchain.");
+    setMessage("Signed transaction retained. WeVid is broadcasting and verifying this exact payment onchain.");
   }
 
   function fail(error: unknown) {
@@ -259,6 +356,8 @@ export function PaymentHandoffPanel({
             intentId={intent?.id ?? ""}
             onError={walletFailed}
             onSubmitted={directWalletSubmitted}
+            quote={intent ? paymentSubmissionQuote(intent) : null}
+            recoveryScope={recoveryScope}
             request={transaction}
           />
           {transaction.qrDataUrl ? (
@@ -267,6 +366,17 @@ export function PaymentHandoffPanel({
           ) : null}
           <a className="secondary-button" href={transaction.transactionRequestUrl}>Open wallet</a>
         </div>
+      ) : null}
+
+      {pendingSubmission && state === "submitted" ? (
+        <PaymentWalletRuntime
+          intentId={pendingSubmission.intentId}
+          onError={() => undefined}
+          onSubmitted={directWalletSubmitted}
+          quote={null}
+          recoveryScope={recoveryScope}
+          request={null}
+        />
       ) : null}
 
       {state === "submitted" || state === "awaiting_projection" ? (
@@ -289,10 +399,41 @@ export function PaymentHandoffPanel({
   );
 }
 
+function removeRecoveryRecord(record: PendingPaymentSubmission) {
+  removePendingPaymentSubmission(window.localStorage, record, {
+    intentId: record.intentId,
+    signature: record.signature
+  });
+}
+
 function Fact({ label, value }: { label: string; value: string }) {
   return <div className="min-w-0"><p className="text-xs uppercase text-(--muted)">{label}</p><p className="mt-1 truncate font-medium">{value}</p></div>;
 }
 
 function productLabel(product: PaymentIntent["productType"]) {
   return product.replaceAll("_", " ");
+}
+
+function paymentSubmissionQuote(intent: PaymentIntent): PaymentSubmissionQuoteSnapshot {
+  return {
+    productType: intent.productType,
+    amountMinor: intent.amountMinor,
+    currency: intent.currency,
+    settlementKind: intent.settlementKind,
+    creatorSideProceedsMinor: intent.creatorSideProceedsMinor,
+    creatorAmountMinor: intent.creatorAmountMinor,
+    enterpriseManagementAmountMinor: intent.enterpriseManagementAmountMinor,
+    platformFeeGrossMinor: intent.platformFeeGrossMinor,
+    platformFeeAmountMinor: intent.platformFeeAmountMinor,
+    referralAmountMinor: intent.referralAmountMinor,
+    minimumAmountMinor: intent.quote.minimumAmountMinor,
+    platformFeeBps: intent.quote.platformFeeBps,
+    referralShareOfPlatformFeeBps: intent.quote.referralShareOfPlatformFeeBps,
+    quotedAt: intent.quote.quotedAt,
+    expiresAt: intent.quote.expiresAt,
+    policySource: intent.quote.policySource,
+    policyRevision: intent.quote.policyRevision,
+    termsVersion: intent.refundPolicy.termsVersion,
+    withdrawalWaiverVersion: intent.refundPolicy.withdrawalWaiverVersion
+  };
 }

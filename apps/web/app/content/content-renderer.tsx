@@ -59,7 +59,7 @@ export function ContentRenderer({ active = true, item: initialItem, title }: Con
 
   return (
     <ProviderPlayback
-      onLeaseStarted={() => refreshAccess("playback_lease")}
+      onAccessRefresh={() => refreshAccess("playback_lease")}
       playback={item.playback}
       posterUrl={item.posterUrl}
       resourceKey={`content:${item.id}`}
@@ -170,7 +170,7 @@ function CarouselAsset({ active, asset, item, onAccessRefresh, title }: {
         : undefined);
     return (
       <ProviderPlayback
-        onLeaseStarted={() => onAccessRefresh("playback_lease")}
+        onAccessRefresh={() => onAccessRefresh("playback_lease")}
         playback={playback}
         posterUrl={asset.posterUrl ?? item.posterUrl}
         resourceKey={`asset:${asset.id}`}

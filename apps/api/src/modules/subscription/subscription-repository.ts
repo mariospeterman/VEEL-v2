@@ -28,6 +28,7 @@ export {
   PlatformUsageLimitReachedError,
   PlatformUsageSequenceConflictError,
   SubscriptionIdempotencyConflictError,
+  SubscriptionCollectionInFlightError,
   SubscriptionPolicyError,
   SubscriptionRepositoryConfigurationError
 } from "./subscription-errors.js";
@@ -94,7 +95,8 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
           sp.label,
           sp.description,
           sp.benefits,
-          sp.amount_minor,
+          sp.price_minor as amount_minor,
+          sp.asset_decimals,
           sp.amount_atomic,
           sp.currency,
           sp.period_days,
@@ -107,6 +109,9 @@ export function createPostgresSubscriptionRepository(database?: string | Postgre
           sp.program_id,
           sp.plan_pda,
           sp.merchant_wallet,
+          sp.creator_amount_atomic,
+          sp.platform_fee_amount_atomic,
+          sp.allocation_amount_atomic,
           sp.creator_user_id,
           p.handle as creator_handle,
           p.display_name as creator_display_name,

@@ -31,6 +31,8 @@ interface VerificationRecordRow {
   status: VerificationRecordResource["status"];
   provider: string;
   method: string;
+  threshold_age: number | null;
+  result_over_threshold: boolean | null;
   assurance_level: string;
   verified_at: Date | null;
   expires_at: Date | null;
@@ -314,16 +316,17 @@ export function createPostgresVerificationRepository(database?: string | Postgre
           end as status,
           vr.provider,
           vr.method,
+          vr.threshold_age,
+          vr.result_over_threshold,
           vr.assurance_level,
           vr.verified_at,
           vr.expires_at,
           vr.reusable
-        from verification_records vr
-        join users u on u.id = vr.subject_id
-        where vr.subject_type = 'user'
-          and u.supabase_user_id = ${input.supabaseUserId}
-          and vr.purpose = ${input.purpose}
-        order by vr.provider_event_at desc nulls last, vr.created_at desc, vr.id desc
+        from users u
+        cross join lateral private.current_verification_decision(
+          'user', u.id, ${input.purpose}
+        ) vr
+        where u.supabase_user_id = ${input.supabaseUserId}
         limit 1
       `;
 
@@ -341,16 +344,15 @@ export function createPostgresVerificationRepository(database?: string | Postgre
           end as status,
           provider,
           method,
+          threshold_age,
+          result_over_threshold,
           assurance_level,
           verified_at,
           expires_at,
           reusable
-        from verification_records
-        where subject_type = 'organization'
-          and subject_id = ${input.organizationId}
-          and purpose = ${input.purpose}
-        order by provider_event_at desc nulls last, created_at desc, id desc
-        limit 1
+        from private.current_verification_decision(
+          'organization', ${input.organizationId}, ${input.purpose}
+        )
       `;
 
       return rows[0] ? toRecord(rows[0]) : null;
@@ -466,22 +468,16 @@ async function applyVerificationWebhookDecision(
   const lockKey = `${session.subject_type}:${session.subject_id}:${session.purpose}`;
   await tx`select pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
 
-  const currentRows = await tx<Array<{
-    status: VerificationRecordResource["status"];
-    provider_event_at: Date | null;
-  }>>`
-    select status, provider_event_at
-    from verification_records
-    where subject_type = ${session.subject_type}
-      and subject_id = ${session.subject_id}
-      and purpose = ${session.purpose}
-      and metadata ->> 'source' = 'provider_webhook'
-    order by provider_event_at desc nulls last, created_at desc, id desc
-    limit 1
-    for update
+  const currentRows = await tx<Array<{ should_apply: boolean }>>`
+    select private.incoming_verification_decision_is_current(
+      ${session.subject_type},
+      ${session.subject_id},
+      ${session.purpose},
+      ${decision.status},
+      ${input.occurredAt ?? null}
+    ) as should_apply
   `;
-  const current = currentRows[0];
-  if (!shouldApplyProviderDecision(current, input.occurredAt ?? null, decision.status)) {
+  if (currentRows[0]?.should_apply !== true) {
     if (eventReceiptId) {
       await tx`
         update verification_events
@@ -491,8 +487,6 @@ async function applyVerificationWebhookDecision(
     }
     return "ignored";
   }
-  const decisionAt = input.occurredAt ?? new Date();
-
   await tx`
     update verification_sessions
     set
@@ -504,7 +498,7 @@ async function applyVerificationWebhookDecision(
         then coalesce(provider_applicant_id, ${input.providerReference}) else provider_applicant_id end,
       provider_inquiry_id = case when ${input.provider} = 'persona'
         then coalesce(provider_inquiry_id, ${input.providerReference}) else provider_inquiry_id end,
-      provider_event_at = ${decisionAt},
+      provider_event_at = ${input.occurredAt ?? null},
       updated_at = now(),
       completed_at = case when ${decision.status} in ('valid', 'invalid', 'blocked') then coalesce(${input.occurredAt ?? null}, now()) else completed_at end
     where id = ${session.id}
@@ -531,7 +525,7 @@ async function applyVerificationWebhookDecision(
       ${session.reusable}, ${input.payloadHash ?? input.signatureHash},
       ${decision.failureReasonCode},
       ${session.policy_version}, ${session.terms_accepted_at},
-      ${decisionAt},
+      ${input.occurredAt ?? null},
       ${tx.json({
         source: "provider_webhook",
         eventType: input.eventType,
@@ -542,30 +536,6 @@ async function applyVerificationWebhookDecision(
     )
     returning id
   `;
-
-  const recordId = records[0]?.id ?? null;
-  if (
-    recordId &&
-    decision.status === "valid" &&
-    session.purpose === "adult_publisher_eligibility" &&
-    ["gov_id_selfie", "doc_scan"].includes(session.requested_method) &&
-    ["high", "documentary"].includes(session.assurance_level)
-  ) {
-    await tx`
-      insert into verification_records (
-        subject_type, subject_id, purpose, status, provider, provider_reference,
-        method, threshold_age, result_over_threshold, assurance_level,
-        verified_at, expires_at, reusable, derived_from_record_id, provider_event_at, metadata
-      )
-      values (
-        ${session.subject_type}, ${session.subject_id}, 'age_access', 'valid',
-        ${input.provider}, ${input.providerReference}, ${session.requested_method},
-        18, true, ${session.assurance_level}, coalesce(${input.occurredAt ?? null}, now()),
-        null, ${session.reusable}, ${recordId}, ${decisionAt},
-        ${tx.json({ source: "adult_publisher_eligibility", eventType: input.eventType })}
-      )
-    `;
-  }
 
   if (decision.status === "valid" && session.purpose === "age_access") {
     await tx`
@@ -710,35 +680,6 @@ async function reconcilePendingVerificationEvents(
   }
 }
 
-function shouldApplyProviderDecision(
-  current: { status: VerificationRecordResource["status"]; provider_event_at: Date | null } | undefined,
-  incomingAt: Date | null,
-  incomingStatus: NormalizedVerificationWebhook["status"]
-): boolean {
-  if (!current) return true;
-  const currentAt = current.provider_event_at?.getTime() ?? null;
-  const nextAt = incomingAt?.getTime() ?? null;
-
-  if (currentAt !== null && nextAt !== null) {
-    if (nextAt < currentAt) return false;
-    if (nextAt > currentAt) return true;
-    return decisionRank(incomingStatus) > decisionRank(current.status);
-  }
-
-  if (nextAt === null) {
-    // Timestamp-less positive or pending events cannot displace an existing
-    // authoritative decision. An adverse result still fails closed.
-    return incomingStatus === "blocked" || incomingStatus === "invalid";
-  }
-  return true;
-}
-
-function decisionRank(status: NormalizedVerificationWebhook["status"] | VerificationRecordResource["status"]): number {
-  if (status === "blocked" || status === "invalid" || status === "revoked") return 3;
-  if (status === "valid") return 2;
-  return 1;
-}
-
 async function resolveSessionSubject(
   sql: PostgresSql,
   input: {
@@ -826,7 +767,13 @@ export function resolveCapabilitiesFromRecords(input: {
   creatorKycState?: "not_required" | "required" | "pending" | "verified" | "failed";
 }): CapabilityResolution {
   const hasAge = isValid(input.ageAccess);
-  const hasAdultPublisherEligibility = hasAge && isValid(input.adultPublisherEligibility ?? null);
+  const adultPublisherEligibility = input.adultPublisherEligibility ?? null;
+  const hasAdultPublisherEligibility =
+    hasAge &&
+    isValid(adultPublisherEligibility) &&
+    adultPublisherEligibility?.resultOverThreshold === true &&
+    typeof adultPublisherEligibility.thresholdAge === "number" &&
+    adultPublisherEligibility.thresholdAge >= 18;
   const hasCreatorKyc = input.creatorKycState
     ? input.creatorKycState === "verified"
     : isValid(input.creatorKyc);
@@ -914,6 +861,8 @@ function toRecord(row: VerificationRecordRow): VerificationRecordResource {
     status: row.status,
     provider: row.provider,
     method: row.method,
+    thresholdAge: row.threshold_age,
+    resultOverThreshold: row.result_over_threshold,
     assuranceLevel: row.assurance_level,
     verifiedAt: row.verified_at?.toISOString() ?? null,
     expiresAt: row.expires_at?.toISOString() ?? null,

@@ -55,6 +55,10 @@ export interface DataRequestRow {
   type: AdminDataRequest["type"];
   state: AdminDataRequest["state"];
   privacy_boundary: AdminDataRequest["privacyBoundary"];
+  content_export_job_id: string | null;
+  content_export_job_state: AdminDataRequest["contentExportJobState"];
+  content_export_cleanup_state: AdminDataRequest["contentExportCleanupState"];
+  content_export_archive_upload_started_at: Date | null;
   created_at: Date;
   updated_at: Date | null;
   completed_at: Date | null;
@@ -111,12 +115,19 @@ export function toRefundDispute(row: RefundDisputeRow): AdminRefundDispute {
 }
 
 export function toDataRequest(row: DataRequestRow): AdminDataRequest {
+  const isContentExport = row.type === "export";
   return {
     id: row.id,
     requesterUserId: row.requester_user_id,
     type: row.type,
     state: row.state,
     privacyBoundary: row.privacy_boundary,
+    contentExportJobId: isContentExport ? row.content_export_job_id : null,
+    contentExportJobState: isContentExport ? row.content_export_job_state : null,
+    contentExportCleanupState: isContentExport ? row.content_export_cleanup_state : null,
+    contentExportArchiveUploadStartedAt: isContentExport
+      ? row.content_export_archive_upload_started_at?.toISOString() ?? null
+      : null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at?.toISOString() ?? null,
     completedAt: row.completed_at?.toISOString() ?? null

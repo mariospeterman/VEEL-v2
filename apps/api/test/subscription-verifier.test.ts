@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { parseServerEnv } from "@veel/config";
 import {
   classifySubscriptionAuthorizationSignatureStatus,
-  createSolanaSubscriptionAuthorizationVerifier
+  createSolanaSubscriptionAuthorizationVerifier,
+  validateSubscriptionAccountLinkage
 } from "../src/modules/subscription/subscription-verifier";
 
 const programId = "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44";
@@ -117,6 +118,48 @@ describe("classifySubscriptionAuthorizationSignatureStatus", () => {
   });
 });
 
+describe("validateSubscriptionAccountLinkage", () => {
+  const linked = {
+    authority: { user: wallet, tokenMint: mint, initId: 7n },
+    delegation: {
+      delegator: wallet,
+      delegatee: wallet,
+      initId: 7n,
+      subscriptionAuthority: programId,
+      mint
+    },
+    tokenAccount: {
+      owner: wallet,
+      mint,
+      delegate: programId,
+      delegatedAmount: 15_000_000n,
+      initialized: true
+    },
+    expected: {
+      subscriberWallet: wallet,
+      collectorAddress: wallet,
+      tokenMint: mint,
+      authorityAddress: programId,
+      amountAtomic: 15_000_000n
+    }
+  };
+
+  it("accepts one exact authority/delegation/token linkage", () => {
+    expect(validateSubscriptionAccountLinkage(linked)).toBeNull();
+  });
+
+  it("rejects mismatched init IDs and insufficient delegated allowance", () => {
+    expect(validateSubscriptionAccountLinkage({
+      ...linked,
+      authority: { ...linked.authority, initId: 8n }
+    })).toBe("authority_init_mismatch");
+    expect(validateSubscriptionAccountLinkage({
+      ...linked,
+      tokenAccount: { ...linked.tokenAccount, delegatedAmount: 14_999_999n }
+    })).toBe("delegated_allowance_mismatch");
+  });
+});
+
 function configuredEnv() {
   return parseServerEnv({
     NODE_ENV: "test",
@@ -148,6 +191,7 @@ function validInput(overrides = {}) {
     amountAtomic: "15000000",
     periodDays: 30,
     periodSeconds: 2_592_000,
+    delegationNonce: 1,
     delegationExpiresAt: new Date("2027-12-01T00:00:00.000Z"),
     provider: "official_solana_subscription_program",
     planId: "platform_plus_monthly",

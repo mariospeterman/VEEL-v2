@@ -86,7 +86,8 @@ describe("buildWorkerRuntime", () => {
         "scheduled-publications",
         "live-safety",
         "media-moderation",
-        "media-asset-cleanups"
+        "media-asset-cleanups",
+        "content-exports"
       ],
       schedules: [
         {
@@ -138,6 +139,11 @@ describe("buildWorkerRuntime", () => {
           name: "media-asset-cleanups",
           cadence: "every_minute",
           sourceIndex: "media_assets_provider_cleanup_idx"
+        },
+        {
+          name: "content-exports",
+          cadence: "every_minute",
+          sourceIndex: "content_export_jobs_lease_due_idx"
         }
       ]
     });
@@ -153,6 +159,9 @@ describe("runScheduledWorkerTick", () => {
       runners: {
         async analyticsProjections() {
           calls.push("analytics");
+        },
+        async contentExports() {
+          calls.push("content-exports");
         },
         async liveSafety() {
           calls.push("live-safety");
@@ -194,6 +203,7 @@ describe("runScheduledWorkerTick", () => {
     expect(calls.sort()).toEqual([
       "analytics",
       "asset-cleanups",
+      "content-exports",
       "email",
       "live-safety",
       "moderation",
@@ -205,6 +215,7 @@ describe("runScheduledWorkerTick", () => {
     ]);
     expect(result).toEqual({
       analyticsProjections: "completed",
+      contentExports: "completed",
       liveSafety: "completed",
       mediaAssetCleanups: "completed",
       mediaModeration: "completed",
@@ -1102,7 +1113,9 @@ describe("runSubscriptionCollectionTick", () => {
       leased: 1,
       confirmed: 1,
       failed: 0,
-      revoked: 0
+      reconciling: 0,
+      revoked: 0,
+      cancelled: 0
     });
     expect(repository.outcomes).toEqual([
       {
@@ -1131,7 +1144,7 @@ describe("runSubscriptionCollectionTick", () => {
     });
     const provider = fakeSubscriptionCollectionProvider({
       state: "failed",
-      failureCode: "insufficient_allowance",
+      failureCode: "subscription_delegated_allowance_mismatch",
       retryAt
     });
 
@@ -1150,7 +1163,7 @@ describe("runSubscriptionCollectionTick", () => {
     expect(repository.outcomes[0]).toMatchObject({
       outcome: {
         state: "failed",
-        failureCode: "insufficient_allowance",
+        failureCode: "subscription_delegated_allowance_mismatch",
         retryAt
       }
     });
@@ -1162,7 +1175,7 @@ describe("runSubscriptionCollectionTick", () => {
     });
     const provider = fakeSubscriptionCollectionProvider({
       state: "revoked",
-      failureCode: "delegation_revoked"
+      failureCode: "subscription_delegation_expired"
     });
 
     const result = await runSubscriptionCollectionTick({
@@ -1180,14 +1193,17 @@ describe("runSubscriptionCollectionTick", () => {
     expect(repository.outcomes[0]).toMatchObject({
       outcome: {
         state: "revoked",
-        failureCode: "delegation_revoked"
+        failureCode: "subscription_delegation_expired"
       }
     });
   });
 
   it("reconciles a stale lease before considering another provider collection", async () => {
     const repository = fakeSubscriptionCollectionRepository({
-      dueCollections: [dueCollectionFixture({ attemptCount: 2 })]
+      dueCollections: [dueCollectionFixture({
+        attemptCount: 2,
+        broadcastSignature: "reconciled-signature"
+      })]
     });
     const collect = vi.fn();
     const provider: SubscriptionCollectionProvider = {
@@ -1364,9 +1380,13 @@ function dueCollectionFixture(
       overrides.providerIdempotencyKey ?? "subscription-1:2026-06-06T00:00:00.000Z",
     subscriptionId: overrides.subscriptionId ?? "subscription-1",
     subscriberUserId: overrides.subscriberUserId ?? "subscriber-1",
+    subscriberWallet: overrides.subscriberWallet ?? "11111111111111111111111111111111",
     planId: overrides.planId ?? "platform_plus_monthly",
-    amountMinor: overrides.amountMinor ?? 15000000n,
+    amountMinor: overrides.amountMinor ?? 1500n,
     amountAtomic: overrides.amountAtomic ?? 15000000n,
+    creatorAmountAtomic: overrides.creatorAmountAtomic ?? 0n,
+    platformAmountAtomic: overrides.platformAmountAtomic ?? 15000000n,
+    allocationAmountAtomic: overrides.allocationAmountAtomic ?? 0n,
     currency: overrides.currency ?? "USDC",
     periodStartsAt: overrides.periodStartsAt ?? new Date("2026-06-06T00:00:00.000Z"),
     periodEndsAt: overrides.periodEndsAt ?? new Date("2026-07-06T00:00:00.000Z"),
@@ -1378,7 +1398,29 @@ function dueCollectionFixture(
     tokenProgram: overrides.tokenProgram ?? "spl_token",
     provider: overrides.provider ?? "official_solana_subscription_program",
     programId: overrides.programId ?? "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
-    periodSeconds: overrides.periodSeconds ?? 30 * 86_400
+    periodSeconds: overrides.periodSeconds ?? 30 * 86_400,
+    delegationNonce: overrides.delegationNonce ?? 1,
+    assetDecimals: overrides.assetDecimals ?? 6,
+    scope: overrides.scope ?? "platform",
+    creatorUserId: overrides.creatorUserId ?? null,
+    creatorReceiverWallet: overrides.creatorReceiverWallet ?? null,
+    platformReceiverWallet:
+      overrides.platformReceiverWallet ?? "11111111111111111111111111111112",
+    termsVersion: overrides.termsVersion ?? "subscription-recurring-terms-v1",
+    withdrawalWaiverVersion:
+      overrides.withdrawalWaiverVersion ?? "subscription-initial-access-waiver-v1",
+    acceptedAt: overrides.acceptedAt ?? new Date("2026-06-01T00:00:00.000Z"),
+    solanaNetwork: overrides.solanaNetwork ?? "devnet",
+    broadcastSignature: overrides.broadcastSignature ?? null,
+    broadcastTransactionBase64: overrides.broadcastTransactionBase64 ?? null,
+    broadcastBlockhash: overrides.broadcastBlockhash ?? null,
+    broadcastLastValidBlockHeight: overrides.broadcastLastValidBlockHeight ?? null,
+    recipientKycRequired: overrides.recipientKycRequired ?? false,
+    recipientKycPolicyMode: overrides.recipientKycPolicyMode ?? "disabled",
+    recipientKycPolicyVersion:
+      overrides.recipientKycPolicyVersion ?? "platform-plan-not-applicable",
+    recipientKycDecisionReason:
+      overrides.recipientKycDecisionReason ?? "platform_plan_not_applicable"
   };
 }
 
@@ -1424,8 +1466,15 @@ function fakeSubscriptionCollectionRepository(input: {
     async leaseDueCollections() {
       return input.dueCollections ?? [];
     },
+    async authorizeCollectionBroadcast() {
+      return true;
+    },
+    async recordPreparedCollectionBroadcast() {
+      return true;
+    },
     async recordCollectionOutcome(outcome) {
       outcomes.push(outcome);
+      return true;
     }
   };
 }

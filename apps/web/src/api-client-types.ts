@@ -79,6 +79,8 @@ export type VerificationRecordSummary = {
   status: string;
   provider: string;
   method: string;
+  thresholdAge?: number | null;
+  resultOverThreshold?: boolean | null;
   assuranceLevel: string;
   verifiedAt: string | null;
   expiresAt: string | null;

@@ -17,6 +17,7 @@ import {
   verifySubscriptionReadyAccess
 } from "./subscription-route-utils.js";
 import {
+  SubscriptionCollectionInFlightError,
   SubscriptionIdempotencyConflictError,
   SubscriptionPolicyError,
   SubscriptionRepositoryConfigurationError
@@ -184,6 +185,7 @@ export async function registerSubscriptionRoutes(
           body: requestBody,
           tokenMint,
           programId: app.config.SUBSCRIPTIONS_SOLANA_PROGRAM_ID,
+          assetDecimals: app.config.PAYMENT_USDC_DECIMALS,
           amountAtomic,
           creatorAmountAtomic: split.creatorAmountAtomic,
           platformAmountAtomic: split.platformFeeAmountAtomic
@@ -263,6 +265,9 @@ export async function registerSubscriptionRoutes(
       if (readiness.config.collectorWallet) {
         assertSolanaAddress(readiness.config.collectorWallet);
       }
+      if (!readiness.config.merchantWallet) {
+        return reply.code(503).send(serviceUnavailableResponse("Subscriptions are unavailable: merchant_wallet_missing"));
+      }
       const intentBody = body as CreateSubscriptionIntentRequest;
       const intent = await options.subscriptionRepository.createAuthorizationIntent({
         supabaseUserId: access.supabaseUserId,
@@ -273,7 +278,10 @@ export async function registerSubscriptionRoutes(
         collectorAddress: readiness.config.collectorWallet,
         delegationProgramId: readiness.config.programId,
         provider: readiness.config.provider,
-        supportedMints: readiness.config.supportedMints
+        supportedMints: readiness.config.supportedMints,
+        platformReceiverWallet: readiness.config.merchantWallet,
+        assetDecimals: app.config.PAYMENT_USDC_DECIMALS,
+        network: readiness.config.network
       });
 
       return reply.code(201).send(intent);
@@ -365,6 +373,7 @@ export async function registerSubscriptionRoutes(
         amountAtomic: verificationContext.amountAtomic,
         periodDays: verificationContext.periodDays,
         periodSeconds: verificationContext.periodSeconds,
+        delegationNonce: verificationContext.delegationNonce,
         delegationExpiresAt: verificationContext.delegationExpiresAt,
         provider: verificationContext.provider,
         planId: verificationContext.planId,
@@ -401,7 +410,6 @@ export async function registerSubscriptionRoutes(
         request.log.warn({ error }, "Subscription authorization submission failed");
         return reply.code(503).send(serviceUnavailableResponse("Subscriptions are not configured"));
       }
-
       throw error;
     }
   });
@@ -487,6 +495,11 @@ export async function registerSubscriptionRoutes(
       if (error instanceof SubscriptionRepositoryConfigurationError) {
         request.log.warn({ error }, "Subscription cancellation failed");
         return reply.code(503).send(serviceUnavailableResponse("Subscriptions are not configured"));
+      }
+      if (error instanceof SubscriptionCollectionInFlightError) {
+        return reply.code(409).send(conflictResponse(
+          "A collection is already signed or broadcasting; retry cancellation after it settles"
+        ));
       }
 
       throw error;

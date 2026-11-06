@@ -47,7 +47,7 @@ Provider choice does not remove platform obligations. The Fastify API remains th
 
 ## Contextual verification UX
 
-Ordinary onboarding asks only for age assurance and never asks for adult-publishing intent. The independent adult-publisher flow appears contextually only when Adult or Explicit publication is selected in Create. The API records versioned Adult Publisher Terms acceptance before the provider session and derives ordinary age access only from an approved high-assurance documentary result.
+Ordinary onboarding asks only for age assurance and never asks for adult-publishing intent. The independent adult-publisher flow appears contextually only when Adult or Explicit publication is selected in Create. The API records versioned Adult Publisher Terms acceptance before the provider session. Documentary identity, liveness, and face-match evidence never imply adulthood: ordinary age access requires a separate authenticated threshold result, unless a source record itself carries an explicit 18+ threshold fact.
 
 ## Jurisdiction notes
 

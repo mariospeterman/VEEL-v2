@@ -140,22 +140,19 @@ attestation.
 
 ## Original Audit Archive
 
-The original audit text is hash-validated against the pinned SHA-256 in the generator, but it is not
-present in this repository. Generation and checking require an explicit `--audit PATH`; there is no
-machine-local Downloads default. CI must provision the exact hash-pinned input as a read-only
-artifact before invoking the tool. A checkout without that provisioned input is not claimed to be a
-self-contained reproduction. The companion
-`WeVid_Audit_Evidence_71ceabc.zip`, `finding-index.json`, and
-`WeVid_Coverage_71ceabc.json` are currently unavailable in the tracked audit inputs. The generator
-therefore records the archive as unavailable and does not fabricate reviewers, full-file ranges,
-logs, or semantic coverage.
+The supplied original audit text and evidence package are tracked below `audit-inputs/`. Generation
+and checking still require an explicit `--audit PATH`; there is no machine-local Downloads default.
+Use the tracked `audit-inputs/WeVid_Full_Audit_71ceabc.txt`, whose SHA-256 is independently pinned by
+the generator.
 
-An optional future import uses
-`audit-inputs/original-evidence-index.json`, the original ZIP, and extracted members below
-`audit-inputs/original/`. Import validation rejects absolute/traversal paths, duplicate normalized
-members, unsupported counts/sizes, archive hash mismatch, and member hash mismatch. Even a valid
-archive import does not promote semantic coverage until its per-path schema is parsed and reconciled
-against all 1,069 baseline blobs.
+`audit-inputs/original-evidence-index.json` binds the exact original ZIP and all 148 extracted
+members below `audit-inputs/original/` by byte length and SHA-256. The validated import includes
+`finding-index.json` and `WeVid_Coverage_71ceabc.json`. Import validation rejects
+absolute/traversal paths, duplicate normalized members, unsupported counts/sizes, archive hash
+mismatch, member hash mismatch, and unindexed tracked members. A valid archive import proves byte
+identity and self-contained availability only: it does not promote semantic coverage until the
+supplied manifest schema is parsed and reconciled against every baseline blob, and it does not
+create a trusted closure attestation.
 
 Coverage classes remain distinct:
 
@@ -170,14 +167,14 @@ review because a path exists or a hash matches.
 
 ## Generate And Check
 
-First stage every intended source, test, documentation, disposition registry entry, review record,
-and receipt input. Leave the protected status-document worktree change and both unapproved recurring
-`0130` migration drafts unstaged. Generation rejects those paths if staged. Then generate:
+First stage every intended source, test, documentation, migration, disposition registry entry,
+review record, receipt, and audit-input file. Leave the protected status-document worktree change
+unstaged. Generation rejects that path if staged. Then generate:
 
 ```sh
 env PATH=/Users/maki/.nvm/versions/node/v22.23.4/bin:/usr/local/bin:/usr/bin:/bin \
   node scripts/generate-audit-evidence.mjs \
-  --audit /path/provisioned-by-ci/WeVid_Full_Audit_71ceabc.txt \
+  --audit docs/v2-new-build/audit-evidence/71ceabc/audit-inputs/WeVid_Full_Audit_71ceabc.txt \
   --workspace-report "${TMPDIR:?}/wevid-audit-workspace.json"
 ```
 
@@ -186,7 +183,7 @@ Verify without writing and require actual closure:
 ```sh
 env PATH=/Users/maki/.nvm/versions/node/v22.23.4/bin:/usr/local/bin:/usr/bin:/bin \
   node scripts/generate-audit-evidence.mjs \
-  --audit /path/provisioned-by-ci/WeVid_Full_Audit_71ceabc.txt \
+  --audit docs/v2-new-build/audit-evidence/71ceabc/audit-inputs/WeVid_Full_Audit_71ceabc.txt \
   --check
 ```
 

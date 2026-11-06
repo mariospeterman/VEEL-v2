@@ -20,6 +20,7 @@ export function SubscriptionAuthorizationPanel({ plan }: { plan: SubscriptionPla
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [consentAccepted, setConsentAccepted] = useState(false);
   const available =
     plan.providerState === "launch_approved" &&
     Boolean(plan.tokenMint && plan.tokenMint !== "SOL" && plan.currency !== "SOL");
@@ -34,7 +35,10 @@ export function SubscriptionAuthorizationPanel({ plan }: { plan: SubscriptionPla
     try {
       const intent = await createSubscriptionIntent({
         planId: plan.id,
-        ...(plan.creator?.id ? { creatorUserId: plan.creator.id } : {})
+        ...(plan.creator?.id ? { creatorUserId: plan.creator.id } : {}),
+        termsVersion: "subscription-recurring-terms-v1",
+        withdrawalWaiverVersion: "subscription-initial-access-waiver-v1",
+        immediateAccessAcknowledged: true
       });
       if (
         intent.subscription.subscriberWallet &&
@@ -61,9 +65,21 @@ export function SubscriptionAuthorizationPanel({ plan }: { plan: SubscriptionPla
 
   return (
     <div className="mt-4 grid gap-3 border-t border-(--line) pt-4">
+      <label className="flex items-start gap-3 text-sm leading-6 text-(--muted)">
+        <input
+          checked={consentAccepted}
+          className="mt-1"
+          onChange={(event) => setConsentAccepted(event.target.checked)}
+          type="checkbox"
+        />
+        <span>
+          I authorize recurring charges of {plan.amountMinor / 100} {plan.currency} every {plan.periodDays} days,
+          request immediate access, and acknowledge that immediate digital access waives the withdrawal right once delivery begins.
+        </span>
+      </label>
       <button
         className="rounded bg-(--foreground) px-3 py-2 text-sm font-semibold text-(--background) disabled:cursor-not-allowed disabled:opacity-50"
-        disabled={!available || pending}
+        disabled={!available || pending || !consentAccepted}
         onClick={() => void authorize()}
         type="button"
       >

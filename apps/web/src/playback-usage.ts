@@ -33,6 +33,9 @@ export function playbackSessionNeedsRotation(
 export function usePlaybackUsage(
   usage: PlaybackUsageContext | null | undefined
 ) {
+  const usageTargetId = usage?.targetId;
+  const usageTargetType = usage?.targetType;
+  const heartbeatIntervalSeconds = usage?.heartbeatIntervalSeconds;
   const [exhausted, setExhausted] = useState(false);
   const mountedRef = useRef(true);
   const sessionRef = useRef<PlaybackUsageSession | null>(null);
@@ -44,7 +47,7 @@ export function usePlaybackUsage(
   const sendingRef = useRef(false);
 
   const startLease = useCallback(async () => {
-    if (!usage) return null;
+    if (!usageTargetId || !usageTargetType) return null;
     if (sessionRef.current && !playbackSessionNeedsRotation(sessionRef.current)) {
       return sessionRef.current;
     }
@@ -58,7 +61,7 @@ export function usePlaybackUsage(
       sessionPromiseRef.current = authenticatedMutation<PlaybackUsageSession>(
         "/v1/platform-usage/playback-sessions",
         "POST",
-        { targetType: usage.targetType, targetId: usage.targetId },
+        { targetType: usageTargetType, targetId: usageTargetId },
         sessionIdempotencyKeyRef.current
       ).then((session) => {
         sessionRef.current = session;
@@ -71,10 +74,10 @@ export function usePlaybackUsage(
       });
     }
     return sessionPromiseRef.current;
-  }, [usage]);
+  }, [usageTargetId, usageTargetType]);
 
   const flush = useCallback(async () => {
-    if (!usage || sendingRef.current || unreportedSecondsRef.current < 1) return;
+    if (!usageTargetId || !usageTargetType || sendingRef.current || unreportedSecondsRef.current < 1) return;
     const session = sessionRef.current;
     if (!session || playbackSessionNeedsRotation(session)) return;
     sendingRef.current = true;
@@ -99,7 +102,7 @@ export function usePlaybackUsage(
     } finally {
       sendingRef.current = false;
     }
-  }, [usage]);
+  }, [usageTargetId, usageTargetType]);
 
   const setPlaying = useCallback((playing: boolean) => {
     playingRef.current = playing;
@@ -109,7 +112,7 @@ export function usePlaybackUsage(
   }, [flush]);
 
   useEffect(() => {
-    if (!usage || exhausted) return;
+    if (!heartbeatIntervalSeconds || exhausted) return;
     const timer = window.setInterval(() => {
       if (
         !playingRef.current ||
@@ -118,13 +121,13 @@ export function usePlaybackUsage(
         document.visibilityState !== "visible"
       ) return;
       unreportedSecondsRef.current += 1;
-      if (unreportedSecondsRef.current >= usage.heartbeatIntervalSeconds) {
+      if (unreportedSecondsRef.current >= heartbeatIntervalSeconds) {
         void flush();
       }
     }, 1_000);
 
     return () => window.clearInterval(timer);
-  }, [exhausted, flush, usage]);
+  }, [exhausted, flush, heartbeatIntervalSeconds]);
 
   useEffect(() => {
     mountedRef.current = true;

@@ -120,16 +120,13 @@ export async function recordContentSafetyDeclaration(
         result_over_threshold,
         verified_at,
         expires_at
-      from verification_records
-      where subject_type = 'user'
-        and subject_id = ${input.creatorUserId}
-        and purpose = 'adult_publisher_eligibility'
-        and status = 'valid'
+      from private.current_verification_decision(
+        'user', ${input.creatorUserId}, 'adult_publisher_eligibility'
+      )
+      where status = 'valid'
         and result_over_threshold is true
         and assurance_level in ('high', 'documentary')
         and (expires_at is null or expires_at > now())
-      order by verified_at desc nulls last, created_at desc
-      limit 1
     )
     insert into performer_subjects (
       owner_user_id,

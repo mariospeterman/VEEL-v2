@@ -1,0 +1,5 @@
+
+> veel-shoot-own-shine@0.0.0 docs:check /workspace/scratch/0635fbdaf32f/wevid-audit
+> node scripts/check-docs.mjs
+
+WeVid docs, route map, and OpenAPI checks passed.

@@ -21,6 +21,7 @@ export function toSubscriptionPlan(row: PlanRow): SubscriptionPlan {
     benefits: row.benefits,
     amountMinor: Number(row.amount_minor),
     currency: row.currency,
+    assetDecimals: row.asset_decimals ?? 6,
     periodDays: row.period_days,
     billingMode: row.billing_mode,
     providerState: row.provider_state,

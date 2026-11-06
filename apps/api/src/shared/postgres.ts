@@ -1,6 +1,6 @@
 import postgres from "postgres";
 import {
-  isCanonicalCursorTimestamp,
+  cursorTimestamp,
   parseDatabaseDate
 } from "./database-timestamp.js";
 
@@ -23,13 +23,10 @@ export function createPostgresClient(databaseUrl: string): PostgresSql {
       preciseDate: {
         to: 1184,
         from: [1082, 1114, 1184],
-        // Cursor boundaries are exact six-digit database timestamps. Parsing
-        // string parameters through JavaScript Date here would truncate them
-        // back to milliseconds before PostgreSQL can compare the boundary.
-        serialize: (value: Date | string) =>
-          typeof value === "string" && isCanonicalCursorTimestamp(value)
-            ? value
-            : (value instanceof Date ? value : new Date(value)).toISOString(),
+        // Keep all timestamp parameters at database precision. Provider event
+        // ordering and cursor boundaries must not pass through Date#toISOString,
+        // which would silently discard their final three fractional digits.
+        serialize: (value: Date | string) => cursorTimestamp(value),
         parse: parseDatabaseDate
       }
     }

@@ -26,10 +26,19 @@ describeIntegration("canonical policy and content eligibility against Postgres",
     const followerContentId = randomUUID();
     const subscriberContentId = randomUUID();
     const membershipId = randomUUID();
+    const authorizationIntentId = randomUUID();
     const entitlementId = randomUUID();
     const creatorWalletId = randomUUID();
     const suffix = creatorId.replaceAll("-", "").slice(0, 12);
     const membershipPlanId = `eligibility-membership-${suffix}`;
+    const recurringProgramId = `eligibility-program-${suffix}`;
+    const subscriberWallet = `eligibility-subscriber-${suffix}`;
+    const subscriberTokenAccount = `eligibility-token-account-${suffix}`;
+    const collectorAddress = `eligibility-collector-${suffix}`;
+    const authorityAddress = `eligibility-authority-${suffix}`;
+    const delegationAddress = `eligibility-delegation-${suffix}`;
+    const creatorReceiverWallet = `eligibility-creator-receiver-${suffix}`;
+    const platformReceiverWallet = `eligibility-platform-receiver-${suffix}`;
     const policySnapshot = await sql<Array<{
       kyc_mode: "disabled" | "risk_based" | "required";
       policy_version: string;
@@ -421,12 +430,14 @@ describeIntegration("canonical policy and content eligibility against Postgres",
       await sql`
         insert into subscription_plans (
           id, scope, creator_user_id, label, amount_minor, currency, period_days,
-          provider_state, token_mint, token_program, state,
-          amount_atomic, period_seconds, creator_amount_atomic
+          provider_state, provider, program_id, token_mint, token_program, state,
+          amount_atomic, period_seconds, creator_amount_atomic, merchant_wallet
         ) values (
           ${membershipPlanId}, 'creator', ${creatorId}, 'Eligibility membership',
-          1000000, 'USDC', 30, 'staging_required', 'integration-mint',
-          'spl_token', 'disabled', 1000000, 2592000, 1000000
+          100, 'USDC', 30, 'staging_required',
+          'official_solana_subscription_program', ${recurringProgramId},
+          'integration-mint', 'spl_token', 'disabled', 1000000, 2592000,
+          1000000, ${creatorReceiverWallet}
         )
       `;
       await sql`
@@ -494,11 +505,58 @@ describeIntegration("canonical policy and content eligibility against Postgres",
         insert into subscriptions (
           id, subscriber_user_id, scope, plan_id, creator_user_id, state,
           token_mint, amount_atomic, period_seconds,
-          current_period_starts_at, current_period_ends_at, next_collection_at
+          current_period_starts_at, current_period_ends_at, next_collection_at,
+          collector_address, subscriber_wallet, provider, program_id,
+          delegation_nonce, authority_address, delegation_address,
+          subscriber_token_account
         ) values (
           ${membershipId}, ${viewerId}, 'creator', ${membershipPlanId}, ${creatorId},
           'active', 'integration-mint', 1000000, 2592000,
-          now() - interval '31 days', now() - interval '1 day', now() - interval '1 hour'
+          now() - interval '31 days', now() - interval '1 day', now() - interval '1 hour',
+          ${collectorAddress}, ${subscriberWallet},
+          'official_solana_subscription_program', ${recurringProgramId}, 1,
+          ${authorityAddress}, ${delegationAddress}, ${subscriberTokenAccount}
+        )
+      `;
+      await sql`
+        insert into subscription_authorization_intents (
+          id, subscription_id, idempotency_key, request_hash, state,
+          authorization_mode, setup_reference, expires_at, provider, program_id,
+          subscriber_wallet, subscriber_token_account, token_mint,
+          authority_address, delegation_address, delegation_nonce,
+          delegation_expires_at
+        ) values (
+          ${authorizationIntentId}, ${membershipId},
+          ${`eligibility-authorization-${suffix}`},
+          ${`eligibility-authorization-hash-${suffix}`}, 'verified',
+          'delegated_solana_subscription', ${`eligibility-setup-${suffix}`},
+          now() + interval '1 hour', 'official_solana_subscription_program',
+          ${recurringProgramId}, ${subscriberWallet}, ${subscriberTokenAccount},
+          'integration-mint', ${authorityAddress}, ${delegationAddress}, 1,
+          now() + interval '60 days'
+        )
+      `;
+      await sql`
+        insert into subscription_billing_acceptances (
+          subscription_id, authorization_intent_id, accepted_by_user_id, plan_id,
+          scope, creator_user_id, terms_version, withdrawal_waiver_version,
+          immediate_access_acknowledged, consent_request_hash, amount_minor,
+          amount_atomic, asset_decimals, currency, solana_network, token_mint,
+          token_program, provider, program_id, period_days, period_seconds,
+          creator_amount_atomic, platform_amount_atomic, allocation_amount_atomic,
+          creator_receiver_wallet, platform_receiver_wallet,
+          allocation_receiver_wallet, collector_address, merchant_wallet,
+          delegation_nonce, immutable_hash
+        ) values (
+          ${membershipId}, ${authorizationIntentId}, ${viewerId}, ${membershipPlanId},
+          'creator', ${creatorId}, 'eligibility-terms-v1',
+          'eligibility-withdrawal-v1', true,
+          ${`eligibility-consent-${suffix}`}, 100, 1000000, 6, 'USDC', 'devnet',
+          'integration-mint', 'spl_token', 'official_solana_subscription_program',
+          ${recurringProgramId}, 30, 2592000, 1000000, 0, 0,
+          ${creatorReceiverWallet}, ${platformReceiverWallet}, null,
+          ${collectorAddress}, ${creatorReceiverWallet}, 1,
+          ${`eligibility-acceptance-${suffix}`}
         )
       `;
       const collectionRepository = createPostgresSubscriptionCollectionRepository(databaseUrl);
@@ -552,48 +610,65 @@ describeIntegration("canonical policy and content eligibility against Postgres",
       expect(hidden).toEqual([]);
     } finally {
       try {
-      await sql`
-        update recipient_monetisation_policies
-        set kyc_mode = ${policySnapshot[0]?.kyc_mode ?? "risk_based"},
-            policy_version = ${policySnapshot[0]?.policy_version ?? "recipient-risk-v1"},
-            kyc_required_jurisdictions = ${policySnapshot[0]?.kyc_required_jurisdictions ?? []},
-            kyc_required_product_types = ${policySnapshot[0]?.kyc_required_product_types ?? []}
-        where policy_key = 'default'
-      `;
-      await sql`
-        delete from viewer_hidden_creators
-        where user_id = ${viewerId} and creator_user_id = ${creatorId}
-      `;
-      await sql`
-        delete from user_follows
-        where follower_user_id = ${viewerId} and followed_user_id = ${creatorId}
-      `;
-      await sql`delete from entitlements where id = ${entitlementId}`;
-      await sql`delete from subscription_events where subscription_id = ${membershipId}`;
-      await sql`delete from subscriptions where id = ${membershipId}`;
-      await sql`delete from subscription_plans where id = ${membershipPlanId}`;
-      await sql`delete from viewer_feed_preferences where user_id = ${viewerId}`;
-      await sql`
-        delete from recipient_monetisation_overrides where user_id = ${creatorId}
-      `;
-      await sql`
-        delete from recipient_monetisation_risk_assessments where user_id = ${creatorId}
-      `;
-      await sql`delete from creator_monetisation_settings where user_id = ${creatorId}`;
-      await sql`
-        delete from content_items
-        where id in (
-          ${safeContentId}, ${adultContentId}, ${pendingContentId},
-          ${followerContentId}, ${subscriberContentId}
-        )
-      `;
-      await sql`
-        delete from verification_records
-        where subject_type = 'user' and subject_id in (${viewerId}, ${creatorId})
-      `;
-      await sql`delete from wallets where id = ${creatorWalletId}`;
-      await sql`delete from profiles where user_id = ${creatorId}`;
-      await sql`delete from users where id in (${viewerId}, ${creatorId})`;
+        await sql.begin(async (transaction) => {
+          await transaction`
+            update recipient_monetisation_policies
+            set kyc_mode = ${policySnapshot[0]?.kyc_mode ?? "risk_based"},
+                policy_version = ${policySnapshot[0]?.policy_version ?? "recipient-risk-v1"},
+                kyc_required_jurisdictions = ${policySnapshot[0]?.kyc_required_jurisdictions ?? []},
+                kyc_required_product_types = ${policySnapshot[0]?.kyc_required_product_types ?? []}
+            where policy_key = 'default'
+          `;
+          await transaction`set local session_replication_role = replica`;
+          await transaction`
+            delete from viewer_hidden_creators
+            where user_id = ${viewerId} and creator_user_id = ${creatorId}
+          `;
+          await transaction`
+            delete from user_follows
+            where follower_user_id = ${viewerId} and followed_user_id = ${creatorId}
+          `;
+          await transaction`delete from entitlements where id = ${entitlementId}`;
+          await transaction`
+            delete from subscription_events where subscription_id = ${membershipId}
+          `;
+          await transaction`
+            delete from subscription_billing_acceptances
+            where subscription_id = ${membershipId}
+          `;
+          await transaction`
+            delete from subscription_authorization_intents
+            where id = ${authorizationIntentId}
+          `;
+          await transaction`delete from subscriptions where id = ${membershipId}`;
+          await transaction`delete from subscription_plans where id = ${membershipPlanId}`;
+          await transaction`
+            delete from viewer_feed_preferences where user_id = ${viewerId}
+          `;
+          await transaction`
+            delete from recipient_monetisation_overrides where user_id = ${creatorId}
+          `;
+          await transaction`
+            delete from recipient_monetisation_risk_assessments where user_id = ${creatorId}
+          `;
+          await transaction`
+            delete from creator_monetisation_settings where user_id = ${creatorId}
+          `;
+          await transaction`
+            delete from content_items
+            where id in (
+              ${safeContentId}, ${adultContentId}, ${pendingContentId},
+              ${followerContentId}, ${subscriberContentId}
+            )
+          `;
+          await transaction`
+            delete from verification_records
+            where subject_type = 'user' and subject_id in (${viewerId}, ${creatorId})
+          `;
+          await transaction`delete from wallets where id = ${creatorWalletId}`;
+          await transaction`delete from profiles where user_id = ${creatorId}`;
+          await transaction`delete from users where id in (${viewerId}, ${creatorId})`;
+        });
       } finally {
         try {
           await policyLock`

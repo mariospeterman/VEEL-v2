@@ -1,7 +1,9 @@
 import { createHmac } from "node:crypto";
 import type { ServerEnv } from "@veel/config";
+import { cursorTimestamp, parseDatabaseDate } from "../../shared/database-timestamp.js";
 import type {
   CreateVerificationSessionInput,
+  VerificationProviderReconciliation,
   VerificationProvider,
   VerificationProviderSession,
   VerificationProviderWaterfall
@@ -29,6 +31,10 @@ interface VerificationProviderAdapter {
   provider: Extract<VerificationProvider, "sumsub" | "didit" | "yoti" | "persona" | "veriff">;
   isConfigured(input: CreateVerificationSessionInput): boolean;
   createSession(input: CreateVerificationSessionInput): Promise<VerificationProviderSession>;
+  reconcileSession?(input: {
+    providerReference: string;
+    purpose: CreateVerificationSessionInput["purpose"];
+  }): Promise<VerificationProviderReconciliation>;
 }
 
 type SelectableVerificationProvider = VerificationProviderAdapter["provider"];
@@ -133,6 +139,27 @@ export function createStaticVerificationProviderWaterfall(
       }
 
       throw new VerificationProviderUnavailableError();
+    },
+    async reconcileSession(input) {
+      if (input.provider !== "didit" && input.provider !== "yoti") {
+        throw new VerificationProviderUnavailableError();
+      }
+      const provider = input.provider;
+      const adapter = (byProvider.get(provider) ?? []).find((candidate) =>
+        candidate.reconcileSession && candidate.isConfigured({
+          supabaseUserId: "reconciliation",
+          purpose: input.purpose as CreateVerificationSessionInput["purpose"],
+          providerPreference: provider,
+          idempotencyKey: `reconcile:${input.providerReference}`,
+          callbackUrl: "https://localhost.invalid/reconciliation",
+          webhookBaseUrl: "https://localhost.invalid/reconciliation"
+        })
+      );
+      if (!adapter?.reconcileSession) throw new VerificationProviderUnavailableError();
+      return adapter.reconcileSession({
+        providerReference: input.providerReference,
+        purpose: input.purpose as CreateVerificationSessionInput["purpose"]
+      });
     }
   };
 }
@@ -252,6 +279,47 @@ function createDiditVerificationProviderAdapter(env: ServerEnv): VerificationPro
         assuranceLevel: verificationAssurance(input, "didit"),
         reusable: false
       };
+    },
+    async reconcileSession(input) {
+      if (!env.DIDIT_API_KEY) {
+        throw new VerificationProviderHttpError("didit", 503, "Didit is not configured");
+      }
+      const response = await providerFetch(
+        "didit",
+        `${withoutTrailingSlash(env.DIDIT_API_BASE_URL)}/v3/session/${encodeURIComponent(input.providerReference)}/decision/`,
+        {
+          method: "GET",
+          headers: { "x-api-key": env.DIDIT_API_KEY }
+        }
+      );
+      const body = objectBody(await response.json());
+      const decision = objectBody(body.decision, true) ?? body;
+      const status = firstString(body.status, decision.status);
+      const mapped = mapDiditDecisionStatus(status);
+      const occurredAt = parseDate(firstString(
+        objectBody(body.decision_trace, true)?.decided_at,
+        decision.updated_at,
+        body.updated_at
+      ));
+      const expiresAt = parseDate(firstString(body.expires_at));
+      const providerReference = firstString(body.session_id, body.id) ?? input.providerReference;
+      return {
+        provider: "didit",
+        providerReference,
+        providerEventId: `${providerReference}:authenticated:${status ?? "unknown"}:${occurredAt ? cursorTimestamp(occurredAt) : "observed"}`,
+        eventType: "session.authenticated_result",
+        status: mapped.status,
+        signatureHash: null,
+        occurredAt,
+        failureReasonCode: mapped.failureReasonCode,
+        identityEvidence: {
+          documentApproved: hasApprovedEntries(decision.id_verifications),
+          livenessApproved: hasApprovedEntries(decision.liveness_checks),
+          faceMatchApproved: hasApprovedEntries(decision.face_matches)
+        },
+        launchUrl: firstString(body.session_url),
+        expiresAt
+      };
     }
   };
 }
@@ -329,6 +397,45 @@ function createYotiVerificationProviderAdapter(env: ServerEnv): VerificationProv
         method: "age_estimation",
         assuranceLevel: "medium",
         reusable: false
+      };
+    },
+    async reconcileSession(input) {
+      if (!env.YOTI_SDK_ID || !env.YOTI_API_TOKEN) {
+        throw new VerificationProviderHttpError("yoti", 503, "Yoti is not configured");
+      }
+      const response = await providerFetch(
+        "yoti",
+        `${withoutTrailingSlash(env.YOTI_API_BASE_URL)}/sessions/${encodeURIComponent(input.providerReference)}/result`,
+        {
+          method: "GET",
+          headers: {
+            authorization: `Bearer ${env.YOTI_API_TOKEN}`,
+            "yoti-sdk-id": env.YOTI_SDK_ID
+          }
+        }
+      );
+      const body = objectBody(await response.json());
+      const status = firstString(body.status, body.state)?.toUpperCase() ?? "PENDING";
+      const result = firstString(body.result, body.outcome, body.decision)?.toUpperCase() ?? null;
+      const mapped = mapYotiResultStatus(status, body.result, result);
+      const occurredAt = parseDate(firstString(body.updated_at, body.updatedAt));
+      const expiresAt = parseDate(firstString(body.expires_at, body.expiresAt));
+      const providerReference = firstString(body.id, body.session_id, body.session_key) ?? input.providerReference;
+      return {
+        provider: "yoti",
+        providerReference,
+        providerSubjectReference: firstString(body.reference_id),
+        providerEventId: `${providerReference}:authenticated:${status}:${occurredAt ? cursorTimestamp(occurredAt) : "observed"}`,
+        eventType: `session.authenticated_result.${firstString(body.method)?.toLowerCase() ?? "unknown"}`,
+        status: mapped.status,
+        signatureHash: null,
+        occurredAt,
+        failureReasonCode: mapped.failureReasonCode,
+        launchUrl: appendQuery(env.YOTI_LAUNCH_BASE_URL, {
+          sessionId: providerReference,
+          sdkId: env.YOTI_SDK_ID
+        }),
+        expiresAt
       };
     }
   };
@@ -585,8 +692,50 @@ function firstString(...values: unknown[]): string | null {
 
 function parseDate(value: string | null): Date | null {
   if (!value) return null;
-  const date = new Date(value);
+  const date = parseDatabaseDate(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function mapDiditDecisionStatus(status: string | null): {
+  status: VerificationProviderReconciliation["status"];
+  failureReasonCode: string | null;
+} {
+  if (status === "Approved") return { status: "valid", failureReasonCode: null };
+  if (status === "Declined") return { status: "blocked", failureReasonCode: "Declined" };
+  if (["Expired", "Abandoned", "Kyc Expired"].includes(status ?? "")) {
+    return { status: "invalid", failureReasonCode: status };
+  }
+  return { status: "pending", failureReasonCode: null };
+}
+
+function mapYotiResultStatus(
+  status: string,
+  rawResult: unknown,
+  result: string | null
+): {
+  status: VerificationProviderReconciliation["status"];
+  failureReasonCode: string | null;
+} {
+  if (status === "COMPLETE") {
+    if (rawResult === false || ["FAIL", "FAILED", "UNDER", "NO", "DECLINED"].includes(result ?? "")) {
+      return { status: "blocked", failureReasonCode: result ?? "FAIL" };
+    }
+    return { status: "valid", failureReasonCode: null };
+  }
+  // Yoti can emit FAIL before a retry/resume later completes successfully.
+  // Keep the authenticated current FAIL recoverable; only COMPLETE decides pass/fail.
+  if (status === "FAIL") return { status: "pending", failureReasonCode: "FAIL" };
+  if (["CANCELLED", "EXPIRED"].includes(status)) {
+    return { status: "invalid", failureReasonCode: status };
+  }
+  return { status: "pending", failureReasonCode: null };
+}
+
+function hasApprovedEntries(value: unknown): boolean {
+  return Array.isArray(value) && value.some((entry) => {
+    const record = objectBody(entry, true);
+    return firstString(record?.status)?.toLowerCase() === "approved";
+  });
 }
 
 function expiresInSeconds(seconds: number): Date {

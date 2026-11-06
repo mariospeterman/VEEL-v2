@@ -1,6 +1,7 @@
 const inFlightRefreshes = new Map<string, Promise<unknown>>();
 
 export const CONTENT_ACCESS_RETRY_DELAYS_MS = [5_000, 15_000, 30_000] as const;
+export const PLAYBACK_RESOURCE_RENEWAL_LEAD_MS = 10_000;
 
 type TimerHandle = ReturnType<typeof setTimeout>;
 
@@ -42,6 +43,42 @@ export function createContentAccessRetryScheduler(input: {
 
 export function isAuthoritativeContentAccessDenial(status: number | undefined): boolean {
   return status === 401 || status === 403 || status === 404 || status === 410;
+}
+
+export function playbackResourceRefreshSchedule(
+  expiresAt: string | null | undefined,
+  now = Date.now()
+): { expiresInMs: number; renewInMs: number } | null {
+  if (!expiresAt) return null;
+  const expiry = Date.parse(expiresAt);
+  if (!Number.isFinite(expiry)) return null;
+  const expiresInMs = Math.max(0, expiry - now);
+  return {
+    expiresInMs,
+    renewInMs: Math.max(0, expiresInMs - PLAYBACK_RESOURCE_RENEWAL_LEAD_MS)
+  };
+}
+
+export function playbackAccessSourceKey(
+  scope: string,
+  playback: {
+    state?: string;
+    url?: string | null;
+    jwt?: string | null;
+    expiresAt?: string | null;
+    blockReason?: string | null;
+    usage?: { leaseExpiresAt?: string | null } | null;
+  } | null | undefined
+): string {
+  return JSON.stringify([
+    scope,
+    playback?.state ?? null,
+    playback?.url ?? null,
+    playback?.jwt ?? null,
+    playback?.expiresAt ?? null,
+    playback?.blockReason ?? null,
+    playback?.usage?.leaseExpiresAt ?? null
+  ]);
 }
 
 interface ContentAccessKeyInput {

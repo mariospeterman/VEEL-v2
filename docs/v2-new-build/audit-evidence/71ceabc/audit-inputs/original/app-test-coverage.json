@@ -1,0 +1,165 @@
+{
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "path": "apps/api/test/app.test.ts",
+  "file_size_bytes": 480766,
+  "line_count": 15018,
+  "file_sha256": "a26a8379386a9f3ac7549181cd419b3c337fb0e129d0a42b8e907025fff95a44",
+  "status": "full_text_review",
+  "total_unique_lines_read": 15018,
+  "total_unique_bytes_read": 480766,
+  "coverage_fraction": 1.0,
+  "read_ranges_inclusive": [
+    {
+      "reviewer": "/root/test_app_full_audit",
+      "start_line": 1,
+      "end_line": 1100,
+      "bytes": 32982,
+      "sha256": "6d01f36eda907260c8332d3b29b93b6cf073d374c7f36e5d697d36e4ee1b3d5a",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit",
+      "start_line": 1101,
+      "end_line": 2200,
+      "bytes": 33928,
+      "sha256": "e932cbfac926bc9bdbe0172322aea2bf6a240f9797246490162e4d120c2e5f6f",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit",
+      "start_line": 2201,
+      "end_line": 3300,
+      "bytes": 32606,
+      "sha256": "2ce1186477ff2f929b658a495683b56bab7fc3af70b78705908da8c01dd7bce3",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit",
+      "start_line": 3301,
+      "end_line": 4400,
+      "bytes": 34637,
+      "sha256": "08a60ade15418419c36e19f6b2ac7121b6ad49bc49c803bb7d4c32edc46dd436",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit",
+      "start_line": 4401,
+      "end_line": 5000,
+      "bytes": 19424,
+      "sha256": "dea139a8391e346fd2d1d4d9102605f8049196a0be7948c4416f5a6b2a506f69",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit/app_test_middle",
+      "start_line": 5001,
+      "end_line": 5650,
+      "bytes": 20522,
+      "sha256": "024ff2a05e38b9ec453edf95aa323d1b0a077dfdc0f62fe90c65f61f792a4205",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit/app_test_middle",
+      "start_line": 5651,
+      "end_line": 6300,
+      "bytes": 20536,
+      "sha256": "8bc7ecd4ad2649b593ddca4d08efe7100cddaf4cfee19e2d38c87e10ca68bd7d",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit/app_test_middle",
+      "start_line": 6301,
+      "end_line": 6950,
+      "bytes": 22642,
+      "sha256": "f9d09c8d97d3f1e62f81dbc8c8ca271e67986e68232e9e243e148d3fcb96da85",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit/app_test_middle",
+      "start_line": 6951,
+      "end_line": 7600,
+      "bytes": 19459,
+      "sha256": "1ad2298864b580859e7190ad57b3ffe1a35d5489ac333b5530dfd1a4aebe2f69",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit/app_test_middle",
+      "start_line": 7601,
+      "end_line": 8250,
+      "bytes": 20120,
+      "sha256": "2aa728fa32c6452123c46679c1c99c0796a2696400d60978d42930e23ebdf14f",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit/app_test_middle",
+      "start_line": 8251,
+      "end_line": 8900,
+      "bytes": 20810,
+      "sha256": "7df14672862d51c18c718caddd8e0b15620e2fb654d0ec21e9f5c9b9cb198e1c",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit/app_test_middle",
+      "start_line": 8901,
+      "end_line": 9550,
+      "bytes": 20608,
+      "sha256": "22879f760e8bd09f38fc9526e1ce296264b361bf2eacecf2bf9ea0485d63ee3f",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit/app_test_middle",
+      "start_line": 9551,
+      "end_line": 10000,
+      "bytes": 15562,
+      "sha256": "69aa2e77af33adcebb6041f7e865344a07d735eb0be865bcdf93083ed3c3cef8",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit",
+      "start_line": 10001,
+      "end_line": 11000,
+      "bytes": 32353,
+      "sha256": "a5ae17edf955615cd0ce8a94086b1a08816315af37f4df6a3b67f3d08699df36",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit",
+      "start_line": 11001,
+      "end_line": 12000,
+      "bytes": 36495,
+      "sha256": "14329f2440f12bfd837419ca4603c977e781335915a51a7b7f922801023120ec",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit",
+      "start_line": 12001,
+      "end_line": 13000,
+      "bytes": 35565,
+      "sha256": "0409a595ab24589d0c8bde0c266c03e1b6fc8e991e9b07b17436ab1de7da84c3",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit",
+      "start_line": 13001,
+      "end_line": 14000,
+      "bytes": 32053,
+      "sha256": "1bf91deddd9d92cdbd094addea997ca79dac766fabf4be9c41a1dd8a2e38267f",
+      "output_truncated": false
+    },
+    {
+      "reviewer": "/root/test_app_full_audit",
+      "start_line": 14001,
+      "end_line": 15018,
+      "bytes": 30464,
+      "sha256": "a83dec4d758046604f94d2ca420914c27d11aafebdb3ec599b49e27a71fac517",
+      "output_truncated": false
+    }
+  ],
+  "scope_limits": [
+    "This confirms full source-text reading by the named review team, not full behavioral coverage.",
+    "No repository source or test edits were made by these reviewers.",
+    "No live provider requests or production-data access were performed.",
+    "The parent/root agent owns test execution and wider repository coverage."
+  ],
+  "delegated_evidence": "/workspace/scratch/0635fbdaf32f/app-test-middle-coverage.json",
+  "report": "/workspace/scratch/0635fbdaf32f/app-test-audit.md"
+}

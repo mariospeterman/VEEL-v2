@@ -86,22 +86,25 @@ export function createPostgresSubscriptionAuthorizationReconciliationRepository(
             sai.delegation_expires_at,
             s.collector_address,
             s.subscriber_wallet,
-            coalesce(s.provider, sp.provider, 'official_solana_subscription_program') as provider,
-            coalesce(s.program_id, sp.program_id) as program_id,
-            sp.token_mint,
-            sp.token_program,
-            sp.amount_minor,
-            sp.amount_atomic,
-            sp.period_days,
-            sp.period_seconds,
-            sp.id as plan_id,
-            coalesce(s.plan_pda, sp.plan_pda) as plan_pda,
+            acceptance.provider,
+            acceptance.program_id,
+            acceptance.token_mint,
+            acceptance.token_program,
+            acceptance.amount_minor,
+            acceptance.amount_atomic,
+            acceptance.period_days,
+            acceptance.period_seconds,
+            acceptance.delegation_nonce,
+            acceptance.plan_id,
+            acceptance.plan_pda,
             s.subscription_pda,
-            coalesce(s.merchant_wallet, sp.merchant_wallet) as merchant_wallet,
+            acceptance.merchant_wallet,
             attempt.last_attempt_at
           from subscription_authorization_intents sai
           join subscriptions s on s.id = sai.subscription_id
-          join subscription_plans sp on sp.id = s.plan_id
+          join subscription_billing_acceptances acceptance
+            on acceptance.subscription_id = s.id
+            and acceptance.authorization_intent_id = sai.id
           left join lateral (
             select max(event.created_at) as last_attempt_at
             from subscription_events event
@@ -115,6 +118,14 @@ export function createPostgresSubscriptionAuthorizationReconciliationRepository(
             and s.cancel_at_period_end = false
             and s.cancelled_at is null
             and s.revoked_at is null
+            and s.plan_id = acceptance.plan_id
+            and s.provider = acceptance.provider
+            and s.program_id = acceptance.program_id
+            and s.token_mint = acceptance.token_mint
+            and s.amount_atomic = acceptance.amount_atomic
+            and s.period_seconds = acceptance.period_seconds
+            and s.collector_address = acceptance.collector_address
+            and s.delegation_nonce = acceptance.delegation_nonce
             and (
               attempt.last_attempt_at is null
               or attempt.last_attempt_at <= ${retryCutoff}
@@ -303,6 +314,7 @@ function toVerificationInput(
     amountAtomic: String(row.amount_atomic),
     periodDays: row.period_days,
     periodSeconds: row.period_seconds,
+    delegationNonce: Number(row.delegation_nonce),
     delegationExpiresAt: row.delegation_expires_at,
     provider: row.provider,
     planId: row.plan_id,
@@ -347,6 +359,7 @@ interface AuthorizationEvidenceRow {
   amount_atomic: string | number;
   period_days: number;
   period_seconds: number;
+  delegation_nonce: string | number;
   plan_id: string;
   plan_pda: string | null;
   subscription_pda: string | null;

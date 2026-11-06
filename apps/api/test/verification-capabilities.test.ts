@@ -20,6 +20,18 @@ function validRecord(purpose: VerificationPurpose): VerificationRecordResource {
   };
 }
 
+function adultPublisherRecord(
+  facts: Pick<VerificationRecordResource, "thresholdAge" | "resultOverThreshold"> = {
+    thresholdAge: 18,
+    resultOverThreshold: true
+  }
+): VerificationRecordResource {
+  return {
+    ...validRecord("adult_publisher_eligibility"),
+    ...facts
+  };
+}
+
 describe("universal account capability policy", () => {
   it("allows an age-verified account to publish SFW media without KYC", () => {
     const resolution = resolveCapabilitiesFromRecords({
@@ -45,7 +57,7 @@ describe("universal account capability policy", () => {
   it("requires adult-content verification only for adult-rated publishing", () => {
     const resolution = resolveCapabilitiesFromRecords({
       ageAccess: validRecord("age_access"),
-      adultPublisherEligibility: validRecord("adult_publisher_eligibility"),
+      adultPublisherEligibility: adultPublisherRecord(),
       creatorKyc: null,
       orgKyb: null
     });
@@ -53,6 +65,25 @@ describe("universal account capability policy", () => {
     expect(resolution.capabilities.canPublishMedia).toBe(true);
     expect(resolution.capabilities.canPublishAdultMedia).toBe(true);
     expect(resolution.capabilities.canMonetize).toBe(false);
+  });
+
+  it.each([
+    { thresholdAge: null, resultOverThreshold: true },
+    { thresholdAge: 18, resultOverThreshold: null },
+    { thresholdAge: 18, resultOverThreshold: false },
+    { thresholdAge: 17, resultOverThreshold: true },
+    {}
+  ])("fails closed for adult publishing without an explicit over-18 threshold fact: %j", (facts) => {
+    const resolution = resolveCapabilitiesFromRecords({
+      ageAccess: validRecord("age_access"),
+      adultPublisherEligibility: adultPublisherRecord(facts),
+      creatorKyc: null,
+      orgKyb: null
+    });
+
+    expect(resolution.capabilities.canPublishMedia).toBe(true);
+    expect(resolution.capabilities.canPublishAdultMedia).toBe(false);
+    expect(resolution.missingRequirements).toContain("adult_publisher_eligibility_required");
   });
 
   it("does not require creator KYC when the canonical recipient policy does not trigger it", () => {
@@ -92,7 +123,7 @@ describe("universal account capability policy", () => {
   it("does not infer paid plan or organization capabilities from identity checks", () => {
     const resolution = resolveCapabilitiesFromRecords({
       ageAccess: validRecord("age_access"),
-      adultPublisherEligibility: validRecord("adult_publisher_eligibility"),
+      adultPublisherEligibility: adultPublisherRecord(),
       creatorKyc: validRecord("creator_kyc"),
       orgKyb: {
         ...validRecord("org_kyb"),

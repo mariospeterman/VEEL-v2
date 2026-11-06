@@ -1396,6 +1396,15 @@ function paymentIntent() {
     platformFeeGrossMinor: 3_750_000_000,
     platformFeeAmountMinor: 3_750_000_000,
     referralAmountMinor: 0,
+    quote: {
+      minimumAmountMinor: 1_000_000,
+      platformFeeBps: 1_500,
+      referralShareOfPlatformFeeBps: 2_000,
+      quotedAt: "2026-06-12T10:30:00.000Z",
+      expiresAt: "2026-06-12T10:45:00.000Z",
+      policySource: "environment_default",
+      policyRevision: 1
+    },
     refundPolicy: {
       termsVersion: "veel-terms-v1",
       withdrawalWaiverVersion: "instant-digital-access-v1",

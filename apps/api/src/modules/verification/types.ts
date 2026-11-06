@@ -46,6 +46,8 @@ export interface VerificationRecordResource {
   status: "valid" | "invalid" | "pending" | "expired" | "revoked" | "blocked";
   provider: string;
   method: string;
+  thresholdAge?: number | null;
+  resultOverThreshold?: boolean | null;
   assuranceLevel: string;
   verifiedAt: string | null;
   expiresAt: string | null;
@@ -110,6 +112,11 @@ export interface VerificationProviderSession {
 
 export interface VerificationProviderWaterfall {
   createSession(input: CreateVerificationSessionInput): Promise<VerificationProviderSession>;
+  reconcileSession?(input: {
+    provider: VerificationProvider;
+    providerReference: string;
+    purpose: "age_access";
+  }): Promise<VerificationProviderReconciliation>;
 }
 
 export interface NormalizedVerificationWebhook {
@@ -128,6 +135,11 @@ export interface NormalizedVerificationWebhook {
     livenessApproved: boolean;
     faceMatchApproved: boolean;
   } | null;
+}
+
+export interface VerificationProviderReconciliation extends NormalizedVerificationWebhook {
+  launchUrl?: string | null;
+  expiresAt?: Date | null;
 }
 
 export interface CapabilityResolution {

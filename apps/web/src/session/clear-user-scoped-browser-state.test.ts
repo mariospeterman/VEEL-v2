@@ -7,6 +7,7 @@ import {
   offlineMessageSessionKey
 } from "../messages/offline-message-queue";
 import { legacyRecentSearchKey, recentSearchKeyPrefix } from "../search/recent-searches";
+import { paymentSubmissionRecoveryPrefix } from "../payment-submission-recovery";
 import { clearUserScopedBrowserState } from "./clear-user-scoped-browser-state";
 
 describe("clearUserScopedBrowserState", () => {
@@ -14,6 +15,7 @@ describe("clearUserScopedBrowserState", () => {
     const localStorage = new MemoryStorage([
       [legacyOfflineMessageQueueKey, "legacy"],
       [legacyRecentSearchKey, "legacy search"],
+      [`${paymentSubmissionRecoveryPrefix}actor:session:scope`, "signed payment"],
       [`${legacyOfflineMessageQueuePrefix}actor:browser:conversation`, "private v2 message"],
       [`${offlineMessageQueuePrefix}actor:session:tab:conversation`, "private v3 message"]
     ]);

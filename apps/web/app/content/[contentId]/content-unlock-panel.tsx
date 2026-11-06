@@ -35,6 +35,7 @@ export function ContentUnlockPanel({ contentId, accessState }: ContentUnlockPane
             onConfirmed={() => router.refresh()}
             pendingLabel="Preparing unlock"
             readyCopy="Your confirmed access will appear here automatically."
+            recoveryScope={`content_unlock:${contentId}`}
           />
         ) : (
           <p className="text-sm leading-6 text-(--muted)">{accessState === "pass_required" ? "This post is included with its related Event Access Pass." : "You already have access to the full post."}</p>

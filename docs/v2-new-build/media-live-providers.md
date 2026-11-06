@@ -46,6 +46,9 @@ Current implementation state:
 - The Bunny adapter follows the current Bunny Stream TUS flow: create video object, generate server-side SHA256 upload signature, return `https://video.bunnycdn.com/tusupload` plus safe upload headers.
 - `BUNNY_STREAM_API_KEY` and `BUNNY_STREAM_LIBRARY_ID` are server-only config values; the Stream API key is never returned to the browser.
 - Completed upload state is stored in `media_assets` as normalized provider/provider asset/provider state only. The server-only operation row retains the minimal request hash and opaque VideoId needed for idempotency and compensation; it stores no filename, bytes, provider payload, API key, or upload signature.
+- Content export is a separate, disabled-by-default provider boundary (`CONTENT_EXPORTS_ENABLED=false`). Migration `0139` snapshots only creator-owned content metadata and exact composition revisions, then holds referenced media cleanup for at most 24 hours while a finite-lease worker streams a bounded ustar archive to a private Bunny Storage object. Sanitized image sources are labelled `sanitized_retained_source`; a Bunny Stream source is fetched from the documented `{VideoId}/original` path only when the original still exists. Livepeer and missing historical originals are recorded as unavailable instead of reconstructed or mislabelled.
+- Export archives are never exposed as Bunny object references or signed provider URLs. The authenticated API checks the canonical current owner and live takedown state through a single-use grant expiring within five minutes, applies a route-specific rate limit, then proxies the private archive with `no-store` while verifying actual length and SHA-256. The archive manifest excludes messages, other users' PII, age/KYC/identity evidence, payment/wallet material, provider identifiers, provider payloads, and secrets. Export does not change takedown, asset retirement, paid-access, or evidence-retention obligations.
+- Before any upload call, the worker durably records `archive_upload_started_at` and `manual_confirmation_required`. A successful, fully hashed archive becomes `retained_private`; cancellation, response loss, or crash cannot erase the possible provider-object cleanup obligation. Archive expiry revokes grants and returns the row to `manual_confirmation_required`, and the admin privacy queue exposes the job and cleanup state. The Bunny delete method exists only as an unwired operations adapter: no worker or API path calls it, so provider deletion and operator confirmation remain an explicit approval gate. Independent restore proof is limited to a streaming local/test sink that enforces bounded archive/file/entry counts, safe unique exact paths, no extra/trailing data, manifest shape, lengths and hashes, and a trusted archive SHA-256; no production provider write, publication, or moderation bypass is implemented.
 - `GET /v1/content/{contentId}` returns a frontend-safe media viewer projection backed by `content_access_rules`, creator profile data, and the first media poster.
 - `/content/[contentId]` consumes that projection through the web API helper and renders backend access/playback state only. Full backend-issued Bunny embed resources render in an iframe, direct/HLS resources render in the browser media element, and blocked/teaser/not-ready states stay gated; it does not create local payment or playback fixtures.
 - Access projection is conservative: free/teaser/pass/locked states are exposed, entitlement grants remain backend-settlement-owned, and provider management URLs are never exposed to the browser.
@@ -59,6 +62,15 @@ Current implementation state:
   and an audit/control receipt. This is the narrow host-ingest credential exception: the workspace
   may hold it in component memory for the active session, but must never persist, log, cache, or
   expose it to a viewer.
+- The host workspace clears camera tracks, preview state, copied values, and in-memory ingest
+  credentials when the current application session/account changes, another tab announces logout,
+  owner/room authorization is lost, or the room becomes non-broadcastable. It rechecks application
+  authority every 10 seconds while mounted and room authority every 30 seconds while a credential
+  is exposed; late reveal responses cannot restore state after invalidation.
+- Browser cleanup is not provider suspension. Provider enforcement remains the backend-owned room
+  end and staff suspension/termination controls below. Advanced OBS can continue outside the web
+  page until that server/provider control succeeds or the provider credential expires/rotates, so
+  actual Livepeer suspension latency and device behavior remain required staging evidence.
 - Viewer playback receives the short-lived Livepeer JWT as a separate player credential, never as a URL query parameter. Ordinary viewer/list repository reads select neither the ingest URL nor stream key.
 - Creator end and staff suspend/resume are backend-owned, idempotent, audited controls. Local playback/access blocking happens before the provider call; resume stays blocked until provider recovery succeeds.
 - Live chat authorization and message idempotency are one atomic database operation. Only the sanitized chat table is published to Supabase Realtime; `live_rooms` and its provider secrets are not.
@@ -86,13 +98,14 @@ Official references checked:
 - Livepeer asset upload reference: https://docs.livepeer.org/api-reference/asset/upload
 - Bunny Storage HTTP API: https://docs.bunny.net/storage/http
 - Bunny Storage upload-file reference: https://docs.bunny.net/api-reference/storage/manage-files/upload-file
+- Bunny Stream original-file retrieval: https://docs.bunny.net/api-reference/stream/manage-videos/get-original-video-file
 - Bunny Optimizer Dynamic Images: https://bunny.net/docs/optimizer/dynamic-images/overview
 - Bunny Optimizer limits: https://bunny.net/docs/optimizer/limits
 - Bunny Shield upload scanning: https://bunny.net/docs/shield/upload-scanning
 - Bunny CDN token authentication: https://bunny.net/docs/cdn/security/token-authentication
 - Bunny advanced HMAC token authentication: https://bunny.net/docs/cdn/security/token-authentication/advanced
 
-The Bunny Stream create/delete, TUS, Storage HTTP, Stream security, current-player embedding, embed-token authentication, CDN token-authentication, and Dynamic Images behavior above was rechecked against the official documentation on 2026-11-05. Bunny documents `iframe.mediadelivery.net` as a legacy-player URL that depends on legacy mode and is scheduled for removal in early 2027; staging must use and prove the current player (`PlayerVersion=2`). Provider approval state remains unchanged: no candidate production path is promoted by this recheck alone.
+The Bunny Stream create/delete/original-file, TUS, Storage HTTP, Stream security, current-player embedding, embed-token authentication, CDN token-authentication, and Dynamic Images behavior above was rechecked against the official documentation on 2026-11-06. Bunny documents `iframe.mediadelivery.net` as a legacy-player URL that depends on legacy mode and is scheduled for removal in early 2027; staging must use and prove the current player (`PlayerVersion=2`). Provider approval state remains unchanged: no candidate production path is promoted by this recheck alone.
 
 ## Provider Split
 

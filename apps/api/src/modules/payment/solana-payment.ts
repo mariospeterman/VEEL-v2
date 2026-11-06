@@ -104,7 +104,7 @@ export async function verifySolanaTransfer(
     };
   }
 
-  if (!isValidSignature(input.signature)) {
+  if (!isValidSolanaSignature(input.signature)) {
     return {
       confirmed: false,
       failureCode: "invalid_signature"
@@ -387,7 +387,7 @@ function isMatchingMemo(
   }
 }
 
-function isValidSignature(signature: string): boolean {
+export function isValidSolanaSignature(signature: string): boolean {
   try {
     return bs58.decode(signature).length === 64;
   } catch {

@@ -5,6 +5,7 @@ import { adminListInput, requireAdminAccess, requireAdminMutation } from "./admi
 import { validateDataRequestAction, validateRefundDisputeAction, validateSupportCaseAction, validateSupportPolicyAction } from "./admin-route-validators.js";
 import type { AdminDataRequestActionRequest, AdminRefundDisputeActionRequest, AdminSupportCaseActionRequest, AdminSupportPolicyActionRequest } from "./types.js";
 import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
+import { AdminRepositoryStateConflictError } from "./admin-repository.js";
 
 export function registerAdminReviewRoutes(
   app: FastifyInstance,
@@ -200,6 +201,9 @@ export function registerAdminReviewRoutes(
     } catch (error) {
       if (error instanceof MutationCommandIdempotencyConflictError) {
         return reply.code(409).send(idempotencyConflictResponse());
+      }
+      if (error instanceof AdminRepositoryStateConflictError) {
+        return reply.code(409).send({ code: "conflict", message: error.message });
       }
       throw error;
     }

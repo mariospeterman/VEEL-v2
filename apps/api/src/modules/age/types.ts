@@ -1,4 +1,5 @@
 import type { components } from "@veel/contracts";
+import type { VerificationProviderReconciliation } from "../verification/types.js";
 
 export type AgeState = components["schemas"]["AgeState"];
 export type AgeStatus = components["schemas"]["AgeStatus"];
@@ -27,7 +28,15 @@ export interface AgeRepository {
     userId: string;
     idempotencyKey: string;
     requestHash: string;
-  }): Promise<{ id: string; subjectReference: string }>;
+    providerPreference?: AgeProviderPreference;
+  }): Promise<{
+    id: string;
+    subjectReference: string;
+    attempt?: AgeSessionAttemptResource;
+    shouldCreateProviderSession?: boolean;
+    idempotencyKey?: string;
+    providerPreference?: AgeProviderPreference;
+  }>;
   selectPendingAgeProvider?(input: {
     sessionId: string;
     provider: AgeProvider;
@@ -40,6 +49,16 @@ export interface AgeRepository {
     providerSession: AgeProviderSession;
   }): Promise<void>;
   failPendingAgeVerification?(input: { sessionId: string; reason: string }): Promise<void>;
+  markPendingAgeVerificationReconciling?(input: { sessionId: string; reason: string }): Promise<void>;
+  findAgeVerificationAttempt?(input: {
+    userId: string;
+    sessionId: string;
+  }): Promise<AgeSessionAttemptResource | null>;
+  recordAgeVerificationReconciliationAttempt?(input: {
+    userId: string;
+    sessionId: string;
+  }): Promise<AgeSessionAttemptResource | null>;
+  applyProviderReconciliation?(input: VerificationProviderReconciliation): Promise<boolean>;
   applyProviderWebhook(input: ApplyAgeProviderWebhookInput): Promise<ProviderWebhookApplyResult>;
   updateVerificationFromWebhook(input: UpdateAgeVerificationFromWebhookInput): Promise<boolean>;
   close?(): Promise<void>;
@@ -102,4 +121,19 @@ export interface AgeProviderSession {
 
 export interface AgeProviderWaterfall {
   createSession(input: AgeProviderSessionRequest): Promise<AgeProviderSession>;
+  reconcileSession?(input: {
+    provider: AgeProvider;
+    providerReference: string;
+  }): Promise<VerificationProviderReconciliation>;
+}
+
+export interface AgeSessionAttemptResource {
+  id: string;
+  provider: AgeProvider | null;
+  providerReference: string | null;
+  launchUrl: string | null;
+  expiresAt: string | null;
+  launchState: "reserved" | "reconciling" | "ready" | "failed";
+  status: string;
+  resumable: boolean;
 }

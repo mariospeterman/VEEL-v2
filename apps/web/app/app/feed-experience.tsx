@@ -23,6 +23,10 @@ import {
   moveFeedWindow,
   type FeedWindow
 } from "@/feed/bounded-feed-window";
+import {
+  restoreAuthorizedFeedView,
+  type FeedViewPositionSnapshot
+} from "@/feed/authorized-feed-view-restore";
 import { ContentRenderer } from "../content/content-renderer";
 import { FollowButton } from "../follow-button";
 import { ContentEngagementPanel } from "../content/[contentId]/content-engagement-panel";
@@ -31,16 +35,10 @@ import { ContentPreferenceControl } from "./settings/content-preference-control"
 type FeedMode = "latest" | "following";
 type FeedSurface = "home" | "bits";
 
-type FeedViewSnapshot = {
-  activeId: string | null;
+type FeedViewSnapshot = FeedViewPositionSnapshot & {
   estimatedHeight: number;
-  followOverrides: Record<string, FollowState>;
   gap: number;
-  measuredHeights: [string, number][];
-  page: FeedPage;
-  renderWindow: FeedWindow;
   savedAt: number;
-  scrollTop: number;
 };
 
 const feedViewCache = new Map<string, FeedViewSnapshot>();
@@ -89,12 +87,10 @@ export function FeedExperience({
   const navigationVersionRef = useRef(0);
   const modeRef = useRef(mode);
   const activeIdRef = useRef(activeId);
-  const followOverridesRef = useRef(followOverrides);
   pageRef.current = page;
   renderWindowRef.current = renderWindow;
   modeRef.current = mode;
   activeIdRef.current = activeId;
-  followOverridesRef.current = followOverrides;
   const restoreKey = `wevid:${surface}:${mode}:scroll`;
 
   const renderedItems = useMemo(
@@ -140,10 +136,9 @@ export function FeedExperience({
     writeFeedViewSnapshot(feedViewCacheKey(cacheScope, surface, modeRef.current), {
       activeId: activeIdRef.current,
       estimatedHeight: estimatedHeightRef.current,
-      followOverrides: followOverridesRef.current,
       gap: gapRef.current,
+      itemIds: pageRef.current.items.map((item) => item.id),
       measuredHeights: [...measuredHeightsRef.current],
-      page: pageRef.current,
       renderWindow: renderWindowRef.current,
       savedAt: Date.now(),
       scrollTop
@@ -232,7 +227,7 @@ export function FeedExperience({
   useEffect(() => {
     let cancelled = false;
     const initialNavigationVersion = navigationVersionRef.current;
-    void getCurrentSession().then((session) => {
+    void getCurrentSession().then(async (session) => {
       if (cancelled || !session.authenticated || !session.user) return;
       cacheScopeRef.current = session.clientSessionScope;
       if (navigationVersionRef.current !== initialNavigationVersion) return;
@@ -241,24 +236,24 @@ export function FeedExperience({
         surface,
         modeRef.current
       ));
-      if (!snapshot || snapshot.page.mode !== modeRef.current || snapshot.page.surface !== surface) return;
+      if (!snapshot) return;
+      const restored = await restoreAuthorizedFeedView(
+        pageRef.current,
+        snapshot,
+        (cursor) => getFeedPage(modeRef.current, surface, cursor)
+      );
+      if (cancelled || navigationVersionRef.current !== initialNavigationVersion) return;
 
-      const nextWindow = validCachedWindow(snapshot.renderWindow, snapshot.page.items.length)
-        ? snapshot.renderWindow
-        : createFeedWindow(snapshot.page.items.length);
-      measuredHeightsRef.current = new Map(snapshot.measuredHeights);
+      measuredHeightsRef.current = new Map(restored.measuredHeights);
       estimatedHeightRef.current = snapshot.estimatedHeight;
       gapRef.current = snapshot.gap;
-      pageRef.current = snapshot.page;
-      renderWindowRef.current = nextWindow;
-      pendingRouteRestoreRef.current = snapshot.scrollTop;
-      lastScrollTopRef.current = snapshot.scrollTop;
-      setPage(snapshot.page);
-      setRenderWindow(nextWindow);
-      setActiveId(snapshot.activeId && snapshot.page.items.some((item) => item.id === snapshot.activeId)
-        ? snapshot.activeId
-        : snapshot.page.items[nextWindow.start]?.id ?? null);
-      setFollowOverrides(snapshot.followOverrides);
+      pageRef.current = restored.page;
+      renderWindowRef.current = restored.renderWindow;
+      pendingRouteRestoreRef.current = restored.scrollTop;
+      if (restored.scrollTop !== null) lastScrollTopRef.current = restored.scrollTop;
+      setPage(restored.page);
+      setRenderWindow(restored.renderWindow);
+      setActiveId(restored.activeId);
       setMeasurementVersion((current) => current + 1);
     }).catch(() => {
       // The server-rendered first page remains usable when the cache scope cannot be resolved.
@@ -811,15 +806,4 @@ function writeFeedViewSnapshot(key: string, snapshot: FeedViewSnapshot) {
     if (typeof oldestKey !== "string") break;
     feedViewCache.delete(oldestKey);
   }
-}
-
-function validCachedWindow(window: FeedWindow, itemCount: number) {
-  return Number.isInteger(window.start)
-    && Number.isInteger(window.end)
-    && window.start >= 0
-    && (itemCount === 0
-      ? window.start === 0 && window.end === 0
-      : window.end > window.start)
-    && window.end <= itemCount
-    && window.end - window.start <= maxRenderedFeedItems;
 }

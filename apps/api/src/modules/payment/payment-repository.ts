@@ -480,7 +480,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
         from payment_intents pi
         where pi.checkout_token_hash = ${input.checkoutTokenHash}
           and pi.expires_at > now()
-          and pi.state in ('pending', 'transaction_requested', 'submitted')
+          and pi.state in ('pending', 'transaction_requested')
         limit 1
       `;
 
@@ -613,7 +613,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
         where pi.user_id = u.id
           and u.supabase_user_id = ${input.supabaseUserId}
           and pi.id = ${input.paymentIntentId}
-          and pi.state in ('pending', 'transaction_requested', 'submitted')
+          and pi.state in ('pending', 'transaction_requested')
         returning pi.expires_at
       `;
 
@@ -634,7 +634,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           updated_at = now()
         where pi.checkout_token_hash = ${input.checkoutTokenHash}
           and pi.expires_at > now()
-          and pi.state in ('pending', 'transaction_requested', 'submitted')
+          and pi.state in ('pending', 'transaction_requested')
           and (pi.buyer_wallet is null or pi.buyer_wallet = ${input.buyerWallet})
         returning pi.*
       `;

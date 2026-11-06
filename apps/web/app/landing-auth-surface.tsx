@@ -6,6 +6,8 @@ import {
   ApiMutationError,
   createAgeSession,
   getCurrentSession,
+  resumeAgeSession,
+  type AgeSession,
   updateMyProfile
 } from "@/api-mutations";
 import type { WebAuthState } from "@/supabase/auth-state";
@@ -288,6 +290,7 @@ function OnboardingAgeStep() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [canContinue, setCanContinue] = useState(false);
+  const [ageSession, setAgeSession] = useState<AgeSession | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -350,9 +353,7 @@ function OnboardingAgeStep() {
 
     try {
       const session = await createAgeSession({ providerPreference: "reusable_first" });
-      setMessage("Opening the secure age check. WeVid stores only the signed result.");
-      markOnboardingJourneyHandoff();
-      window.location.assign(session.launchUrl);
+      await presentOrResumeAgeSession(session, true);
     } catch (reason) {
       recordOnboardingEvent("age_step_failed", Date.now().toString(36));
       const nextError = ageErrorMessage(reason);
@@ -364,6 +365,43 @@ function OnboardingAgeStep() {
         markOnboardingJourneyHandoff();
         redirectToSafeNextPath();
       }
+    } finally {
+      setStartingAction(null);
+    }
+  }
+
+  async function presentOrResumeAgeSession(session: AgeSession, attemptResume: boolean) {
+    let current = session;
+    setAgeSession(current);
+
+    if (!current.launchUrl && current.resumable && attemptResume) {
+      setMessage("Checking the existing secure age-verification handoff...");
+      current = await resumeAgeSession(current.id);
+      setAgeSession(current);
+    }
+
+    if (!current.launchUrl) {
+      setMessage(current.resumable
+        ? "The secure provider handoff is still being reconciled. Resume this same session to check again."
+        : "The provider outcome is still uncertain. We will not open a second session while this attempt is being reconciled.");
+      return;
+    }
+
+    setMessage("Opening the secure age check. WeVid stores only the signed result.");
+    markOnboardingJourneyHandoff();
+    window.location.assign(current.launchUrl);
+  }
+
+  async function resumePendingAgeSession() {
+    if (!ageSession) return;
+    setStartingAction("age");
+    setMessage(null);
+    setError(null);
+    try {
+      await presentOrResumeAgeSession(ageSession, true);
+    } catch (reason) {
+      recordOnboardingEvent("age_step_failed", Date.now().toString(36));
+      setError(ageErrorMessage(reason));
     } finally {
       setStartingAction(null);
     }
@@ -423,6 +461,11 @@ function OnboardingAgeStep() {
           <button className="landing-button" data-tone="primary" disabled={startingAction !== null} onClick={() => void startAgeSession()} type="button">
             <strong>{startingAction === "age" ? "Opening age check" : "Verify age"}</strong>
           </button>
+          {ageSession && !ageSession.launchUrl && ageSession.resumable ? (
+            <button className="landing-button" disabled={startingAction !== null} onClick={() => void resumePendingAgeSession()} type="button">
+              <strong>{startingAction === "age" ? "Checking secure handoff" : "Resume age check"}</strong>
+            </button>
+          ) : null}
         </div>
       </div>
       {message ? <p className="landing-auth-message">{message}</p> : null}

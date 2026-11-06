@@ -44,7 +44,13 @@ async function selectPoll(sql: postgres.TransactionSql, contentId: string, appUs
       'closesAt', poll.closes_at,
       'viewerOptionId', (select vote.option_id from content_poll_votes vote where vote.content_item_id = poll.content_item_id and vote.voter_user_id = ${appUserId})
     ) as poll
-    from content_polls poll where poll.content_item_id = ${contentId}
+    from content_polls poll
+    where poll.content_item_id = ${contentId}
+      and exists (
+        select 1
+        from private.eligible_content(${appUserId}, null) eligible
+        where eligible.content_item_id = poll.content_item_id
+      )
   `;
   return rows[0] ? normalizeContentPoll(rows[0].poll) : null;
 }

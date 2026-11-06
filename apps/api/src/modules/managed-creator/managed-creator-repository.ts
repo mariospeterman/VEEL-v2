@@ -569,11 +569,11 @@ function selectSql() { return `
     agreement.version_number, agreement.state as agreement_state, agreement.permissions,
     agreement.creator_share_bps, agreement.enterprise_management_share_bps,
     (o.state = 'active' and exists (
-      select 1 from verification_records verification
-      where verification.subject_type = 'organization'
-        and verification.subject_id = o.id
-        and verification.purpose = 'org_kyb'
-        and verification.status = 'valid'
+      select 1
+      from private.current_verification_decision(
+        'organization', o.id, 'org_kyb'
+      ) verification
+      where verification.status = 'valid'
         and (verification.expires_at is null or verification.expires_at > now())
     )) as organization_kyb_ready,
     exists (select 1 from tier_waivers tw where tw.subject_type = 'organization' and tw.subject_id = o.id and tw.tier_key = 'enterprise' and tw.state = 'active' and tw.starts_at <= now() and (tw.ends_at is null or tw.ends_at > now())) as enterprise_entitlement_ready,

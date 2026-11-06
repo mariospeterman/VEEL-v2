@@ -39,6 +39,11 @@ const booleanSchema = (defaultValue: boolean) =>
     return value;
   }, z.boolean().default(defaultValue));
 
+const canonicalUsdcMintByCluster = {
+  devnet: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  "mainnet-beta": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+} as const;
+
 export const nodeEnvSchema = z.enum(["development", "test", "production"]).default("development");
 
 const serverEnvObjectSchema = z.object({
@@ -72,7 +77,10 @@ const serverEnvObjectSchema = z.object({
   SOLANA_WS_URL: optionalUrlSchema,
   PAYMENT_DEFAULT_ASSET: z.enum(["SOL", "USDC"]).default("SOL"),
   PAYMENT_USDC_MINT: optionalStringSchema,
-  PAYMENT_USDC_DECIMALS: z.coerce.number().int().min(0).max(18).default(6),
+  // The USDC-labelled checkout contract is intentionally narrow. Supporting
+  // another SPL asset requires a distinct immutable asset identity; accepting
+  // arbitrary decimals here would let receipts relabel non-USDC atomics.
+  PAYMENT_USDC_DECIMALS: z.coerce.number().int().min(6).max(6).default(6),
   PAYMENT_SOLANA_FINALITY: z.enum(["confirmed", "finalized"]).default("finalized"),
   PAYMENT_MIN_SUPPORT_SOL_LAMPORTS: z.coerce.number().int().positive().safe().default(1_000_000),
   PAYMENT_MIN_SUPPORT_USDC_ATOMIC: z.coerce.number().int().positive().safe().default(500_000),
@@ -134,6 +142,9 @@ const serverEnvObjectSchema = z.object({
   BUNNY_STREAM_EMBED_TOKEN_KEY: optionalStringSchema,
   BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(900),
   BUNNY_STREAM_WEBHOOK_READONLY_KEY: optionalStringSchema,
+  CONTENT_EXPORTS_ENABLED: booleanSchema(false),
+  BUNNY_STREAM_ORIGINAL_PULL_ZONE_URL: optionalUrlSchema,
+  BUNNY_STREAM_CDN_TOKEN_KEY: optionalStringSchema,
   BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED: booleanSchema(false),
   BUNNY_STORAGE_ACCESS_KEY: optionalStringSchema,
   BUNNY_STORAGE_ZONE_NAME: optionalStringSchema,
@@ -168,8 +179,6 @@ const serverEnvObjectSchema = z.object({
   AGE_VERIFICATION_DRIVER: z
     .preprocess(emptyToUndefined, z.enum(["didit", "yoti", "sumsub", "veriff", "persona"]).optional()),
   AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: booleanSchema(false),
-  AGE_VERIFICATION_REVERIFY_MODE: z.enum(["risk_or_expiry", "fixed_interval"]).default("risk_or_expiry"),
-  AGE_VERIFICATION_REVERIFY_DAYS: z.coerce.number().int().min(1).max(3650).default(365),
   SUMSUB_APP_TOKEN: optionalStringSchema,
   SUMSUB_SECRET_KEY: optionalStringSchema,
   SUMSUB_WEBHOOK_SECRET: optionalStringSchema,
@@ -253,6 +262,16 @@ export const serverEnvSchema = serverEnvObjectSchema
         code: "custom",
         message: "SOLANA_RPC_URL must explicitly select an approved mainnet RPC",
         path: ["SOLANA_RPC_URL"]
+      });
+    }
+    if (
+      env.PAYMENT_USDC_MINT &&
+      env.PAYMENT_USDC_MINT !== canonicalUsdcMintByCluster[env.SOLANA_CLUSTER]
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: `PAYMENT_USDC_MINT must be Circle's canonical ${env.SOLANA_CLUSTER} USDC mint`,
+        path: ["PAYMENT_USDC_MINT"]
       });
     }
   })

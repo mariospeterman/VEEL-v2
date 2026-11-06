@@ -31,6 +31,7 @@
     "@veel/config": "workspace:*",
     "@veel/contracts": "workspace:*",
     "@veel/ui": "workspace:*",
+    "bs58": "6.0.0",
     "fastestsmallesttextencoderdecoder": "1.0.22",
     "lucide-react": "^1.18.0",
     "next": "16.4.5",

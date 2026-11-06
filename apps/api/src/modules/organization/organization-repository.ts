@@ -119,19 +119,18 @@ export function createPostgresOrganizationRepository(database?: string | Postgre
             and (ends_at is null or ends_at > now())
         ),
         latest_org_kyb as (
-          select distinct on (subject_id)
-            subject_id as organization_id,
+          select
+            organization.id as organization_id,
             case
-              when status = 'valid' and expires_at is not null and expires_at <= now() then 'expired'
-              else status
+              when verification.status = 'valid'
+                and verification.expires_at is not null
+                and verification.expires_at <= now() then 'expired'
+              else verification.status
             end as verification_kyb_status
-          from verification_records
-          where subject_type = 'organization'
-            and purpose = 'org_kyb'
-          order by subject_id,
-            case when status = 'valid' and (expires_at is null or expires_at > now()) then 0 else 1 end,
-            verified_at desc nulls last,
-            created_at desc
+          from organizations organization
+          cross join lateral private.current_verification_decision(
+            'organization', organization.id, 'org_kyb'
+          ) verification
         )
         select
           om.id as membership_id,
