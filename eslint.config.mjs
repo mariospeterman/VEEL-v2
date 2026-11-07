@@ -9,6 +9,7 @@ export default [
       "**/coverage/**",
       "**/dist/**",
       "**/node_modules/**",
+      "docs/v2-new-build/audit-evidence/71ceabc/audit-inputs/original/**",
       "packages/contracts/src/generated/**",
       "**/playwright-report/**",
       "**/test-results/**"

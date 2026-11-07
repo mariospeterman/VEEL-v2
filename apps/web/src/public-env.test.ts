@@ -29,4 +29,31 @@ describe("runtime public web environment", () => {
     expect(script).toContain("\\u003c/script>");
     expect(script).not.toContain("DATABASE_URL");
   });
+
+  it("rejects a browser chain that contradicts the server payment cluster", () => {
+    expect(() => readServerPublicWebEnv({
+      NODE_ENV: "test",
+      SOLANA_CLUSTER: "devnet",
+      NEXT_PUBLIC_SOLANA_CHAIN: "solana:mainnet"
+    })).toThrow(/Contradictory Solana environment/);
+  });
+
+  it("rejects mainnet browser configuration without an explicit mainnet RPC", () => {
+    expect(() => readServerPublicWebEnv({
+      NODE_ENV: "test",
+      SOLANA_CLUSTER: "mainnet-beta",
+      NEXT_PUBLIC_SOLANA_CHAIN: "solana:mainnet"
+    })).toThrow(/NEXT_PUBLIC_SOLANA_RPC_URL must explicitly select an approved mainnet RPC/);
+  });
+
+  it("accepts mainnet only with an explicit matching browser RPC", () => {
+    const env = readServerPublicWebEnv({
+      NODE_ENV: "test",
+      SOLANA_CLUSTER: "mainnet-beta",
+      NEXT_PUBLIC_SOLANA_CHAIN: "solana:mainnet",
+      NEXT_PUBLIC_SOLANA_RPC_URL: "https://mainnet-rpc.example"
+    });
+
+    expect(env.NEXT_PUBLIC_SOLANA_RPC_URL).toBe("https://mainnet-rpc.example");
+  });
 });

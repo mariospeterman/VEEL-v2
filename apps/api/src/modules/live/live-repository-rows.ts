@@ -4,6 +4,7 @@ export interface LiveRoomRow {
   id: string;
   title: string;
   state: StoredLiveRoom["state"];
+  created_at: Date;
   access_rule: string;
   creator_user_id: string;
   creator_handle: string;

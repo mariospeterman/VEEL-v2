@@ -1,0 +1,104 @@
+{
+  "sumsub": {
+    "payload": {
+      "type": "applicantReviewed",
+      "applicantId": "test-applicant",
+      "correlationId": "event-1",
+      "reviewResult": {
+        "reviewAnswer": "GREEN"
+      }
+    },
+    "matchingBranches": [
+      0,
+      2
+    ],
+    "valid": false,
+    "errors": [
+      {
+        "instancePath": "",
+        "schemaPath": "#/oneOf/1/required",
+        "keyword": "required",
+        "params": {
+          "missingProperty": "id"
+        },
+        "message": "must have required property 'id'"
+      },
+      {
+        "instancePath": "",
+        "schemaPath": "#/oneOf/1/required",
+        "keyword": "required",
+        "params": {
+          "missingProperty": "session_key"
+        },
+        "message": "must have required property 'session_key'"
+      },
+      {
+        "instancePath": "",
+        "schemaPath": "#/oneOf/1/required",
+        "keyword": "required",
+        "params": {
+          "missingProperty": "state"
+        },
+        "message": "must have required property 'state'"
+      },
+      {
+        "instancePath": "",
+        "schemaPath": "#/oneOf/1/required",
+        "keyword": "required",
+        "params": {
+          "missingProperty": "signature"
+        },
+        "message": "must have required property 'signature'"
+      },
+      {
+        "instancePath": "",
+        "schemaPath": "#/oneOf",
+        "keyword": "oneOf",
+        "params": {
+          "passingSchemas": [
+            0,
+            2
+          ]
+        },
+        "message": "must match exactly one schema in oneOf"
+      }
+    ]
+  },
+  "yoti": {
+    "payload": {
+      "id": "event-2",
+      "session_key": "test-session",
+      "state": "COMPLETE",
+      "signature": "abc",
+      "method": "age_verification"
+    },
+    "matchingBranches": [
+      1,
+      2
+    ],
+    "valid": false,
+    "errors": [
+      {
+        "instancePath": "",
+        "schemaPath": "#/oneOf/0/required",
+        "keyword": "required",
+        "params": {
+          "missingProperty": "type"
+        },
+        "message": "must have required property 'type'"
+      },
+      {
+        "instancePath": "",
+        "schemaPath": "#/oneOf",
+        "keyword": "oneOf",
+        "params": {
+          "passingSchemas": [
+            1,
+            2
+          ]
+        },
+        "message": "must match exactly one schema in oneOf"
+      }
+    ]
+  }
+}

@@ -1,11 +1,14 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import type { LiveRoom } from "@/api-client";
 import { createLiveEventAccessIntent } from "@/api-mutations";
 import { PaymentHandoffPanel } from "@/payment-handoff-panel";
-import { formatAssetAmount } from "@/format-asset-amount";
+import { formatAtomicAssetAmount } from "@/format-asset-amount";
 
 export function LiveAccessPanel({ room }: { room: LiveRoom }) {
+  const router = useRouter();
+
   if (room.accessMode === "public") {
     return (
       <AccessSummary title="Public live">
@@ -26,6 +29,14 @@ export function LiveAccessPanel({ room }: { room: LiveRoom }) {
 
   const offer = room.eventAccess;
 
+  if (room.accessState === "allowed") {
+    return (
+      <AccessSummary title="Event access ready">
+        Your confirmed event access includes this live and its replay window.
+      </AccessSummary>
+    );
+  }
+
   if (!offer) {
     return <AccessSummary title="Paid event">Event access is not currently on sale.</AccessSummary>;
   }
@@ -40,7 +51,7 @@ export function LiveAccessPanel({ room }: { room: LiveRoom }) {
           </p>
         </div>
         <span className="text-sm font-semibold">
-          {formatAssetAmount(offer.amountMinor, offer.currency)}
+          {formatAtomicAssetAmount(offer.amountMinor, offer.currency)}
         </span>
       </div>
       {offer.membersIncluded ? (
@@ -50,10 +61,11 @@ export function LiveAccessPanel({ room }: { room: LiveRoom }) {
         <PaymentHandoffPanel
           createIntent={(idempotencyKey) => createLiveEventAccessIntent(room.id, idempotencyKey)}
           ctaLabel="Get event access"
-          disabled={room.accessState === "allowed"}
           idleCopy="Review the exact event price, then approve the request in your wallet. Access appears after payment confirmation."
+          onConfirmed={() => router.refresh()}
           pendingLabel="Creating event access"
           readyCopy="Open the wallet request. Your confirmed access will appear automatically."
+          recoveryScope={`live_event_access:${room.id}`}
         />
       </div>
     </section>

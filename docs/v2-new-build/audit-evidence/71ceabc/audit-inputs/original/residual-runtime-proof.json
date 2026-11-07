@@ -1,0 +1,18 @@
+{
+  "ordinaryInternalError": {
+    "status": 500,
+    "body": {
+      "statusCode": 500,
+      "error": "Internal Server Error",
+      "message": "AUDIT_PRIVATE_DIAGNOSTIC_X"
+    }
+  },
+  "malformedRefundReason": {
+    "status": 500,
+    "body": {
+      "statusCode": 500,
+      "error": "Internal Server Error",
+      "message": "body.reason.trim is not a function"
+    }
+  }
+}

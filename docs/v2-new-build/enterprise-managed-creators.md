@@ -71,6 +71,8 @@ Local mocks prove application behavior only. Run:
 pnpm proof:enterprise
 ```
 
-The proof requires a staging application session plus organization, relationship, redacted KYB evidence, and approved Enterprise contract evidence identifiers. It verifies the member dashboard, normalized KYB state, independent Enterprise entitlement, accepted creator agreement, settlement-wallet readiness, and allocation reporting projection. Missing configuration returns `CODE_COMPLETE_PROVIDER_BLOCKED`; it never fabricates approval.
+This command is an application projection smoke only. It requires a staging application session plus organization and relationship identifiers, then verifies the member dashboard, normalized KYB state, independent Enterprise entitlement, accepted creator agreement, settlement-wallet readiness, and allocation reporting projection. Its success state is `APPLICATION_PROJECTION_SMOKE`; it never claims provider or commercial approval. Missing configuration returns `CODE_COMPLETE_PROVIDER_BLOCKED`.
+
+Provider and commercial evidence is registered separately as `STAGING_ENTERPRISE_PROOF_ID` in the exact-release evidence bundle. The staging gate validates that opaque reference against the current release-manifest digest and source SHA. A projection smoke cannot substitute for that release-bound evidence, and neither item by itself is launch approval.
 
 Production remains disabled until real KYB callbacks, approved commercial evidence, organization domains, provider configuration, and the complete staging journey are recorded against the exact release artifact.

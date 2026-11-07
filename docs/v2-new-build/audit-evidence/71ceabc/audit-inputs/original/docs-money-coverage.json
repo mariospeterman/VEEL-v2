@@ -1,0 +1,16 @@
+{
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "full_read_files": [
+    "docs/v2-new-build/business-monetisation.md",
+    "docs/v2-new-build/payments-and-monetisation.md",
+    "docs/v2-new-build/noncustodial-money-compliance.md",
+    "docs/v2-new-build/liability-compliance-audit.md",
+    "docs/v2-new-build/enterprise-managed-creators.md",
+    "docs/v2-new-build/compliance/dac7-dac8-vat-system.md",
+    "docs/v2-new-build/product/event-access.md",
+    "docs/v2-new-build/profile-activity-ranking.md",
+    "docs/v2-new-build/engagement-strategy.md"
+  ],
+  "bytes_read": 144197,
+  "legal_verification": "Current primary official EU withdrawal-function and DAC8 dates verified; final product-specific legal/tax classification explicitly left to counsel."
+}

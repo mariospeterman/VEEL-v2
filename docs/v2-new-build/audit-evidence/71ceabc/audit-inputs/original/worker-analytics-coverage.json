@@ -1,0 +1,42 @@
+{
+  "reviewed_files": [
+    "apps/api/src/modules/analytics/analytics-errors.ts",
+    "apps/api/src/modules/analytics/analytics-repository.ts",
+    "apps/api/src/modules/analytics/analytics-routes.ts",
+    "apps/api/src/modules/analytics/analytics-service.ts",
+    "apps/api/src/modules/analytics/metric-registry.ts",
+    "apps/api/src/modules/analytics/types.ts",
+    "apps/api/src/modules/notification/notification-device-repository.ts",
+    "apps/api/test/analytics-core.integration.test.ts",
+    "apps/api/test/analytics.test.ts",
+    "apps/worker/README.md",
+    "apps/worker/package.json",
+    "apps/worker/src/analytics-projections.ts",
+    "apps/worker/src/index.ts",
+    "apps/worker/src/live-safety.ts",
+    "apps/worker/src/media-asset-cleanup.ts",
+    "apps/worker/src/media-moderation.ts",
+    "apps/worker/src/notification-delivery.ts",
+    "apps/worker/src/provider-event-replay.ts",
+    "apps/worker/src/scheduled-publication.ts",
+    "apps/worker/test/index.test.ts",
+    "apps/worker/test/live-safety.test.ts",
+    "apps/worker/test/scheduled-publication.test.ts",
+    "apps/worker/tsconfig.build.json",
+    "apps/worker/tsconfig.json",
+    "docs/v2-new-build/product/analytics-core.md",
+    "packages/database/migrations/0117_moments_and_scheduled_publication.sql"
+  ],
+  "method": "Full source reads. Worker index.test.ts complete including payments/subscription assertions also owned by payments_worker_audit. Related line-range crosschecks not included as full-read coverage.",
+  "delegated_to_payments_worker_audit": [
+    "apps/worker/scripts/prove-solana-subscriptions.mjs",
+    "apps/worker/src/payment-confirmation-email-smoke.ts",
+    "apps/worker/src/payment-confirmation-email.ts",
+    "apps/worker/src/subscription-collections.ts"
+  ],
+  "runtime_proofs": [
+    "analytics-suppression-repro.json",
+    "worker-relational-repro.json"
+  ],
+  "pending": []
+}

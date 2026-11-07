@@ -1,0 +1,23 @@
+
+> veel-shoot-own-shine@0.0.0 typecheck /workspace/scratch/0635fbdaf32f/wevid-audit
+> pnpm -r typecheck
+
+Scope: 9 of 10 workspace projects
+packages/config typecheck$ tsc --noEmit -p tsconfig.json
+packages/contracts typecheck$ tsc --noEmit -p tsconfig.json
+packages/database typecheck$ tsc --noEmit -p tsconfig.json
+packages/observability typecheck$ tsc --noEmit -p tsconfig.json
+packages/database typecheck: Done
+packages/test-factories typecheck$ tsc --noEmit -p tsconfig.json
+packages/contracts typecheck: Done
+packages/ui typecheck$ tsc --noEmit -p tsconfig.json
+packages/observability typecheck: Done
+packages/config typecheck: Done
+packages/test-factories typecheck: Done
+packages/ui typecheck: Done
+apps/api typecheck$ tsc --noEmit -p tsconfig.json
+apps/web typecheck$ tsc --noEmit -p tsconfig.json
+apps/api typecheck: Done
+apps/web typecheck: Done
+apps/worker typecheck$ tsc --noEmit -p tsconfig.json
+apps/worker typecheck: Done

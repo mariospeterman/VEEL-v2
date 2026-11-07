@@ -118,6 +118,7 @@ export function createContentReadRepositoryMethods(
               'providerState', asset.provider_state,
               'playbackUrl', asset.playback_url,
               'providerPlayable', asset.provider_playable,
+              'providerAssetId', asset.provider_asset_id,
               'posterUrl', asset.poster_url,
               'mimeType', asset.mime_type,
               'widthPixels', asset.width_pixels,

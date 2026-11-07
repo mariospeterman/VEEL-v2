@@ -14,9 +14,11 @@ import {
 import { ProviderLogo } from "@/brand/provider-logo";
 import { safeMutationMessage } from "@/api-errors";
 import type { WebAuthState } from "@/supabase/auth-state";
+import { walletSessionDestination } from "@/supabase/access-redirect";
 import { bytesToBase64, createBackendWalletSession, walletChain, type WalletAuthPurpose } from "./backend-wallet-auth";
 import { walletSupportsMessageSigning } from "./wallet-capabilities";
 import { recordOnboardingEvent } from "@/analytics/onboarding-analytics";
+import { handleWalletAccountNotFound } from "./wallet-account-not-found";
 
 type ExternalWalletProvider = LinkWalletRequest["provider"];
 
@@ -272,7 +274,8 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
       setAwaitingWallet(false);
       if (error instanceof ApiMutationError && error.status === 404 && authPurpose === "login") {
         setState("account_not_found");
-        setMessage("No WeVid account was found for this wallet. Start onboarding with this wallet to continue.");
+        setMessage("No WeVid account was found. Moving you to secure onboarding…");
+        handleWalletAccountNotFound(onAccountNotFound);
         return;
       }
       setState("error");
@@ -428,11 +431,6 @@ export function WalletLinkPanel({ autoStart = false, authState, authPurpose = "l
           {message}
         </p>
       ) : null}
-      {state === "account_not_found" && onAccountNotFound ? (
-        <button className="landing-inline-link" onClick={onAccountNotFound} type="button">
-          Start onboarding
-        </button>
-      ) : null}
     </section>
   );
 }
@@ -442,24 +440,7 @@ function shortWalletAddress(address: string) {
 }
 
 function redirectAfterWalletSession(session: Awaited<ReturnType<typeof getCurrentSession>>) {
-  const reason = session.appAccessState.reason;
-
-  if (session.appAccessState.allowed) {
-    window.location.assign("/app/home");
-    return;
-  }
-
-  if (reason === "age_required" || reason === "age_pending") {
-    window.location.assign("/?mode=onboarding&step=age&next=%2Fapp%2Fhome");
-    return;
-  }
-
-  if (reason === "identity_required" || reason === "wallet_required") {
-    window.location.assign("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome");
-    return;
-  }
-
-  window.location.assign("/?mode=login&next=%2Fapp%2Fhome");
+  window.location.assign(walletSessionDestination("/app/home", session.appAccessState));
 }
 
 function walletNameIncludes(wallet: Wallet, value: string) {

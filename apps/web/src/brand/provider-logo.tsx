@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, ShieldCheck, WalletCards } from "lucide-react";
+import { KeyRound, Mail, ShieldCheck, WalletCards } from "lucide-react";
 import { FaDiscord, FaGithub, FaGoogle, FaXTwitter } from "react-icons/fa6";
 import { safeProviderImageSource } from "./provider-image-source";
 
@@ -12,6 +12,7 @@ type ProviderLogoName =
   | "didit"
   | "github"
   | "google"
+  | "passkey"
   | "phantom"
   | "persona"
   | "privy"
@@ -68,6 +69,7 @@ function ProviderIcon({ label, name }: { label: string; name: ProviderLogoName }
   if (name === "email") return <Mail size={18} />;
   if (name === "github") return <FaGithub size={18} />;
   if (name === "google") return <FaGoogle size={18} />;
+  if (name === "passkey") return <KeyRound size={18} />;
   if (name === "x") return <FaXTwitter size={18} />;
   if (name === "didit" || name === "persona" || name === "sumsub" || name === "veriff" || name === "yoti") {
     return <ShieldCheck className="provider-logo-neutral" aria-label={label} size={18} />;

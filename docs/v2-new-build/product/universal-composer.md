@@ -1,12 +1,12 @@
 # Universal Composer
 
 Status: accepted
-Scope: one creator draft and rendering lifecycle for photo, video, carousel, text, poll, Moment, and scheduled publication
-Last updated: 2026-08-22
+Scope: one creator draft and rendering lifecycle for photo, video, carousel, contextual Moments, and scheduled publication
+Last updated: 2026-11-05
 Source of truth: yes for Convergence 02 product behavior
 
 Owns:
-- creator format selection, draft recovery, ordered assets, text posts, polls, and shared rendering behavior
+- creator media selection, draft recovery, ordered assets, duration-based video classification, and shared rendering behavior
 - the provider-safe image boundary and provenance projection for these formats
 
 Defers to:
@@ -16,31 +16,45 @@ Defers to:
 - provider docs and adapters for Bunny Stream, Bunny Storage, Optimizer, and Shield behavior
 
 Does not own:
-- access, payment, entitlement, classification, moderation, performer consent, or publication approval truth
+- access, payment, entitlement, safety classification, moderation, performer consent, or publication approval truth
 
 Launch scope:
-- single photo, existing Bunny Stream video, photo carousel, mixed image/video carousel, plain structured text, and polls
+- single photo, Bunny Stream video, photo carousel, and mixed image/video carousel
 
 Non-goals:
-- a timeline editor, arbitrary HTML, browser-owned ordering, direct provider credentials, custom transcoding/CDN, or a second content table
+- text/poll creation, a timeline editor, arbitrary HTML, browser-owned ordering, direct provider credentials, custom transcoding/CDN, or a second content table
 
 ## Product Contract
 
-The canonical `/app/create` route starts with four choices: **Photos or video**, **Write
-something**, **Poll**, and **Go live**. The selection progressively reveals only fields relevant to that format.
-Every path creates or resumes one server-owned `content_items` draft and uses the same audience,
-rating, people/rights, review, publication, and owner workspace.
+The canonical `/app/create` route starts with exactly two actions: **Add photos/videos** and
+**Go live**. Media selection progressively reveals only the fields relevant to that composition.
+The media path creates or resumes one server-owned `content_items` draft and uses the shared
+audience, rating, people/rights, review, publication, and owner workspace. Go live enters the one
+Livepeer room flow; it does not create a content draft or a second live system.
 
 ```text
 choose format
 -> create/resume server draft
--> add text or ordered assets
+-> add ordered assets
 -> preview
--> caption/question
+-> caption
 -> audience and rating
 -> people/rights declaration
 -> submit for review
 ```
+
+A video is classified from its provider-confirmed duration: `<= 60` seconds is a Bit and anything
+longer is VOD. The browser does not ask the creator to choose Bit/clip/VOD and does not trust a
+client-reported duration as publication truth. A Moment is a contextual entry from the Moments
+surface over the same canonical media lifecycle; it is not a third Create action or a media type
+picker. Persistent Home/Profile publication remains the ordinary Create context.
+
+New text posts and polls are retired. Fresh create, edit, publish, scheduled-publish, and vote
+writes for those formats fail closed with the normalized retired-format response. A completed exact
+idempotent replay may return its original response, but no replay can produce a new mutation.
+Existing text/poll rows remain available only through authorized historical detail, owner, admin,
+moderation, export, and retention workflows. They are excluded from primary feed/discovery/profile
+grids and their historical renderer is read-only.
 
 Local storage contains presentation recovery only: the current format choice, unsent field values,
 local file handles/fingerprints where the browser permits them, and the canonical draft id. It never
@@ -54,40 +68,35 @@ the browser does not manufacture final positions.
 
 ## Canonical Data
 
-`content_items.media_type` remains the format discriminator. Existing `bit`, `clip`, `vod`, and
-`live_replay` are video renderers; `image` is a single photo; `carousel`, `text`, and `poll` extend
-the same authority. Text content is stored as bounded plain structured text. Hashtags, mentions, and
-links are parsed into safe application tokens at the API/read boundary; user HTML is never rendered.
+`content_items.media_type` remains the discriminator. `bit`, `vod`, and `live_replay` are video
+renderers; `image` is a single photo; `carousel` is an ordered image/video composition. Historical
+`clip`, `text`, and `poll` values remain readable for compatibility and retention, but they are not
+new creator choices. Captions are bounded plain text; hashtags, mentions, and links are parsed into
+safe application tokens at the API/read boundary and user HTML is never rendered.
 
 `media_assets` is the only asset list. Assets have a server-owned zero-based position, image/video
 kind, validated MIME, dimensions, duration, alt text, SHA-256 checksum, cover/focal metadata,
 required-for-release state, and provenance. A content item has at most ten assets and at most one
 cover. Single-photo posts accept one image, existing video formats accept video, carousels accept a
-mix, and text/polls accept none. Drafts may be incomplete; publication validates the completed
-shape.
-
-Poll records are subordinate to a `content_items` row. A poll has one question, two to four ordered
-options, an optional close time, and one current vote per user. Vote writes are idempotent and update
-the old/new option counters in the same Postgres transaction. Option text/order becomes immutable
-after the first vote. Counts and viewer choice come from the backend projection; the browser never
-increments them optimistically as truth.
+mix. Drafts may be incomplete; publication validates the completed shape. Provider-confirmed video
+duration is stored before publication and drives the Bit/VOD classification.
 
 Authenticated feed and detail reads project this composition from the canonical rows in one query:
-bounded plain text, every normalized asset in server-owned position order, and the poll options,
-transactional counts, close state, and current viewer choice. Only the frontend-safe OpenAPI fields
+every normalized asset in server-owned position order and the historical read-only body/poll
+projection when the requested row uses a retired discriminator. Only the frontend-safe OpenAPI fields
 leave the API; provider payloads, private provenance details, checksums, and storage references do
 not. The top-level poster/playback projection remains the compatibility path for the selected release
 asset, while every ordered video asset carries its own normalized playback resource for the shared
 carousel renderer. Feed and detail routes pass both projections through the same backend signer,
 deduplicate signing of the selected asset, and never serialize a stored Bunny playlist URL; signer
-failure returns normalized blocked playback. Paid or otherwise gated cards redact body text, poll
-state/options, and per-asset delivery URLs until the
+failure returns normalized blocked playback. Paid or otherwise gated detail redacts historical body
+or poll state and per-asset delivery URLs until the
 viewer has canonical access; the creator remains authorized through the canonical app user id.
 
-Image/video compositions may be distributed as a persistent post or a 24-hour Moment, and any
-supported draft may request a future release time. These remain fields and a subordinate lease job
-on canonical content rather than separate media, calendar, moderation, or playback systems; see
-`product/moments-studio-enterprise.md`.
+Image/video compositions may be entered from the ordinary persistent Create context or the
+contextual 24-hour Moments surface, and a supported draft may request a future release time. These
+remain fields and a subordinate lease job on canonical content rather than separate media,
+calendar, moderation, or playback systems; see `product/moments-studio-enterprise.md`.
 
 ## Safety And Release
 
@@ -97,10 +106,10 @@ plus human release evidence before the content can publish. One approved cover c
 an unreviewed carousel asset. A rejected, missing, replaced, or position-conflicted required asset
 keeps publication fail-closed.
 
-Text and poll content use the same `media_safety_cases`, report, appeal, and staff review authority;
-they do not bypass moderation merely because no provider media exists. Performer declarations and
-adult-publisher eligibility remain independent contextual gates. Creation never implies KYC or
-earnings readiness.
+Historical text and poll rows retain their existing safety, report, appeal, staff-review, export,
+and retention records. Retirement does not erase those obligations. Performer declarations and
+adult-publisher eligibility remain independent contextual gates for media. Creation never implies
+KYC or earnings readiness.
 
 ## Image Provider Boundary
 
@@ -163,22 +172,22 @@ label is derived from canonical provenance and moderation policy, not browser co
 
 ## Renderer Family
 
-The Create surface uses one media selection step. A single image becomes an `image` draft, a single
-video retains an explicit Bit/Clip/Long video choice, and any two-to-ten image/video selection
-becomes one `carousel` draft. Images continue through the private server-streamed Storage boundary;
-videos continue through the resumable Bunny Stream TUS boundary. The UI can pause/resume the active
-video transfer, describes every ordered item, and never changes a saved draft's format merely because
-an item is added or removed. Replacement therefore remains a canonical retire-then-add operation of
-the same saved format, while a mixed composition must be selected before its carousel draft is made.
-Video-session creation rejects non-video/non-carousel drafts before any provider call.
+The Create surface uses one media selection step. A single image becomes an `image` draft. A single
+video becomes `bit` when its provider-confirmed duration is at most 60 seconds and `vod` when it is
+longer. Any two-to-ten image/video selection becomes one `carousel` draft. Images continue through
+the private server-streamed Storage boundary; videos continue through the resumable Bunny Stream
+TUS boundary. The UI can pause/resume the active transfer, describes every ordered item, and never
+changes a saved composition from untrusted local metadata. Replacement remains canonical
+retire-then-add. Video-session creation rejects non-video/non-carousel drafts before provider calls.
 
 One content renderer family is reused by Home, Bits, detail, profiles, and share previews:
 
 - image renderer;
 - provider-owned video renderer;
-- accessible carousel composing those image/video renderers;
-- safe structured-text renderer;
-- accessible poll renderer.
+- accessible carousel composing those image/video renderers.
+
+The historical detail renderer may display sanitized text and frozen poll results, but it provides
+no composer or voting control and is not used by primary feed/discovery/profile grids.
 
 Carousel controls support touch, mouse, visible previous/next buttons, keyboard navigation, an
 announced position indicator, reduced motion, adjacent-only lazy loading, and at most one active
@@ -188,11 +197,12 @@ or player implementation.
 ## Operations And Proof
 
 Admin content review shows format, ordered asset count, per-asset readiness/evidence, provenance
-label, poll report state, and the exact asset blocking release without exposing sensitive media or
-provider payloads. Provider outages and incomplete image configuration remain explicit fail-closed
-states.
+label, retained historical report state, and the exact asset blocking release without exposing
+sensitive media or provider payloads. Provider outages and incomplete image configuration remain
+explicit fail-closed states.
 
 Acceptance must prove photo, carousel, mixed carousel, ordering conflicts, concurrent updates,
-metadata removal, rejected-asset release blocking, replacement/removal, text parsing, poll shape,
-vote replay and concurrency, option locking, accessibility, resumable video, responsive rendering,
-and provider staging or deterministic fail-closed behavior.
+metadata removal, rejected-asset release blocking, replacement/removal, provider-confirmed 60-second
+classification, retired-format write denial plus exact replay, historical read-only rendering,
+accessibility, resumable video, responsive rendering, and provider staging or deterministic
+fail-closed behavior.

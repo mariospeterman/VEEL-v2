@@ -5,6 +5,7 @@ import { revokeWalletAuthSession } from "@/api-mutations";
 import { createSupabaseBrowserClient } from "@/supabase/client";
 import { e2eAuthCookieName } from "@/supabase/auth-cookie";
 import { useProviderSessionLogout } from "@/wallet/provider-session-logout";
+import { clearUserScopedBrowserState } from "@/session/clear-user-scoped-browser-state";
 
 export function ProfileLogoutButton() {
   const [pending, setPending] = useState(false);
@@ -62,6 +63,7 @@ async function clearServerSession() {
 
 function clearBrowserSessionState() {
   runBestEffort(() => clearCookie(e2eAuthCookieName));
+  clearUserScopedBrowserState();
 }
 
 function clearCookie(name: string) {

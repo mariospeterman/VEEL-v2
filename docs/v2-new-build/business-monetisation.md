@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: business model, monetisation, noncustodial money movement
-Last updated: 2026-08-15
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
 - business monetisation decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, immutable database migrations, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -50,7 +50,7 @@ Veel earns through:
 - platform fee on content unlocks, creator media offers, accepted structured deliverables, paid live events, Event Access Passes, and support
 - Profile Membership platform fee
 - platform plans: Free, Plus, Ultra, Studio, and Enterprise
-- optional referral commission sourced only from Veel platform commission net of refunds and tax
+- optional referral commission sourced only from the platform-fee quote basis known at purchase time; later refund/tax corrections require an approved append-only remedy and are not automatically netted
 - optional wallet-funding referral revenue only if legal/provider review approves it and it is never product checkout revenue
 
 Creators earn through:
@@ -148,7 +148,7 @@ Examples:
 | Native SOL split transfer | Devnet testing, low-friction support/tips, possible SOL products | Optional depending product | Signature, reference, payer, lamports, recipients, finality |
 | SPL/USDC split transfer | Production stablecoin products if selected | Optional depending product | Signature, reference, payer, mint, token program, token amounts, recipients, finality |
 | Solana delegated subscription | Profile Memberships and platform recurring plans | Membership/platform entitlement only after verified authorization and recurring collection | Authority PDA, subscription/delegation PDA, payer token account, mint/program, recipients, amount/period, collection signature, finality |
-| Manual Solana Pay recovery | Emergency fallback for failed delegated setup/collection only | Renewal entitlement only after confirmed payment intent | Signature, reference, payer, amount, recipients, finality |
+| Manual Solana Pay recovery | Planned and unsupported at launch | None until a canonical renewal intent and duplicate-collection arbitration exist | Future path would require signature, reference, payer, amount, recipients, finality, receipt, and entitlement proof |
 | Wallet funding/onramp | User adds SOL/USDC to their own wallet | No access effect | Funding status only for UX/support |
 | Free approval | Free Event Access/Passes | Entitlement only | Backend approval/audit, no wallet settlement |
 
@@ -174,9 +174,9 @@ Native SOL and SPL token modes must share a common intent/split/settlement model
 | Ultra | 17.99 USDC/month | No creator share unless bundled | Platform revenue | High-usage viewing entitlement |
 | Studio | 29 USDC/month | No creator share unless bundled | Platform revenue | Creator business/tool entitlement |
 | Enterprise | Custom, from 199 USDC/month equivalent | No creator share unless contracted | Platform revenue | Organization/agency/venue entitlement |
-| Live pass | Duration/pass price | Creator share | Platform fee | Live playback/chat access |
+| Paid live event access | Disclosed event price and replay window | Creator/event-owner share | Platform fee | Live event playback/chat access; `live_pass` remains an internal compatibility product type, never a timed-duration catalogue product |
 | Event Access Pass | Pass price | Creator/event owner share | Platform fee | Access entitlement/QR |
-| Referral commission | From Veel platform commission net of refunds/tax | Referrer/partner earns | Platform share reduced | Attribution/commission record |
+| Referral commission | From the platform-fee quote basis known at purchase time | Referrer earns only on an implemented eligible token path | Platform share reduced | Attribution/commission record; future refund/tax correction is not automatic |
 
 Launch product type enum:
 
@@ -218,7 +218,7 @@ Default launch recommendation:
 
 - platform fee: `1000 bps` on eligible paid products
 - creator share: gross price minus platform fee and configured taxes/fees where applicable
-- referral share: paid only from Veel platform commission net of refunds and tax
+- referral share: paid only from the platform-fee quote basis known at purchase time; never creator share, and never described as automatically net of future refunds or later tax corrections
 - creator share is never reduced by referral
 - self-referral is always rejected
 - duplicate commission is always rejected
@@ -259,13 +259,14 @@ Only free public long-form VOD and public live viewing consumes the platform all
 
 The canonical accounting path is server-owned:
 
-1. The backend decides whether a requested content item or live room qualifies before it issues full playback.
-2. The browser starts one idempotent playback session only after provider playback starts.
-3. Visible, actively playing time is reported in ordered, idempotent heartbeats of at most 30 seconds.
-4. PostgreSQL serializes the current usage window, caps credited time by server-observed elapsed time and remaining allowance, and records the session, heartbeat, and usage update atomically.
-5. Exhaustion blocks only otherwise-free public VOD/live playback. Paid, membership, event, preview, Bits, promotional, and owner playback remain governed by their normal entitlement/access policies.
+1. The backend decides whether a requested content item or live room qualifies. A bounded tier returns playback blocked with an explicit lease-required context; it does not mint a signed provider resource on that read.
+2. An explicit user start sends one idempotent playback-session command. Browsing, preloading, and repeated content/live reads never debit allowance.
+3. PostgreSQL serializes the current usage window and atomically reserves the smaller of 15 minutes, the remaining allowance, and the seconds remaining in that accounting window. The session lease lasts exactly that reservation, including a final partial chunk.
+4. Only after the reservation commits may the backend mint Bunny or Livepeer playback. The provider capability expiry is capped to the allowance lease, so a bearer URL or JWT cannot outlive the backend authority that paid for it.
+5. Visible, actively playing time is reported in ordered, idempotent heartbeats of at most 30 seconds for analytics. Heartbeats do not debit a reserved session again and cannot extend its lease; unused reserved seconds are not refunded from browser claims.
+6. Exhaustion blocks only otherwise-free public VOD/live playback after the last active lease expires. Paid, membership, event, preview, Bits, promotional, owner, and unlimited-tier playback remain governed by their normal entitlement/access policies and do not reserve allowance.
 
-Bunny iframe state is observed through the official [Bunny Stream Player.js playback API](https://docs.bunny.net/stream/playback-api). Livepeer playback uses the official [`@livepeer/react` player](https://docs.livepeer.org/sdks/react/Player) and native media lifecycle events. Client events initiate usage reports but never own allowance truth.
+Bunny iframe state is observed through the official [Bunny Stream Player.js playback API](https://docs.bunny.net/stream/playback-api). Livepeer playback uses the official [`@livepeer/react` player](https://docs.livepeer.org/sdks/react/Player) and native media lifecycle events. Client events initiate the explicit lease command and analytics reports but never own allowance truth.
 
 Tier rules:
 
@@ -282,7 +283,8 @@ Pricing, allowance limits, Mutual/Event Access limits, paid-live-event guardrail
 Profile Membership:
 
 - belongs to a profile and has one active offer per profile at launch
-- grants creator-specific benefits such as subscriber-only media, premium posts, live access tiers, or message privileges
+- grants creator-specific benefits such as member-only media, premium posts, live access tiers, or members-only live-chat write permission where that room explicitly supports it
+- never grants direct-message priority, preferential response, access to a person, Mutuals treatment, or feed/recommendation visibility
 - has renewal state, grace period, cancellation, and failed-renewal recovery
 - must be auditable per creator, subscriber, plan, billing event, entitlement, and settlement
 
@@ -302,7 +304,7 @@ The minimum new domain concepts are Product Offer, content/profile/live attachme
 
 Commerce activation is independently policy-gated. Seller/trader identity, lawful seller disclosures, shipping/return policy, prohibited-product screening, product safety/traceability, recall handling, jurisdiction, tax readiness, and EU DSA/GPSR obligations require legal and operational approval. Noncustodial direct settlement does not remove marketplace responsibilities. Launch, when approved, begins with lawful low-risk creator merchandise.
 
-Profile-native UX is canonical: content is the advertisement, the creator profile is the storefront, the wallet is the payment account, selected Commerce Kit primitives are invisible payment interoperability, and WeVid owns the social experience and business rules. A Product Offer may attach to a profile, Post, Bit, or live stream, with at most one explicit contextual `View product` or `Buy product` action. Products do not enter the five primary navigation items, open checkout automatically, alter feed ranking, or grant access to people.
+Profile-native UX is canonical: content is the advertisement, the creator profile is the storefront, the wallet is the payment account, the isolated Solana Pay codec is invisible transaction-request/QR interoperability, and WeVid owns the social experience and business rules. A Product Offer may attach to a profile, Post, Bit, or live stream, with at most one explicit contextual `View product` or `Buy product` action. Products do not enter the five primary navigation items, open checkout automatically, alter feed ordering, or grant access to people.
 
 ## Subscription State Machine
 
@@ -338,7 +340,7 @@ Recurring subscription policy:
 - Target provider path is Solana Subscriptions and Allowances through the official Subscription Delegation Program.
 - Subscription products are modeled as auto-renewing delegated subscriptions until the user cancels in Veel and/or revokes the delegation in wallet/provider UX.
 - The delegated subscription production switch remains gated until devnet/staging authority setup, revoke, collection, wallet UX, event, and reconciliation fixtures pass.
-- Manual Solana Pay renewal is recovery fallback only; do not use merchant checkout, card billing, custodial subscription balances, or provider-operated product subscriptions.
+- Manual Solana Pay renewal recovery is planned and unsupported at launch. Do not advertise or invoke it until a canonical renewal intent, collection arbitration, receipt, and entitlement transition are implemented and tested. Merchant checkout, card billing, custodial subscription balances, and provider-operated product subscriptions remain excluded.
 - Users must be able to cancel in Veel and revoke delegated allowance in wallet/provider UX.
 - Backend subscription status mirrors verified payment/collection evidence and internal entitlement policy; it is not a stored debt or receivable.
 - Renewal checkout and settings must disclose amount, period, token/mint, cancellation path, delegated authority, and that cancellation stops future collection rather than automatically refunding the current started period unless law or platform/provider failure requires it.
@@ -413,7 +415,7 @@ Commercial default:
 - Creator-sold products are final once immediate access is delivered, except mandatory legal rights, duplicate settlement, fraud/unauthorized access, misdescription, provider/platform failure, or seller non-delivery.
 - Veel-sold platform plans are final once the current access period starts, except mandatory legal rights, duplicate collection, fraud/unauthorized access, platform failure, or failure to provide the software feature.
 - Creator-sold refunds should be seller-funded noncustodial transactions. Veel must not promise to absorb creator refund exposure from platform treasury unless counsel approves a goodwill or platform-fault exception.
-- Referral commissions come only from Veel platform commission net of refunds and tax; approved refunds/reversals must correct commission eligibility through backend records.
+- Referral commissions come only from the platform-fee quote basis known at purchase time. An approved refund/reversal may require an append-only eligibility/correction record, but the current noncustodial split cannot claw back an already transferred amount or create a negative user balance.
 - If a creator-sold refund is approved, creator share refund responsibility remains with the seller where legally supportable. Veel only refunds/reverses its commission when required by law, policy, or Veel fault, and referral commissions must be clawed back or marked ineligible from backend records rather than by creating a negative user balance.
 - Payment/refund review records must preserve `payment_confirmed`, `access_granted_at`, `withdrawal_waiver_accepted_at`, `withdrawal_waiver_version`, `terms_version`, `refund_eligible_reason`, `refund_status`, `refund_wallet`, and `refund_value_basis` either directly or through linked payment, entitlement, refund/dispute, receipt, and audit rows.
 - Confirmed settlement must also preserve durable confirmation evidence through backend receipt, compliance-ledger, notification, and confirmation-delivery rows. In-app delivery may be marked sent when the backend notification exists; email delivery is leased by the worker and must stay queued/provider-not-configured/failed until a launch-approved transactional email provider confirms delivery.

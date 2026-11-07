@@ -206,8 +206,10 @@ export interface AdminRepository {
     membershipId: string;
     body: AdminOrganizationMemberActionRequest;
     idempotencyKey: string;
+    requestHash: string;
   }): Promise<AdminOrganizationMember | null>;
-  listFeatureFlags(): Promise<AdminPage<AdminFeatureFlag>>;
+  getFeatureFlag(featureFlagKey: string): Promise<AdminFeatureFlag | null>;
+  listFeatureFlags(input: { cursor?: string }): Promise<AdminPage<AdminFeatureFlag>>;
   updateFeatureFlag(input: {
     supabaseUserId: string;
     featureFlagKey: string;

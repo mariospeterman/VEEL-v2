@@ -1,0 +1,36 @@
+{
+  "runtime": "PGlite0.5.15 PostgreSQL WASM + pgcrypto; auth.uid/auth.jwt stubs; no hosted Supabase services",
+  "existingDefaultGrants": true,
+  "upgradeFailures": [
+    {
+      "migration": "0046_admin_moderation_report_states.sql",
+      "code": "23514",
+      "message": "new row for relation \"reports\" violates check constraint \"reports_state_check\"",
+      "detail": "Failing row contains (3788d9a5-d92e-4716-a97a-1ebec1d4a6fd, 00000000-0000-4000-8000-000000000001, user, 00000000-0000-4000-8000-000000000001, test legacy report, user, rejected, legacy-upgrade, 2026-11-04 15:18:05.359+00, null)."
+    },
+    {
+      "migration": "0056_event_access_purchase_request_state.sql",
+      "code": "23514",
+      "message": "new row for relation \"event_access_purchase_requests\" violates check constraint \"ticket_purchase_requests_state_check\"",
+      "detail": "Failing row contains (00000000-0000-4000-8000-000000000020, 00000000-0000-4000-8000-000000000030, 00000000-0000-4000-8000-000000000040, 00000000-0000-4000-8000-000000000001, 100, SOL, access_pass_granted, 2026-11-04 15:18:05.399+00)."
+    },
+    {
+      "migration": "0077_universal_account_media_safety.sql",
+      "code": "23514",
+      "message": "new row for relation \"viewer_feed_preferences\" violates check constraint \"viewer_feed_preferences_nsfw_preference_check\"",
+      "detail": "Failing row contains (00000000-0000-4000-8000-000000000001, recommended, both, 2026-11-04 15:18:05.654+00)."
+    }
+  ],
+  "finalSchemaVersion": 118,
+  "privateCommentsRead": [
+    {
+      "content_item_id": "00000000-0000-4000-8000-000000000050",
+      "body": "private post conversation"
+    }
+  ],
+  "invalidPerformerError": {
+    "code": "23514",
+    "message": "new row for relation \"performer_subjects\" violates check constraint \"performer_subjects_verification_status_check\"",
+    "detail": "Failing row contains (00000000-0000-4000-8000-000000000060, 00000000-0000-4000-8000-000000000001, 00000000-0000-4000-8000-000000000001, invalid, sumsub, null, gov_id_selfie, documentary, null, null, null, none, 2026-11-04 15:18:07.135+00, 2026-11-04 15:18:07.136+00, wevid_user, null, 46eed685-c7de-4f15-a46f-37b2de52f37c)."
+  }
+}

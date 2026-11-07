@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
 import type { FastifyInstance } from "fastify";
 import type { RegisterAdminRoutesOptions } from "./admin-route-auth.js";
 import { AdminRepositoryStateConflictError } from "./admin-repository.js";
@@ -131,12 +132,21 @@ export function registerAdminOrganizationRoutes(
     if (!mutation) return reply;
 
     try {
+      const body = {
+        ...mutation.body,
+        reason: mutation.body.reason.trim()
+      };
       const member = await options.adminRepository.updateOrganizationMember({
         supabaseUserId: mutation.supabaseUserId,
         organizationId,
         membershipId,
-        body: mutation.body,
-        idempotencyKey: mutation.idempotencyKey
+        body,
+        idempotencyKey: mutation.idempotencyKey,
+        requestHash: createHash("sha256").update(JSON.stringify({
+          organizationId,
+          membershipId,
+          body
+        })).digest("hex")
       });
 
       if (!member) {
@@ -163,7 +173,10 @@ export function registerAdminOrganizationRoutes(
     const allowed = await requireAdminAccess(request, reply, options, "admin.feature_flags.read");
     if (!allowed) return reply;
 
-    return reply.code(200).send(await options.adminRepository.listFeatureFlags());
+    const query = request.query as { cursor?: string };
+    return reply.code(200).send(
+      await options.adminRepository.listFeatureFlags(adminListInput(query))
+    );
   });
 
   app.patch("/v1/admin/feature-flags/:featureFlagKey", mutationRateLimit("adminMutation"), async (request, reply) => {
@@ -184,12 +197,23 @@ export function registerAdminOrganizationRoutes(
     );
     if (!mutation) return reply;
 
-    const featureFlag = await options.adminRepository.updateFeatureFlag({
-      supabaseUserId: mutation.supabaseUserId,
-      featureFlagKey,
-      body: mutation.body,
-      idempotencyKey: mutation.idempotencyKey
-    });
+    let featureFlag;
+    try {
+      featureFlag = await options.adminRepository.updateFeatureFlag({
+        supabaseUserId: mutation.supabaseUserId,
+        featureFlagKey,
+        body: mutation.body,
+        idempotencyKey: mutation.idempotencyKey
+      });
+    } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Idempotency key was already used for a different admin mutation"
+        });
+      }
+      throw error;
+    }
 
     if (!featureFlag) {
       return reply.code(404).send({

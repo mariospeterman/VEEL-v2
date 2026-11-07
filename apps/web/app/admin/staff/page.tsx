@@ -33,7 +33,7 @@ export default async function AdminStaffPage() {
             <Field label="Role"><select className={fieldClass} defaultValue="support" name="role">{roles.map((role) => <option key={role}>{role}</option>)}</select></Field>
             <Field label="Expires"><select className={fieldClass} defaultValue="72" name="expiresInHours"><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select></Field>
             <Field label="Reason"><input className={fieldClass} minLength={3} name="reason" placeholder="Why access is required" required /></Field>
-            <button className="min-h-11 self-end rounded-xl bg-(--accent) px-4 text-sm font-semibold text-white" type="submit">Confirm invite</button>
+            <button className="min-h-11 self-end rounded-xl bg-(--accent) px-4 text-sm font-semibold text-(--accent-on-solid)" type="submit">Confirm invite</button>
           </form>
         </section>
       ) : null}

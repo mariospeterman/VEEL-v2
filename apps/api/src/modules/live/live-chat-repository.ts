@@ -22,6 +22,9 @@ export function createLiveChatRepositoryMethods(
       }
 
       const rows = await sql<LiveChatMessageRow[]>`
+        with viewer as (
+          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+        )
         select
           lcm.id,
           lcm.room_id,
@@ -32,10 +35,20 @@ export function createLiveChatRepositoryMethods(
           p.display_name as author_display_name,
           p.avatar_url as author_avatar_url
         from live_chat_messages lcm
-        join users u on u.id = lcm.user_id
+        join users u on u.id = lcm.user_id and u.state = 'active'
         join profiles p on p.user_id = u.id
         where lcm.room_id = ${input.roomId}
           and lcm.state = 'visible'
+          and not exists (
+            select 1 from blocks b
+            where (b.blocker_user_id = (select id from viewer) and b.blocked_user_id = lcm.user_id)
+               or (b.blocker_user_id = lcm.user_id and b.blocked_user_id = (select id from viewer))
+          )
+          and not exists (
+            select 1 from user_mutes mute
+            where mute.muting_user_id = (select id from viewer)
+              and mute.muted_user_id = lcm.user_id
+          )
         order by lcm.created_at desc
         limit 50
       `;
@@ -80,16 +93,19 @@ export function createLiveChatRepositoryMethods(
             and (
               actor.id = lr.creator_user_id
               or lr.access_rule = 'public'
-              or exists (
-                select 1 from subscriptions s
-                where s.subscriber_user_id = actor.id
-                  and s.creator_user_id = lr.creator_user_id
-                  and s.scope = 'creator'
-                  and s.state in ('active', 'renewal_pending', 'grace_period')
-                  and s.current_period_starts_at is not null
-                  and s.current_period_starts_at <= now()
-                  and s.current_period_ends_at is not null
-                  and s.current_period_ends_at > now()
+              or (
+                (lr.access_rule = 'profile_members' or lr.members_included_in_paid_event)
+                and exists (
+                  select 1 from subscriptions s
+                  where s.subscriber_user_id = actor.id
+                    and s.creator_user_id = lr.creator_user_id
+                    and s.scope = 'creator'
+                    and s.state in ('active', 'renewal_pending', 'grace_period')
+                    and s.current_period_starts_at is not null
+                    and s.current_period_starts_at <= now()
+                    and s.current_period_ends_at is not null
+                    and s.current_period_ends_at > now()
+                )
               )
               or exists (
                 select 1 from live_passes lp

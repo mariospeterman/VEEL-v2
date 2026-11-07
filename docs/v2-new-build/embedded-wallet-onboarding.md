@@ -9,7 +9,7 @@ Owns:
 - embedded wallet onboarding decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -191,7 +191,7 @@ Implementation contract:
 
 - Step 2 target requires only a unique `@handle`; display name and avatar are optional or safely prefilled. Bio, interests, categories, creator/viewer choice, gender, exact location, tax, KYC/KYB, earnings, pricing, adult intent, performer, and Enterprise fields stay out of onboarding.
 - Browser wallet completion must verify the newly issued canonical application session before the UI advances to Profile. Local preview requests normalize only `localhost`, `127.0.0.1`, and `::1` API hosts to the page loopback hostname so an HttpOnly `SameSite=Lax` session cannot be lost across two names for the same machine. Deployed origins are never rewritten.
-- Profile details are persisted before the optional avatar upload. This prevents an unavailable or conflicting handle from creating an unnecessary Storage object; a successful avatar upload is then attached through the same canonical profile mutation.
+- Profile details are persisted without requiring an avatar. The reserved avatar endpoint currently fails closed with `503` and onboarding continues without a photo; no browser-selected bytes are decoded, stored, or published until a private, sanitized, safety-checked release pipeline is approved.
 - Until Step 3 succeeds, the profile is provisional, non-discoverable, excluded from feeds/search, and unable to publish publicly, message others, or receive money. Redirects and recoverable errors preserve safe progress; abandoned/failed profiles follow the approved retention policy.
 - Step 3 says “Confirm you’re 18+ to enter WeVid,” uses the configured provider-neutral waterfall, and stores only normalized threshold/method/provider-reference/jurisdiction/time/expiry/policy evidence. It fails closed and never implies KYC or another capability.
 - Ordinary onboarding asks for wallet ownership once and age once. Higher-assurance evidence appears only for risk/policy, earnings, adult publishing, performer, or legal-entity purposes; purpose records remain separate even where evidence may lawfully be reused.

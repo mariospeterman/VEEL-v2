@@ -79,8 +79,19 @@ export interface PrivacyUserRow {
 export interface DataRequestRow {
   id: string;
   type: "export" | "delete";
-  state: "requested" | "verifying" | "processing" | "completed" | "rejected";
+  state: "requested" | "verifying" | "processing" | "completed" | "rejected" | "cancelled" | "failed";
   created_at: Date;
   updated_at: Date | null;
   completed_at: Date | null;
+  export_job_id?: string | null;
+  export_state?: "queued" | "processing" | "retry" | "ready" | "cancelled" | "dead_letter" | "expired" | null;
+  export_total_items?: number | null;
+  export_completed_items?: number | null;
+  export_available_items?: number | null;
+  export_unavailable_items?: number | null;
+  export_attempt_count?: number | null;
+  export_last_error_code?: string | null;
+  export_snapshot_created_at?: Date | null;
+  export_archive_ready_at?: Date | null;
+  export_downloadable_until?: Date | null;
 }

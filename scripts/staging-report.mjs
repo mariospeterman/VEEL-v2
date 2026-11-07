@@ -8,6 +8,7 @@ for (const journey of result.journeys) console.log(`${journey.status} ${journey.
 const failed = result.overall === "FAIL" || result.overall === "UNSAFE_TARGET"
   || result.journeys.some((journey) => journey.status === "FAIL");
 const stagingProven = result.overall === "PASS"
+  && result.journeys.length > 0
   && result.journeys.every((journey) => ["PASS", "DEFERRED"].includes(journey.status));
 const terminalState = stagingProven
   ? "STAGING_PROVEN"
@@ -16,3 +17,4 @@ const terminalState = stagingProven
     : "OPERATOR_READY_FOR_STAGING_CONFIGURATION";
 console.log(`terminal=${terminalState}`);
 if (failed) process.exitCode = 1;
+else if (!stagingProven) process.exitCode = 2;

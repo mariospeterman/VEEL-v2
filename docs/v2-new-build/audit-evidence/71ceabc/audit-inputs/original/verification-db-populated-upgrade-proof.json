@@ -1,0 +1,34 @@
+{
+  "runtime": "PGlite0.5.15 PostgreSQL WASM + pgcrypto; auth.uid/auth.jwt stubs; no hosted Supabase services",
+  "existingDefaultGrants": false,
+  "upgradeFailures": [
+    {
+      "migration": "0046_admin_moderation_report_states.sql",
+      "code": "23514",
+      "message": "new row for relation \"reports\" violates check constraint \"reports_state_check\"",
+      "detail": "Failing row contains (909ee17a-71d4-4e2e-9669-2d98688f8566, 00000000-0000-4000-8000-000000000001, user, 00000000-0000-4000-8000-000000000001, test legacy report, user, rejected, legacy-upgrade, 2026-11-04 15:17:58.773+00, null)."
+    },
+    {
+      "migration": "0056_event_access_purchase_request_state.sql",
+      "code": "23514",
+      "message": "new row for relation \"event_access_purchase_requests\" violates check constraint \"ticket_purchase_requests_state_check\"",
+      "detail": "Failing row contains (00000000-0000-4000-8000-000000000020, 00000000-0000-4000-8000-000000000030, 00000000-0000-4000-8000-000000000040, 00000000-0000-4000-8000-000000000001, 100, SOL, access_pass_granted, 2026-11-04 15:17:58.857+00)."
+    },
+    {
+      "migration": "0077_universal_account_media_safety.sql",
+      "code": "23514",
+      "message": "new row for relation \"viewer_feed_preferences\" violates check constraint \"viewer_feed_preferences_nsfw_preference_check\"",
+      "detail": "Failing row contains (00000000-0000-4000-8000-000000000001, recommended, both, 2026-11-04 15:17:59.566+00)."
+    }
+  ],
+  "finalSchemaVersion": 118,
+  "privateCommentsReadError": {
+    "code": "42501",
+    "message": "permission denied for table content_items"
+  },
+  "invalidPerformerError": {
+    "code": "23514",
+    "message": "new row for relation \"performer_subjects\" violates check constraint \"performer_subjects_verification_status_check\"",
+    "detail": "Failing row contains (00000000-0000-4000-8000-000000000060, 00000000-0000-4000-8000-000000000001, 00000000-0000-4000-8000-000000000001, invalid, sumsub, null, gov_id_selfie, documentary, null, null, null, none, 2026-11-04 15:18:00.647+00, 2026-11-04 15:18:00.65+00, wevid_user, null, 6a86ef4d-5613-4e3d-a368-03c2ed9e3ac8)."
+  }
+}

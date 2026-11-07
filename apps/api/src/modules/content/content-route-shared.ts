@@ -14,6 +14,7 @@ import type {
   FeedSurface,
   MediaUploadProviderAdapter
 } from "./types.js";
+import { privateImageProviderAssetId } from "./content-repository-mappers.js";
 
 export interface RegisterContentRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
@@ -27,7 +28,9 @@ export interface RegisterContentRoutesOptions {
   subscriptionRepository: SubscriptionRepository;
 }
 
-export const feedModes = new Set(["recommended", "following"]);
+// `recommended` is accepted only as a transition alias for clients that
+// predate the chronological feed. Responses always expose the canonical mode.
+export const feedModes = new Set(["latest", "following", "recommended"]);
 export const feedSurfaces = new Set(["home", "bits", "moments"]);
 export const contentMediaTypes = new Set([
   "bit",
@@ -65,7 +68,8 @@ export const defaultContentCreationAbusePolicy: ContentCreationAbusePolicy = {
 };
 
 export function feedModeFromQuery(mode: string | undefined): FeedMode {
-  return feedModes.has(mode ?? "") ? (mode as FeedMode) : "recommended";
+  if (mode === "following") return "following";
+  return "latest";
 }
 
 export function feedSurfaceFromQuery(surface: string | undefined): FeedSurface {
@@ -135,6 +139,7 @@ export async function withSignedPlayback(input: {
 }): Promise<components["schemas"]["ContentItem"]> {
   const { content, mediaUploadProvider } = input;
   type PlaybackResource = NonNullable<components["schemas"]["ContentItem"]["playback"]>;
+  const fullCompositionAllowed = ["free", "unlocked", "subscribed"].includes(content.accessState);
   let blockReason: PlaybackResource["blockReason"] | undefined;
 
   const potentiallyAccounted =
@@ -146,6 +151,8 @@ export async function withSignedPlayback(input: {
     ...(content.mediaAssets ?? []).map((asset) => asset.playback)
   ].some((playback) => playback?.state === "full" && playback.provider === "bunny");
   let usage: components["schemas"]["PlaybackUsageContext"] | undefined;
+  let leaseExpiresAt: Date | null = null;
+  let leaseStartRequired = false;
 
   if (potentiallyAccounted && hasFullBunnyPlayback) {
     if (!input.subscriptionRepository.getPlatformPlaybackDecision) {
@@ -164,8 +171,15 @@ export async function withSignedPlayback(input: {
             policy: "public_media_allowance",
             targetType: "content",
             targetId: content.id,
-            heartbeatIntervalSeconds: 15
+            heartbeatIntervalSeconds: 15,
+            leaseExpiresAt: decision.leaseExpiresAt
           };
+          if (decision.leaseRequired) {
+            leaseExpiresAt = decision.leaseExpiresAt
+              ? new Date(decision.leaseExpiresAt)
+              : null;
+            leaseStartRequired = !leaseExpiresAt || leaseExpiresAt.getTime() <= Date.now();
+          }
         }
       } catch {
         blockReason = "provider_unavailable";
@@ -179,6 +193,9 @@ export async function withSignedPlayback(input: {
     attachUsage: boolean
   ): PlaybackResource | undefined => {
     if (!playback || playback.state !== "full") return playback;
+    if (!fullCompositionAllowed) {
+      return { state: "blocked", url: null, provider: playback.provider };
+    }
     if (playback.provider === "livepeer") {
       return { state: "blocked", url: null, provider: "livepeer" };
     }
@@ -188,16 +205,38 @@ export async function withSignedPlayback(input: {
       state: "blocked",
       url: null,
       provider: "bunny",
-      ...(blockReason ? { blockReason } : {})
+      ...(blockReason
+        ? { blockReason }
+        : leaseStartRequired
+          ? { blockReason: "playback_lease_required" as const }
+          : {}),
+      ...(attachUsage && usage ? { usage } : {})
     };
-    if (blockReason || !mediaUploadProvider.createPlaybackResource) return blockedPlayback;
+    if (
+      blockReason ||
+      leaseStartRequired ||
+      !mediaUploadProvider.createPlaybackResource
+    ) return blockedPlayback;
 
     const providerAssetId = bunnyProviderAssetIdFromPlaybackUrl(playback.url);
     if (!providerAssetId) return blockedPlayback;
 
     try {
       const signed = signedBunnyResources.get(providerAssetId)
-        ?? mediaUploadProvider.createPlaybackResource({ providerAssetId });
+        ?? mediaUploadProvider.createPlaybackResource({
+          providerAssetId,
+          ...(leaseExpiresAt ? { expiresAt: leaseExpiresAt } : {})
+        });
+      if (leaseExpiresAt) {
+        const signedExpiry = signed.expiresAt ? Date.parse(signed.expiresAt) : Number.NaN;
+        if (
+          !Number.isFinite(signedExpiry) ||
+          signedExpiry <= Date.now() ||
+          signedExpiry > leaseExpiresAt.getTime()
+        ) {
+          return { ...blockedPlayback, blockReason: "provider_unavailable" };
+        }
+      }
       signedBunnyResources.set(providerAssetId, signed);
       return {
         ...signed,
@@ -210,12 +249,37 @@ export async function withSignedPlayback(input: {
 
   const playback = sign(content.playback, true);
   const mediaAssets = content.mediaAssets?.map((asset) => {
-    if (!asset.playback) return asset;
-    return { ...asset, playback: sign(asset.playback, false)! };
+    const withPlayback = asset.playback
+      ? { ...asset, playback: sign(asset.playback, true)! }
+      : asset;
+    if (asset.kind !== "image") return withPlayback;
+
+    const providerAssetId = privateImageProviderAssetId(asset);
+    if (
+      !fullCompositionAllowed ||
+      !providerAssetId ||
+      !mediaUploadProvider.createImageDeliveryResource
+    ) {
+      return { ...withPlayback, posterUrl: null };
+    }
+    try {
+      const imageDelivery = mediaUploadProvider.createImageDeliveryResource({ providerAssetId });
+      return { ...withPlayback, posterUrl: imageDelivery.url, imageDelivery };
+    } catch {
+      return { ...withPlayback, posterUrl: null };
+    }
   });
+  const signedImagePoster = mediaAssets
+    ?.find((asset) => asset.kind === "image" && asset.isCover && asset.posterUrl)
+    ?.posterUrl
+    ?? mediaAssets?.find((asset) => asset.kind === "image" && asset.posterUrl)?.posterUrl;
 
   return {
     ...content,
+    ...(!fullCompositionAllowed && content.accessState !== "teaser" ? { posterUrl: null } : {}),
+    ...(["image", "carousel"].includes(content.mediaType)
+      ? { posterUrl: signedImagePoster ?? null }
+      : {}),
     ...(playback ? { playback } : {}),
     ...(mediaAssets ? { mediaAssets } : {})
   };

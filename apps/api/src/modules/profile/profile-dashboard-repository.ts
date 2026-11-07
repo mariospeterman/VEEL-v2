@@ -72,36 +72,57 @@ export function createProfileDashboardRepositoryMethods(
       const [earningsRows, productRows, recentPaymentRows] = await Promise.all([
         sql<EarningsRow[]>`
           with creator_payments as (
-            select distinct payment_intent_id
+            select distinct payment_intent_id, currency
             from payment_ledger_entries
             where account_user_id = ${dashboard.id}
               and account_kind = 'creator_earning'
+              and state = 'posted'
+          ),
+          creator_totals as (
+            select currency, sum(amount_minor) as amount_minor
+            from payment_ledger_entries
+            where account_user_id = ${dashboard.id}
+              and account_kind = 'creator_earning'
+              and state = 'posted'
+            group by currency
+          ),
+          platform_totals as (
+            select ple.currency, sum(ple.amount_minor) as amount_minor
+            from payment_ledger_entries ple
+            join creator_payments cp on cp.payment_intent_id = ple.payment_intent_id
+            where ple.account_kind = 'platform_fee'
+              and ple.state = 'posted'
+            group by ple.currency
+          ),
+          referral_totals as (
+            select currency, sum(amount_minor) as amount_minor
+            from referral_commissions
+            where referrer_user_id = ${dashboard.id}
+              and state in ('pending', 'posted', 'earned')
+            group by currency
+          ),
+          asset_keys as (
+            select currency from creator_totals
+            union
+            select currency from platform_totals
+            union
+            select currency from referral_totals
           )
           select
-            (
-              select coalesce(sum(amount_minor), 0)
-              from payment_ledger_entries
-              where account_user_id = ${dashboard.id}
-                and account_kind = 'creator_earning'
-                and state = 'posted'
-            ) as creator_earnings_minor,
-            (
-              select coalesce(sum(ple.amount_minor), 0)
-              from payment_ledger_entries ple
-              join creator_payments cp on cp.payment_intent_id = ple.payment_intent_id
-              where ple.account_kind = 'platform_fee'
-                and ple.state = 'posted'
-            ) as platform_fees_minor,
-            (
-              select coalesce(sum(amount_minor), 0)
-              from referral_commissions
-              where referrer_user_id = ${dashboard.id}
-                and state in ('pending', 'posted', 'earned')
-            ) as referral_commissions_minor,
+            assets.currency,
+            coalesce(creator.amount_minor, 0) as creator_earnings_minor,
+            coalesce(platform.amount_minor, 0) as platform_fees_minor,
+            coalesce(referral.amount_minor, 0) as referral_commissions_minor,
             (
               select count(*)
-              from creator_payments
+              from creator_payments payments
+              where payments.currency = assets.currency
             ) as confirmed_payment_count
+          from asset_keys assets
+          left join creator_totals creator using (currency)
+          left join platform_totals platform using (currency)
+          left join referral_totals referral using (currency)
+          order by assets.currency
         `,
         sql<ProductRow[]>`
           with creator_targets as (
@@ -113,13 +134,14 @@ export function createProfileDashboardRepositoryMethods(
           )
           select
             case when pi.product_type = 'tip' then 'support' else pi.product_type end as product_type,
+            pi.currency,
             coalesce(sum(pi.amount_minor), 0) as amount_minor,
             count(*) as confirmed_payment_count
           from payment_intents pi
           join creator_targets ct on ct.id = pi.target_id
           where pi.state = 'confirmed'
-          group by case when pi.product_type = 'tip' then 'support' else pi.product_type end
-          order by case when pi.product_type = 'tip' then 'support' else pi.product_type end
+          group by case when pi.product_type = 'tip' then 'support' else pi.product_type end, pi.currency
+          order by case when pi.product_type = 'tip' then 'support' else pi.product_type end, pi.currency
         `,
         sql<RecentPaymentRow[]>`
           with creator_targets as (
@@ -147,7 +169,7 @@ export function createProfileDashboardRepositoryMethods(
         `
       ]);
 
-      return toCreatorDashboard(dashboard, earningsRows[0], productRows, recentPaymentRows);
+      return toCreatorDashboard(dashboard, earningsRows, productRows, recentPaymentRows);
     },
     async getMyCreatorOnboarding(userId) {
       const rows = await sql<CreatorOnboardingRow[]>`
@@ -202,12 +224,7 @@ export function createProfileDashboardRepositoryMethods(
             when vr.status = 'pending' then 'pending'
             else 'failed'
           end as state
-          from verification_records vr
-          where vr.subject_type = 'user'
-            and vr.subject_id = u.id
-            and vr.purpose = 'age_access'
-          order by vr.created_at desc, vr.id desc
-          limit 1
+          from private.current_verification_decision('user', u.id, 'age_access') vr
         ) latest_age on true
         left join lateral (
           select w.id
@@ -321,16 +338,9 @@ export function createProfileDashboardRepositoryMethods(
           expires_at: Date | null;
         }[]>`
           select status, assurance_level, expires_at
-          from verification_records
-          where subject_type = 'user'
-            and subject_id = ${identity.id}
-            and purpose = 'creator_kyc'
-          order by (
-            status = 'valid'
-            and assurance_level in ('high', 'documentary')
-            and (expires_at is null or expires_at > now())
-          ) desc, created_at desc, id desc
-          limit 1
+          from private.current_verification_decision(
+            'user', ${identity.id}, 'creator_kyc'
+          )
         `;
         const kyc = kycRows[0];
         const kycState = resolveCreatorOnboardingKycState(kycRequired, kyc);
@@ -343,15 +353,12 @@ export function createProfileDashboardRepositoryMethods(
         }[]>`
           select
             (p.handle is not null) as has_profile,
-            exists (
-              select 1 from verification_records vr
-              where vr.subject_type = 'user'
-                and vr.subject_id = u.id
-                and vr.purpose = 'age_access'
-                and vr.status = 'valid'
+            coalesce((
+              select vr.status = 'valid'
                 and vr.result_over_threshold is true
                 and (vr.expires_at is null or vr.expires_at > now())
-            ) as age_verified,
+              from private.current_verification_decision('user', u.id, 'age_access') vr
+            ), false) as age_verified,
             cms.tax_profile_state,
             cms.state as settings_state
           from users u
@@ -431,12 +438,7 @@ export function createProfileDashboardRepositoryMethods(
               when vr.status = 'pending' then 'pending'
               else 'failed'
             end as state
-            from verification_records vr
-            where vr.subject_type = 'user'
-              and vr.subject_id = u.id
-              and vr.purpose = 'age_access'
-            order by vr.created_at desc, vr.id desc
-            limit 1
+            from private.current_verification_decision('user', u.id, 'age_access') vr
           ) latest_age on true
           left join lateral (
             select w.id from wallets w

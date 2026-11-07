@@ -101,6 +101,13 @@ export class ContentDraftPollCloseError extends Error {
   }
 }
 
+export class ContentFormatRetiredError extends Error {
+  constructor() {
+    super("content_format_retired");
+    this.name = "ContentFormatRetiredError";
+  }
+}
+
 export class ContentPollVoteConflictError extends Error {
   constructor(readonly reason: "idempotency_conflict" | "poll_closed") {
     super(reason);

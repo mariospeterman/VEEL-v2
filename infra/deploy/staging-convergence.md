@@ -49,19 +49,21 @@ pnpm staging:acceptance
 pnpm staging:report
 ```
 
-`staging:seed` accepts only existing canonical WeVid user IDs declared in `STAGING_FIXTURE_USERS_JSON`; it records every created resource in the server-only namespace ledger. Cleanup requires the exact `DELETE_FIXTURES:<namespace>` acknowledgement and deletes only ledger-owned resources. The acceptance runner is the machine-readable release source of truth in `docs/v2-new-build/operator/staging-acceptance.json`; generated Markdown is presentation only.
+`staging:seed` accepts only existing canonical WeVid user IDs declared in `STAGING_FIXTURE_USERS_JSON`; it records every created resource in the server-only namespace ledger. Cleanup requires the exact `DELETE_FIXTURES:<namespace>` acknowledgement and deletes only ledger-owned resources. The machine-readable manifest at `docs/v2-new-build/operator/staging-acceptance.json` defines journey requirements only; it never stores a result. Generated Markdown is presentation only. The acceptance runner records cloud-link, exact-manifest verification, named proof-plan, and staging-browser outcomes, then derives every journey from those outcomes plus the exact-release journey receipt described below.
+
+Runtime journey states are `PASS`, `FAIL`, `BLOCKED`, `NOT_RUN`, and `DEFERRED`. Missing receipts and skipped runs remain `NOT_RUN`; missing required capabilities or proof prerequisites remain `BLOCKED`; failed proofs or invalid/stale evidence remain `FAIL`. `DEFERRED` is allowed only for a manifest-declared optional capability while that capability is explicitly `DISABLED`. Overall acceptance is `PASS` only when every enabled journey is `PASS`, every other journey is a valid optional `DEFERRED`, and the command/proof gates have no failure, block, or not-run outcome.
 
 The staging workflow then verifies the exact source SHA, manifest fingerprint, contract digest, migration head, and all three GitHub OCI attestations. It must deploy those digests without rebuilding.
 
 ## 3. Evidence matrix
 
-After the exact images are deployed and migrations are applied through the approved remote migration procedure, run:
+After the exact images are deployed and migrations are applied through the approved remote migration procedure, the standalone proof diagnostic is:
 
 ```text
 pnpm staging:prove
 ```
 
-The command independently executes release-manifest, synthetic web/API, Bunny SFW TUS/playability, Enterprise, transactional-email, database restore, and Storage object restore proofs. Solana subscription proof runs only when the runtime's strict `SUBSCRIPTIONS_ENABLED=true` flag is set; when false it is reported as `PROOF_SKIPPED`. Enterprise remains required because the current runtime has no global fail-closed Enterprise-disable boundary. It also requires opaque, redacted evidence receipts for journeys that need provider dashboards, target devices, or operator observation:
+`staging:acceptance` executes this same named proof plan and stores its outcomes in the acceptance report; `staging:prove` remains useful as an independent diagnostic but cannot promote a journey by itself. The plan independently executes release-manifest, synthetic web/API, configured-Solana-RPC genesis/network, Bunny SFW TUS/playability, Enterprise, transactional-email, database restore, and Storage object restore proofs. The Solana network proof compares the private configured endpoint's `getGenesisHash` result with the official endpoint for the canonical `SOLANA_CLUSTER`; URLs and credentials are not printed. Solana subscription proof runs only when the runtime's strict `SUBSCRIPTIONS_ENABLED=true` flag is set; when false it is reported as `PROOF_SKIPPED`. Enterprise remains required because the current runtime has no global fail-closed Enterprise-disable boundary. It also requires opaque, redacted evidence receipts for journeys that need provider dashboards, target devices, or operator observation:
 
 - `STAGING_IDENTITY_WALLET_PROOF_ID`: external and embedded wallet login, link, session, logout, recovery, and collision denial;
 - `STAGING_VERIFICATION_PROOF_ID`: age plus purpose-separated creator KYC and organization KYB callbacks/replay denial;
@@ -84,11 +86,20 @@ Store these identifiers together in the protected `STAGING_EVIDENCE_BUNDLE_JSON`
   "manifestDigest": "sha256:<64 lowercase hex characters>",
   "receipts": {
     "STAGING_IDENTITY_WALLET_PROOF_ID": "opaque-redacted-reference"
+  },
+  "journeyOutcomes": {
+    "auth.continue_to_wevid": {
+      "status": "PASS",
+      "evidenceId": "opaque-redacted-journey-reference",
+      "manifestDigest": "sha256:<the same exact manifest digest>",
+      "releaseSha": "<the exact 40-character source SHA>",
+      "executedAt": "2026-11-04T12:00:00.000Z"
+    }
   }
 }
 ```
 
-The real bundle contains every baseline receipt listed above, including Enterprise, and the subscription receipt only when subscriptions are enabled. Each identifier is an opaque run, ticket, or artifact reference with no query string or secret. The bundle's `manifestDigest` must equal the exact `manifestDigest` in `RELEASE_MANIFEST_PATH`; staging and production validate every required receipt inside that same record, so receipts from an older release cannot be paired with a new digest. Exit `2` means required configuration or the bundle is absent. Exit `1` means a configured proof or bundle validation failed. Only exit `0` is a complete staging proof for that release.
+The real bundle contains every baseline receipt listed above, including Enterprise, and the subscription receipt only when subscriptions are enabled. It also contains one `journeyOutcomes` entry for every enabled journey that actually ran. A `PASS` entry requires an opaque redacted `evidenceId`; `FAIL`, `BLOCKED`, and `NOT_RUN` remain explicit outcomes and are never rewritten from the manifest. Each journey record repeats the exact manifest digest and source SHA, and the runner rejects a record whose binding differs from `RELEASE_MANIFEST_PATH`. An old or wrong-release receipt therefore fails instead of silently proving the current release. Each identifier is an opaque run, ticket, or artifact reference with no query string or secret. Exit `2` means required configuration/evidence is blocked or a journey did not run. Exit `1` means a configured command, proof, or journey failed. Only exit `0` with overall `PASS` is complete staging proof for that release.
 
 ## 4. Rollback and cleanup
 

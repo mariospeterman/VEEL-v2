@@ -83,17 +83,23 @@ describe("MCP tool registry", () => {
     expect(originEnum).not.toContain("human_created");
   });
 
-  it("redacts creator-authored text from durable tool-call audit input", () => {
+  it("keeps retired text and poll fields out of creator draft schemas and redacts captions", () => {
+    const draftTool = mcpToolDefinitions.find((tool) => tool.name === "creator_create_private_draft");
+    expect(draftTool).toBeDefined();
+    expect(draftTool!.inputSchema).not.toHaveProperty("properties.bodyText");
+    expect(draftTool!.inputSchema).not.toHaveProperty("properties.poll");
+    const mediaTypes = (draftTool!.inputSchema as {
+      properties: { mediaType: { enum: string[] } };
+    }).properties.mediaType.enum;
+    expect(mediaTypes).not.toContain("text");
+    expect(mediaTypes).not.toContain("poll");
+
     expect(redactedToolInput({
-      mediaType: "text",
-      caption: "private caption",
-      bodyText: "private body",
-      poll: { question: "private question" }
+      mediaType: "image",
+      caption: "private caption"
     })).toEqual({
-      mediaType: "text",
-      caption: "[redacted]",
-      bodyText: "[redacted]",
-      poll: "[redacted]"
+      mediaType: "image",
+      caption: "[redacted]"
     });
   });
 });

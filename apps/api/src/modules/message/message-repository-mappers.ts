@@ -22,6 +22,7 @@ export interface ConversationRow {
   last_sender_handle: string | null;
   last_sender_display_name: string | null;
   last_sender_avatar_url: string | null;
+  sort_at: Date;
 }
 
 export interface MessageRow {

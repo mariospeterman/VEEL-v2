@@ -1,13 +1,19 @@
+import { createECDH } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { serverEnvSchema } from "./index.js";
+import {
+  isPublicInternetAddress,
+  normalizeWebPushSubscription,
+  serverEnvSchema,
+  validateWebPushSubscription,
+  WebPushSubscriptionValidationError,
+  type WebPushDnsResolver
+} from "./index.js";
 
 const booleanKeys = [
   "SUBSCRIPTIONS_ENABLED",
   "SUBSCRIPTIONS_REQUIRE_ONCHAIN_VERIFICATION",
   "LIVEPEER_ADULT_LIVE_ENABLED",
   "AGE_VERIFICATION_ALLOW_MOCK_PROVIDER",
-  "AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED",
-  "AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS",
   "MCP_ENABLED",
   "MCP_REQUIRE_OAUTH",
   "MCP_ALLOW_STATIC_TOKENS_DEV",
@@ -37,5 +43,151 @@ describe("server boolean environment parsing", () => {
     expect(parsed.LIVEPEER_ADULT_LIVE_ENABLED).toBe(false);
     expect(parsed.AGE_VERIFICATION_ALLOW_MOCK_PROVIDER).toBe(false);
     expect(parsed.MCP_ENABLED).toBe(false);
+  });
+});
+
+describe("Solana environment authority", () => {
+  it("accepts only the approved six-decimal USDC contract", () => {
+    expect(serverEnvSchema.parse({
+      PAYMENT_USDC_DECIMALS: "6",
+      PAYMENT_USDC_MINT: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+    }).PAYMENT_USDC_DECIMALS)
+      .toBe(6);
+    expect(serverEnvSchema.safeParse({ PAYMENT_USDC_DECIMALS: "9" }).success)
+      .toBe(false);
+    expect(serverEnvSchema.safeParse({ PAYMENT_USDC_DECIMALS: "0" }).success)
+      .toBe(false);
+    expect(serverEnvSchema.safeParse({
+      SOLANA_CLUSTER: "devnet",
+      PAYMENT_USDC_MINT: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    }).success).toBe(false);
+    expect(serverEnvSchema.safeParse({
+      SOLANA_CLUSTER: "mainnet-beta",
+      SOLANA_RPC_URL: "https://mainnet-rpc.example",
+      PAYMENT_USDC_MINT: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+    }).success).toBe(true);
+  });
+
+  it("derives compatibility aliases from the canonical cluster", () => {
+    const parsed = serverEnvSchema.parse({
+      SOLANA_CLUSTER: "mainnet-beta",
+      SOLANA_RPC_URL: "https://mainnet-rpc.example"
+    });
+
+    expect(parsed.SOLANA_NETWORK).toBe("solana:mainnet");
+    expect(parsed.HELIUS_CLUSTER).toBe("mainnet-beta");
+    expect(parsed.SUBSCRIPTIONS_SOLANA_NETWORK).toBe("mainnet-beta");
+  });
+
+  it.each([
+    { SOLANA_CLUSTER: "devnet", SOLANA_NETWORK: "solana:mainnet" },
+    { SOLANA_CLUSTER: "devnet", NEXT_PUBLIC_SOLANA_CHAIN: "solana:mainnet" },
+    { SOLANA_CLUSTER: "mainnet-beta", HELIUS_CLUSTER: "devnet" },
+    { SOLANA_CLUSTER: "mainnet-beta", HELIUS_WEBHOOK_CLUSTER: "devnet" },
+    { SOLANA_CLUSTER: "mainnet-beta", SUBSCRIPTIONS_SOLANA_NETWORK: "devnet" }
+  ])("rejects contradictory aliases: %o", (environment) => {
+    const result = serverEnvSchema.safeParse(environment);
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain("Contradictory Solana environment");
+    }
+  });
+
+  it("does not infer a private RPC network from its hostname", () => {
+    const parsed = serverEnvSchema.parse({
+      SOLANA_CLUSTER: "mainnet-beta",
+      SOLANA_RPC_URL: "https://private-rpc.internal.example"
+    });
+
+    expect(parsed.SOLANA_CLUSTER).toBe("mainnet-beta");
+    expect(parsed.SOLANA_RPC_URL).toBe("https://private-rpc.internal.example");
+  });
+
+  it("fails closed when mainnet would inherit the devnet RPC default", () => {
+    expect(() => serverEnvSchema.parse({ SOLANA_CLUSTER: "mainnet-beta" }))
+      .toThrow(/SOLANA_RPC_URL must explicitly select an approved mainnet RPC/);
+  });
+});
+
+describe("web push subscription validation", () => {
+  const p256dh = createECDH("prime256v1").generateKeys().toString("base64url");
+  const auth = Buffer.alloc(16, 7).toString("base64url");
+  const publicResolver: WebPushDnsResolver = async () => [
+    { address: "8.8.8.8", family: 4 },
+    { address: "2606:4700:4700::1111", family: 6 }
+  ];
+
+  it.each([
+    "https://fcm.googleapis.com/fcm/send/browser-token",
+    "https://updates.push.services.mozilla.com/wpush/v2/browser-token",
+    "https://web.push.apple.com/QH5/browser-token"
+  ])("accepts a canonical supported push service endpoint: %s", async (endpoint) => {
+    await expect(
+      validateWebPushSubscription(
+        { endpoint, p256dh, auth },
+        { resolver: publicResolver }
+      )
+    ).resolves.toMatchObject({ endpoint, p256dh, auth });
+  });
+
+  it.each([
+    "http://fcm.googleapis.com/fcm/send/token",
+    "https://user@fcm.googleapis.com/fcm/send/token",
+    "https://fcm.googleapis.com:8443/fcm/send/token",
+    "https://fcm.googleapis.com/fcm/send/token#fragment",
+    "https://attacker.example/push/token",
+    "https://push.apple.com/token"
+  ])("rejects a noncanonical or unsupported endpoint: %s", (endpoint) => {
+    expect(() => normalizeWebPushSubscription({ endpoint, p256dh, auth })).toThrow(
+      WebPushSubscriptionValidationError
+    );
+  });
+
+  it("rejects mixed public and private DNS answers", async () => {
+    await expect(
+      validateWebPushSubscription(
+        {
+          endpoint: "https://fcm.googleapis.com/fcm/send/browser-token",
+          p256dh,
+          auth
+        },
+        {
+          resolver: async () => [
+            { address: "8.8.8.8", family: 4 },
+            { address: "169.254.169.254", family: 4 }
+          ]
+        }
+      )
+    ).rejects.toMatchObject({ code: "unsafe_push_service_address" });
+  });
+
+  it("requires canonical RFC 8291 key material", () => {
+    expect(() =>
+      normalizeWebPushSubscription({
+        endpoint: "https://fcm.googleapis.com/fcm/send/browser-token",
+        p256dh: Buffer.alloc(65, 4).toString("base64url"),
+        auth
+      })
+    ).toThrow(WebPushSubscriptionValidationError);
+    expect(() =>
+      normalizeWebPushSubscription({
+        endpoint: "https://fcm.googleapis.com/fcm/send/browser-token",
+        p256dh,
+        auth: Buffer.alloc(15, 7).toString("base64url")
+      })
+    ).toThrow(WebPushSubscriptionValidationError);
+  });
+
+  it.each([
+    ["127.0.0.1", 4],
+    ["10.0.0.1", 4],
+    ["100.64.0.1", 4],
+    ["::1", 6],
+    ["::ffff:127.0.0.1", 6],
+    ["fc00::1", 6],
+    ["fe80::1", 6]
+  ] as const)("classifies %s as non-public", (address, family) => {
+    expect(isPublicInternetAddress(address, family)).toBe(false);
   });
 });

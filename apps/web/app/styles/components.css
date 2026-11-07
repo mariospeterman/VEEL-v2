@@ -144,7 +144,7 @@
     background:
       repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.12) 0 1px, transparent 1px 4px),
       linear-gradient(135deg, var(--accent), var(--accent-3));
-    color: #04110c;
+    color: var(--accent-on-solid);
   }
 
   .secondary-button {

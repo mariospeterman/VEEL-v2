@@ -1,4 +1,8 @@
 import postgres from "postgres";
+import {
+  cursorTimestamp,
+  parseDatabaseDate
+} from "./database-timestamp.js";
 
 export type PostgresSql = postgres.Sql;
 export type PostgresTransaction = postgres.TransactionSql;
@@ -14,7 +18,18 @@ export function createPostgresClient(databaseUrl: string): PostgresSql {
   return postgres(databaseUrl, {
     max: 10,
     idle_timeout: 20,
-    prepare: false
+    prepare: false,
+    types: {
+      preciseDate: {
+        to: 1184,
+        from: [1082, 1114, 1184],
+        // Keep all timestamp parameters at database precision. Provider event
+        // ordering and cursor boundaries must not pass through Date#toISOString,
+        // which would silently discard their final three fractional digits.
+        serialize: (value: Date | string) => cursorTimestamp(value),
+        parse: parseDatabaseDate
+      }
+    }
   });
 }
 

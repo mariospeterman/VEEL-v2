@@ -1,0 +1,866 @@
+{
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "dccd8378dc23ebe4c904ed52a656206e5b7a22e9eb9b5e5d44aacffbb3529e70",
+      "bytes": 5677,
+      "lines": 101,
+      "method": "full text inherited context read",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          101
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-payment-commercial-policy-routes.ts",
+      "sha256": "537be38087ab8987d9ce19849142e0355f66404348b50bbc19e6425ca1bd1405",
+      "bytes": 5138,
+      "lines": 130,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          130
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-amounts.ts",
+      "sha256": "d48081706cd6795e95a576ab4ab1f765d38974677f0f2ce368cf2510cd21e464",
+      "bytes": 3635,
+      "lines": 105,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          105
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-evidence-repository.ts",
+      "sha256": "6bd6853212751eb7bc2ffc5038f0ca44deadda970a994355aef27fd34d4d7953",
+      "bytes": 4199,
+      "lines": 145,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          145
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-intent-routes.ts",
+      "sha256": "f3c94533cb91c398d70fcabe614f226660120c9163b44711ff8a0c0246670a60",
+      "bytes": 18188,
+      "lines": 530,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          530
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-repository-errors.ts",
+      "sha256": "0c101f6e8acc276333d6c6d6354e711ef7f582bb6fc7c16422ce4baf6b58cf45",
+      "bytes": 1302,
+      "lines": 46,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          46
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-repository.ts",
+      "sha256": "796099ddce7e2bc784d821414949f99f3c4e28f1012e8cdb0607f84648eb3034",
+      "bytes": 24301,
+      "lines": 653,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          653
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-route-shared.ts",
+      "sha256": "bb37eb17c4fef4f4048befa92ca28d56d578cbf7b3ae01666417803f34c74d14",
+      "bytes": 7437,
+      "lines": 221,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          221
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-routes.ts",
+      "sha256": "03814044c55f8629601aada3e457dab43a7c84e57ebf410add560157494d5fe6",
+      "bytes": 748,
+      "lines": 16,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          16
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-submission.ts",
+      "sha256": "44b4ed29612e9a607c074d79986d172121dde41459014d4a3071de8fef44ae76",
+      "bytes": 7560,
+      "lines": 191,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          191
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/solana-payment.ts",
+      "sha256": "406ea665dda2d099670f88b1e82b5063d4923f4f4d4bdd9802b05ebe5c456d65",
+      "bytes": 12834,
+      "lines": 462,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          462
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/referral/referral-repository.ts",
+      "sha256": "b98e5840ad8dab3606826b16af5ff415493d5e1230659a092905c9160d3e6702",
+      "bytes": 4965,
+      "lines": 170,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          170
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/referral/referral-routes.ts",
+      "sha256": "79d55af5404dfa8f30376c3c075344a7e1fd6e07b0a6f1837dfb7a223fa2e68a",
+      "bytes": 6682,
+      "lines": 224,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          224
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/referral/types.ts",
+      "sha256": "7b887d3de2e7fc76e83cbf00003ccd5358b1cbee7b54f8c0d281e86aafc40116",
+      "bytes": 879,
+      "lines": 28,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          28
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/solana/token-program.ts",
+      "sha256": "266ee68c262fb8d34dbcfdd0c91b9eebd0673ec5de78c0353b41793c9de4eef2",
+      "bytes": 2906,
+      "lines": 86,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          86
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/creator-membership-offer-repository.ts",
+      "sha256": "c53fcda1579f31f8884d4f6a21aa0870061271eeb38bbe53b7906b02d83814b5",
+      "bytes": 9595,
+      "lines": 207,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          207
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/platform-access-repository.ts",
+      "sha256": "0398b23e654539508e8e241987d0f0af9d844b0cface3a931343f636828dd34e",
+      "bytes": 18747,
+      "lines": 536,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          536
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/platform-usage-routes.ts",
+      "sha256": "cd3e9169c006f13508c33b1963683a50ddac44a93accea9b31f5b0711c957cdd",
+      "bytes": 5398,
+      "lines": 148,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          148
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-authorization-intent-repository.ts",
+      "sha256": "761cad6b9160bd8519111fa1f7bd70fe256c42547d3efa650347cd8e5baa6e16",
+      "bytes": 9065,
+      "lines": 325,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          325
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-authorization-repository.ts",
+      "sha256": "021b4d0da36788849017f8a48b968ba3678034a8b48292a896b26cc0f02f5154",
+      "bytes": 1075,
+      "lines": 33,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          33
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-authorization-transaction.ts",
+      "sha256": "dbc0dee983038408433e0e6601e80f08f9786759d6d95e74159754f3979bf74b",
+      "bytes": 5433,
+      "lines": 156,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          156
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-authorization-verification-repository.ts",
+      "sha256": "886329ed1b6f8f5e3a1cac736b3ecf6e4f529e9e023245a5dfe67a0cb2a8e58c",
+      "bytes": 10420,
+      "lines": 264,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          264
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-cancellation-repository.ts",
+      "sha256": "78fd976478b8da8aa416ed3cb19b498a0e6f135c72b69412ea8f83bc43f5245c",
+      "bytes": 6200,
+      "lines": 172,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          172
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-errors.ts",
+      "sha256": "ce7134360e8aaabd8a4c7fea3a65a500c5d8dc976c73cf942357c3da2cf076bf",
+      "bytes": 1105,
+      "lines": 41,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          41
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-provider-config.ts",
+      "sha256": "2e46b04825547c7dd3cefa3fd85e1da7d0f1efbef8599da932766992b537ef09",
+      "bytes": 3141,
+      "lines": 97,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          97
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-repository-mappers.ts",
+      "sha256": "7aa75ca589e2ddfc4fda9b67f7d1a93c803bb0f8a5f52436afe26e99a1c8fa67",
+      "bytes": 4070,
+      "lines": 123,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          123
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-repository-rows.ts",
+      "sha256": "926e5bcbfc14d1b1ddb5fb88c21a438a6936037bcc36e98c468e9e10400a379a",
+      "bytes": 2008,
+      "lines": 64,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          64
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-repository-support.ts",
+      "sha256": "03ae9f67acbcffc347cf68db9603964a12af920c46268f5edc374f898c878f4e",
+      "bytes": 2413,
+      "lines": 94,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          94
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-repository.ts",
+      "sha256": "ba97a3dd1a32b8fab080310af6e1feb389680f790c38414382bd5487f2864324",
+      "bytes": 5610,
+      "lines": 171,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          171
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-route-utils.ts",
+      "sha256": "98b98a4696c43d69aa37a12130e5a24d4ea1aaead35d099b2410039ebd11a846",
+      "bytes": 4192,
+      "lines": 148,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          148
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-routes.ts",
+      "sha256": "13cc0a67f396df3ca7ff0113fa1529fd6339c5bbf8bd8be93439487b01b39b93",
+      "bytes": 19236,
+      "lines": 477,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          477
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/subscription-verifier.ts",
+      "sha256": "052d2f52dd7730286ab639e8459da06d0ed679b23825a10298f936d963a46717",
+      "bytes": 8674,
+      "lines": 191,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          191
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/subscription/types.ts",
+      "sha256": "bfa25129a6a12d06648eb7461bbeb4cb36356c9a10cbc44e236265eeb6cb7ba7",
+      "bytes": 7251,
+      "lines": 221,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          221
+        ]
+      ]
+    },
+    {
+      "path": "apps/worker/scripts/prove-solana-subscriptions.mjs",
+      "sha256": "14dd9f95797eba29815bd600160e8001585423cbd1392a9e926df94ec0802a1c",
+      "bytes": 4829,
+      "lines": 117,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          117
+        ]
+      ]
+    },
+    {
+      "path": "apps/worker/src/payment-confirmation-email-smoke.ts",
+      "sha256": "08587e206d4d8bf8d57c9e54824d299116398a4e86a919acb32683e0d31e9ec2",
+      "bytes": 1561,
+      "lines": 47,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          47
+        ]
+      ]
+    },
+    {
+      "path": "apps/worker/src/payment-confirmation-email.ts",
+      "sha256": "09a9fe63cec23e0331b86d1e2f096d25ad8af6fb8f346917a99174181182a198",
+      "bytes": 12574,
+      "lines": 387,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          387
+        ]
+      ]
+    },
+    {
+      "path": "apps/worker/src/subscription-collections.ts",
+      "sha256": "30cfd3786eca783e140dbccfb5293f452f01a08e39835e22b0138cd4180bf744",
+      "bytes": 34372,
+      "lines": 953,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          953
+        ]
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0098_recurring_membership_authority.sql",
+      "sha256": "a093350a520832a807df04b60f185cd11acfda10d45f091790aa9c35b8d04533",
+      "bytes": 2607,
+      "lines": 62,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments",
+      "ranges": [
+        [
+          1,
+          62
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-commercial-policy.ts",
+      "sha256": "e83e835fb23f8101d18be3e1838842539b88033717afed8b5ea6435a68a23289",
+      "bytes": 1956,
+      "lines": 61,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          61
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-commercial-policy-repository.ts",
+      "sha256": "8c969478f41cfaf4ff1ef9836720c770eb0856f27879d4d452aa214586174d61",
+      "bytes": 7840,
+      "lines": 219,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          219
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-creator-commercial-settlement.ts",
+      "sha256": "2a5fec9b75f1d4789a2e60e680efbe51a0762eab82107580ee985c0f0ac79b81",
+      "bytes": 7309,
+      "lines": 161,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          161
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-durable-confirmation.ts",
+      "sha256": "1f936f33c2b6e841e5cd237d1fa3563a11f7975e891b40b38f78d0445590e7a2",
+      "bytes": 12124,
+      "lines": 389,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          389
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-entitlement-settlement.ts",
+      "sha256": "3ae2a2e8d26839e3075e4514d308aee164680786aaf61fd759902565c6187a28",
+      "bytes": 4894,
+      "lines": 216,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          216
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-event-access-pass-settlement.ts",
+      "sha256": "5a96820d8f11729fed1f279705ff294363617097de9c8dfc411591d0268f8d6a",
+      "bytes": 5694,
+      "lines": 183,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          183
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-paid-message-settlement.ts",
+      "sha256": "5732f2d2984d0a854d210727b5ab0b764f4067af4a9820d46cfeecfc3b10e994",
+      "bytes": 6856,
+      "lines": 203,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          203
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-intent-mapper.ts",
+      "sha256": "2b56890ac089f626294521731b36afaa57a157535f9b96afb663995b2bcdf14e",
+      "bytes": 4552,
+      "lines": 104,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          104
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-settlement-ledger.ts",
+      "sha256": "2c6d65d7670c6d8d2cfef10b8299bf67a36d2568523afb27ce5d0dabb204e88b",
+      "bytes": 4494,
+      "lines": 187,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          187
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-settlement-records.ts",
+      "sha256": "c0220cc1c3847e9d32a55c65238d04a436d937d5f513b2599eccd99ec1dfa5dc",
+      "bytes": 2303,
+      "lines": 87,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          87
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-content-unlock-routes.ts",
+      "sha256": "ad6514fb77a3f40dd05a59c2d9cf4e44e4e4cf232aaae033d03689b1efc73a42",
+      "bytes": 5004,
+      "lines": 137,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          137
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/payment-webhook-routes.ts",
+      "sha256": "f6ad98fb88169731006a909a287973223f2c872aae2d80cd80cf8e3fcfda79a8",
+      "bytes": 6409,
+      "lines": 193,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          193
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/solana-pay-codec.ts",
+      "sha256": "032bc7324e1de7f3378737b291355dde079a358c86e4433e173bfc836198c237",
+      "bytes": 3000,
+      "lines": 101,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          101
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/src/modules/payment/types.ts",
+      "sha256": "e220a1e623a3fdeb1e52ab2439b87e03f69a3d0c86bd6270db2e126b64121708",
+      "bytes": 7192,
+      "lines": 210,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          210
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/test/payment-commercial-policy.test.ts",
+      "sha256": "0ce7eb6e0b3597bf155bd1e05ee49b133b046c83b5fa77dc7b5d0ead3eb106a5",
+      "bytes": 2392,
+      "lines": 41,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          41
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/test/payment-creator-commercial-settlement.test.ts",
+      "sha256": "3766c98fedacf2580a99eb18df126e8638c6a656176795a92e81dc2ee8dcf051",
+      "bytes": 4621,
+      "lines": 119,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          119
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/test/payment-evidence-repository.test.ts",
+      "sha256": "d2d581640004ec13c1b719988dc7fffcdea1225510b85b5b4f84a2b51bd92ea3",
+      "bytes": 2379,
+      "lines": 50,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          50
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/test/payment-submission.test.ts",
+      "sha256": "f1fb542219dd05eb803abe9f8773a85c58b234046c5d2419c415c2ba096f6e2e",
+      "bytes": 1505,
+      "lines": 38,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          38
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/test/solana-pay-codec.test.ts",
+      "sha256": "bcc53631a604cebb2c4dab93630154904c02b8f9d5040c24a22a5bf0578787cb",
+      "bytes": 1913,
+      "lines": 53,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          53
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/test/subscription-authorization-transaction.test.ts",
+      "sha256": "94896e466285fd1fa54e76af6fe9ef63b9b2f7db43e9f12b4d509f380ef8746a",
+      "bytes": 3106,
+      "lines": 64,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          64
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/test/subscription-verifier.test.ts",
+      "sha256": "a3fba33226aa04da5a5dc9aab4ea7f0a8c95350fb9b67f36c1f61b8bbb0efd04",
+      "bytes": 3871,
+      "lines": 111,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          111
+        ]
+      ]
+    },
+    {
+      "path": "apps/api/test/payment-solana.test.ts",
+      "sha256": "30973e7677fbd365b80f5b70b5599dbb561207b0534f0c279b7ee91267a81d16",
+      "bytes": 17254,
+      "lines": 503,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          503
+        ]
+      ]
+    },
+    {
+      "path": "apps/web/next.config.ts",
+      "sha256": "350ce8a662603033b6d879890ef37dd6f93a3f6a99c63e4e8c57c36fbd6d4ac3",
+      "bytes": 3767,
+      "lines": 102,
+      "method": "full text independent reread",
+      "reviewer": "verify_payments/money_secondary",
+      "ranges": [
+        [
+          1,
+          102
+        ]
+      ]
+    }
+  ],
+  "full_read_source_count": 61,
+  "bytes": 406462,
+  "additional_review_owner": "verify_payments/money_secondary completed",
+  "prior_cross_domain_partial_ranges": "Not independently reread here; retain original aggregate audit methods",
+  "original_assigned_full_file_count": 60,
+  "additional_full_file_count": 1,
+  "additional_review_report": "verification-money-secondary.md"
+}

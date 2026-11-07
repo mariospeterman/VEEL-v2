@@ -4,7 +4,9 @@ import { EventRepositoryConfigurationError } from "./event-errors.js";
 import { toAccessPassType } from "./event-repository-mappers.js";
 import type { EventRow, AccessPassTypeRow } from "./event-repository-rows.js";
 
-export function eventSelectSql(sql: postgres.Sql) {
+type EventQueryable = postgres.Sql | postgres.TransactionSql;
+
+export function eventSelectSql(sql: EventQueryable) {
   return sql`
     select
       e.id,
@@ -24,7 +26,7 @@ export function eventSelectSql(sql: postgres.Sql) {
 }
 
 export async function eventFromRows(
-  sql: postgres.Sql,
+  sql: EventQueryable,
   rows: EventRow[],
   requestHash?: string
 ): Promise<Event & { requestHash?: string }> {

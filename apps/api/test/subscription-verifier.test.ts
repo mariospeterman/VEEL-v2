@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { parseServerEnv } from "@veel/config";
-import { createSolanaSubscriptionAuthorizationVerifier } from "../src/modules/subscription/subscription-verifier";
+import {
+  classifySubscriptionAuthorizationSignatureStatus,
+  createSolanaSubscriptionAuthorizationVerifier,
+  validateSubscriptionAccountLinkage
+} from "../src/modules/subscription/subscription-verifier";
 
 const programId = "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44";
 const wallet = "11111111111111111111111111111111";
@@ -66,6 +70,94 @@ describe("createSolanaSubscriptionAuthorizationVerifier", () => {
       failureCode: "intent_expired"
     });
   });
+
+  it("lets a previously accepted exact signature outlive the short intent window", async () => {
+    const verifier = createSolanaSubscriptionAuthorizationVerifier();
+
+    await expect(verifier.verifyAuthorization(validInput({
+      expiresAt: new Date("2026-01-01T00:00:00.000Z"),
+      acceptedAt: new Date("2025-12-31T23:59:59.000Z")
+    }))).resolves.toMatchObject({
+      verified: false,
+      failureCode: "provider_not_configured",
+      retryable: true
+    });
+  });
+});
+
+describe("classifySubscriptionAuthorizationSignatureStatus", () => {
+  it("keeps not-found and not-yet-finalized observations retryable", () => {
+    expect(classifySubscriptionAuthorizationSignatureStatus(null)).toEqual({
+      verified: false,
+      failureCode: "transaction_not_found",
+      retryable: true
+    });
+    expect(classifySubscriptionAuthorizationSignatureStatus({
+      confirmationStatus: "confirmed",
+      err: { InstructionError: [0, "Custom"] }
+    })).toEqual({
+      verified: false,
+      failureCode: "transaction_pending",
+      retryable: true
+    });
+  });
+
+  it("distinguishes a finalized chain failure from a finalized success", () => {
+    expect(classifySubscriptionAuthorizationSignatureStatus({
+      confirmationStatus: "finalized",
+      err: { InstructionError: [0, "Custom"] }
+    })).toEqual({
+      verified: false,
+      failureCode: "transaction_failed",
+      retryable: false
+    });
+    expect(classifySubscriptionAuthorizationSignatureStatus({
+      confirmationStatus: "finalized",
+      err: null
+    })).toBeNull();
+  });
+});
+
+describe("validateSubscriptionAccountLinkage", () => {
+  const linked = {
+    authority: { user: wallet, tokenMint: mint, initId: 7n },
+    delegation: {
+      delegator: wallet,
+      delegatee: wallet,
+      initId: 7n,
+      subscriptionAuthority: programId,
+      mint
+    },
+    tokenAccount: {
+      owner: wallet,
+      mint,
+      delegate: programId,
+      delegatedAmount: 15_000_000n,
+      initialized: true
+    },
+    expected: {
+      subscriberWallet: wallet,
+      collectorAddress: wallet,
+      tokenMint: mint,
+      authorityAddress: programId,
+      amountAtomic: 15_000_000n
+    }
+  };
+
+  it("accepts one exact authority/delegation/token linkage", () => {
+    expect(validateSubscriptionAccountLinkage(linked)).toBeNull();
+  });
+
+  it("rejects mismatched init IDs and insufficient delegated allowance", () => {
+    expect(validateSubscriptionAccountLinkage({
+      ...linked,
+      authority: { ...linked.authority, initId: 8n }
+    })).toBe("authority_init_mismatch");
+    expect(validateSubscriptionAccountLinkage({
+      ...linked,
+      tokenAccount: { ...linked.tokenAccount, delegatedAmount: 14_999_999n }
+    })).toBe("delegated_allowance_mismatch");
+  });
 });
 
 function configuredEnv() {
@@ -96,9 +188,10 @@ function validInput(overrides = {}) {
     tokenMint: mint,
     tokenProgram: "spl_token" as const,
     amountMinor: 15_000_000,
-    amountAtomic: 15_000_000,
+    amountAtomic: "15000000",
     periodDays: 30,
     periodSeconds: 2_592_000,
+    delegationNonce: 1,
     delegationExpiresAt: new Date("2027-12-01T00:00:00.000Z"),
     provider: "official_solana_subscription_program",
     planId: "platform_plus_monthly",

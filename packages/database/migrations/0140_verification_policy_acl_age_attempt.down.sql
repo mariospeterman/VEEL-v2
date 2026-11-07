@@ -1,0 +1,6 @@
+-- Browser-role revocation, current-decision convergence, and the bounded
+-- eligibility overload are intentionally retained during an application
+-- rollback. Restoring historical valid-first readers or broad direct-table
+-- grants would recreate a reviewed authorization defect.
+-- The capture/upload/distribution performer-consent readiness requirement is
+-- retained for the same reason; removing it would authorize unagreed distribution.

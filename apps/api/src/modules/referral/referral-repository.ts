@@ -1,6 +1,15 @@
 import { randomUUID } from "node:crypto";
+import {
+  bindCursorScope,
+  decodeTimestampKindIdCursor,
+  encodeTimestampKindIdCursor,
+  keysetPage
+} from "../../shared/keyset-pagination.js";
 import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
-import type { ActivityPage, ReferralRepository } from "./types.js";
+import type { ReferralActivityPage, ReferralRepository } from "./types.js";
+
+const referralActivityCursorScope = "GET /v1/referrals/activity";
+const referralActivityKinds = ["share", "commission"] as const;
 
 export class ReferralRepositoryConfigurationError extends Error {
   constructor() {
@@ -25,10 +34,11 @@ interface ReferralTokenRow {
 
 interface ReferralActivityRow {
   id: string;
+  activity_type: "share" | "commission";
   token: string;
-  target_type: string;
+  target_type: "content" | "profile" | "event";
   target_id: string;
-  eligibility: string;
+  eligibility: "external_share" | "partner_campaign" | "not_commissionable";
   state: string;
   created_at: Date;
   commission_amount_minor: number | null;
@@ -122,33 +132,91 @@ export function createPostgresReferralRepository(database?: string | PostgresSql
       };
     },
     async listActivity(input) {
+      const cursorScope = bindCursorScope(referralActivityCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,activity_type:desc,id:desc"
+      });
+      const cursor = decodeTimestampKindIdCursor(
+        cursorScope,
+        input.cursor,
+        referralActivityKinds
+      );
       const rows = await sql<ReferralActivityRow[]>`
+        with target_user as (
+          select id
+          from users
+          where supabase_user_id = ${input.supabaseUserId}
+          limit 1
+        ),
+        referral_activity as (
+          select
+            rt.id,
+            'share'::text as activity_type,
+            rt.token,
+            rt.target_type,
+            rt.target_id,
+            rt.eligibility,
+            rt.state,
+            rt.created_at,
+            null::bigint as commission_amount_minor,
+            null::text as currency
+          from referral_tokens rt
+          join target_user tu on tu.id = rt.creator_user_id
+
+          union all
+
+          select
+            rc.id,
+            'commission'::text as activity_type,
+            rt.token,
+            rt.target_type,
+            rt.target_id,
+            rt.eligibility,
+            rc.state,
+            rc.created_at,
+            rc.amount_minor as commission_amount_minor,
+            rc.currency
+          from referral_commissions rc
+          join referral_tokens rt on rt.id = rc.referral_token_id
+          join target_user tu on tu.id = rt.creator_user_id
+        )
         select
-          rt.id,
-          rt.token,
-          rt.target_type,
-          rt.target_id,
-          rt.eligibility,
-          rt.state,
-          rt.created_at,
-          rc.amount_minor as commission_amount_minor,
-          rc.currency
-        from referral_tokens rt
-        join users u on u.id = rt.creator_user_id
-        left join referral_commissions rc on rc.referral_token_id = rt.id
-        where u.supabase_user_id = ${input.supabaseUserId}
-          and (${input.cursor ?? null}::timestamptz is null or rt.created_at < ${input.cursor ?? null}::timestamptz)
-        order by rt.created_at desc
+          activity.id,
+          activity.activity_type,
+          activity.token,
+          activity.target_type,
+          activity.target_id,
+          activity.eligibility,
+          activity.state,
+          activity.created_at,
+          activity.commission_amount_minor,
+          activity.currency
+        from referral_activity activity
+        where (
+            ${cursor.timestamp}::timestamptz is null
+            or activity.created_at < ${cursor.timestamp}::timestamptz
+            or (
+              activity.created_at = ${cursor.timestamp}::timestamptz
+              and (
+                ${cursor.kind}::text is null
+                or activity.activity_type < ${cursor.kind}::text
+                or (
+                  activity.activity_type = ${cursor.kind}::text
+                  and (${cursor.id}::uuid is null or activity.id < ${cursor.id}::uuid)
+                )
+              )
+            )
+          )
+        order by activity.created_at desc, activity.activity_type desc, activity.id desc
         limit ${input.limit + 1}
       `;
-      const pageRows = rows.slice(0, input.limit);
-      const nextRow = rows[input.limit];
 
-      return {
-        items: pageRows.map((row) => ({
+      return keysetPage(
+        rows,
+        input.limit,
+        (row) => ({
           id: row.id,
-          kind: "referral",
-          title: "Referral share",
+          activityType: row.activity_type,
           state: row.state,
           createdAt: row.created_at.toISOString(),
           token: row.token,
@@ -157,9 +225,14 @@ export function createPostgresReferralRepository(database?: string | PostgresSql
           eligibility: row.eligibility,
           commissionAmountMinor: row.commission_amount_minor,
           ...(row.currency ? { currency: row.currency } : {})
-        })),
-        nextCursor: nextRow ? nextRow.created_at.toISOString() : null
-      } satisfies ActivityPage;
+        }),
+        (row) => encodeTimestampKindIdCursor(
+          cursorScope,
+          row.created_at,
+          row.activity_type,
+          row.id
+        )
+      ) satisfies ReferralActivityPage;
     },
     async close() {
       if (ownsClient) {

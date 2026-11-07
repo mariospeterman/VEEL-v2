@@ -42,9 +42,12 @@ export async function registerMessageRoutes(
     }
 
     try {
+      const cursor = readCursor(request.query);
       return reply.code(200).send(
         await options.messageRepository.listConversations({
-          supabaseUserId: access.supabaseUserId
+          supabaseUserId: access.supabaseUserId,
+          limit: 50,
+          ...(cursor ? { cursor } : {})
         })
       );
     } catch (error) {
@@ -177,11 +180,14 @@ export async function registerMessageRoutes(
     }
 
     const conversationId = (request.params as { conversationId?: string }).conversationId ?? "";
+    const cursor = readCursor(request.query);
 
     try {
       const page = await options.messageRepository.listMessages({
         supabaseUserId: access.supabaseUserId,
-        conversationId
+        conversationId,
+        limit: 50,
+        ...(cursor ? { cursor } : {})
       });
 
       if (!page) {
@@ -204,6 +210,14 @@ export async function registerMessageRoutes(
 
     if (!access.ok) {
       return reply.code(access.statusCode).send(access.body);
+    }
+
+    const expectedActorId = request.headers["x-wevid-expected-actor-id"];
+    if (typeof expectedActorId !== "string" || !uuidPattern.test(expectedActorId)) {
+      return reply.code(400).send(validationResponse("X-WeVid-Expected-Actor-Id header is required"));
+    }
+    if (expectedActorId !== access.userId) {
+      return reply.code(409).send(conflictResponse("Authenticated account changed; reload messages before sending"));
     }
 
     const idempotencyKey = requiredIdempotencyKey(request);
@@ -300,6 +314,11 @@ export async function registerMessageRoutes(
     updateReaction(false)
   );
 
+}
+
+function readCursor(query: unknown): string | undefined {
+  const cursor = (query as { cursor?: unknown } | null)?.cursor;
+  return typeof cursor === "string" && cursor.length > 0 ? cursor : undefined;
 }
 
 function messageMutationErrorReply(

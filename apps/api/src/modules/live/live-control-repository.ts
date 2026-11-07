@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import {
+  bindCursorScope,
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
+  keysetPage
+} from "../../shared/keyset-pagination.js";
 import { LiveControlIdempotencyConflictError } from "./live-errors.js";
 import { toLiveRoom } from "./live-repository-mappers.js";
 import type { LiveRoomRow } from "./live-repository-rows.js";
@@ -15,6 +21,8 @@ interface ControlRow {
   provider_stream_id: string | null;
 }
 
+const ownedRoomsCursorScope = "live:owned-rooms";
+
 export function createLiveControlRepositoryMethods(
   sql: postgres.Sql
 ): Pick<
@@ -28,17 +36,34 @@ export function createLiveControlRepositoryMethods(
 > {
   return {
     async listOwnedRooms(input) {
+      const cursorScope = bindCursorScope(ownedRoomsCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<LiveRoomRow[]>`
         with target_user as (
           select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
         )
         ${liveRoomSelectSql(sql)}
         where lr.creator_user_id = (select id from target_user)
-        order by lr.created_at desc
-        limit 20
+          and (
+            ${cursor.timestamp}::timestamptz is null
+            or (lr.created_at, lr.id) < (
+              ${cursor.timestamp}::timestamptz,
+              coalesce(${cursor.id}::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)
+            )
+          )
+        order by lr.created_at desc, lr.id desc
+        limit ${input.limit + 1}
       `;
 
-      return { items: rows.map(toLiveRoom), nextCursor: null };
+      return keysetPage(
+        rows,
+        input.limit,
+        toLiveRoom,
+        (row) => encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async revealHostConnection(input) {
       return sql.begin(async (transaction) => {

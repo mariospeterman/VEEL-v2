@@ -1,0 +1,533 @@
+{
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "reviewer": "auth_security_audit",
+  "as_of": "2026-11-04",
+  "method": "Full text read and cross-file static tracing; standalone source probes where noted; no blanket full-repository claim",
+  "full_text_review": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 5677,
+      "sha256": "dccd8378dc23ebe4c904ed52a656206e5b7a22e9eb9b5e5d44aacffbb3529e70"
+    },
+    {
+      "path": "apps/api/src/app.ts",
+      "bytes": 6804,
+      "sha256": "15c6e53af76df1cb9b6509298cabaad95804b56d36774041f24623867f687ecc"
+    },
+    {
+      "path": "apps/api/src/app-routes.ts",
+      "bytes": 7718,
+      "sha256": "5bbfc11ee2563a15d3cc0ff86d4d139d6aea494be7ad378239f3768a02101f94"
+    },
+    {
+      "path": "apps/api/src/shared/idempotency.ts",
+      "bytes": 2080,
+      "sha256": "64e517e9b32ca01a5fd7fdc17f6076797c5003f4f4cad277dc16680d65a261f9"
+    },
+    {
+      "path": "apps/api/src/shared/openapi-route-schema.ts",
+      "bytes": 4535,
+      "sha256": "1f4bfccc276de9ffdb2f9620087f95e7765f7e08e82d12fcecc32e191bf434c3"
+    },
+    {
+      "path": "apps/api/src/shared/postgres.ts",
+      "bytes": 1018,
+      "sha256": "14fac5963ec818637a71e63122fcfb7c5c0ccedcd9937f9b6f008c2a3a07d649"
+    },
+    {
+      "path": "apps/api/src/shared/provider-event-order.ts",
+      "bytes": 3036,
+      "sha256": "f306076ab509d43750d9a02bba98d077a9b3bd7dd6f463897dfed9fe90f8cba9"
+    },
+    {
+      "path": "apps/api/src/shared/rate-limits.ts",
+      "bytes": 1243,
+      "sha256": "171a4d1a0733ee43e52033cc40df879845503fb47ceb253bae7350f8a0ea67c3"
+    },
+    {
+      "path": "apps/api/src/modules/auth/http-auth.ts",
+      "bytes": 1980,
+      "sha256": "e285bd79661a63c03b73e22baf0b1914c9991c8c0d5a6906b4cc61d47cf99c33"
+    },
+    {
+      "path": "apps/api/src/modules/auth/wallet-auth-routes.ts",
+      "bytes": 15163,
+      "sha256": "7edd0c396400e03b8ce0e3095f54b89334dfcaac5adfe088109250649178f6ed"
+    },
+    {
+      "path": "apps/api/src/modules/auth/wallet-auth-repository.ts",
+      "bytes": 24551,
+      "sha256": "ca98022dab05a0a8314ca5e7bc101558ac409fe8e8a6b6ea4495835f5ba8abc6"
+    },
+    {
+      "path": "apps/api/src/modules/session/session-routes.ts",
+      "bytes": 4378,
+      "sha256": "0c9e65247ba50016520f2c7563de2b38ff935fca5c6ddea22c8839dd13831dd9"
+    },
+    {
+      "path": "apps/api/src/modules/session/supabase-auth.ts",
+      "bytes": 1841,
+      "sha256": "c69e36fb4dca54f16f698eb66239de7c0182ab4106af634d6d49a94a2fdecee2"
+    },
+    {
+      "path": "apps/api/src/modules/age/age-routes.ts",
+      "bytes": 8387,
+      "sha256": "d9f731327f43c80a9e7c443b260cb9e5c5b72fec01b998b12606ee558f3ff175"
+    },
+    {
+      "path": "apps/api/src/modules/age/age-repository.ts",
+      "bytes": 11286,
+      "sha256": "7c328bd8c827f50075752b7c23c68047d4e80a57cc53ccb0a3f049346e471a86"
+    },
+    {
+      "path": "apps/api/src/modules/age/age-provider-waterfall.ts",
+      "bytes": 1568,
+      "sha256": "a8e80dc8a074447376638479f18be6de9c7ab1e73d91c28cb67e9cacd12c395b"
+    },
+    {
+      "path": "apps/api/src/modules/age/age-webhook-adapter.ts",
+      "bytes": 7983,
+      "sha256": "d2336309efef0e0985bf04be6aaee17bf75f83177025037e5496242fa8ec3c16"
+    },
+    {
+      "path": "apps/api/src/modules/age/types.ts",
+      "bytes": 2624,
+      "sha256": "c8b5035e51e4bc0d01fb3b7e75cb0d57cf5c73ebe6f85ff76888548904ce9e10"
+    },
+    {
+      "path": "apps/api/src/modules/verification/verification-provider-adapters.ts",
+      "bytes": 18364,
+      "sha256": "fedaf8b0cc891958fb301c8ea9d06bb7692acc757a5c348a6f108092d79409e7"
+    },
+    {
+      "path": "apps/api/src/modules/verification/verification-repository.ts",
+      "bytes": 19527,
+      "sha256": "d83b970637082f4c71ea470e35a2e296a5e41e5d0681a943e3a5f303874c5f15"
+    },
+    {
+      "path": "apps/api/src/modules/verification/verification-routes.ts",
+      "bytes": 11194,
+      "sha256": "65e9413a7540833f9f95a8e71b89eb1c664e7c5e61a6af591ec0d5533349e366"
+    },
+    {
+      "path": "apps/api/src/modules/verification/verification-webhook-adapter.ts",
+      "bytes": 13065,
+      "sha256": "46fd441611ee675934e2640b24bc70d7f0bc02f2d3ee11b63299c5443424340f"
+    },
+    {
+      "path": "apps/api/src/modules/verification/didit-webhook.ts",
+      "bytes": 1765,
+      "sha256": "b36a50fc88a7d73c6a95f039345c72131f6a43a62d2db164dd8d5be50dcb4c10"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/wallet-routes.ts",
+      "bytes": 13683,
+      "sha256": "7499ba7fbd1a208766b155e658c155bfa3eb39e9228504220233d8a8e3667098"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/wallet-link-repository.ts",
+      "bytes": 5937,
+      "sha256": "b0d60929c3f9763e8c6f0255602199b5977e2f156aab95ea55c37cb6442cee78"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/wallet-route-utils.ts",
+      "bytes": 2978,
+      "sha256": "d6603bce8b826f98c92da5d1b56467163e51ee83902e8399857e02a299b00500"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-route-auth.ts",
+      "bytes": 4917,
+      "sha256": "e5c7b27bc0c85eae367793e111712e7aa45fe962a1121d42b8209261044a96ab"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-permissions.ts",
+      "bytes": 4597,
+      "sha256": "6271f949e85f98ad4cae850783dee755cb50c46094157d90b5e7b2169ea8e022"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-staff.ts",
+      "bytes": 18916,
+      "sha256": "4bd5e7bafe10405d8f5003a0318cc0206d5056429e3f4bdacf2b6175b18be36f"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-access.ts",
+      "bytes": 21857,
+      "sha256": "8421bd5af028071bffdd04cb49f516c9b36c060ce09c73a876dfdf580cb16567"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-staff-routes.ts",
+      "bytes": 8353,
+      "sha256": "eff44de70133f2b94fd3a1c899b6c488ddd6dd98430f2857b708683676d5880d"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-ops-routes.ts",
+      "bytes": 6515,
+      "sha256": "cc6346f717a40d08f1554487f4deec0fb411c84f9970ff253c797e733f4e0dc3"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-review-routes.ts",
+      "bytes": 6286,
+      "sha256": "65df4eafaa077cae6cc375bda8c7e125fdada047978186dad27094840d6f6122"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-compliance-routes.ts",
+      "bytes": 3911,
+      "sha256": "81697457f15ed241a89c23ac864d988a937592f2a7abee3b7fad805f346ad0cc"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-event-provider-routes.ts",
+      "bytes": 8381,
+      "sha256": "9d580a514b153d88812758fd31acfabe8c11a0d8a3c9b5897884bd2c24ccc675"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-moderation-routes.ts",
+      "bytes": 4510,
+      "sha256": "b9043d6644be009e074fbb311629502aad9b143a48e7717219bc7948584eeb73"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-organization-routes.ts",
+      "bytes": 6950,
+      "sha256": "714e5c3d8aa1adae185f69d4d4b99990984eb971d4abd61214cf1f7150cd55b0"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-payment-commercial-policy-routes.ts",
+      "bytes": 5138,
+      "sha256": "537be38087ab8987d9ce19849142e0355f66404348b50bbc19e6425ca1bd1405"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-routes.ts",
+      "bytes": 1257,
+      "sha256": "73ed433d18e18a518cdb6f7bdaa24a4fe8fa9f032f9f34ec1fcc9abad03353d0"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-route-validators.ts",
+      "bytes": 10070,
+      "sha256": "96df2c90d8c656ff84b5fec7b896b2acd8cf8821d94a74567fabeda6a9eaaf0d"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-privacy.ts",
+      "bytes": 10030,
+      "sha256": "f33dc64bd258a9f95a48003259819925f5d977d0144c0b5ef55a232f72347b8c"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-feature-flag.ts",
+      "bytes": 3025,
+      "sha256": "0531aee850f8fd5e1dcd8c26ea30965f542c7e021fbfdd4fd8fc836a7f1510d2"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-moderation.ts",
+      "bytes": 14905,
+      "sha256": "29c1d5c2d59df8dfebc59d94f0b8329573d5d8f82323d8be2a194c38582b8bb6"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-support.ts",
+      "bytes": 7326,
+      "sha256": "a49b03b7b52a38ece14493b9229cdde1e35c2d032c4ff2bfeb00a86e7b842ef0"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-mapper-utils.ts",
+      "bytes": 1689,
+      "sha256": "a5319dbb5624d375f56905703be4a8752dc200ab53140bda1ea649ee41527aad"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-core-mappers.ts",
+      "bytes": 8821,
+      "sha256": "f9313fef0c02eab3147f0e80a88b9bfc403bf08c91832c4f5f32c2b141422a69"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-support-mappers.ts",
+      "bytes": 3720,
+      "sha256": "2f803627282afe7b2da171ce540e77103ee5804b18a46cd67ac2a552d4f51a6f"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository.ts",
+      "bytes": 1933,
+      "sha256": "3c289eded15c1d6d5d0ca30d38e7c0c438dab55685bbbc52f7893d07ec9cd7f3"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-unconfigured.ts",
+      "bytes": 1891,
+      "sha256": "bf49c994dcb058ff2134991eebf5bd3845c2ae055c88a7405ab8ee04d8d63eaf"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-errors.ts",
+      "bytes": 358,
+      "sha256": "3b7f40de57e7118af0f6b30eed3a6a392bff7afd8d78199e42662a2232fb66e0"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-mappers.ts",
+      "bytes": 395,
+      "sha256": "24830469aa7b336673ee991b1684c80bd5da2091d876d8511981e05add073675"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-money.ts",
+      "bytes": 5857,
+      "sha256": "4f9f3297e7e518965b443c9e822d484fe207c3e856983e98d74da6e5602effe0"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-compliance.ts",
+      "bytes": 4395,
+      "sha256": "1d05391d09171fbe28152179eff8d9d4276e0092baa2765f5aacb642d25a3e9c"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-growth.ts",
+      "bytes": 1735,
+      "sha256": "38d5c397d1f30ba27dc589f903331f914effd387db3a9d8688e817bb286eaa0e"
+    },
+    {
+      "path": "apps/api/src/modules/mcp/mcp-routes.ts",
+      "bytes": 41962,
+      "sha256": "fb40e29b37a5bffcd47d35ef5f922b35fe7e471e6ba917fe96b450892edffc85"
+    },
+    {
+      "path": "apps/api/src/modules/mcp/mcp-repository.ts",
+      "bytes": 27659,
+      "sha256": "24b9b2455fa0f21485248841912f094a9b224f267254c0ab8f9cbb64e0b49dbf"
+    },
+    {
+      "path": "apps/api/src/modules/mcp/mcp-tools.ts",
+      "bytes": 35208,
+      "sha256": "6b54069d27cf65f378ae97da504c75830311e4007da44b1cade303139e921f91"
+    },
+    {
+      "path": "apps/api/src/modules/mcp/mcp-media-routes.ts",
+      "bytes": 11391,
+      "sha256": "623c333a4c165b77c27d097169e876dbbb3be7e763eda0dbb9ad5195119a57a0"
+    },
+    {
+      "path": "apps/api/src/modules/realtime/realtime-routes.ts",
+      "bytes": 3880,
+      "sha256": "ac6f5caa65e941f17afd941a43aad4fc768786581b63a6d478a067d5d0bd57da"
+    },
+    {
+      "path": "apps/api/src/modules/realtime/realtime-token.ts",
+      "bytes": 2005,
+      "sha256": "2d8258c3ae1fe1a08a037048ae0cb9343a531284ff8640771e55d934d778b181"
+    },
+    {
+      "path": "apps/api/src/modules/profile/profile-routes.ts",
+      "bytes": 17773,
+      "sha256": "c4801a208b4164463dc986474bd3cb505766162463031dff3a97bbf7f8e77805"
+    },
+    {
+      "path": "apps/api/src/modules/profile/profile-mutation-repository.ts",
+      "bytes": 3459,
+      "sha256": "c6d7311557ef1c3b9313ec795241868690abd1148d8238d8fa72b2654e2b8636"
+    },
+    {
+      "path": "apps/api/src/modules/profile/profile-creator-repository.ts",
+      "bytes": 8493,
+      "sha256": "ce52984fe2b6ed8ac41a5f71b327c533ed9cf0d4e6d02c13d38e3b9d0fa4f5eb"
+    },
+    {
+      "path": "apps/api/test/admin-permissions.test.ts",
+      "bytes": 2266,
+      "sha256": "c966d1736c1c28dd1e533aeefe92d6b4248f33ae9da9aa7f8f1d993545cb38fc"
+    },
+    {
+      "path": "apps/api/test/admin-repository-access.test.ts",
+      "bytes": 2394,
+      "sha256": "6ed36d3b8b44b0ce50f1ff0d6a40ebeb6aac5eefe37c58fea8db9cafc27ab0f7"
+    },
+    {
+      "path": "apps/api/test/admin-staff.test.ts",
+      "bytes": 5107,
+      "sha256": "d22ba7ebf5a2eed769ce3321d591f4601370ebf66372d089fa6331cc9dece42f"
+    },
+    {
+      "path": "apps/api/test/auth-lifecycle.integration.test.ts",
+      "bytes": 6861,
+      "sha256": "f1f77e3a6eab41e31d789eadee7e50a6d5e985afddab09738783233a66f3f880"
+    },
+    {
+      "path": "apps/api/test/verification-capabilities.test.ts",
+      "bytes": 4141,
+      "sha256": "cff6156bb50a4319e2944328664985786442f381ea08644187a94650e96f50c3"
+    },
+    {
+      "path": "apps/api/test/verification-organization-authorization.test.ts",
+      "bytes": 3652,
+      "sha256": "c449dfffa72d606f4cd37ea65bd1d8a2f2c46fc6a0a624962c1e52743a424d6b"
+    },
+    {
+      "path": "apps/api/test/didit-verification.integration.test.ts",
+      "bytes": 3961,
+      "sha256": "061738c0e14177bae175899716fb84de9a4c7c281798fc62942241db9a64d041"
+    },
+    {
+      "path": "apps/api/test/realtime-token.test.ts",
+      "bytes": 5964,
+      "sha256": "470f63620f69c8c58b14608d851dd9676a5bed3185b69438fc94746bc43ece06"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-compliance-mappers.ts",
+      "bytes": 6079,
+      "sha256": "a54bf6f991c67e87c5e3f12890f873ceb4d2c605bedd3dd634dd654fffc6ba85"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-event-mappers.ts",
+      "bytes": 9912,
+      "sha256": "1cf03f16da452a8ac27afd6abc94a07f57d793eaca095e7421b6217e2bb6d162"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-event-ops.ts",
+      "bytes": 9545,
+      "sha256": "6b8d266aa812d893c57319ff56e7812539b4af39a97d401aa9c94d705d2ce189"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-growth-mappers.ts",
+      "bytes": 3558,
+      "sha256": "e1aed44ad99ba3f21f31ef1460446403dee01c936360acfe6cc1115b37c6ad46"
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-organization.ts",
+      "bytes": 13969,
+      "sha256": "18a278e1d83dfbd8a6f01be254ed800944f70beddf7ea4d7b5607658f1329a54"
+    },
+    {
+      "path": "apps/api/src/modules/admin/types.ts",
+      "bytes": 10988,
+      "sha256": "78b9275e9258b862b0bb3a2d0b52210379af87214445401eb7c5d71e5907fd83"
+    },
+    {
+      "path": "apps/api/src/modules/mcp/types.ts",
+      "bytes": 6650,
+      "sha256": "a141ee8216018176f402a5d8c36dc5517853b167e543b84fc5630a5bf34c583b"
+    },
+    {
+      "path": "apps/api/src/modules/realtime/types.ts",
+      "bytes": 371,
+      "sha256": "932c732588b30cd92ae70b537d287ba864c46f8c7db16b5c027b695d103e4f98"
+    },
+    {
+      "path": "apps/api/src/modules/session/session-repository.ts",
+      "bytes": 2215,
+      "sha256": "d620487334ce21b033324dae7805a62e701c90e3f1847be42f056f04b5a9e64c"
+    },
+    {
+      "path": "apps/api/src/modules/session/types.ts",
+      "bytes": 1302,
+      "sha256": "0a5e46ab75c71393d8584695fbbbfc2eefd639121fc5437f93d4a55dfdcf5259"
+    },
+    {
+      "path": "apps/api/src/modules/verification/types.ts",
+      "bytes": 4966,
+      "sha256": "97ba20ba4ba34d9a5a44971a4056ebb2866bdcc9f9f13c56ded41bb3a2e6121f"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/embedded-wallet-adapter.ts",
+      "bytes": 783,
+      "sha256": "44eb8ee82256566268ccdbfe9e01ae5b70d50701b6fc79f4303f99205b190ae3"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/types.ts",
+      "bytes": 5586,
+      "sha256": "d3c61984ed43e3d5840837d20f1abc862ba90ff7102a0467ce49f6f3a0261543"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/wallet-core-repository.ts",
+      "bytes": 4478,
+      "sha256": "eb0fe9f93e82a1cbf9e18d387136d9d86bf3418581aa0d867835c7870a1eaa17"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/wallet-errors.ts",
+      "bytes": 669,
+      "sha256": "824cedd79626be45097508380df3e44648488573b31256de78c5341425b775d4"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/wallet-onramp-adapter.ts",
+      "bytes": 3247,
+      "sha256": "11d14a5be27643304dd1c742f3552d4822f5d4396aec0fdf03c64629fdf595fd"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/wallet-onramp-repository.ts",
+      "bytes": 3407,
+      "sha256": "3611ede63db078d04f0b417d262ab7728a7f747b92f4f0d0a4c5906c8c0b0108"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/wallet-repository-mappers.ts",
+      "bytes": 1597,
+      "sha256": "b3a07324b772c4236ef83fa960b3f82ac250c595345317737f39be7a85ca5328"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/wallet-repository-rows.ts",
+      "bytes": 774,
+      "sha256": "a57d3272190a96ee93f8c80d822bb5d37a56d87855aa473f51af19d77862fcf2"
+    },
+    {
+      "path": "apps/api/src/modules/wallet/wallet-repository.ts",
+      "bytes": 2228,
+      "sha256": "428780e794b94ad2791aaddff640ea1eef4461869ab1ebebd3775f13f0a292c2"
+    },
+    {
+      "path": "docs/v2-new-build/admin-operations-dashboard.md",
+      "bytes": 24663,
+      "sha256": "e979170f431139e0f8dedb19478781054e3d19b18da6b2d601a4287bb4e143db"
+    },
+    {
+      "path": "docs/v2-new-build/realtime-messages-activity.md",
+      "bytes": 18601,
+      "sha256": "6a80a366a23ab2e057897d59a6fcb38a1041cc3959fea499c145231c989b3c61"
+    },
+    {
+      "path": "docs/v2-new-build/safety-admin-ai.md",
+      "bytes": 5000,
+      "sha256": "3c84f2f10db57f5ac5b5106ccd140af5223cd4114a2c57ba6ccb0c387700cd51"
+    }
+  ],
+  "partial_text_review": [
+    {
+      "path": "apps/api/test/app.test.ts",
+      "coverage": [
+        "1330-1425 (Persona/Veriff fixture)",
+        "searched age/auth/recovery tests (not full file)"
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0066_mcp_oauth_completion.sql",
+      "coverage": [
+        "100-140 OAuth token schema"
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0091_canonical_identity_session_security.sql",
+      "coverage": [
+        "targeted searches only"
+      ]
+    },
+    {
+      "path": "packages/database/migrations/0090_monetisation_performer_enterprise_authorities.sql",
+      "coverage": [
+        "targeted searches only"
+      ]
+    }
+  ],
+  "assigned_source_not_fully_reviewed_by_this_agent": [],
+  "executed_probes": [
+    {
+      "name": "admin-pagination-exclusive-boundary",
+      "runtime": "Node24.22.1 --experimental-strip-types",
+      "result": "IDs1..50 then52..101;51 skipped"
+    },
+    {
+      "name": "Didit-signed-body-freshness",
+      "runtime": "Node24.22.1 --experimental-strip-types",
+      "result": "24h-old signed body accepted with current unsigned x-timestamp header"
+    },
+    {
+      "name": "admin-live-SQL-parse",
+      "runtime": "PGlite PostgreSQL engine",
+      "method": "Extract exact query from source and substitute no cursor plus limit51; minimal schema with actual overlapping column names",
+      "result": "42702 column reference id is ambiguous"
+    }
+  ],
+  "suite_status": "No complete pinned unit/browser/provider/Postgres suite run by this agent; root owns baseline verification",
+  "additional_runtime_probes": [
+    {
+      "artifact": "auth-onboarding-proof.json",
+      "method": "Actual createPostgresAgeRepository canonical query and registerSessionRoutes handler over minimal PGlite seeded generic-webhook shape; host Node24 with tsx",
+      "result": "provisional + valid age with result NULL => age verified and session ready; creator age predicate false",
+      "scope_limit": "Not full provider callback or full database schema integration"
+    }
+  ]
+}

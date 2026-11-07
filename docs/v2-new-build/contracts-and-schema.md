@@ -1,15 +1,15 @@
-# Veel V2 Initial Contracts And Schema
+# WeVid V2 Initial Contracts And Schema
 
 Status: accepted
 Scope: OpenAPI and database starting point
-Last updated: 2026-08-20
-Source of truth: yes
+Last updated: 2026-11-05
+Source of truth: API contract guide; database authority is the immutable migration chain
 
 Owns:
 - contracts and schema decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, immutable database migrations, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -20,12 +20,12 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This document explains the first concrete implementation artifacts:
+This document explains the contract and database authority boundaries:
 
 - `packages/contracts/openapi.yaml`
-- `packages/database/schema-blueprint.sql`
+- ordered SQL in `packages/database/migrations/`
 
-They are intentionally broad enough to cover the full platform, but not final migrations. Convert them into proper migrations and generated clients during the first implementation slices.
+`packages/contracts/openapi.yaml` is canonical for HTTP shape and generates the TypeScript contract artifact. The ordered migration chain is canonical for database shape. `packages/database/schema-blueprint.sql` is retained as non-authoritative planning history and must not be used to infer a current column, constraint, policy, or table.
 
 ## Contract Principles
 
@@ -78,8 +78,26 @@ The first contract skeleton is in `packages/contracts/openapi.yaml`. It intentio
 - `recipient_monetisation_risk_assessments` stores normalized, expiring risk evidence and reason/source/policy provenance; RLS permits staff reads and browser roles cannot execute the private resolver.
 - `private.resolve_recipient_monetisation_policy(...)` is the single per-product KYC decision. `private.resolve_creator_kyc_state(...)` projects that decision for creator onboarding, dashboard, and verification capabilities. Payment and membership paths consume the same resolver through `private.assert_recipient_monetisation_ready(...)`.
 - `payment_intents`, creator `subscription_plans`, and `subscription_collections` retain the effective recipient-KYC requirement, mode, version, and reason for audit. Recurring collection rechecks the resolver and suspends before submission when newly required KYC evidence is absent.
-- `private.eligible_content(...)` is the indexed, viewer-relative content set used by feed, detail, Discover, profiles, shares, unlocks, and engagement. It applies age/release/moderation/profile state, public/follower/member visibility, active entitlement where applicable, the independent `both | sfw | nsfw` content preference, hidden creators/topics, blocks, and the viewer's own reports. Anonymous reads are public-visibility and Safe-only.
-- `viewer_feed_preferences.default_feed_mode` stores only ranking choice (`recommended | following`). Content preference remains separate and cannot be encoded as a ranking mode.
+- `private.eligible_content(...)` is the viewer-relative content authority used by feed, detail, Discover, profiles, shares, unlocks, and engagement. It applies age/release/moderation/profile state, public/follower/member visibility, active entitlement where applicable, the independent `both | sfw | nsfw` content preference, hidden creators/topics, blocks, and the viewer's own reports. Anonymous reads are public-visibility and Safe-only.
+- `viewer_feed_preferences.default_feed_mode` stores only the chronological scope (`latest | following`). Content preference remains separate and cannot be encoded as a feed mode. A deprecated `recommended` request may normalize to `latest` during compatibility migration but must not be persisted by new writes.
+- Home/Bits read models order only by `published_at DESC, id DESC`, capture a first-page upper bound, and carry that bound plus the last key and request scope in the opaque cursor. No scoring table or bounded candidate session is a feed authority.
+
+## Canonical Media Scope
+
+- New `CreateContentRequest` writes admit photo/image, carousel, and video media only. Text and poll
+  discriminators remain in read resources solely for authorized historical compatibility.
+- Fresh create, update, publish, scheduled-publish, and poll-vote requests for `text` or `poll`
+  return the normalized `content_format_retired` response. A completed exact idempotent replay may
+  return its stored response without performing a new mutation.
+- A single video's provider-confirmed duration classifies it as `bit` when duration is at most 60
+  seconds and `vod` when it is longer. Browser-supplied format or duration is not publication truth.
+- Moment is contextual lifecycle metadata over canonical media, not a separate composer choice or
+  new content authority.
+- Historical text/poll rows retain detail, owner, admin, moderation, export, and retention
+  obligations but are excluded from primary feed/discovery/profile grids.
+- Live room contracts keep host credentials out of viewer resources. The owner-only recent-auth
+  reveal remains the narrow no-store capability used in component memory by browser broadcast or
+  OBS Advanced setup; it does not create a second ingest endpoint.
 
 ## Canonical Identity And Session Tables
 
@@ -96,7 +114,7 @@ The first contract skeleton is in `packages/contracts/openapi.yaml`. It intentio
 Before building a slice:
 
 1. Add or refine OpenAPI paths.
-2. Add migrations based on the schema blueprint.
+2. Add a new ordered migration against the final schema produced by the existing immutable chain; never rewrite applied history or derive a change from the historical blueprint alone.
 3. Add generated TS client/types.
 4. Implement Fastify route/service/adapter.
 5. Add tests and frontend smoke.

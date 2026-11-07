@@ -9,7 +9,7 @@ export type CreatorDashboard = components["schemas"]["CreatorMonetisationDashboa
 export type CreatorOnboarding = components["schemas"]["CreatorOnboarding"];
 export type CreatorProfile = components["schemas"]["CreatorProfile"];
 export type LiveRoom = components["schemas"]["LiveRoom"];
-export type LiveRoomPage = { items: LiveRoom[]; nextCursor?: string | null };
+export type LiveRoomPage = { items: LiveRoom[]; nextCursor: string | null };
 export type HostConnection = components["schemas"]["HostConnection"];
 export type RevealedHostConnection = components["schemas"]["RevealedHostConnection"];
 export type LiveChatMessage = components["schemas"]["LiveChatMessage"];
@@ -21,6 +21,7 @@ export type WalletTransactionPage = components["schemas"]["WalletTransactionPage
 export type Conversation = components["schemas"]["Conversation"];
 export type ConversationList = {
   items: Conversation[];
+  nextCursor: string | null;
 };
 export type Message = components["schemas"]["Message"];
 export type MessagePage = components["schemas"]["MessagePage"];
@@ -35,6 +36,7 @@ export type SubscriptionPlanPage = components["schemas"]["SubscriptionPlanPage"]
 export type PlatformAccess = components["schemas"]["PlatformAccess"];
 export type PlatformPlaybackSession = components["schemas"]["PlatformPlaybackSession"];
 export type DiscoverPage = components["schemas"]["DiscoverPage"];
+export type DiscoverCursorSet = components["schemas"]["DiscoverCursorSet"];
 export type FeedPage = components["schemas"]["FeedPage"];
 export type FeedPreferences = components["schemas"]["FeedPreferences"];
 export type PrivacySettings = components["schemas"]["PrivacySettings"];
@@ -77,6 +79,8 @@ export type VerificationRecordSummary = {
   status: string;
   provider: string;
   method: string;
+  thresholdAge?: number | null;
+  resultOverThreshold?: boolean | null;
   assuranceLevel: string;
   verifiedAt: string | null;
   expiresAt: string | null;

@@ -34,8 +34,6 @@ export const stagingCapabilities = [
   ]),
   capability("wallet", true, [
     variable("NEXT_PUBLIC_PRIVY_APP_ID", "public", true),
-    variable("PRIVY_APP_SECRET", "secret", true),
-    variable("PRIVY_JWKS_ENDPOINT", "public", true),
     variable("NEXT_PUBLIC_EMBEDDED_WALLET_RUNTIME_ENABLED", "public", true),
     variable("NEXT_PUBLIC_SOLANA_CHAIN", "public", true),
     variable("NEXT_PUBLIC_SOLANA_RPC_URL", "public", true)
@@ -105,6 +103,9 @@ export const stagingCapabilities = [
     variable("SUBSCRIPTIONS_COLLECTOR_WALLET", "public", false),
     variable("SUBSCRIPTIONS_COLLECTOR_PRIVATE_KEY", "secret", false)
   ], (env) => env.SUBSCRIPTIONS_ENABLED !== "false"),
+  capability("content_exports", false, [
+    variable("CONTENT_EXPORTS_ENABLED", "public", true)
+  ]),
   capability("enterprise", false, [
     variable("ENTERPRISE_STAGING_SESSION_COOKIE", "secret", false),
     variable("ENTERPRISE_STAGING_ORGANIZATION_ID", "secret", false),
@@ -238,7 +239,7 @@ function validateGlobalSafety(env) {
         // URL syntax is reported by the earlier global URL validation.
       }
     }
-    for (const name of ["DATABASE_URL", "SUPABASE_DIRECT_DB_URL"]) {
+    for (const name of ["DATABASE_URL", "SUPABASE_DIRECT_DB_URL", "SUPABASE_MIGRATIONS_DB_URL"]) {
       if (present(env[name]) && !databaseUrlMatchesProject(env[name], env.SUPABASE_PROJECT_REF)) {
         errors.push(`${name}=staging_project_ref`);
       }
@@ -275,7 +276,8 @@ function validateCapability(name, env) {
   if (name === "email" && mismatch("TRANSACTIONAL_EMAIL_PROVIDER", "resend")) invalid.push("TRANSACTIONAL_EMAIL_PROVIDER=resend");
   if (name === "observability" && mismatch("OTEL_REQUIRED", "true")) invalid.push("OTEL_REQUIRED=true");
   if (name === "observability" && mismatch("OTEL_SDK_DISABLED", "false")) invalid.push("OTEL_SDK_DISABLED=false");
-  if (name === "subscriptions" && present(env.SUBSCRIPTIONS_ENABLED) && !["true", "false"].includes(env.SUBSCRIPTIONS_ENABLED)) invalid.push("SUBSCRIPTIONS_ENABLED=true|false");
+  if (name === "subscriptions" && mismatch("SUBSCRIPTIONS_ENABLED", "false")) invalid.push("SUBSCRIPTIONS_ENABLED=false");
+  if (name === "content_exports" && mismatch("CONTENT_EXPORTS_ENABLED", "false")) invalid.push("CONTENT_EXPORTS_ENABLED=false");
   if (name === "mcp" && present(env.MCP_ENABLED) && !["true", "false"].includes(env.MCP_ENABLED)) invalid.push("MCP_ENABLED=true|false");
   if (name === "mcp" && env.MCP_ENABLED === "true" && !env.MCP_PUBLIC_BASE_URL) invalid.push("MCP_PUBLIC_BASE_URL=https");
   if (name === "legal_release" && present(env.LEGAL_DOCUMENTS_APPROVED) && env.LEGAL_DOCUMENTS_APPROVED !== "true") blocked.push("LEGAL_DOCUMENTS_APPROVED=true");

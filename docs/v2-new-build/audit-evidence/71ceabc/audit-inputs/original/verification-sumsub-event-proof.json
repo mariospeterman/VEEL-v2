@@ -1,0 +1,64 @@
+{
+  "sourceSha": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "runtime": "v24.22.1",
+  "proofBoundary": "Actual compiled signed Sumsub normalization; exact migration verification_events table under reduced PGlite fixture; no live provider or full session/route run",
+  "generic": [
+    {
+      "provider": "sumsub",
+      "providerEventId": "shared-operation-request-id",
+      "providerReference": "actual-applicant-id",
+      "eventType": "applicantPending",
+      "status": "pending",
+      "signatureHash": "3ca934e344d4fc82e53e61a3af609348f1b526a2fa845fab98f62aa70c7302ad",
+      "occurredAt": "2026-11-04T09:00:00.000Z",
+      "failureReasonCode": null,
+      "payloadHash": "1cc1e0cd859139203f0e6ac1a9c51d07270111480a21edfdeb21877902574eab"
+    },
+    {
+      "provider": "sumsub",
+      "providerEventId": "shared-operation-request-id",
+      "providerReference": "actual-applicant-id",
+      "eventType": "applicantReviewed",
+      "status": "valid",
+      "signatureHash": "1b2ffe7aac7743f9c31b0dd7f235005065b26603a16e06cdbb5bd51ff8ef3d43",
+      "occurredAt": "2026-11-04T09:01:00.000Z",
+      "failureReasonCode": null,
+      "payloadHash": "457da7a4dd40fcad3a26b0df771145ddb404f5c61543aafbe28451c952052af7"
+    }
+  ],
+  "age": [
+    {
+      "provider": "sumsub",
+      "providerEventId": "shared-operation-request-id",
+      "providerReference": "actual-applicant-id",
+      "eventType": "applicantPending",
+      "state": "pending",
+      "signatureHash": "3ca934e344d4fc82e53e61a3af609348f1b526a2fa845fab98f62aa70c7302ad",
+      "occurredAt": "2026-11-04T09:00:00.000Z",
+      "failureCode": null
+    },
+    {
+      "provider": "sumsub",
+      "providerEventId": "shared-operation-request-id",
+      "providerReference": "actual-applicant-id",
+      "eventType": "applicantReviewed",
+      "state": "verified",
+      "signatureHash": "1b2ffe7aac7743f9c31b0dd7f235005065b26603a16e06cdbb5bd51ff8ef3d43",
+      "occurredAt": "2026-11-04T09:01:00.000Z",
+      "failureCode": null
+    }
+  ],
+  "receiptOutcomes": [
+    {
+      "eventType": "applicantPending",
+      "state": "pending",
+      "receiptInserted": true
+    },
+    {
+      "eventType": "applicantReviewed",
+      "state": "valid",
+      "receiptInserted": false
+    }
+  ],
+  "observed": "Pending event accepted; distinct later authentic-shaped approved event has same idempotency key and is suppressed as duplicate."
+}

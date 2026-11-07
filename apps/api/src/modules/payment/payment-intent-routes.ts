@@ -14,8 +14,10 @@ import {
   createPaymentCheckoutToken,
   createSolanaReferenceAddress,
   hashPaymentCheckoutToken,
+  isValidSolanaSignature,
   paymentMemo,
-  SolanaPaymentConfigurationError
+  SolanaPaymentConfigurationError,
+  validateSignedPaymentTransaction
 } from "./solana-payment.js";
 import {
   createStoredWeVidTransactionRequestUrl,
@@ -38,7 +40,13 @@ import {
   verifyPaymentReadyAccess
 } from "./payment-route-shared.js";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
+import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
 import { defaultPaymentCommercialPolicy } from "./payment-commercial-policy.js";
+import { PaymentSubmissionWriteConflictError } from "./payment-submission.js";
+import {
+  verifyPaymentSettlementWithinDeadline,
+  verifyPaymentTransactionExpiryWithinDeadline
+} from "./payment-settlement-deadline.js";
 
 export async function registerPaymentIntentRoutes(
   app: FastifyInstance,
@@ -287,10 +295,10 @@ export async function registerPaymentIntentRoutes(
         return reply.code(404).send(notFoundResponse("Payment intent was not found"));
       }
 
-      if (intent.state === "confirmed") {
+      if (["submitted", "confirming", "confirmed", "settled"].includes(intent.state)) {
         return reply.code(409).send({
           code: "conflict",
-          message: "Payment intent is already settled"
+          message: "Payment was already submitted; resume verification instead of creating another wallet request"
         });
       }
 
@@ -461,6 +469,20 @@ export async function registerPaymentIntentRoutes(
         return reply.code(400).send(validationResponse("signature is required"));
       }
 
+      if (!isValidSolanaSignature(body.signature)) {
+        return reply.code(400).send(validationResponse("signature must be a valid Solana transaction signature"));
+      }
+
+      if (
+        typeof body.signedTransactionBase64 !== "string" ||
+        body.signedTransactionBase64.length === 0 ||
+        body.signedTransactionBase64.length > 4_096
+      ) {
+        return reply.code(400).send(validationResponse(
+          "signedTransactionBase64 is required and must be a bounded base64 transaction"
+        ));
+      }
+
       const params = request.params as { paymentIntentId?: string };
 
       try {
@@ -473,6 +495,16 @@ export async function registerPaymentIntentRoutes(
           return reply.code(404).send(notFoundResponse("Payment intent was not found"));
         }
 
+        if (!validateSignedPaymentTransaction({
+          signature: body.signature,
+          signedTransactionBase64: body.signedTransactionBase64,
+          buyerWallet: intent.buyerWallet
+        })) {
+          return reply.code(400).send(validationResponse(
+            "signedTransactionBase64 must contain the exact valid payer-signed transaction"
+          ));
+        }
+
         if (intent.withdrawalWaiverRequired && !intent.withdrawalWaiverAcceptedAt) {
           return reply.code(409).send({
             code: "conflict",
@@ -480,37 +512,143 @@ export async function registerPaymentIntentRoutes(
           });
         }
 
-        const settlement = await options.settlementVerifier.verifyTransfer({
-          signature: body.signature,
-          referenceAddress: intent.referenceAddress,
-          memo: paymentMemo(intent.id),
-          settlementKind: intent.settlementKind,
-          buyerWallet: intent.buyerWallet,
-          creatorWallet: intent.creatorWallet,
-          enterpriseWallet: intent.enterpriseWallet,
-          platformFeeWallet: intent.platformFeeWallet,
-          referralWallet: intent.referralWallet,
-          treasuryWallet: intent.treasuryWallet,
-          totalAmountMinor: intent.totalAmountMinor,
-          creatorAmountMinor: intent.creatorAmountMinor,
-          enterpriseManagementAmountMinor: intent.enterpriseManagementAmountMinor,
-          platformFeeAmountMinor: intent.platformFeeAmountMinor,
-          referralAmountMinor: intent.referralAmountMinor,
-          currency: intent.currency,
-          tokenMint: intent.tokenMint ?? null,
-          tokenDecimals: intent.tokenDecimals ?? null,
-          expiresAt: intent.expiresAt
-        });
+        if (!["pending", "transaction_requested", "submitted"].includes(intent.state)) {
+          const exactReplay = await options.paymentRepository.hasSubmissionCommandReceipt?.({
+            supabaseUserId: access.supabaseUserId,
+            paymentIntentId: intent.id,
+            idempotencyKey,
+            signature: body.signature
+          });
+          if (exactReplay) {
+            return reply.code(202).send();
+          }
 
+          return reply.code(409).send({
+            code: "conflict",
+            message: "Payment intent cannot accept a transaction submission in its current state"
+          });
+        }
+
+        const acceptedState = intent.state as "pending" | "transaction_requested" | "submitted";
+
+        // Persist the wallet-authorized signature before any RPC lookup. A provider outage or a
+        // lost HTTP acknowledgement can then be recovered by replaying this exact command instead
+        // of constructing and approving a second transfer.
         await options.paymentRepository.recordSubmission({
           supabaseUserId: access.supabaseUserId,
           paymentIntentId: intent.id,
+          idempotencyKey,
           signature: body.signature,
-          settlement
+          settlement: { confirmed: false },
+          writeGuard: {
+            state: acceptedState,
+            submittedSignature: acceptedState === "submitted" ? body.signature : null
+          }
         });
+
+        let settlement: Awaited<ReturnType<typeof options.settlementVerifier.verifyTransfer>>;
+        try {
+          settlement = await verifyPaymentSettlementWithinDeadline(options.settlementVerifier, {
+            signature: body.signature,
+            referenceAddress: intent.referenceAddress,
+            memo: paymentMemo(intent.id),
+            settlementKind: intent.settlementKind,
+            buyerWallet: intent.buyerWallet,
+            creatorWallet: intent.creatorWallet,
+            enterpriseWallet: intent.enterpriseWallet,
+            platformFeeWallet: intent.platformFeeWallet,
+            referralWallet: intent.referralWallet,
+            treasuryWallet: intent.treasuryWallet,
+            totalAmountMinor: intent.totalAmountMinor,
+            creatorAmountMinor: intent.creatorAmountMinor,
+            enterpriseManagementAmountMinor: intent.enterpriseManagementAmountMinor,
+            platformFeeAmountMinor: intent.platformFeeAmountMinor,
+            referralAmountMinor: intent.referralAmountMinor,
+            currency: intent.currency,
+            tokenMint: intent.tokenMint ?? null,
+            tokenDecimals: intent.tokenDecimals ?? null,
+            expiresAt: intent.expiresAt
+          });
+        } catch (error) {
+          request.log.warn(
+            { error, paymentIntentId: intent.id },
+            "Payment signature was accepted but immediate settlement verification is unavailable"
+          );
+          return reply.code(202).send();
+        }
+
+        if (
+          !settlement.confirmed &&
+          settlement.failureCode === "not_found" &&
+          intent.expiresAt <= new Date() &&
+          options.settlementVerifier.verifyTransactionExpiry
+        ) {
+          try {
+            const expiry = await verifyPaymentTransactionExpiryWithinDeadline(
+              options.settlementVerifier,
+              {
+                signature: body.signature,
+                signedTransactionBase64: body.signedTransactionBase64,
+                buyerWallet: intent.buyerWallet
+              }
+            );
+
+            if (expiry.state === "invalid") {
+              return reply.code(400).send(validationResponse(
+                "signedTransactionBase64 must contain the exact valid payer-signed transaction"
+              ));
+            }
+
+            if (expiry.state === "expired") {
+              settlement = {
+                confirmed: false,
+                failureCode: "signed_transaction_expired"
+              };
+            }
+          } catch (error) {
+            request.log.warn(
+              { error, paymentIntentId: intent.id },
+              "Expired payment submission remains recoverable while transaction expiry proof is unavailable"
+            );
+            return reply.code(202).send();
+          }
+        }
+
+        try {
+          await options.paymentRepository.recordSubmission({
+            supabaseUserId: access.supabaseUserId,
+            paymentIntentId: intent.id,
+            signature: body.signature,
+            settlement,
+            writeGuard: {
+              state: "submitted",
+              submittedSignature: body.signature
+            }
+          });
+        } catch (error) {
+          if (!(error instanceof PaymentSubmissionWriteConflictError)) throw error;
+          request.log.info(
+            { paymentIntentId: intent.id },
+            "Payment submission advanced concurrently after signature acceptance"
+          );
+        }
 
         return reply.code(202).send();
       } catch (error) {
+        if (error instanceof MutationCommandIdempotencyConflictError) {
+          return reply.code(409).send({
+            code: "conflict",
+            message: "Idempotency key was already used for a different payment submission"
+          });
+        }
+
+        if (error instanceof PaymentSubmissionWriteConflictError) {
+          return reply.code(409).send({
+            code: "conflict",
+            message: "A different payment submission is already being reconciled for this intent"
+          });
+        }
+
         if (error instanceof PaymentRepositoryConfigurationError) {
           request.log.warn({ error }, "Payment submission failed");
           return reply.code(503).send({

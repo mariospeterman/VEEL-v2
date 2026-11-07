@@ -20,6 +20,10 @@ const parseVersion = (version) => {
 const compareVersion = (a, b) =>
   a.major - b.major || a.minor - b.minor || a.patch - b.patch;
 
+const minimumNodeVersion = parseVersion("24.22.2");
+const isSupportedNodeVersion = (version) =>
+  version.major === minimumNodeVersion.major && compareVersion(version, minimumNodeVersion) >= 0;
+
 const isCodexBundledNode = (candidate) =>
   process.platform === "darwin" && candidate.includes("/Applications/Codex.app/");
 
@@ -31,12 +35,8 @@ const getCandidateNodes = () => {
   if (existsSync(nvmRoot)) {
     const nvmCandidates = readdirSync(nvmRoot)
       .map((entry) => ({ entry, version: parseVersion(entry) }))
-      .filter((candidate) => candidate.version && candidate.version.major >= 22)
-      .sort((a, b) => {
-        if (a.version.major === 22 && b.version.major !== 22) return -1;
-        if (b.version.major === 22 && a.version.major !== 22) return 1;
-        return compareVersion(b.version, a.version);
-      });
+      .filter((candidate) => candidate.version && isSupportedNodeVersion(candidate.version))
+      .sort((a, b) => compareVersion(b.version, a.version));
 
     for (const candidate of nvmCandidates) {
       candidates.push(join(nvmRoot, candidate.entry, "bin/node"));
@@ -62,7 +62,7 @@ const inspectNode = (candidate) => {
   });
   if (result.status !== 0) return null;
   const version = parseVersion(result.stdout.trim());
-  if (!version || version.major < 22) return null;
+  if (!version || !isSupportedNodeVersion(version)) return null;
   return { path: candidate, version };
 };
 
@@ -72,7 +72,9 @@ const selectNode = () => {
     if (inspected) return inspected;
   }
 
-  console.error("No usable Node.js >=22 binary found. Set VEEL_NODE_BINARY to a non-hardened Node binary.");
+  console.error(
+    "No usable Node.js >=24.22.2 <25 binary found. Set VEEL_NODE_BINARY to a supported non-hardened Node binary."
+  );
   process.exit(1);
 };
 

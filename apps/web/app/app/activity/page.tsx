@@ -7,7 +7,7 @@ import {
 } from "@/api-client";
 import { RefundRequestPanel } from "../../activity/refund-request-panel";
 import { requireAppAccess } from "@/supabase/route-guard";
-import { formatAssetAmount } from "@/format-asset-amount";
+import { formatAtomicAssetAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
 import { AnalyticsSummary, analyticsWindow } from "../analytics-summary";
@@ -100,7 +100,7 @@ function ActivityRow({ item }: { item: ActivityItem }) {
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
         <Fact
           label="Amount"
-          value={formatAssetAmount(item.amountMinor ?? 0, item.currency ?? "SOL")}
+          value={formatAtomicAssetAmount(item.amountMinor ?? 0, item.currency ?? "SOL")}
         />
         <Fact label="Kind" value={friendlyLabel(item.kind)} />
         <Fact label="Reference" value={shorten(item.referenceAddress)} />
@@ -131,7 +131,7 @@ function WalletTransactionCard({ transaction }: { transaction: WalletTransaction
         <StatusPill>{friendlyLabel(transaction.state)}</StatusPill>
       </div>
       <div className="mt-4 grid gap-2 text-sm">
-        <Fact label="Amount" value={formatAssetAmount(transaction.amountMinor, transaction.currency)} />
+        <Fact label="Amount" value={formatAtomicAssetAmount(transaction.amountMinor, transaction.currency)} />
         <Fact label="Signature" value={shorten(transaction.signature)} />
       </div>
     </Card>

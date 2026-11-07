@@ -9,7 +9,7 @@ Owns:
 - ai mcp use cases decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, immutable database migrations, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -27,6 +27,8 @@ AI/MCP must solve real operational or user pain. It must not become a chatbot gi
 Launch AI/MCP as a lightweight, permissioned MCP connection layer first.
 External AI clients and LLMs provide the reasoning layer; Veel provides
 authenticated data, scopes, safe tools, policy checks, rate limits, and audit.
+
+The legacy REST assistant routes are not this MCP layer. `/v1/ai/sessions` and its tool-call route are disabled with `503`, and their capability projection exposes no executable tools, because canned captions, metrics, health text, or decisions must never be reported as executed work. Historical `ai_sessions` and `ai_tool_calls` remain audit records only. Supported tools are the implemented MCP tools backed by canonical repositories; an unavailable assistant stays unavailable.
 
 The launch jobs are:
 
@@ -49,10 +51,11 @@ The current external MCP slice is production-auth-capable but still requires ope
 
 Convergence 07 completes only the profile/analytics/private-draft bridge described in
 `product/mcp-profile-bridge.md`. It returns standard MCP structured results, declares accurate tool
-annotations, negotiates the pinned stable protocol, validates HTTP Origins, minimizes personal data,
-and records private-draft origin without hosting an LLM or model key. The July 2026 MCP release
-candidate is not a production authority; the bridge remains pinned to stable `2025-11-25` behavior
-until a final specification and supported-client proof justify an upgrade.
+annotations, negotiates the pinned compatibility protocol, validates HTTP Origins, minimizes personal
+data, and records private-draft origin without hosting an LLM or model key. MCP `2026-07-28` is the
+latest final specification. This bridge deliberately remains on tested `2025-11-25` initialize-based
+behavior until the current stateless discovery/routing/cache/auth changes and exact client matrix are
+implemented and staged; it does not claim current-protocol compatibility.
 
 Production private-data connectors for Claude, Cowork-style clients, OpenAI, or similar MCP clients use pre-registered OAuth clients, authorization-code plus PKCE, resource-bound bearer access tokens, scope grants, and revocation. Scoped tokens are explicitly limited to local development and staging environments.
 MCP Inspector, Claude Code, Claude custom connectors, and OpenAI-compatible clients must be proven against a public HTTPS staging URL before Veel claims compatibility with those external clients.
@@ -191,7 +194,10 @@ Launch implementation rules:
 - Stored input and output are redacted summaries plus safe JSON results, never raw prompts, provider payloads, secrets, or private messages.
 - External MCP transports must follow the current MCP authorization spec before launch: OAuth 2.1, PKCE where applicable, bearer tokens on every HTTP request, resource/audience validation, HTTPS except localhost development redirect URIs, exact redirect URI validation, no tokens in query strings, no token passthrough to downstream services, and least-privilege scopes.
 - Tool outputs must treat user/profile/content text as untrusted data. Prompt-injection defenses include strict schemas, no instruction-following from retrieved content, resource-scoped authorization after every tool call, output redaction, and human confirmation before risky actions.
-- Rate limits are per connection, user, organization, tool, and risk class.
+- The implemented external-tool quota is per connection and risk class in the canonical distributed
+  API limiter. The authenticated user/organization remain bound by the connection and tool
+  authorization checks; finer per-tool policy budgets require a measured follow-up and must not be
+  claimed from the current quota.
 - `/app/assistant` exists only when backend capability allows it, is not a
   primary mobile nav item, and cannot publish, spend, message, moderate, call
   providers, change admin state, or mutate user data without explicit

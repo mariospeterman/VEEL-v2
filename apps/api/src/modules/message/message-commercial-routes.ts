@@ -47,10 +47,13 @@ export async function registerMessageCommercialRoutes(
     if (!access.ok) return reply.code(access.statusCode).send(access.body);
     const conversationId = readConversationId(request);
     if (!conversationId) return reply.code(400).send(validationResponse("A valid conversation is required"));
+    const cursor = readCommercialCursor(request.query);
     try {
       const result = await options.messageRepository.listCommercialInteractions({
         supabaseUserId: access.supabaseUserId,
-        conversationId
+        conversationId,
+        limit: 50,
+        ...(cursor ? { cursor } : {})
       });
       return result
         ? reply.code(200).send(result)
@@ -148,8 +151,9 @@ export async function registerMessageCommercialRoutes(
     const { conversationId, resourceId: requestId } = readCommercialParams(request, "requestId");
     const idempotencyKey = requiredIdempotencyKey(request);
     const body = request.body as Partial<UpdateStructuredCreatorRequestRequest> | undefined;
-    if (!conversationId || !requestId || !idempotencyKey || !body?.action || !requestActions.has(body.action) || !validOptionalTerms(body)) {
-      return reply.code(400).send(validationResponse("A valid creator-request action and Idempotency-Key are required"));
+    const invalid = validateCreatorRequestUpdate(body);
+    if (!conversationId || !requestId || !idempotencyKey || invalid) {
+      return reply.code(400).send(validationResponse(invalid ?? "A valid creator-request action and Idempotency-Key are required"));
     }
     try {
       const response = await options.messageRepository.updateStructuredCreatorRequest({
@@ -171,6 +175,12 @@ export async function registerMessageCommercialRoutes(
   app.post("/v1/messages/conversations/:conversationId/creator-requests/:requestId/payment-intents", mutationRateLimit("paymentMutation"), async (request, reply) => {
     return createCommercialPaymentIntent(app, options, request, reply, "creator_request");
   });
+}
+
+function readCommercialCursor(query: unknown): string | undefined {
+  if (!query || typeof query !== "object" || !("cursor" in query)) return undefined;
+  const cursor = (query as { cursor?: unknown }).cursor;
+  return typeof cursor === "string" && cursor.length > 0 ? cursor : undefined;
 }
 
 async function createCommercialPaymentIntent(
@@ -259,13 +269,23 @@ function validateCreatorRequest(body: Partial<CreateStructuredCreatorRequestRequ
   return null;
 }
 
-function validOptionalTerms(body: Partial<UpdateStructuredCreatorRequestRequest>) {
-  if (body.agreedAmountMinor != null && !validAmount(body.agreedAmountMinor)) return false;
-  if (body.expectedDeliveryDays != null && (!Number.isInteger(body.expectedDeliveryDays) || body.expectedDeliveryDays < 1 || body.expectedDeliveryDays > 90)) return false;
-  for (const value of [body.clarificationRule, body.cancellationRule]) {
-    if (value != null && (value.trim().length < 3 || value.length > 500 || prohibitedPersonalAccess.test(value))) return false;
+function validateCreatorRequestUpdate(body: Partial<UpdateStructuredCreatorRequestRequest> | undefined) {
+  if (!body?.action || !requestActions.has(body.action)) return "A valid creator-request action is required";
+  const termFields = ["agreedAmountMinor", "expectedDeliveryDays", "clarificationRule", "cancellationRule"] as const;
+  const hasTermMutation = termFields.some((field) => Object.prototype.hasOwnProperty.call(body, field));
+  const negotiatesTerms = body.action === "accept" || body.action === "propose_terms" || body.action === "accept_terms";
+  if (negotiatesTerms && (!Number.isInteger(body.expectedTermsRevision) || Number(body.expectedTermsRevision) < 1)) {
+    return "expectedTermsRevision is required for term negotiation";
   }
-  return true;
+  if (!negotiatesTerms && body.expectedTermsRevision !== undefined) return "expectedTermsRevision is only valid for term negotiation";
+  if (body.action !== "propose_terms" && hasTermMutation) return "Only propose_terms may change creator-request terms";
+  if (body.action === "propose_terms" && !validAmount(body.agreedAmountMinor)) return "propose_terms requires a valid agreedAmountMinor";
+  if (body.agreedAmountMinor != null && !validAmount(body.agreedAmountMinor)) return "agreedAmountMinor is invalid";
+  if (body.expectedDeliveryDays != null && (!Number.isInteger(body.expectedDeliveryDays) || body.expectedDeliveryDays < 1 || body.expectedDeliveryDays > 90)) return "expectedDeliveryDays must be between 1 and 90";
+  for (const value of [body.clarificationRule, body.cancellationRule]) {
+    if (value != null && (value.trim().length < 3 || value.length > 500 || prohibitedPersonalAccess.test(value))) return "Creator-request rules are invalid";
+  }
+  return null;
 }
 
 function validAmount(value: unknown): value is number {

@@ -1,0 +1,47 @@
+{
+  "reviewer": "/root/test_app_full_audit/app_test_middle",
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "path": "apps/api/test/app.test.ts",
+  "file_size_bytes": 480766,
+  "file_sha256": "a26a8379386a9f3ac7549181cd419b3c337fb0e129d0a42b8e907025fff95a44",
+  "assigned_start_line": 5001,
+  "assigned_end_line": 10000,
+  "read_status": "full_assigned_range",
+  "read_ranges_inclusive": [
+    [
+      5001,
+      5650
+    ],
+    [
+      5651,
+      6300
+    ],
+    [
+      6301,
+      6950
+    ],
+    [
+      6951,
+      7600
+    ],
+    [
+      7601,
+      8250
+    ],
+    [
+      8251,
+      8900
+    ],
+    [
+      8901,
+      9550
+    ],
+    [
+      9551,
+      10000
+    ]
+  ],
+  "read_bytes": 160259,
+  "range_sha256": "bd5618ee8ce2e7ef743c902ca48b27e163b12033785b9a105abc98963f0bc12b",
+  "scope_limits": "Only assigned range was read; parent aggregates other ranges. No provider calls, source changes, or full-suite execution by this reviewer."
+}

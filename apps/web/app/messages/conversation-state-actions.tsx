@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { Conversation } from "@/api-client";
+import type { Conversation, ConversationList } from "@/api-client";
 import {
   blockUser,
   createSafetyReport,
@@ -12,6 +12,7 @@ import {
 } from "@/api-mutations";
 import { safeMutationMessage } from "@/api-errors";
 import { createMutationIdempotencyKey } from "@/api-mutation-transport";
+import { conversationReadAttemptKey } from "@/messages/conversation-selection";
 
 export function ConversationStateActions({
   conversation,
@@ -21,7 +22,7 @@ export function ConversationStateActions({
   messagesVisible: boolean;
 }) {
   const queryClient = useQueryClient();
-  const readStarted = useRef(false);
+  const readAttempt = useRef<string | null>(null);
   const [pending, setPending] = useState<"accept" | "decline" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [safetyAction, setSafetyAction] = useState<"block" | "report" | null>(null);
@@ -29,12 +30,23 @@ export function ConversationStateActions({
   const [reportReason, setReportReason] = useState("");
 
   useEffect(() => {
-    if (!messagesVisible || conversation.requestState === "pending" || conversation.unreadCount < 1 || readStarted.current) return;
-    readStarted.current = true;
-    void markConversationRead(conversation.id).then(() => {
+    const attemptKey = conversationReadAttemptKey(conversation, messagesVisible);
+    if (conversation.unreadCount < 1) {
+      readAttempt.current = null;
+    }
+    if (!attemptKey) return;
+    if (readAttempt.current === attemptKey) return;
+    readAttempt.current = attemptKey;
+    void markConversationRead(conversation.id).then((readState) => {
+      queryClient.setQueryData<ConversationList>(["messages", "conversations"], (current) => ({
+        items: (current?.items ?? []).map((item) => item.id === readState.conversationId
+          ? { ...item, unreadCount: readState.unreadCount }
+          : item),
+        nextCursor: current?.nextCursor ?? null
+      }));
       void queryClient.invalidateQueries({ queryKey: ["messages", "conversations"] });
     }).catch(() => {
-      readStarted.current = false;
+      if (readAttempt.current === attemptKey) readAttempt.current = null;
     });
   }, [conversation.id, conversation.requestState, conversation.unreadCount, messagesVisible, queryClient]);
 
@@ -43,8 +55,9 @@ export function ConversationStateActions({
     setMessage(null);
     try {
       const updated = await respondToMessageRequest(conversation.id, { action });
-      queryClient.setQueryData<{ items: Conversation[] }>(["messages", "conversations"], (current) => ({
-        items: (current?.items ?? []).map((item) => item.id === updated.id ? updated : item)
+      queryClient.setQueryData<ConversationList>(["messages", "conversations"], (current) => ({
+        items: (current?.items ?? []).map((item) => item.id === updated.id ? updated : item),
+        nextCursor: current?.nextCursor ?? null
       }));
       void queryClient.invalidateQueries({ queryKey: ["messages", "conversation", conversation.id] });
     } catch (error) {
@@ -72,8 +85,9 @@ export function ConversationStateActions({
     setMessage(null);
     try {
       const updated = await updateConversationMute(conversation.id, { muted: !conversation.muted });
-      queryClient.setQueryData<{ items: Conversation[] }>(["messages", "conversations"], (current) => ({
-        items: (current?.items ?? []).map((item) => item.id === updated.id ? updated : item)
+      queryClient.setQueryData<ConversationList>(["messages", "conversations"], (current) => ({
+        items: (current?.items ?? []).map((item) => item.id === updated.id ? updated : item),
+        nextCursor: current?.nextCursor ?? null
       }));
       setMessage(updated.muted ? "Conversation notifications muted." : "Conversation notifications enabled.");
     } catch (error) {

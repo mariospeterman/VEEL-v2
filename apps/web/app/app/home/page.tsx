@@ -16,7 +16,7 @@ export default async function AppHomePage() {
   await requireAppAccess("/app/home");
 
   const preferences = await getFeedPreferences();
-  const initialMode = preferences.ok ? preferences.data.defaultMode : "recommended";
+  const initialMode = preferences.ok ? preferences.data.defaultMode : "latest";
   const [feed, moments, discover] = await Promise.all([
     getHomeFeed(initialMode, "home"),
     getHomeFeed(initialMode, "moments"),

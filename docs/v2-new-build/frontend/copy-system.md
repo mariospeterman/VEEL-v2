@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-05
-Source of truth: yes
+Last updated: 2026-11-04
+Source of truth: yes, only for product vocabulary and tone
 
 Owns:
 - copy system decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -61,16 +61,17 @@ Avoid:
 
 Use:
 
-- `Passkey is the easiest start.`
-- `WEVID is a safe space.`
-- `Recommended for full functionality.`
-- `Skip for now.`
+- `Choose how to continue.`
+- `Connect the wallet you use with WeVid.`
+- `Signing proves wallet ownership. It never approves a payment.`
+- `Confirm 18+ access.`
 
 Rules:
 
 - explain why a step exists in one line
 - explain time cost briefly
 - privacy explanation lives inside Login and Wallet
+- do not promise a passkey-first or skip-wallet path that the implemented lifecycle does not provide
 
 ## App shell copy
 
@@ -92,7 +93,7 @@ Product-facing naming:
 - say `Event Access`, `Pass`, `Passes`, `Get Access`, and `Reserve Access`
 - say `Mutuals`, `Show Interest`, `Interested`, `Mutual`, `Mutual chat`, and `Mutuals mode`
 - say `Use WEVID wallet`, `Connect my wallet`, and `Pay from wallet`
-- say `Free Verified`, `WEVID Plus`, `WEVID Studio`, and `Enterprise`
+- say `Free Verified`, `WEVID Plus`, `WEVID Ultra`, `WEVID Studio`, and `Enterprise`
 - keep `video` as the generic fallback when the duration bucket is not the point of the UI
 
 Avoid:

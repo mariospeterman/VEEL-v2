@@ -34,10 +34,28 @@ export function toMutualsFeedItem(row: MutualsFeedRow): MutualsFeedItem {
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
     title: row.title,
-    mediaKind: row.media_kind,
+    mediaKind: mutualsMediaKind(row.media_type, row.cover_asset_kind),
     posterUrl: row.poster_url,
     createdAt: row.created_at.toISOString()
   };
+}
+
+export function mutualsMediaKind(
+  mediaType: MutualsFeedRow["media_type"],
+  coverAssetKind: MutualsFeedRow["cover_asset_kind"]
+): MutualsFeedItem["mediaKind"] {
+  switch (mediaType) {
+    case "image":
+      return "image";
+    case "bit":
+    case "clip":
+    case "vod":
+      return "video";
+    case "live_replay":
+      return "replay";
+    case "carousel":
+      return coverAssetKind;
+  }
 }
 
 export function toInterestResult(row: MutualsInterestResultRow): MutualsInterestResult {

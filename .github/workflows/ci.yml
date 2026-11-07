@@ -45,6 +45,9 @@ jobs:
       - name: Check dependency policy
         run: pnpm deps:check
 
+      - name: Audit production dependencies
+        run: pnpm audit:prod
+
       - name: Check docs, route map, OpenAPI, and schema alignment
         run: node scripts/check-docs.mjs
         env:
@@ -118,7 +121,39 @@ jobs:
         shell: bash
         run: |
           eval "$(pnpm exec supabase status -o env)"
-          VEEL_ENABLE_REAL_API_INTEGRATION_TESTS=1 API_INTEGRATION_DATABASE_URL="$DB_URL" pnpm exec vitest run --no-file-parallelism apps/api/test/authenticated-happy-path.integration.test.ts apps/api/test/policy-content-eligibility.integration.test.ts apps/api/test/analytics-core.integration.test.ts apps/api/test/mcp-profile-bridge.integration.test.ts apps/api/test/admin-staff.integration.test.ts
+          API_INTEGRATION_DATABASE_URL="$DB_URL" pnpm test:integration:api
+
+      - name: Stop isolated Supabase database
+        if: always()
+        run: pnpm exec supabase stop --no-backup
+
+  postgres-rollbacks:
+    name: postgres-rollbacks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.0.0
+          run_install: false
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Start isolated Supabase database
+        run: node scripts/run-supabase-cli.mjs start --exclude studio,imgproxy,mailpit,edge-runtime,logflare,vector,supavisor --yes
+
+      - name: Execute rollback and reapply proofs
+        shell: bash
+        run: |
+          eval "$(pnpm exec supabase status -o env)"
+          VEEL_ENABLE_REAL_ROLLBACK_TESTS=1 ROLLBACK_INTEGRATION_DATABASE_URL="$DB_URL" pnpm exec vitest run --no-file-parallelism packages/database/test/rollbacks.integration.test.ts packages/database/test/content-export-locking.integration.test.ts
 
       - name: Stop isolated Supabase database
         if: always()

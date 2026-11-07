@@ -4,7 +4,7 @@ import type { PostgresTransaction } from "../src/shared/postgres";
 import { createContentUpdateRepositoryMethods } from "../src/modules/content/content-update-repository";
 
 describe("content update repository", () => {
-  it("withdraws published content when its safety declaration changes", async () => {
+  it("withdraws published content without changing its first-publication time", async () => {
     const queries: string[] = [];
     const queryCalls: Array<{ query: string; values: unknown[] }> = [];
     const transaction = vi.fn((strings: TemplateStringsArray, ...queryValues: unknown[]) => {
@@ -13,6 +13,15 @@ describe("content update repository", () => {
       queryCalls.push({ query, values: queryValues });
       if (query.includes("select id from users where supabase_user_id")) {
         return Promise.resolve([{ id: "00000000-0000-4000-8000-000000000001" }]);
+      }
+      if (query.includes("select request_hash, response_body from idempotency_keys")) {
+        return Promise.resolve([{
+          request_hash: "published-safety-edit-request-hash",
+          response_body: null
+        }]);
+      }
+      if (query.includes("select media_type") && query.includes("from content_items")) {
+        return Promise.resolve([{ media_type: "vod" }]);
       }
       if (query.includes("with actor as")) {
         return Promise.resolve([{
@@ -29,6 +38,7 @@ describe("content update repository", () => {
       }
       return Promise.resolve([]);
     }) as unknown as PostgresTransaction;
+    transaction.json = ((value: unknown) => value) as PostgresTransaction["json"];
     const sql = {
       begin: vi.fn(async (work: (tx: PostgresTransaction) => Promise<unknown>) =>
         work(transaction))
@@ -39,6 +49,7 @@ describe("content update repository", () => {
       supabaseUserId: "00000000-0000-4000-8000-000000000001",
       contentId: "00000000-0000-4000-8000-000000000040",
       idempotencyKey: "published-safety-edit-1",
+      requestHash: "published-safety-edit-request-hash",
       captionProvided: false,
       bodyTextProvided: false,
       nsfwLabel: "adult",
@@ -55,7 +66,7 @@ describe("content update repository", () => {
     expect(updateQuery).toContain("then 'submitted_for_review'");
     expect(updateQuery).toContain("moderation_state = case");
     expect(updateQuery).toContain("then 'pending'");
-    expect(updateQuery).toContain("published_at = case");
+    expect(updateQuery).not.toContain("published_at =");
     expect(updateQuery).toContain("safety.representation_mode is distinct from");
     expect(updateQuery).toContain("declaration.representation_mode");
     const declarationCall = queryCalls.find(({ query }) =>

@@ -1,0 +1,13 @@
+
+> veel-shoot-own-shine@0.0.0 doctor /workspace/scratch/0635fbdaf32f/wevid-audit
+> bash scripts/toolchain-doctor.sh
+
+VEEL toolchain doctor
+Node expected: 22.16.0
+Node actual:   v22.16.0
+Node binary:   /root/.npm/_npx/2ad0c2d1aba2dd61/node_modules/node/bin/node
+pnpm expected: 10.0.0
+pnpm actual:   10.0.0
+Corepack:      /opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin/corepack
+platform:      Linux x86_64
+status:        ok

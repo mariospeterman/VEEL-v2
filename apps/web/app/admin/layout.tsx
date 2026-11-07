@@ -16,7 +16,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
           <p className="text-sm font-semibold text-(--accent-text)">WeVid Admin</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">Staff access required</h1>
           <p className="mt-3 text-sm leading-6 text-(--muted)">{access.message}</p>
-          <a className="mt-6 inline-flex min-h-11 items-center rounded-full bg-(--accent) px-5 text-sm font-semibold text-white" href="/app/home">Return to WeVid</a>
+          <a className="mt-6 inline-flex min-h-11 items-center rounded-full bg-(--accent) px-5 text-sm font-semibold text-(--accent-on-solid)" href="/app/home">Return to WeVid</a>
         </section>
       </main>
     );

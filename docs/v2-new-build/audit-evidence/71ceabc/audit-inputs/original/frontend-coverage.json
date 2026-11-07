@@ -1,0 +1,1550 @@
+{
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "scope": [
+    "apps/web",
+    "packages/ui",
+    "tests/smoke",
+    "tests/staging"
+  ],
+  "additional_full_reads": [
+    "AGENTS.md",
+    "docs/v2-new-build/frontend-architecture.md",
+    "docs/v2-new-build/frontend/component-map.md",
+    "docs/v2-new-build/frontend/copy-system.md",
+    "docs/v2-new-build/frontend/design-system.md",
+    "docs/v2-new-build/frontend/motion-system.md",
+    "docs/v2-new-build/frontend/ui-kit-lock.md",
+    "docs/v2-new-build/landing-page.md",
+    "docs/v2-new-build/native-ui-ux-screens.md",
+    "docs/v2-new-build/product/consumer-social-experience.md",
+    "packages/config/src/public.ts"
+  ],
+  "method": "Read-only full manual review of all executable source, configuration, styles, textual documentation and smoke/staging tests in scope. SVG asset structure inspected separately; binary graphics metadata only. Tests baseline owned by parent.",
+  "counts": {
+    "full_code_read": 210,
+    "metadata_only": 34,
+    "structured_asset_review": 8
+  },
+  "files": [
+    {
+      "path": "apps/web/.env.example",
+      "bytes": 1140,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/AGENTS.md",
+      "bytes": 678,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/CLAUDE.md",
+      "bytes": 11,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/README.md",
+      "bytes": 143,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/activity/refund-request-panel.tsx",
+      "bytes": 3894,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/admin/[section]/page.tsx",
+      "bytes": 12229,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/admin/actions.ts",
+      "bytes": 4945,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/admin/admin-operations.tsx",
+      "bytes": 8171,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/admin/admin-shell.tsx",
+      "bytes": 4583,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/admin/layout.tsx",
+      "bytes": 1135,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/admin/page.tsx",
+      "bytes": 4066,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/admin/staff/page.tsx",
+      "bytes": 5975,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/age/age-session-panel.tsx",
+      "bytes": 2550,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/age/callback/route.ts",
+      "bytes": 761,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/age/page.tsx",
+      "bytes": 1953,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/activity/page.tsx",
+      "bytes": 6515,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/analytics-summary.tsx",
+      "bytes": 3939,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/app-providers.tsx",
+      "bytes": 321,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/assistant/page.tsx",
+      "bytes": 4582,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/bits/page.tsx",
+      "bytes": 917,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/create/adult-publisher-gate.tsx",
+      "bytes": 2637,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/create/page.tsx",
+      "bytes": 2063,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/enterprise/enterprise-relationship-panel.tsx",
+      "bytes": 20557,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/enterprise/page.tsx",
+      "bytes": 7876,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/feed-experience.tsx",
+      "bytes": 15677,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/home/page.tsx",
+      "bytes": 3190,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/layout.tsx",
+      "bytes": 352,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/live/[liveRoomId]/live-host-workspace.tsx",
+      "bytes": 6354,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/live/[liveRoomId]/page.tsx",
+      "bytes": 1078,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/messages/page.tsx",
+      "bytes": 1330,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/moments/moment-tray.tsx",
+      "bytes": 1631,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/moments/moment-viewer.tsx",
+      "bytes": 4717,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/moments/page.tsx",
+      "bytes": 948,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/notifications/notification-list.tsx",
+      "bytes": 2940,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/notifications/page.tsx",
+      "bytes": 1372,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/profile/earnings/earnings-setup-form.tsx",
+      "bytes": 7746,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/profile/earnings/membership-offer-form.tsx",
+      "bytes": 4715,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/profile/earnings/page.tsx",
+      "bytes": 6708,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/profile/page.tsx",
+      "bytes": 5351,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/profile/profile-logout-button.tsx",
+      "bytes": 2705,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/profile/profile-media-grid.tsx",
+      "bytes": 1382,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/profile/profile-media-workspace.tsx",
+      "bytes": 12597,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/search/page.tsx",
+      "bytes": 811,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/search/search-experience.tsx",
+      "bytes": 6175,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/settings/content-preference-control.tsx",
+      "bytes": 2904,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/settings/page.tsx",
+      "bytes": 7696,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/settings/privacy-controls.tsx",
+      "bytes": 6053,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/studio/page.tsx",
+      "bytes": 7840,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/subscriptions/page.tsx",
+      "bytes": 8416,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/wallet/layout.tsx",
+      "bytes": 115,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app/wallet/page.tsx",
+      "bytes": 6598,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/app-shell.tsx",
+      "bytes": 4288,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/auth/confirm/route.ts",
+      "bytes": 6349,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/auth/logout/route.ts",
+      "bytes": 1274,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/content/[contentId]/content-engagement-panel.tsx",
+      "bytes": 20664,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/content/[contentId]/content-unlock-panel.tsx",
+      "bytes": 2187,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/content/[contentId]/page.tsx",
+      "bytes": 4636,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/content/content-renderer.tsx",
+      "bytes": 9845,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/create/composer-options.ts",
+      "bytes": 442,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/create/create-workspace-fields.tsx",
+      "bytes": 1531,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/create/image-composer.tsx",
+      "bytes": 25872,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/create/live-create-workspace.tsx",
+      "bytes": 6258,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/create/media-composer.tsx",
+      "bytes": 346,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/create/universal-composer.tsx",
+      "bytes": 10531,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/event-access/[eventId]/event-access-pass-panel.tsx",
+      "bytes": 3565,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/event-access/[eventId]/page.tsx",
+      "bytes": 3805,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/follow-button.tsx",
+      "bytes": 1973,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/globals.css",
+      "bytes": 335,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/landing-auth-surface.tsx",
+      "bytes": 17119,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/landing-claims.test.ts",
+      "bytes": 1495,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/landing-claims.ts",
+      "bytes": 4483,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/landing-content.ts",
+      "bytes": 9034,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/landing-entry.test.ts",
+      "bytes": 1164,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/landing-entry.ts",
+      "bytes": 1443,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/landing-experience.tsx",
+      "bytes": 19476,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/landing-wallet-runtime.tsx",
+      "bytes": 1871,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/layout.tsx",
+      "bytes": 2787,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/legal/[slug]/page.tsx",
+      "bytes": 709,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/legal-docs.ts",
+      "bytes": 2016,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/live/[liveRoomId]/live-access-panel.tsx",
+      "bytes": 2570,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/live/[liveRoomId]/live-interaction-panel.tsx",
+      "bytes": 7539,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/live/[liveRoomId]/page.tsx",
+      "bytes": 5380,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/messages/commercial-interactions-panel.tsx",
+      "bytes": 13489,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/messages/conversation-state-actions.tsx",
+      "bytes": 7252,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/messages/message-composer.tsx",
+      "bytes": 11494,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/messages/messages-workspace.tsx",
+      "bytes": 9186,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/mutuals/feed/mutuals-feed.tsx",
+      "bytes": 5461,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/mutuals/feed/page.tsx",
+      "bytes": 2719,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/mutuals/page.tsx",
+      "bytes": 2086,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/oauth/mcp/consent/mcp-consent-decision-panel.tsx",
+      "bytes": 1977,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/oauth/mcp/consent/page.tsx",
+      "bytes": 4139,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/offline/offline-retry-button.tsx",
+      "bytes": 166,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/offline/page.tsx",
+      "bytes": 697,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/page.tsx",
+      "bytes": 2123,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/passes/page.tsx",
+      "bytes": 2278,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/performer-consent/[token]/page.tsx",
+      "bytes": 2366,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/performer-consent/[token]/performer-consent-actions.tsx",
+      "bytes": 2919,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/performer-consent/return/page.tsx",
+      "bytes": 508,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/profile/[handle]/creator-support-panel.tsx",
+      "bytes": 2530,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/profile/[handle]/page.tsx",
+      "bytes": 5911,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/profile/[handle]/profile-follow-panel.tsx",
+      "bytes": 917,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/profile/[handle]/profile-message-button.tsx",
+      "bytes": 1106,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/provider-playback.tsx",
+      "bytes": 7932,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/pwa-runtime.tsx",
+      "bytes": 3115,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/robots.ts",
+      "bytes": 362,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/runtime-config.js/route.ts",
+      "bytes": 566,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/settings/mcp-connections-panel.tsx",
+      "bytes": 3791,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/settings/notification-enrollment.tsx",
+      "bytes": 5487,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/settings/notification-preferences-panel.tsx",
+      "bytes": 2360,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/settings/recovery-access-panel.tsx",
+      "bytes": 1869,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/settings/session-security-actions.tsx",
+      "bytes": 2605,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/sitemap.ts",
+      "bytes": 452,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/app-shell.css",
+      "bytes": 3817,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/auth-controls.css",
+      "bytes": 6161,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/auth-login.css",
+      "bytes": 3588,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/auth-onboarding.css",
+      "bytes": 4268,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/auth-overlays.css",
+      "bytes": 2678,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/auth-responsive.css",
+      "bytes": 3463,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/auth-shell.css",
+      "bytes": 4034,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/auth.css",
+      "bytes": 184,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/components.css",
+      "bytes": 7806,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/landing.css",
+      "bytes": 40777,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/media.css",
+      "bytes": 9883,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/responsive.css",
+      "bytes": 2367,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/styles/tokens-base.css",
+      "bytes": 3768,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/subscriptions/subscription-authorization-panel.tsx",
+      "bytes": 3701,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/subscriptions/subscription-cancel-panel.tsx",
+      "bytes": 1743,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/theme-toggle.tsx",
+      "bytes": 1299,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/app/ui.tsx",
+      "bytes": 2000,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/next-env.d.ts",
+      "bytes": 288,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/next.config.ts",
+      "bytes": 3767,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/package.json",
+      "bytes": 1535,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/postcss.config.mjs",
+      "bytes": 92,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/proxy.ts",
+      "bytes": 391,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/public/Logo-Dark-Transparent.png",
+      "bytes": 66444,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/Logo-Light-Transparent.png",
+      "bytes": 21614,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/favicon.ico",
+      "bytes": 4286,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/images/wevid-landing-hero-v2.jpg",
+      "bytes": 245659,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/manifest.webmanifest",
+      "bytes": 734,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/public/mockup/admin dashboard.png",
+      "bytes": 1310357,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/ai assistant - MCP.png",
+      "bytes": 1286161,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/app shell - navigation.png",
+      "bytes": 1675678,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/bits - imersive viwer.png",
+      "bytes": 1799628,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/create - upload workspace.png",
+      "bytes": 1672382,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/design.md",
+      "bytes": 9291,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/public/mockup/discovery - search overlay.png",
+      "bytes": 1702053,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/enterprise dashboard.png",
+      "bytes": 1603879,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/home - mixed feed.png",
+      "bytes": 1897729,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/landing age dark.png",
+      "bytes": 1444568,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/landing age light.png",
+      "bytes": 1490967,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/landing login dark.png",
+      "bytes": 1303804,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/landing login light.png",
+      "bytes": 1221708,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/landing setup account dark.png",
+      "bytes": 1332331,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/landing setup account light.png",
+      "bytes": 1358631,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/landing start dark.png",
+      "bytes": 1580800,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/landing start light.png",
+      "bytes": 1476956,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/live - event access.png",
+      "bytes": 1521965,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/media viwer - content details.png",
+      "bytes": 1796203,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/message - share flow.png",
+      "bytes": 1534013,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/mutuals - connection flow.png",
+      "bytes": 1563310,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/profile - activity.png",
+      "bytes": 1648044,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/settings privacy.png",
+      "bytes": 1315778,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/studio dashboard.png",
+      "bytes": 1621294,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/subscriptions - plans - membershps (tires).png",
+      "bytes": 1466829,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/mockup/wallet - receipts.png",
+      "bytes": 1654021,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/provider-icons/README.md",
+      "bytes": 729,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/public/provider-icons/backpack.png",
+      "bytes": 1645,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/provider-icons/didit.svg",
+      "bytes": 122808,
+      "kind": "text",
+      "status": "structured_asset_review",
+      "note": "Complete XML parsed and active content, external references, embedded image type, style and tag structure inspected; path geometry/base64 not manually decoded or visually compared."
+    },
+    {
+      "path": "apps/web/public/provider-icons/persona.svg",
+      "bytes": 5867,
+      "kind": "text",
+      "status": "structured_asset_review",
+      "note": "Complete XML parsed and active content, external references, embedded image type, style and tag structure inspected; path geometry/base64 not manually decoded or visually compared."
+    },
+    {
+      "path": "apps/web/public/provider-icons/phantom.svg",
+      "bytes": 1390,
+      "kind": "text",
+      "status": "structured_asset_review",
+      "note": "Complete XML parsed and active content, external references, embedded image type, style and tag structure inspected; path geometry/base64 not manually decoded or visually compared."
+    },
+    {
+      "path": "apps/web/public/provider-icons/privy.png",
+      "bytes": 502,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/provider-icons/solflare.svg",
+      "bytes": 1643,
+      "kind": "text",
+      "status": "structured_asset_review",
+      "note": "Complete XML parsed and active content, external references, embedded image type, style and tag structure inspected; path geometry/base64 not manually decoded or visually compared."
+    },
+    {
+      "path": "apps/web/public/provider-icons/sumsub.svg",
+      "bytes": 2509,
+      "kind": "text",
+      "status": "structured_asset_review",
+      "note": "Complete XML parsed and active content, external references, embedded image type, style and tag structure inspected; path geometry/base64 not manually decoded or visually compared."
+    },
+    {
+      "path": "apps/web/public/provider-icons/turnkey.svg",
+      "bytes": 646,
+      "kind": "text",
+      "status": "structured_asset_review",
+      "note": "Complete XML parsed and active content, external references, embedded image type, style and tag structure inspected; path geometry/base64 not manually decoded or visually compared."
+    },
+    {
+      "path": "apps/web/public/provider-icons/veriff.svg",
+      "bytes": 1926,
+      "kind": "text",
+      "status": "structured_asset_review",
+      "note": "Complete XML parsed and active content, external references, embedded image type, style and tag structure inspected; path geometry/base64 not manually decoded or visually compared."
+    },
+    {
+      "path": "apps/web/public/provider-icons/yoti.svg",
+      "bytes": 884,
+      "kind": "text",
+      "status": "structured_asset_review",
+      "note": "Complete XML parsed and active content, external references, embedded image type, style and tag structure inspected; path geometry/base64 not manually decoded or visually compared."
+    },
+    {
+      "path": "apps/web/public/pwa-icon-192.png",
+      "bytes": 2912,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/pwa-icon-512.png",
+      "bytes": 12121,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/pwa-icon-maskable-512.png",
+      "bytes": 10587,
+      "kind": "binary",
+      "status": "metadata_only"
+    },
+    {
+      "path": "apps/web/public/veel-sw.js",
+      "bytes": 3889,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/scripts/prove-bunny-sfw.mjs",
+      "bytes": 3471,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/analytics/onboarding-analytics.test.ts",
+      "bytes": 829,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/analytics/onboarding-analytics.ts",
+      "bytes": 2609,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/analytics/onboarding-journey-handoff.ts",
+      "bytes": 699,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-client-admin-mutations.ts",
+      "bytes": 5803,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-client-read.ts",
+      "bytes": 15681,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-client-transport.ts",
+      "bytes": 5237,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-client-types.ts",
+      "bytes": 10366,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-client.ts",
+      "bytes": 117,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-errors.test.ts",
+      "bytes": 1817,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-errors.ts",
+      "bytes": 4062,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-mutation-transport.test.ts",
+      "bytes": 1523,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-mutation-transport.ts",
+      "bytes": 6905,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-mutation-types.ts",
+      "bytes": 10154,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/api-mutations.ts",
+      "bytes": 33232,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/brand/provider-image-source.ts",
+      "bytes": 222,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/brand/provider-logo.test.ts",
+      "bytes": 688,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/brand/provider-logo.tsx",
+      "bytes": 2165,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/browser-api-url.test.ts",
+      "bytes": 921,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/browser-api-url.ts",
+      "bytes": 721,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/format-asset-amount.ts",
+      "bytes": 764,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/mcp-display.ts",
+      "bytes": 3481,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/payment-handoff-panel.tsx",
+      "bytes": 9063,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/payment-wallet-bridge.tsx",
+      "bytes": 1622,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/payment-wallet-runtime.tsx",
+      "bytes": 498,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/playback-usage.ts",
+      "bytes": 3648,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/player-js.d.ts",
+      "bytes": 611,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/providers/onboarding-provider-config.ts",
+      "bytes": 434,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/public-env.test.ts",
+      "bytes": 1364,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/public-env.ts",
+      "bytes": 1575,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/query-provider.tsx",
+      "bytes": 521,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/realtime-protocol.test.ts",
+      "bytes": 1607,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/realtime-protocol.ts",
+      "bytes": 900,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/realtime-provider.tsx",
+      "bytes": 9988,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/auth-cookie.ts",
+      "bytes": 58,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/auth-state.ts",
+      "bytes": 925,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/client.ts",
+      "bytes": 1099,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/e2e-auth.ts",
+      "bytes": 900,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/proxy.test.ts",
+      "bytes": 2409,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/proxy.ts",
+      "bytes": 1384,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/route-guard.test.ts",
+      "bytes": 1944,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/route-guard.ts",
+      "bytes": 2082,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/server.ts",
+      "bytes": 932,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/supabase-auth-config.ts",
+      "bytes": 1495,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/supabase/supabase-auth-panel.tsx",
+      "bytes": 5567,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/auth-purpose-policy.test.ts",
+      "bytes": 721,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/auth-purpose-policy.ts",
+      "bytes": 360,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/backend-wallet-auth.ts",
+      "bytes": 2528,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/embedded-wallet-launcher.tsx",
+      "bytes": 2428,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/embedded-wallet-login-runtime.tsx",
+      "bytes": 766,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/embedded-wallet-login.tsx",
+      "bytes": 6647,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/embedded-wallet-providers.tsx",
+      "bytes": 2720,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/provider-session-logout.tsx",
+      "bytes": 2047,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/solana-wallet-provider.tsx",
+      "bytes": 2280,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/wallet-capabilities.test.ts",
+      "bytes": 1381,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/wallet-capabilities.ts",
+      "bytes": 697,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/wallet-link-panel.tsx",
+      "bytes": 18578,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/wallet-runtime-base-providers.tsx",
+      "bytes": 701,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/wallet-runtime-providers.tsx",
+      "bytes": 414,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/src/wallet/wallet-session-cookie.ts",
+      "bytes": 56,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/test/format-asset-amount.test.ts",
+      "bytes": 459,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "apps/web/tsconfig.json",
+      "bytes": 355,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "packages/ui/README.md",
+      "bytes": 100,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "packages/ui/package.json",
+      "bytes": 335,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "packages/ui/src/index.test.ts",
+      "bytes": 973,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "packages/ui/src/index.ts",
+      "bytes": 7147,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "packages/ui/tsconfig.json",
+      "bytes": 238,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "tests/smoke/auth-happy-path.spec.ts",
+      "bytes": 53008,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "tests/smoke/frontend-readiness.spec.ts",
+      "bytes": 14790,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "tests/smoke/home.spec.ts",
+      "bytes": 61395,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "tests/smoke/landing.spec.ts",
+      "bytes": 4406,
+      "kind": "text",
+      "status": "full_code_read"
+    },
+    {
+      "path": "tests/staging/platform.spec.ts",
+      "bytes": 2023,
+      "kind": "text",
+      "status": "full_code_read"
+    }
+  ]
+}

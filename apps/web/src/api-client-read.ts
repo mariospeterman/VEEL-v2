@@ -49,6 +49,7 @@ import type {
   CreatorOnboarding,
   CreatorProfile,
   DiscoverPage,
+  DiscoverCursorSet,
   Event,
   EventAccessPass,
   EventAccessPassPage,
@@ -82,6 +83,7 @@ import type {
   WalletList,
   WalletTransactionPage
 } from "./api-client-types";
+import { adminApiPagePath } from "./admin/admin-pagination";
 
 export async function getContentItem(contentId: string): Promise<ApiResult<ContentItem>> {
   return getJson<ContentItem>(`/v1/content/${encodeURIComponent(contentId)}`);
@@ -99,8 +101,8 @@ export async function getLiveRoom(liveRoomId: string): Promise<ApiResult<LiveRoo
   return getJson<LiveRoom>(`/v1/live/rooms/${encodeURIComponent(liveRoomId)}`);
 }
 
-export async function getMyLiveRooms(): Promise<ApiResult<LiveRoomPage>> {
-  return getJson<LiveRoomPage>("/v1/live/rooms/mine");
+export async function getMyLiveRooms(cursor?: string): Promise<ApiResult<LiveRoomPage>> {
+  return getJson<LiveRoomPage>(withCursor("/v1/live/rooms/mine", cursor));
 }
 
 export async function getLiveRoomMessages(liveRoomId: string): Promise<ApiResult<LiveChatPage>> {
@@ -127,24 +129,46 @@ export async function getWalletTransactionActivity(): Promise<ApiResult<WalletTr
   return getJson<WalletTransactionPage>("/v1/activity/wallet-transactions");
 }
 
-export async function getConversations(): Promise<ApiResult<ConversationList>> {
-  return getJson<ConversationList>("/v1/messages/conversations");
+export async function getConversations(cursor?: string): Promise<ApiResult<ConversationList>> {
+  return getJson<ConversationList>(withCursor("/v1/messages/conversations", cursor));
 }
 
-export async function getConversationMessages(conversationId: string): Promise<ApiResult<MessagePage>> {
-  return getJson<MessagePage>(`/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`);
+export async function getConversationMessages(
+  conversationId: string,
+  cursor?: string
+): Promise<ApiResult<MessagePage>> {
+  return getJson<MessagePage>(
+    withCursor(
+      `/v1/messages/conversations/${encodeURIComponent(conversationId)}/messages`,
+      cursor
+    )
+  );
+}
+
+function withCursor(path: string, cursor: string | undefined): string {
+  return cursor ? `${path}?cursor=${encodeURIComponent(cursor)}` : path;
 }
 
 export async function getWallets(): Promise<ApiResult<WalletList>> {
   return getJson<WalletList>("/v1/wallets");
 }
 
-export async function getSubscriptionPlans(): Promise<ApiResult<SubscriptionPlanPage>> {
-  return getJson<SubscriptionPlanPage>("/v1/subscriptions/plans");
+export async function getSubscriptionPlans(cursor?: string): Promise<ApiResult<SubscriptionPlanPage>> {
+  return getJson<SubscriptionPlanPage>(withCursor("/v1/subscriptions/plans", cursor));
 }
 
-export async function getSubscriptions(): Promise<ApiResult<SubscriptionPage>> {
-  return getJson<SubscriptionPage>("/v1/subscriptions");
+export async function getSubscriptions(options: {
+  cursor?: string;
+  scope?: "platform" | "creator";
+  view?: "active" | "history";
+} = {}): Promise<ApiResult<SubscriptionPage>> {
+  const query = new URLSearchParams();
+  if (options.cursor) query.set("cursor", options.cursor);
+  if (options.scope) query.set("scope", options.scope);
+  if (options.view) query.set("view", options.view);
+  return getJson<SubscriptionPage>(
+    `/v1/subscriptions${query.size > 0 ? `?${query.toString()}` : ""}`
+  );
 }
 
 export async function getMyCreatorMembershipOffer(): Promise<ApiResult<SubscriptionPlan>> {
@@ -155,18 +179,32 @@ export async function getPlatformAccess(): Promise<ApiResult<PlatformAccess>> {
   return getJson<PlatformAccess>("/v1/platform-access");
 }
 
-export async function getDiscoverSearch(query = ""): Promise<ApiResult<DiscoverPage>> {
+export async function getDiscoverSearch(
+  query = "",
+  cursors: Partial<DiscoverCursorSet> = {}
+): Promise<ApiResult<DiscoverPage>> {
   const search = new URLSearchParams();
 
   if (query) {
     search.set("q", query);
   }
 
+  const cursorParameters = [
+    ["contentCursor", cursors.content],
+    ["creatorCursor", cursors.creators],
+    ["hashtagCursor", cursors.hashtags],
+    ["eventCursor", cursors.events],
+    ["liveCursor", cursors.liveRooms]
+  ] as const;
+  for (const [parameter, cursor] of cursorParameters) {
+    if (cursor) search.set(parameter, cursor);
+  }
+
   return getJson<DiscoverPage>(`/v1/discover/search${search.size > 0 ? `?${search.toString()}` : ""}`);
 }
 
 export async function getHomeFeed(
-  mode = "recommended",
+  mode: "latest" | "following" = "latest",
   surface: "home" | "bits" | "moments" = "home",
   cursor?: string
 ): Promise<ApiResult<FeedPage>> {
@@ -288,140 +326,146 @@ export async function getAdminNotificationHealth(): Promise<ApiResult<AdminNotif
   return getJson<AdminNotificationHealth>("/v1/admin/notifications/health");
 }
 
-export async function getAdminUsers(): Promise<ApiResult<AdminPage<AdminUser>>> {
-  return getJson<AdminPage<AdminUser>>("/v1/admin/users");
+export async function getAdminUsers(cursor?: string): Promise<ApiResult<AdminPage<AdminUser>>> {
+  return getAdminPage<AdminUser>("/v1/admin/users", cursor);
 }
 
-export async function getAdminContent(): Promise<ApiResult<AdminPage<AdminContentItem>>> {
-  return getJson<AdminPage<AdminContentItem>>("/v1/admin/content");
+export async function getAdminContent(cursor?: string): Promise<ApiResult<AdminPage<AdminContentItem>>> {
+  return getAdminPage<AdminContentItem>("/v1/admin/content", cursor);
 }
 
-export async function getAdminReports(): Promise<ApiResult<AdminPage<AdminReport>>> {
-  return getJson<AdminPage<AdminReport>>("/v1/admin/reports");
+export async function getAdminReports(cursor?: string): Promise<ApiResult<AdminPage<AdminReport>>> {
+  return getAdminPage<AdminReport>("/v1/admin/reports", cursor);
 }
 
-export async function getAdminPaymentIntents(): Promise<ApiResult<AdminPage<AdminPaymentIntent>>> {
-  return getJson<AdminPage<AdminPaymentIntent>>("/v1/admin/payments/intents");
+export async function getAdminPaymentIntents(cursor?: string): Promise<ApiResult<AdminPage<AdminPaymentIntent>>> {
+  return getAdminPage<AdminPaymentIntent>("/v1/admin/payments/intents", cursor);
 }
 
-export async function getAdminPaymentCommercialPolicies(): Promise<ApiResult<AdminPage<AdminPaymentCommercialPolicy>>> {
-  return getJson<AdminPage<AdminPaymentCommercialPolicy>>("/v1/admin/payments/commercial-policies");
+export async function getAdminPaymentCommercialPolicies(cursor?: string): Promise<ApiResult<AdminPage<AdminPaymentCommercialPolicy>>> {
+  return getAdminPage<AdminPaymentCommercialPolicy>("/v1/admin/payments/commercial-policies", cursor);
 }
 
-export async function getAdminUnlocks(): Promise<ApiResult<AdminPage<AdminUnlock>>> {
-  return getJson<AdminPage<AdminUnlock>>("/v1/admin/unlocks");
+export async function getAdminUnlocks(cursor?: string): Promise<ApiResult<AdminPage<AdminUnlock>>> {
+  return getAdminPage<AdminUnlock>("/v1/admin/unlocks", cursor);
 }
 
-export async function getAdminProviderEvents(): Promise<ApiResult<AdminPage<AdminProviderEvent>>> {
-  return getJson<AdminPage<AdminProviderEvent>>("/v1/admin/provider-events");
+export async function getAdminProviderEvents(cursor?: string): Promise<ApiResult<AdminPage<AdminProviderEvent>>> {
+  return getAdminPage<AdminProviderEvent>("/v1/admin/provider-events", cursor);
 }
 
-export async function getAdminLiveRooms(): Promise<ApiResult<AdminPage<AdminLiveRoom>>> {
-  return getJson<AdminPage<AdminLiveRoom>>("/v1/admin/live/rooms");
+export async function getAdminLiveRooms(cursor?: string): Promise<ApiResult<AdminPage<AdminLiveRoom>>> {
+  return getAdminPage<AdminLiveRoom>("/v1/admin/live/rooms", cursor);
 }
 
-export async function getAdminMediaAssets(): Promise<ApiResult<AdminPage<AdminMediaAsset>>> {
-  return getJson<AdminPage<AdminMediaAsset>>("/v1/admin/media/assets");
+export async function getAdminMediaAssets(cursor?: string): Promise<ApiResult<AdminPage<AdminMediaAsset>>> {
+  return getAdminPage<AdminMediaAsset>("/v1/admin/media/assets", cursor);
 }
 
-export async function getAdminAgeChecks(): Promise<ApiResult<AdminPage<AdminAgeCheck>>> {
-  return getJson<AdminPage<AdminAgeCheck>>("/v1/admin/age-kyc/age-checks");
+export async function getAdminAgeChecks(cursor?: string): Promise<ApiResult<AdminPage<AdminAgeCheck>>> {
+  return getAdminPage<AdminAgeCheck>("/v1/admin/age-kyc/age-checks", cursor);
 }
 
-export async function getAdminIdentityChecks(): Promise<ApiResult<AdminPage<AdminIdentityCheck>>> {
-  return getJson<AdminPage<AdminIdentityCheck>>("/v1/admin/age-kyc/identity-checks");
+export async function getAdminIdentityChecks(cursor?: string): Promise<ApiResult<AdminPage<AdminIdentityCheck>>> {
+  return getAdminPage<AdminIdentityCheck>("/v1/admin/age-kyc/identity-checks", cursor);
 }
 
-export async function getAdminAiSessions(): Promise<ApiResult<AdminPage<AdminAiSession>>> {
-  return getJson<AdminPage<AdminAiSession>>("/v1/admin/ai/sessions");
+export async function getAdminAiSessions(cursor?: string): Promise<ApiResult<AdminPage<AdminAiSession>>> {
+  return getAdminPage<AdminAiSession>("/v1/admin/ai/sessions", cursor);
 }
 
-export async function getAdminAiToolCalls(): Promise<ApiResult<AdminPage<AdminAiToolCall>>> {
-  return getJson<AdminPage<AdminAiToolCall>>("/v1/admin/ai/tool-calls");
+export async function getAdminAiToolCalls(cursor?: string): Promise<ApiResult<AdminPage<AdminAiToolCall>>> {
+  return getAdminPage<AdminAiToolCall>("/v1/admin/ai/tool-calls", cursor);
 }
 
-export async function getAdminAuditEvents(): Promise<ApiResult<AdminPage<AuditEvent>>> {
-  return getJson<AdminPage<AuditEvent>>("/v1/admin/audit");
+export async function getAdminAuditEvents(cursor?: string): Promise<ApiResult<AdminPage<AuditEvent>>> {
+  return getAdminPage<AuditEvent>("/v1/admin/audit", cursor);
 }
 
-export async function getAdminSupportCases(): Promise<ApiResult<AdminPage<AdminSupportCase>>> {
-  return getJson<AdminPage<AdminSupportCase>>("/v1/admin/support/cases");
+export async function getAdminSupportCases(cursor?: string): Promise<ApiResult<AdminPage<AdminSupportCase>>> {
+  return getAdminPage<AdminSupportCase>("/v1/admin/support/cases", cursor);
 }
 
-export async function getAdminSupportPolicies(): Promise<ApiResult<AdminPage<AdminSupportPolicy>>> {
-  return getJson<AdminPage<AdminSupportPolicy>>("/v1/admin/support/policies");
+export async function getAdminSupportPolicies(cursor?: string): Promise<ApiResult<AdminPage<AdminSupportPolicy>>> {
+  return getAdminPage<AdminSupportPolicy>("/v1/admin/support/policies", cursor);
 }
 
-export async function getAdminRefundDisputes(): Promise<ApiResult<AdminPage<AdminRefundDispute>>> {
-  return getJson<AdminPage<AdminRefundDispute>>("/v1/admin/refunds/disputes");
+export async function getAdminRefundDisputes(cursor?: string): Promise<ApiResult<AdminPage<AdminRefundDispute>>> {
+  return getAdminPage<AdminRefundDispute>("/v1/admin/refunds/disputes", cursor);
 }
 
-export async function getAdminDataRequests(): Promise<ApiResult<AdminPage<AdminDataRequest>>> {
-  return getJson<AdminPage<AdminDataRequest>>("/v1/admin/data-requests");
+export async function getAdminDataRequests(cursor?: string): Promise<ApiResult<AdminPage<AdminDataRequest>>> {
+  return getAdminPage<AdminDataRequest>("/v1/admin/data-requests", cursor);
 }
 
-export async function getAdminEvents(): Promise<ApiResult<AdminPage<Event>>> {
-  return getJson<AdminPage<Event>>("/v1/admin/events");
+export async function getAdminEvents(cursor?: string): Promise<ApiResult<AdminPage<Event>>> {
+  return getAdminPage<Event>("/v1/admin/events", cursor);
 }
 
-export async function getAdminEventAccessPasses(): Promise<ApiResult<AdminPage<EventAccessPass>>> {
-  return getJson<AdminPage<EventAccessPass>>("/v1/admin/event-access-passes");
+export async function getAdminEventAccessPasses(cursor?: string): Promise<ApiResult<AdminPage<EventAccessPass>>> {
+  return getAdminPage<EventAccessPass>("/v1/admin/event-access-passes", cursor);
 }
 
 export async function getAdminMutualsSafety(): Promise<ApiResult<AdminMutualsSafety>> {
   return getJson<AdminMutualsSafety>("/v1/admin/mutuals/safety");
 }
 
-export async function getAdminComplianceLedger(): Promise<ApiResult<AdminPage<AdminComplianceLedgerEntry>>> {
-  return getJson<AdminPage<AdminComplianceLedgerEntry>>("/v1/admin/compliance/ledger");
+export async function getAdminComplianceLedger(cursor?: string): Promise<ApiResult<AdminPage<AdminComplianceLedgerEntry>>> {
+  return getAdminPage<AdminComplianceLedgerEntry>("/v1/admin/compliance/ledger", cursor);
 }
 
-export async function getAdminDac7Reports(): Promise<ApiResult<AdminPage<AdminComplianceReport>>> {
-  return getJson<AdminPage<AdminComplianceReport>>("/v1/admin/compliance/dac7/reports");
+export async function getAdminDac7Reports(cursor?: string): Promise<ApiResult<AdminPage<AdminComplianceReport>>> {
+  return getAdminPage<AdminComplianceReport>("/v1/admin/compliance/dac7/reports", cursor);
 }
 
-export async function getAdminCarfReports(): Promise<ApiResult<AdminPage<AdminComplianceReport>>> {
-  return getJson<AdminPage<AdminComplianceReport>>("/v1/admin/compliance/carf/reports");
+export async function getAdminCarfReports(cursor?: string): Promise<ApiResult<AdminPage<AdminComplianceReport>>> {
+  return getAdminPage<AdminComplianceReport>("/v1/admin/compliance/carf/reports", cursor);
 }
 
-export async function getAdminVatDeterminations(): Promise<ApiResult<AdminPage<AdminVatDetermination>>> {
-  return getJson<AdminPage<AdminVatDetermination>>("/v1/admin/compliance/vat/determinations");
+export async function getAdminVatDeterminations(cursor?: string): Promise<ApiResult<AdminPage<AdminVatDetermination>>> {
+  return getAdminPage<AdminVatDetermination>("/v1/admin/compliance/vat/determinations", cursor);
 }
 
-export async function getAdminReceipts(): Promise<ApiResult<AdminPage<AdminReceipt>>> {
-  return getJson<AdminPage<AdminReceipt>>("/v1/admin/compliance/receipts");
+export async function getAdminReceipts(cursor?: string): Promise<ApiResult<AdminPage<AdminReceipt>>> {
+  return getAdminPage<AdminReceipt>("/v1/admin/compliance/receipts", cursor);
 }
 
-export async function getAdminInvoices(): Promise<ApiResult<AdminPage<AdminInvoice>>> {
-  return getJson<AdminPage<AdminInvoice>>("/v1/admin/compliance/invoices");
+export async function getAdminInvoices(cursor?: string): Promise<ApiResult<AdminPage<AdminInvoice>>> {
+  return getAdminPage<AdminInvoice>("/v1/admin/compliance/invoices", cursor);
 }
 
-export async function getAdminReferralPrograms(): Promise<ApiResult<AdminPage<AdminReferralProgram>>> {
-  return getJson<AdminPage<AdminReferralProgram>>("/v1/admin/referrals/programs");
+export async function getAdminReferralPrograms(cursor?: string): Promise<ApiResult<AdminPage<AdminReferralProgram>>> {
+  return getAdminPage<AdminReferralProgram>("/v1/admin/referrals/programs", cursor);
 }
 
-export async function getAdminPartnerCampaigns(): Promise<ApiResult<AdminPage<AdminPartnerCampaign>>> {
-  return getJson<AdminPage<AdminPartnerCampaign>>("/v1/admin/referrals/partner-campaigns");
+export async function getAdminPartnerCampaigns(cursor?: string): Promise<ApiResult<AdminPage<AdminPartnerCampaign>>> {
+  return getAdminPage<AdminPartnerCampaign>("/v1/admin/referrals/partner-campaigns", cursor);
 }
 
-export async function getAdminTierWaivers(): Promise<ApiResult<AdminPage<AdminTierWaiver>>> {
-  return getJson<AdminPage<AdminTierWaiver>>("/v1/admin/tier-waivers");
+export async function getAdminTierWaivers(cursor?: string): Promise<ApiResult<AdminPage<AdminTierWaiver>>> {
+  return getAdminPage<AdminTierWaiver>("/v1/admin/tier-waivers", cursor);
 }
 
-export async function getAdminOrganizations(): Promise<ApiResult<AdminPage<AdminOrganization>>> {
-  return getJson<AdminPage<AdminOrganization>>("/v1/admin/organizations");
+export async function getAdminOrganizations(cursor?: string): Promise<ApiResult<AdminPage<AdminOrganization>>> {
+  return getAdminPage<AdminOrganization>("/v1/admin/organizations", cursor);
 }
 
 export async function getAdminOrganizationMembers(
-  organizationId: string
+  organizationId: string,
+  cursor?: string
 ): Promise<ApiResult<AdminPage<AdminOrganizationMember>>> {
-  return getJson<AdminPage<AdminOrganizationMember>>(
-    `/v1/admin/organizations/${encodeURIComponent(organizationId)}/members`
+  return getAdminPage<AdminOrganizationMember>(
+    `/v1/admin/organizations/${encodeURIComponent(organizationId)}/members`,
+    cursor
   );
 }
 
-export async function getAdminFeatureFlags(): Promise<ApiResult<AdminPage<AdminFeatureFlag>>> {
-  return getJson<AdminPage<AdminFeatureFlag>>("/v1/admin/feature-flags");
+export async function getAdminFeatureFlags(cursor?: string): Promise<ApiResult<AdminPage<AdminFeatureFlag>>> {
+  return getAdminPage<AdminFeatureFlag>("/v1/admin/feature-flags", cursor);
+}
+
+function getAdminPage<T>(path: string, cursor?: string): Promise<ApiResult<AdminPage<T>>> {
+  return getJson<AdminPage<T>>(adminApiPagePath(path, cursor));
 }
 
 export async function getPerformerInvitation(token: string): Promise<ApiResult<PerformerConsentRequest>> {

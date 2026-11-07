@@ -8,6 +8,7 @@ import {
   ReferralIdempotencyConflictError,
   ReferralRepositoryConfigurationError
 } from "./referral-repository.js";
+import { KeysetPaginationCursorError } from "../../shared/keyset-pagination.js";
 import type { CreateReferralTokenRequest, ReferralRepository } from "./types.js";
 
 interface RegisterReferralRoutesOptions {
@@ -113,6 +114,10 @@ async function sendReferralActivity(
 
     return reply.code(200).send(activity);
   } catch (error) {
+    if (error instanceof KeysetPaginationCursorError) {
+      return reply.code(400).send(validationResponse(error.message));
+    }
+
     if (error instanceof ReferralRepositoryConfigurationError) {
       request.log.warn({ error }, "Referral repository is not configured");
       return reply.code(200).send({

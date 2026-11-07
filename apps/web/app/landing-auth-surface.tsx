@@ -6,8 +6,9 @@ import {
   ApiMutationError,
   createAgeSession,
   getCurrentSession,
-  updateMyProfile,
-  uploadMyProfileAvatar
+  resumeAgeSession,
+  type AgeSession,
+  updateMyProfile
 } from "@/api-mutations";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { SupabaseAuthPanel } from "@/supabase/supabase-auth-panel";
@@ -18,6 +19,7 @@ import {
   markOnboardingJourneyHandoff,
   recordOnboardingEvent
 } from "@/analytics/onboarding-analytics";
+import { assignSameOriginPath } from "@/navigation/safe-same-origin-path";
 
 const onboardingSteps = [
   {
@@ -28,7 +30,7 @@ const onboardingSteps = [
   {
     eyebrow: "2 / 3",
     title: "Profile details",
-    copy: "Choose a handle. A name and photo are optional."
+    copy: "Choose a handle. A display name is optional; you can continue without a photo."
   },
   {
     eyebrow: "3 / 3",
@@ -84,7 +86,6 @@ export function LandingAuthSurface({
         <LandingLoginForm
           authState={authState}
           onAccountNotFound={() => {
-            recordOnboardingEvent("account_not_found");
             setOnboardingStep(0);
             setAuthMode("onboard");
           }}
@@ -180,23 +181,10 @@ function LandingWalletList({ authState, onAccountNotFound, onLinked, purpose }: 
 }
 
 function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [handle, setHandle] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!avatarFile) {
-      setAvatarPreview(null);
-      return;
-    }
-
-    const nextPreview = URL.createObjectURL(avatarFile);
-    setAvatarPreview(nextPreview);
-    return () => URL.revokeObjectURL(nextPreview);
-  }, [avatarFile]);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -218,10 +206,6 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
         handle: normalizedHandle
       });
       await updateMyProfile(profilePayload);
-      if (avatarFile) {
-        const avatarUrl = await uploadAvatarFile(avatarFile);
-        await updateMyProfile({ ...profilePayload, avatarUrl });
-      }
       recordOnboardingEvent("profile_step_completed");
       await continueFromProfile();
     } catch (reason) {
@@ -264,18 +248,9 @@ function OnboardingProfileStep({ onContinue }: { onContinue: () => void }) {
     <>
       <form className="landing-profile-setup" noValidate onSubmit={saveProfile}>
         <div className="landing-form-grid">
-          <label className="landing-avatar-upload">
-            <input
-              accept="image/jpeg,image/png,image/webp"
-              name="profile-picture"
-              onChange={(event) => {
-                setAvatarFile(event.target.files?.[0] ?? null);
-                setError(null);
-              }}
-              type="file"
-            />
-            {avatarPreview ? <img alt="" src={avatarPreview} /> : <span>Add photo</span>}
-          </label>
+          <div aria-disabled="true" className="landing-avatar-upload">
+            <span>Photo optional · available after setup</span>
+          </div>
           <label>
             <span>Handle</span>
             <input
@@ -315,6 +290,7 @@ function OnboardingAgeStep() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [canContinue, setCanContinue] = useState(false);
+  const [ageSession, setAgeSession] = useState<AgeSession | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -332,7 +308,7 @@ function OnboardingAgeStep() {
             recordOnboardingEvent("age_step_completed");
             recordOnboardingEvent("protected_app_entered");
             markOnboardingJourneyHandoff();
-            window.location.assign(resolveSafeNextPath());
+            redirectToSafeNextPath();
             return;
           }
         } catch {
@@ -377,9 +353,7 @@ function OnboardingAgeStep() {
 
     try {
       const session = await createAgeSession({ providerPreference: "reusable_first" });
-      setMessage("Opening the secure age check. WeVid stores only the signed result.");
-      markOnboardingJourneyHandoff();
-      window.location.assign(session.launchUrl);
+      await presentOrResumeAgeSession(session, true);
     } catch (reason) {
       recordOnboardingEvent("age_step_failed", Date.now().toString(36));
       const nextError = ageErrorMessage(reason);
@@ -389,8 +363,51 @@ function OnboardingAgeStep() {
         recordOnboardingEvent("age_step_completed");
         recordOnboardingEvent("protected_app_entered");
         markOnboardingJourneyHandoff();
-        window.location.assign(resolveSafeNextPath());
+        redirectToSafeNextPath();
       }
+    } finally {
+      setStartingAction(null);
+    }
+  }
+
+  async function presentOrResumeAgeSession(session: AgeSession, attemptResume: boolean) {
+    let current = session;
+    setAgeSession(current);
+
+    if (!current.launchUrl && current.resumable && attemptResume) {
+      setMessage(current.providerReference
+        ? "Checking the existing secure age-verification handoff..."
+        : "Checking whether the provider handoff can be recovered...");
+      current = await resumeAgeSession(current.id);
+      setAgeSession(current);
+    }
+
+    if (!current.launchUrl) {
+      setMessage(current.launchState === "failed" || current.status === "needs_review"
+        ? "We could not recover the provider handoff identifier. Contact support; WeVid will not start a second session until this attempt is reconciled."
+        : current.resumable && !current.providerReference
+          ? "The provider request may still be completing. Check this handoff again later; WeVid will not open a second session while it may still be active."
+          : current.resumable
+          ? "The secure provider handoff is still being reconciled. Resume this same session to check again."
+          : "The provider outcome is still uncertain. We will not open a second session while this attempt is being reconciled.");
+      return;
+    }
+
+    setMessage("Opening the secure age check. WeVid stores only the signed result.");
+    markOnboardingJourneyHandoff();
+    window.location.assign(current.launchUrl);
+  }
+
+  async function resumePendingAgeSession() {
+    if (!ageSession) return;
+    setStartingAction("age");
+    setMessage(null);
+    setError(null);
+    try {
+      await presentOrResumeAgeSession(ageSession, true);
+    } catch (reason) {
+      recordOnboardingEvent("age_step_failed", Date.now().toString(36));
+      setError(ageErrorMessage(reason));
     } finally {
       setStartingAction(null);
     }
@@ -409,7 +426,7 @@ function OnboardingAgeStep() {
         recordOnboardingEvent("age_step_completed");
         recordOnboardingEvent("protected_app_entered");
         markOnboardingJourneyHandoff();
-        window.location.assign(resolveSafeNextPath());
+        redirectToSafeNextPath();
         return;
       }
 
@@ -450,6 +467,15 @@ function OnboardingAgeStep() {
           <button className="landing-button" data-tone="primary" disabled={startingAction !== null} onClick={() => void startAgeSession()} type="button">
             <strong>{startingAction === "age" ? "Opening age check" : "Verify age"}</strong>
           </button>
+          {ageSession && !ageSession.launchUrl && ageSession.resumable ? (
+            <button className="landing-button" disabled={startingAction !== null} onClick={() => void resumePendingAgeSession()} type="button">
+              <strong>{startingAction === "age"
+                ? "Checking secure handoff"
+                : ageSession.providerReference
+                  ? "Resume age check"
+                  : "Check handoff status"}</strong>
+            </button>
+          ) : null}
         </div>
       </div>
       {message ? <p className="landing-auth-message">{message}</p> : null}
@@ -484,41 +510,7 @@ function buildProfilePayload({
   };
 }
 
-async function uploadAvatarFile(file: File) {
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-    throw new Error("Profile picture must be JPEG, PNG, or WebP.");
-  }
-
-  if (file.size > 5_000_000) {
-    throw new Error("Profile picture must be 5MB or smaller.");
-  }
-
-  const dataBase64 = await fileToBase64(file);
-  const contentType = file.type as "image/jpeg" | "image/png" | "image/webp";
-  const uploaded = await uploadMyProfileAvatar({
-    contentType,
-    dataBase64,
-    fileName: file.name
-  });
-
-  return uploaded.avatarUrl;
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Profile picture could not be read."));
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      const [, base64 = ""] = result.split(",");
-      resolve(base64);
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function resolveSafeNextPath() {
+function redirectToSafeNextPath() {
   const params = new URLSearchParams(window.location.search);
-  const next = params.get("next") ?? "/app/home";
-  return next.startsWith("/") && !next.startsWith("//") ? next : "/app/home";
+  assignSameOriginPath(params.get("next"), "/app/home");
 }

@@ -29,7 +29,6 @@ import type {
 } from "./types.js";
 
 const memoProgramId = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-const delegationLifetimeSeconds = 366 * 24 * 60 * 60;
 
 export type SubscriptionAuthorizationTransactionBuilder = (
   input: Parameters<typeof createSubscriptionAuthorizationTransaction>[0]
@@ -44,7 +43,8 @@ export async function createSubscriptionAuthorizationTransaction(input: {
     !context.subscriberWallet ||
     !context.collectorAddress ||
     !context.tokenMint ||
-    !context.tokenProgram
+    !context.tokenProgram ||
+    !context.delegationExpiresAt
   ) {
     throw new Error("subscription_transaction_facts_missing");
   }
@@ -79,7 +79,7 @@ export async function createSubscriptionAuthorizationTransaction(input: {
     },
     { programAddress }
   );
-  const delegationExpiresAt = new Date(Date.now() + delegationLifetimeSeconds * 1000);
+  const delegationExpiresAt = context.delegationExpiresAt;
   const transaction = new Transaction();
   transaction.feePayer = ownerKey;
   transaction.recentBlockhash = (await connection.getLatestBlockhash("confirmed")).blockhash;

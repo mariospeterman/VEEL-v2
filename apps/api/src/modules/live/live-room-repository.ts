@@ -21,7 +21,8 @@ export function createLiveRoomRepositoryMethods(
 > {
   return {
     async createRoom(input) {
-      const rows = await sql<LiveRoomRow[]>`
+      return sql.begin(async (transaction) => {
+        const selectedRows = await transaction<Array<{ id: string; request_hash: string | null }>>`
         with target_user as (
           select id
           from users
@@ -157,25 +158,39 @@ export function createLiveRoomRepositoryMethods(
           on conflict (idempotency_key) do nothing
           returning id
         )
-        ${liveRoomSelectSql(sql)}
-        join selected_room sr on sr.id = lr.id
+        select sr.id, sr.request_hash
+        from selected_room sr
         cross join (select count(*) from inserted_job) job_effect
         cross join (select count(*) from inserted_session) session_effect
-      `;
-      const row = rows[0];
+        `;
+        const selected = selectedRows[0];
+        if (!selected) {
+          throw new LiveRepositoryConfigurationError();
+        }
+        const rows = await transaction<LiveRoomRow[]>`
+          with target_user as (
+            select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+          )
+          ${liveRoomSelectSql(transaction)}
+          where lr.id = ${selected.id}
+          limit 1
+        `;
+        const row = rows[0];
 
-      if (!row) {
-        throw new LiveRepositoryConfigurationError();
-      }
+        if (!row) {
+          throw new LiveRepositoryConfigurationError();
+        }
 
-      if (row.request_hash !== input.requestHash) {
-        throw new LiveRoomIdempotencyConflictError();
-      }
+        if ((selected.request_hash ?? row.request_hash) !== input.requestHash) {
+          throw new LiveRoomIdempotencyConflictError();
+        }
 
-      return toLiveRoom(row);
+        return toLiveRoom(row);
+      });
     },
     async reserveRoom(input) {
-      const rows = await sql<LiveRoomRow[]>`
+      return sql.begin(async (transaction) => {
+        const selectedRows = await transaction<Array<{ id: string; request_hash: string | null }>>`
         with target_user as (
           select id
           from users
@@ -300,22 +315,35 @@ export function createLiveRoomRepositoryMethods(
           on conflict (idempotency_key) do nothing
           returning id
         )
-        ${liveRoomSelectSql(sql)}
-        join selected_room sr on sr.id = lr.id
+        select sr.id, sr.request_hash
+        from selected_room sr
         cross join (select count(*) from inserted_job) job_effect
         cross join (select count(*) from inserted_session) session_effect
-      `;
-      const row = rows[0];
+        `;
+        const selected = selectedRows[0];
+        if (!selected) {
+          throw new LiveRepositoryConfigurationError();
+        }
+        const rows = await transaction<LiveRoomRow[]>`
+          with target_user as (
+            select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+          )
+          ${liveRoomSelectSql(transaction)}
+          where lr.id = ${selected.id}
+          limit 1
+        `;
+        const row = rows[0];
 
-      if (!row) {
-        throw new LiveRepositoryConfigurationError();
-      }
+        if (!row) {
+          throw new LiveRepositoryConfigurationError();
+        }
 
-      if (row.request_hash !== input.requestHash) {
-        throw new LiveRoomIdempotencyConflictError();
-      }
+        if ((selected.request_hash ?? row.request_hash) !== input.requestHash) {
+          throw new LiveRoomIdempotencyConflictError();
+        }
 
-      return toLiveRoom(row);
+        return toLiveRoom(row);
+      });
     },
     async claimProviderCreation(input) {
       const rows = await sql<{ id: string }[]>`
@@ -341,7 +369,8 @@ export function createLiveRoomRepositoryMethods(
       return Boolean(rows[0]);
     },
     async attachProviderRoom(input) {
-      const rows = await sql<LiveRoomRow[]>`
+      return sql.begin(async (transaction) => {
+        const updatedRows = await transaction<Array<{ id: string }>>`
         with target_user as (
           select id
           from users
@@ -375,12 +404,23 @@ export function createLiveRoomRepositoryMethods(
           where session.room_id = room.id
           returning session.id
         )
-        ${liveRoomSelectSql(sql)}
-        join updated_room ur on ur.id = lr.id
+        select ur.id
+        from updated_room ur
         cross join (select count(*) from updated_session) session_effect
-      `;
+        `;
+        const updated = updatedRows[0];
+        if (!updated) return null;
+        const rows = await transaction<LiveRoomRow[]>`
+          with target_user as (
+            select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+          )
+          ${liveRoomSelectSql(transaction)}
+          where lr.id = ${updated.id}
+          limit 1
+        `;
 
-      return rows[0] ? toLiveRoom(rows[0]) : null;
+        return rows[0] ? toLiveRoom(rows[0]) : null;
+      });
     },
     async findRoom(input) {
       const rows = await sql<LiveRoomRow[]>`
@@ -392,6 +432,13 @@ export function createLiveRoomRepositoryMethods(
         )
         ${liveRoomSelectSql(sql)}
         where lr.id = ${input.roomId}
+          and creator.state = 'active'
+          and (lr.creator_user_id = (select id from target_user) or p.visibility = 'public')
+          and not exists (
+            select 1 from blocks b
+            where (b.blocker_user_id = (select id from target_user) and b.blocked_user_id = lr.creator_user_id)
+               or (b.blocker_user_id = lr.creator_user_id and b.blocked_user_id = (select id from target_user))
+          )
         limit 1
       `;
 

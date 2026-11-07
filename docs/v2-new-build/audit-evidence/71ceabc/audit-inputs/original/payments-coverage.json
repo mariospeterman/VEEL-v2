@@ -1,0 +1,101 @@
+{
+  "repository": "mariospeterman/VEEL-v2",
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "full_read_files": [
+    "AGENTS.md",
+    "apps/api/src/modules/admin/admin-payment-commercial-policy-routes.ts",
+    "apps/api/src/modules/payment/payment-amounts.ts",
+    "apps/api/src/modules/payment/payment-commercial-policy-repository.ts",
+    "apps/api/src/modules/payment/payment-commercial-policy.ts",
+    "apps/api/src/modules/payment/payment-content-unlock-routes.ts",
+    "apps/api/src/modules/payment/payment-creator-commercial-settlement.ts",
+    "apps/api/src/modules/payment/payment-durable-confirmation.ts",
+    "apps/api/src/modules/payment/payment-entitlement-settlement.ts",
+    "apps/api/src/modules/payment/payment-event-access-pass-settlement.ts",
+    "apps/api/src/modules/payment/payment-evidence-repository.ts",
+    "apps/api/src/modules/payment/payment-intent-mapper.ts",
+    "apps/api/src/modules/payment/payment-intent-routes.ts",
+    "apps/api/src/modules/payment/payment-paid-message-settlement.ts",
+    "apps/api/src/modules/payment/payment-repository-errors.ts",
+    "apps/api/src/modules/payment/payment-repository.ts",
+    "apps/api/src/modules/payment/payment-route-shared.ts",
+    "apps/api/src/modules/payment/payment-routes.ts",
+    "apps/api/src/modules/payment/payment-settlement-ledger.ts",
+    "apps/api/src/modules/payment/payment-settlement-records.ts",
+    "apps/api/src/modules/payment/payment-submission.ts",
+    "apps/api/src/modules/payment/payment-webhook-routes.ts",
+    "apps/api/src/modules/payment/solana-pay-codec.ts",
+    "apps/api/src/modules/payment/solana-payment.ts",
+    "apps/api/src/modules/payment/types.ts",
+    "apps/api/src/modules/referral/referral-repository.ts",
+    "apps/api/src/modules/referral/referral-routes.ts",
+    "apps/api/src/modules/referral/types.ts",
+    "apps/api/src/modules/solana/token-program.ts",
+    "apps/api/src/modules/subscription/creator-membership-offer-repository.ts",
+    "apps/api/src/modules/subscription/platform-access-repository.ts",
+    "apps/api/src/modules/subscription/platform-usage-routes.ts",
+    "apps/api/src/modules/subscription/subscription-authorization-intent-repository.ts",
+    "apps/api/src/modules/subscription/subscription-authorization-repository.ts",
+    "apps/api/src/modules/subscription/subscription-authorization-transaction.ts",
+    "apps/api/src/modules/subscription/subscription-authorization-verification-repository.ts",
+    "apps/api/src/modules/subscription/subscription-cancellation-repository.ts",
+    "apps/api/src/modules/subscription/subscription-errors.ts",
+    "apps/api/src/modules/subscription/subscription-provider-config.ts",
+    "apps/api/src/modules/subscription/subscription-repository-mappers.ts",
+    "apps/api/src/modules/subscription/subscription-repository-rows.ts",
+    "apps/api/src/modules/subscription/subscription-repository-support.ts",
+    "apps/api/src/modules/subscription/subscription-repository.ts",
+    "apps/api/src/modules/subscription/subscription-route-utils.ts",
+    "apps/api/src/modules/subscription/subscription-routes.ts",
+    "apps/api/src/modules/subscription/subscription-verifier.ts",
+    "apps/api/src/modules/subscription/types.ts",
+    "apps/api/test/payment-commercial-policy.test.ts",
+    "apps/api/test/payment-creator-commercial-settlement.test.ts",
+    "apps/api/test/payment-evidence-repository.test.ts",
+    "apps/api/test/payment-solana.test.ts",
+    "apps/api/test/payment-submission.test.ts",
+    "apps/api/test/solana-pay-codec.test.ts",
+    "apps/api/test/subscription-authorization-transaction.test.ts",
+    "apps/api/test/subscription-verifier.test.ts",
+    "apps/worker/scripts/prove-solana-subscriptions.mjs",
+    "apps/worker/src/payment-confirmation-email-smoke.ts",
+    "apps/worker/src/payment-confirmation-email.ts",
+    "apps/worker/src/subscription-collections.ts",
+    "packages/database/migrations/0098_recurring_membership_authority.sql"
+  ],
+  "partial_read_files": {
+    "apps/worker/test/index.test.ts": [
+      "money suites lines741-981 and1130-1234"
+    ],
+    "apps/api/src/modules/content/content-read-repository.ts": [
+      "findContentUnlockOffer lines189-258"
+    ],
+    "apps/api/src/modules/message/message-commercial-routes.ts": [
+      "money intent caller lines190-240"
+    ],
+    "apps/api/src/modules/live/live-pass-routes.ts": [
+      "intent caller lines65-120"
+    ],
+    "apps/api/src/modules/event/event-access-pass-routes.ts": [
+      "intent caller lines115-175"
+    ],
+    "packages/database/migrations/0108_policy_content_eligibility_convergence.sql": [
+      "membership eligibility lines450-510"
+    ],
+    "docs/v2-new-build/payments-and-monetisation.md": [
+      "provider, settlement, recurring, receipt sections via targeted search"
+    ],
+    "docs/v2-new-build/providers/provider-map.md": [
+      "payments and subscriptions map"
+    ],
+    "docs/v2-new-build/current-implementation-status.md": [
+      "money, subscription, provider status sections via targeted search"
+    ]
+  },
+  "notes": [
+    "Read complete text of assigned payment/subscription/referral modules and specific tests; not claiming all project files read.",
+    "Analytics and non-money workers delegated to ownership_research.",
+    "Existing suites not executed by this agent; root running environment gates.",
+    "Independent actual-source native settlement/mock-RPC and email-rendering proofs executed in ../payment-audit-proof.mjs."
+  ]
+}

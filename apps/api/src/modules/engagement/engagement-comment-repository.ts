@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import {
+  bindCursorScope,
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
+  keysetPage
+} from "../../shared/keyset-pagination.js";
 import type { EngagementRepository } from "./types.js";
 import { EngagementIdempotencyConflictError, EngagementPolicyError } from "./engagement-errors.js";
 import { toComment } from "./engagement-repository-mappers.js";
@@ -7,12 +13,29 @@ import type { CommentReplayRow, CommentRow } from "./engagement-repository-rows.
 import { visibleContentSql } from "./engagement-repository-sql.js";
 
 const mentionPattern = /(?:^|\s)@([a-z0-9_]{2,32})\b/gi;
+const engagementCommentsCursorRoute = "GET /v1/engagement/:contentId/comments";
+
+export function engagementCommentsCursorScope(
+  supabaseUserId: string,
+  contentId: string
+): string {
+  return bindCursorScope(engagementCommentsCursorRoute, {
+    actor: supabaseUserId,
+    content: contentId,
+    sort: "created_at:desc,id:desc"
+  });
+}
 
 export function createEngagementCommentRepositoryMethods(
   sql: postgres.Sql
 ): Pick<EngagementRepository, "listComments" | "createComment" | "toggleCommentLike"> {
   return {
     async listComments(input) {
+      const cursorScope = engagementCommentsCursorScope(
+        input.supabaseUserId,
+        input.contentId
+      );
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<CommentRow[]>`
         with actor as (
           select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
@@ -102,17 +125,24 @@ export function createEngagementCommentRepositoryMethods(
             select 1 from user_mutes mute
             where mute.muting_user_id = actor.id and mute.muted_user_id = c.user_id
           )
-          and (${input.cursor ?? null}::timestamptz is null or c.created_at < ${input.cursor ?? null}::timestamptz)
-        order by c.created_at desc
+          and (
+            ${cursor.timestamp}::timestamptz is null
+            or (
+              ${cursor.id}::uuid is null
+              and c.created_at <= ${cursor.timestamp}::timestamptz
+            )
+            or (
+              ${cursor.id}::uuid is not null
+              and (c.created_at, c.id) < (${cursor.timestamp}::timestamptz, ${cursor.id}::uuid)
+            )
+          )
+        order by c.created_at desc, c.id desc
         limit ${input.limit + 1}
       `;
-      const visibleRows = rows.slice(0, input.limit);
-      const next = rows[input.limit];
 
-      return {
-        items: visibleRows.map(toComment),
-        nextCursor: next ? next.created_at.toISOString() : null
-      };
+      return keysetPage(rows, input.limit, toComment, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async createComment(input) {
       return sql.begin(async (transaction) => {
@@ -312,77 +342,94 @@ export function createEngagementCommentRepositoryMethods(
     },
     async toggleCommentLike(input) {
       return sql.begin(async (transaction) => {
-        const rows = await transaction<{ target_id: string; liked: boolean }[]>`
-        with actor as (
-          select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
-        ),
-        visible_comment as (
-          select comment.id
-          from comments comment
-          join content_items content on content.id = comment.content_item_id
-          join actor on true
-          join private.eligible_content(actor.id, null) eligible on eligible.content_item_id = content.id
-          where comment.id = ${input.commentId}
-            and comment.moderation_state = 'visible'
-            and (comment.parent_comment_id is null or exists (
-              select 1 from comments parent
-              where parent.id = comment.parent_comment_id
-                and parent.content_item_id = comment.content_item_id
-                and parent.moderation_state = 'visible'
-            ))
-            and not exists (
-              select 1 from blocks block
-              where (block.blocker_user_id = actor.id and block.blocked_user_id = comment.user_id)
-                 or (block.blocker_user_id = comment.user_id and block.blocked_user_id = actor.id)
-            )
-            and not exists (
-              select 1 from user_mutes mute
-              where mute.muting_user_id = actor.id and mute.muted_user_id = comment.user_id
-            )
-        ),
-        receipt as (
+        const claimed = await transaction<{ target_id: string }[]>`
+          with actor as (
+            select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+          ),
+          visible_comment as (
+            ${visibleCommentSql(transaction, input.commentId)}
+          )
           insert into engagement_action_receipts (actor_user_id, action, target_id, idempotency_key)
           select actor.id, 'comment.like', visible_comment.id, ${input.idempotencyKey}
           from actor, visible_comment
-          on conflict (actor_user_id, action, idempotency_key) do update
-          set idempotency_key = engagement_action_receipts.idempotency_key
-          returning actor_user_id, target_id
-        ),
-        mutation as (
-          insert into comment_reactions (comment_id, user_id, reaction_key, state, last_idempotency_key)
-          select visible_comment.id, actor.id, 'like', 'active', ${input.idempotencyKey}
-          from actor, visible_comment
-          join receipt on receipt.target_id = visible_comment.id
-          on conflict (comment_id, user_id, reaction_key) do update
-          set
-            state = case
-              when comment_reactions.last_idempotency_key = ${input.idempotencyKey}
-                then comment_reactions.state
-              when comment_reactions.state = 'active' then 'inactive'
-              else 'active'
-            end,
-            last_idempotency_key = ${input.idempotencyKey},
-            updated_at = now()
-          returning comment_id, state = 'active' as liked
-        )
-        select receipt.target_id, mutation.liked
-        from receipt
-        join mutation on mutation.comment_id = receipt.target_id
+          on conflict (actor_user_id, action, idempotency_key) do nothing
+          returning target_id
         `;
+        const receipt = claimed[0] ?? (await transaction<{ target_id: string }[]>`
+          with actor as (
+            select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+          ),
+          visible_comment as (
+            ${visibleCommentSql(transaction, input.commentId)}
+          )
+          select receipt.target_id
+          from engagement_action_receipts receipt, actor, visible_comment
+          where receipt.actor_user_id = actor.id
+            and receipt.action = 'comment.like'
+            and receipt.idempotency_key = ${input.idempotencyKey}
+        `)[0];
 
-        const row = rows[0];
-        if (!row || row.target_id !== input.commentId) throw new EngagementIdempotencyConflictError();
-        // A data-modifying CTE shares its statement snapshot with sibling reads.
-        // Count in the next statement so the response includes this transaction's write.
-        const counts = await transaction<{ like_count: string | number }[]>`
-          select count(*) as like_count
-          from comment_reactions
-          where comment_id = ${row.target_id} and state = 'active'
+        if (receipt?.target_id !== input.commentId) throw new EngagementIdempotencyConflictError();
+
+        if (claimed.length > 0) {
+          await transaction`
+            insert into comment_reactions (comment_id, user_id, reaction_key, state, last_idempotency_key)
+            select ${input.commentId}, actor.id, 'like', 'active', ${input.idempotencyKey}
+            from users actor
+            where actor.supabase_user_id = ${input.supabaseUserId}
+            on conflict (comment_id, user_id, reaction_key) do update
+            set
+              state = case when comment_reactions.state = 'active' then 'inactive' else 'active' end,
+              last_idempotency_key = ${input.idempotencyKey},
+              updated_at = now()
+          `;
+        }
+
+        const states = await transaction<{ like_count: string | number; liked: boolean }[]>`
+          with actor as (
+            select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
+          )
+          select
+            count(*) filter (where reaction.state = 'active') as like_count,
+            coalesce(bool_or(reaction.user_id = actor.id and reaction.state = 'active'), false) as liked
+          from actor
+          left join comment_reactions reaction on reaction.comment_id = ${input.commentId}
         `;
-        return { commentId: row.target_id, liked: row.liked, likeCount: Number(counts[0]?.like_count ?? 0) };
+        return {
+          commentId: input.commentId,
+          liked: Boolean(states[0]?.liked),
+          likeCount: Number(states[0]?.like_count ?? 0)
+        };
       });
     }
   };
+}
+
+function visibleCommentSql(sql: postgres.TransactionSql, commentId: string) {
+  return sql`
+    select comment.id
+    from comments comment
+    join content_items content on content.id = comment.content_item_id
+    join actor on true
+    join private.eligible_content(actor.id, null) eligible on eligible.content_item_id = content.id
+    where comment.id = ${commentId}
+      and comment.moderation_state = 'visible'
+      and (comment.parent_comment_id is null or exists (
+        select 1 from comments parent
+        where parent.id = comment.parent_comment_id
+          and parent.content_item_id = comment.content_item_id
+          and parent.moderation_state = 'visible'
+      ))
+      and not exists (
+        select 1 from blocks block
+        where (block.blocker_user_id = actor.id and block.blocked_user_id = comment.user_id)
+           or (block.blocker_user_id = comment.user_id and block.blocked_user_id = actor.id)
+      )
+      and not exists (
+        select 1 from user_mutes mute
+        where mute.muting_user_id = actor.id and mute.muted_user_id = comment.user_id
+      )
+  `;
 }
 
 function extractMentionHandles(body: string): string[] {

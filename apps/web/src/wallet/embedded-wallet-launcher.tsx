@@ -3,47 +3,41 @@
 import { useEffect, useRef, useState, type ComponentType } from "react";
 import { ProviderLogo } from "@/brand/provider-logo";
 import type { WalletAuthPurpose } from "./backend-wallet-auth";
+import { embeddedAuthMethods, readEmbeddedAuthResume, type EmbeddedAuthMethod } from "./embedded-auth-method";
 
 interface EmbeddedWalletRuntimeProps {
-  label: string;
   purpose: WalletAuthPurpose;
   onAccountNotFound?: (() => void) | undefined;
   onLinked?: ((address: string) => void) | undefined;
   secondary: boolean;
+  initialMethod: EmbeddedAuthMethod;
 }
 
 export function EmbeddedWalletLauncher({
-  label,
   onAccountNotFound,
   onLinked,
   purpose,
   secondary = false
-}: EmbeddedWalletRuntimeProps) {
+}: Omit<EmbeddedWalletRuntimeProps, "initialMethod"> & { label: string }) {
   const [runtime, setRuntime] = useState<ComponentType<EmbeddedWalletRuntimeProps> | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<EmbeddedAuthMethod | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
-  const preloadedRuntime = useRef<ComponentType<EmbeddedWalletRuntimeProps> | null>(null);
+  const resumeStarted = useRef(false);
 
   useEffect(() => {
-    let active = true;
-    void import("./embedded-wallet-login-runtime")
-      .then((module) => {
-        if (active) preloadedRuntime.current = module.EmbeddedWalletLoginRuntime;
-      })
-      .catch(() => undefined);
+    if (resumeStarted.current) return;
+    const resumedMethod = readEmbeddedAuthResume(purpose);
+    if (!resumedMethod) return;
+    resumeStarted.current = true;
+    void start(resumedMethod);
+  }, [purpose]);
 
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  async function start() {
+  async function start(method: EmbeddedAuthMethod) {
+    resumeStarted.current = true;
+    setSelectedMethod(method);
     setState("loading");
 
     try {
-      if (preloadedRuntime.current) {
-        setRuntime(() => preloadedRuntime.current);
-        return;
-      }
       const module = await import("./embedded-wallet-login-runtime");
       setRuntime(() => module.EmbeddedWalletLoginRuntime);
     } catch {
@@ -53,28 +47,35 @@ export function EmbeddedWalletLauncher({
 
   if (runtime) {
     const Runtime = runtime;
-    return <Runtime label={label} onAccountNotFound={onAccountNotFound} onLinked={onLinked} purpose={purpose} secondary={secondary} />;
+    return selectedMethod ? (
+      <Runtime
+        initialMethod={selectedMethod}
+        onAccountNotFound={onAccountNotFound}
+        onLinked={onLinked}
+        purpose={purpose}
+        secondary={secondary}
+      />
+    ) : null;
   }
 
-  return (
-    <div className="auth-provider-button-stack">
+  return embeddedAuthMethods.map((method) => (
+    <div className="auth-provider-button-stack" key={method.method}>
       <button
+        aria-label={`${purpose === "login" ? "Continue" : "Set up"} with ${method.label}`}
         className={`auth-provider-button${secondary ? " auth-provider-button-secondary" : ""}`}
         disabled={state === "loading"}
-        onClick={() => void start()}
+        onClick={() => void start(method.method)}
         type="button"
       >
-        <ProviderLogo label={label} name="privy" />
+        <ProviderLogo label={method.label} name={method.logo} />
         <span>
-          <strong>{label}</strong>
-          <small>{state === "loading" ? "Opening" : purpose === "login" ? "Email · social · passkey" : "Secure embedded wallet"}</small>
+          <strong>{method.label}</strong>
+          <small>{state === "loading" && selectedMethod === method.method ? "Loading secure sign-in" : method.status}</small>
         </span>
       </button>
-      {state === "error" ? (
-        <p className="auth-provider-note auth-provider-note-error">
-          Secure wallet setup could not open. Try again.
-        </p>
+      {state === "error" && selectedMethod === method.method ? (
+        <p className="auth-provider-note auth-provider-note-error">Secure sign-in could not load. Try again.</p>
       ) : null}
     </div>
-  );
+  ));
 }

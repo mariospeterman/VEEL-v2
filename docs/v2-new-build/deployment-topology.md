@@ -9,7 +9,7 @@ Owns:
 - deployment topology decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -30,7 +30,7 @@ flowchart TB
   API --> Worker["Worker process\njobs/webhooks/retries"]
   API --> Supabase["Supabase\nPostgres/Auth/Realtime"]
   Worker --> Supabase
-  API --> Jobs["pg-boss/Postgres jobs\nRedis later if measured"]
+  API --> Jobs["Domain Postgres lease tables\nconsolidate later if measured"]
   Worker --> Jobs
   API --> Providers["Providers\nSolana/Helius/Bunny/Livepeer/Age"]
   Providers --> Webhooks["Webhook ingress"]
@@ -69,7 +69,8 @@ Extract later only when a module has a measured scaling boundary and a stable co
 
 Use managed provider infrastructure where it clearly removes custom code:
 
-- Supabase Auth for identity/session issuer
+- WeVid Fastify wallet challenge/exchange for the opaque application-session issuer
+- optional Supabase Auth only for settings recovery exchange; its bearer token is never ordinary API authority
 - Supabase Postgres for relational source of truth
 - Supabase Realtime for selected authorized events
 - Bunny for VOD, CDN, TUS/upload, thumbnails/playback
@@ -122,7 +123,7 @@ Phase 1:
 - one small API instance
 - one small worker instance
 - managed Supabase
-- managed Redis only if pg-boss is not enough
+- no Redis/second queue unless measured load and an approved consolidation ADR require it
 - Bunny/Livepeer on usage-based tiers
 - Helius scoped to relevant creator, platform-fee, allocation, and payment reference addresses
 

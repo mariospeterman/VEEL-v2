@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApi } from "../src/app.js";
+import {
+  PerformerIdempotencyConflictError,
+  samePerformerCommand
+} from "../src/modules/performer/performer-repository.js";
 import type { PerformerConsentRequestResource, PerformerRepository } from "../src/modules/performer/types.js";
 
 const invitation: PerformerConsentRequestResource = {
@@ -26,7 +30,7 @@ describe("performer consent routes", () => {
     const repository = performerRepository({
       async createRequest(input) {
         storedTokenHash = input.invitationTokenHash ?? null;
-        expect(input.allowedUses).toEqual(invitation.allowedUses);
+        expect(input.allowedUses).toEqual([...invitation.allowedUses].sort());
         expect(input.externalLabel).toBe("Guest performer");
         return { request: invitation, invitationCreated: true };
       }
@@ -61,6 +65,36 @@ describe("performer consent routes", () => {
     await app.close();
   });
 
+  it("rejects performer requests that omit a required distribution use", async () => {
+    const createRequest = vi.fn();
+    const app = await buildApi({
+      authVerifier: {
+        async verifyToken() {
+          return { userId: "00000000-0000-4000-8000-000000000001", supabaseUserId: "00000000-0000-4000-8000-000000000001", sessionId: "00000000-0000-4000-8000-000000000099", authenticatedAt: new Date(), authenticationMethod: "wallet" as const };
+        }
+      },
+      performerRepository: performerRepository({ createRequest })
+    });
+
+    for (const allowedUses of [
+      ["upload", "distribution", "promotion"],
+      ["capture", "distribution", "promotion"],
+      ["capture", "upload", "promotion"]
+    ]) {
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/content/${invitation.contentId}/performers`,
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "performer-request-required-uses" },
+        payload: { externalLabel: "Guest performer", allowedUses }
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe("validation_failed");
+    }
+    expect(createRequest).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("does not expose a mismatched invitation token on an idempotent retry", async () => {
     const app = await buildApi({
       authVerifier: {
@@ -84,6 +118,44 @@ describe("performer consent routes", () => {
 
     expect(response.statusCode).toBe(201);
     expect(response.json().invitationUrl).toBeNull();
+    await app.close();
+  });
+
+  it("rejects reuse of a performer command key for another target", async () => {
+    expect(samePerformerCommand({
+      content_item_id: invitation.contentId,
+      content_revision: invitation.contentRevision,
+      allowed_uses: invitation.allowedUses,
+      subject_kind: "external_invitee",
+      display_label: "Guest performer",
+      handle: null
+    }, {
+      contentId: "00000000-0000-4000-8000-000000000041",
+      externalLabel: "Guest performer",
+      allowedUses: invitation.allowedUses
+    }, invitation.contentRevision)).toBe(false);
+
+    const app = await buildApi({
+      authVerifier: {
+        async verifyToken() {
+          return { userId: "00000000-0000-4000-8000-000000000001", supabaseUserId: "00000000-0000-4000-8000-000000000001", sessionId: "00000000-0000-4000-8000-000000000099", authenticatedAt: new Date(), authenticationMethod: "wallet" as const };
+        }
+      },
+      performerRepository: performerRepository({
+        async createRequest() {
+          throw new PerformerIdempotencyConflictError();
+        }
+      })
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/content/${invitation.contentId}/performers`,
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "performer-request-1" },
+      payload: { externalLabel: "Different performer", allowedUses: invitation.allowedUses }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().code).toBe("idempotency_conflict");
     await app.close();
   });
 

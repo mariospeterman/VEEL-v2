@@ -1,6 +1,14 @@
-# WeVid Design Contract — Codex 5.5
+# WeVid Historical Visual Reference
 
-Use this file as the UI/UX implementation contract for the WeVid PWA frontend. Build a premium creator-first media app: simple, fast, one-screen where possible, native-feeling on mobile and desktop, and never like a backend dashboard.
+Status: reference
+Last updated: 2026-11-04
+Source of truth: no
+
+This file preserves early visual and interaction notes for composition reference. It is not an
+implementation contract. `docs/v2-new-build/frontend-architecture.md` owns the current frontend map,
+`docs/v2-new-build/route-map.md` owns URLs, and narrow product/provider docs own workflows. Any
+imperative wording below is historical when it conflicts with those authorities or current tested
+source. The mockup images may guide visual density and tone only.
 
 ## 1. Product north star
 
@@ -8,7 +16,7 @@ WeVid is a media-first creator platform. The UI must make the next action obviou
 
 Avoid: crypto-casino visuals, dense admin-style navigation, excessive redirects, hidden money actions, gesture-only critical actions, and duplicated nav.
 
-## 2. Route and navigation source of truth
+## 2. Historical route and navigation sketch
 
 Centralize all navigation in one `AppShell/NavConfig`. Do not duplicate nav per route.
 
@@ -28,9 +36,9 @@ Protected app shell:
 
 Contextual routes / overlays:
 /app/search
-/app/media/:id
+/content/:id
 /app/live/:id
-/app/event/:id
+/event-access/:id
 /app/wallet
 /app/subscriptions
 /app/settings
@@ -163,7 +171,8 @@ Sheet open/close:    220–320ms
 Heavy loading:       progress/status required after 1s
 ```
 
-Use CSS transitions, View Transitions, scroll-snap, and GSAP only where it improves clarity. No toy bounce, no excessive parallax, no neon motion spam.
+Use restrained CSS transitions, View Transitions, and scroll-snap only where they improve clarity.
+The canonical landing forbids GSAP, scroll-jacking, excessive parallax, toy bounce, and neon motion spam.
 
 Critical actions must always have visible controls. Gestures are shortcuts, not the only path.
 
@@ -171,7 +180,7 @@ Critical actions must always have visible controls. Gestures are shortcuts, not 
 
 Home:
 - Vertical scroll through mixed feed.
-- Tap media opens `/app/media/:id` viewer.
+- Tap media opens the canonical `/content/:id` viewer.
 - Support/unlock opens sheet.
 
 Bits:
@@ -208,11 +217,10 @@ Mutuals:
 ## 7. Screen contracts
 
 Landing:
-- One-screen hero.
-- Header nav: Start, Watch/Create, Why WeVid, Earn, Partners, Trust.
-- GSAP-style video-frame scroll: scrolling advances hero frames/topics inside the same screen, not many redirects.
-- CTAs: Start onboarding, Log in / Enter.
-- Footer legal links open centered modal; user can expand/open new tab.
+- Semantic poster-first product story.
+- One `Continue to WeVid` entry into the full-page login/onboarding surface.
+- No scroll-jacking, hidden video frames, or GSAP.
+- Legal links are directly addressable routes.
 
 Onboarding:
 - Identity + profile + wallet in one guided step.
@@ -226,7 +234,7 @@ Bits:
 - Immersive vertical feed, one-thumb actions, right rail, bottom sheets.
 
 Create:
-- KYC-gated.
+- SFW publishing is not earnings-KYC gated; adult publishing and monetisation follow their separate backend eligibility authorities.
 - Resumable upload.
 - Autosave drafts.
 - Explicit publish confirmation.
@@ -251,7 +259,7 @@ Settings:
 
 Studio / Enterprise / Assistant / Admin:
 - Studio and Enterprise are capability-based secondary workspaces.
-- Assistant requires explicit confirmation for publish, admin, money, or provider-impacting actions.
+- Assistant may prepare bounded work but cannot publish, spend, message, or perform admin/provider-impacting actions; the user completes canonical mutations in their owning surface.
 - Admin is separate and role-gated.
 
 ## 8. Trust, safety, money, and conversion rules

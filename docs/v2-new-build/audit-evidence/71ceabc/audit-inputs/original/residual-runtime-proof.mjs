@@ -1,0 +1,13 @@
+import { writeFile } from 'node:fs/promises';
+import { buildApi } from './wevid-audit/apps/api/dist/app.js';
+process.env.NODE_ENV='test';
+process.env.LOG_LEVEL='silent';
+const identity={userId:'00000000-0000-4000-8000-000000000001',supabaseUserId:'00000000-0000-4000-8000-000000000001',sessionId:'session',authenticatedAt:new Date(),authenticationMethod:'wallet'};
+const app=await buildApi({authVerifier:{async verifyToken(){return identity}},sessionRepository:{async findProfileByUserId(){return {id:identity.userId,state:'active',handle:'auditor',displayName:'Auditor'}},async findProfileBySupabaseUserId(){return {id:identity.userId,state:'active',handle:'auditor',displayName:'Auditor'}}},ageRepository:{async findLatestAgeStatusBySupabaseUserId(){return {state:'verified'}},async findLatestAgeStatusByUserId(){return {state:'verified'}}}});
+app.get('/audit-throw',async()=>{throw new Error('AUDIT_PRIVATE_DIAGNOSTIC_X')});
+const error=await app.inject('/audit-throw');
+const invalidReason=await app.inject({method:'POST',url:'/v1/refunds/requests',headers:{cookie:'wevid_session=wevid_session_fake','idempotency-key':'audit-reason'},payload:{paymentIntentId:'00000000-0000-4000-8000-000000000002',kind:'refund_request',requestedAction:'review_only',reason:42}});
+const result={ordinaryInternalError:{status:error.statusCode,body:error.json()},malformedRefundReason:{status:invalidReason.statusCode,body:invalidReason.json()}};
+await app.close();
+await writeFile(new URL('./residual-runtime-proof.json',import.meta.url),JSON.stringify(result,null,2)+'\n');
+console.log(JSON.stringify(result));

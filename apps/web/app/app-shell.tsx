@@ -61,6 +61,25 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Search aria-hidden="true" size={17} />
               <span>Search creators, live, events</span>
             </Link>
+            <nav className="mobile-quick-actions" aria-label="Mobile account shortcuts">
+              {[
+                { href: "/app/search", icon: "search", label: "Search" },
+                { href: "/app/notifications", icon: "notifications", label: "Notifications" },
+                { href: "/app/wallet", icon: "wallet", label: "Wallet" }
+              ].map((item) => (
+                <Link
+                  aria-current={isActive(pathname, item.href) ? "page" : undefined}
+                  aria-label={item.label}
+                  className={`mobile-quick-action mobile-quick-${item.icon}`}
+                  data-active={isActive(pathname, item.href) ? "true" : "false"}
+                  href={item.href as Route}
+                  key={item.href}
+                  title={item.label}
+                >
+                  <ShellIcon name={item.icon} />
+                </Link>
+              ))}
+            </nav>
             <nav className="top-actions" aria-label="Secondary">
               <ThemeToggle />
               {appShellTopActionItems.map((item) => (
@@ -110,6 +129,7 @@ function ShellIcon({ name }: { name: string }) {
     messages: MessageCircle,
     notifications: Bell,
     profile: UserRound,
+    search: Search,
     settings: Settings,
     subscriptions: Bell,
     wallet: WalletCards

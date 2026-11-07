@@ -55,7 +55,7 @@ describe("Analytics Core", () => {
     await app.close();
   });
 
-  it("suppresses a small audience without leaking numerator or denominator", async () => {
+  it("suppresses a small audience without leaking value, numerator, denominator, or sample size", async () => {
     const suppressions: string[] = [];
     const app = await analyticsApp(repositoryFixture({
       async queryMetric() {
@@ -81,10 +81,77 @@ describe("Analytics Core", () => {
       value: null,
       numerator: null,
       denominator: null,
-      sampleSize: "4",
+      sampleSize: null,
       privacyDecision: "suppressed_minimum_cohort"
     });
     expect(suppressions).toEqual(["creator.content.completion_rate"]);
+    await app.close();
+  });
+
+  it("does not disclose a creator count through sample size when the count is the cohort", async () => {
+    const app = await analyticsApp(repositoryFixture({
+      async queryMetric() {
+        return [{ bucketDate: null, value: "3", numerator: null, denominator: null, sampleSize: "3" }];
+      }
+    }));
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/query",
+      headers: { authorization: "Bearer valid" },
+      payload: {
+        scope: { type: "creator" },
+        metricKeys: ["creator.social.follower_starts"],
+        window: { startDate: "2026-08-01", endDate: "2026-08-07" },
+        granularity: "total",
+        timezone: "UTC"
+      }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().metrics[0].points[0]).toEqual({
+      bucketDate: null,
+      value: null,
+      numerator: null,
+      denominator: null,
+      sampleSize: null,
+      privacyDecision: "suppressed_minimum_cohort"
+    });
+    await app.close();
+  });
+
+  it("does not derive a delta or insight from a suppressed comparison window", async () => {
+    let call = 0;
+    const app = await analyticsApp(repositoryFixture({
+      async queryMetric() {
+        call += 1;
+        return [{
+          bucketDate: null,
+          value: call === 1 ? "6" : "3",
+          numerator: null,
+          denominator: null,
+          sampleSize: call === 1 ? "6" : "3"
+        }];
+      }
+    }));
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/query",
+      headers: { authorization: "Bearer valid" },
+      payload: {
+        scope: { type: "creator" },
+        metricKeys: ["creator.social.follower_starts"],
+        window: { startDate: "2026-08-08", endDate: "2026-08-14" },
+        comparisonWindow: { startDate: "2026-08-01", endDate: "2026-08-07" },
+        granularity: "total",
+        timezone: "UTC"
+      }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().metrics[0]).toMatchObject({
+      points: [{ sampleSize: "6", privacyDecision: "released" }],
+      comparisonValue: null,
+      deltaPercent: null
+    });
+    expect(response.json().insights).toEqual([]);
     await app.close();
   });
 
@@ -270,11 +337,15 @@ describe("Analytics Core", () => {
   });
 
   it("denies another viewer's personal metrics and platform metrics without staff authorization", async () => {
+    let metricQueries = 0;
     const app = await analyticsApp(repositoryFixture({
       async authorizeScope(_actor, scope) {
         if (scope.type === "viewer" && scope.userId && scope.userId !== actorUserId) return null;
-        if (scope.type === "platform") return null;
         return scope.type === "viewer" ? { type: "viewer", userId: actorUserId } : scope;
+      },
+      async queryMetric() {
+        metricQueries += 1;
+        return [{ bucketDate: null, value: "1", numerator: null, denominator: null, sampleSize: "1" }];
       }
     }));
     const viewerResponse = await app.inject({
@@ -304,6 +375,34 @@ describe("Analytics Core", () => {
       }
     });
     expect(platformResponse.statusCode).toBe(403);
+    expect(metricQueries).toBe(0);
+    await app.close();
+  });
+
+  it("requires analytics permission and audits the bounded purpose for platform reads", async () => {
+    const audit: Array<{ purposeCode: string; metricKeys: string[] }> = [];
+    const app = await analyticsApp(repositoryFixture({
+      async recordPlatformQueryAccess(input) {
+        audit.push({ purposeCode: input.purposeCode, metricKeys: input.metricKeys });
+      }
+    }), true);
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/query",
+      headers: { authorization: "Bearer valid" },
+      payload: {
+        scope: { type: "platform", purposeCode: "operations.review" },
+        metricKeys: ["platform.operations.provider_failures"],
+        window: { startDate: "2026-08-01", endDate: "2026-08-07" },
+        granularity: "total",
+        timezone: "UTC"
+      }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(audit).toEqual([{
+      purposeCode: "operations.review",
+      metricKeys: ["platform.operations.provider_failures"]
+    }]);
     await app.close();
   });
 
@@ -415,6 +514,7 @@ function repositoryFixture(overrides: Partial<AnalyticsRepository> = {}): Analyt
     async queryMetric() { return [{ bucketDate: null, value: "10", numerator: null, denominator: null, sampleSize: "10" }]; },
     async getWatermark() { return { definitionVersion: 1, dataThrough: new Date(Date.now() - 10_000), state: "healthy" }; },
     async recordSuppression() {},
+    async recordPlatformQueryAccess() {},
     async getProjectionHealth() {
       return {
         projectionKey: "analytics_core", definitionVersion: 1, state: "healthy",

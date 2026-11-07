@@ -62,7 +62,8 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
         with actor as (
           select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
         ), authorized_relationship as (
-          select relationship.organization_id, relationship.creator_user_id
+          select relationship.organization_id, relationship.creator_user_id,
+            relationship.creator_user_id = actor.id as viewer_is_creator
           from managed_creator_relationships relationship
           join actor on true
           where relationship.id = ${input.relationshipId}
@@ -94,6 +95,16 @@ export function createPostgresManagedCreatorRepository(database?: string | Postg
         left join managed_creator_allocation_records allocation
           on allocation.relationship_id = ${input.relationshipId}
           and allocation.state = 'confirmed'
+          and (
+            authorized.viewer_is_creator
+            or exists (
+              select 1 from managed_creator_agreements allocation_agreement
+              where allocation_agreement.id = allocation.agreement_id
+                and allocation_agreement.relationship_id = ${input.relationshipId}
+                and allocation_agreement.permissions @> array['analytics_view']::text[]
+                and allocation_agreement.state in ('accepted', 'superseded', 'terminated')
+            )
+          )
         group by authorized.organization_id, authorized.creator_user_id, allocation.currency
         order by allocation.currency nulls last
       `;
@@ -558,11 +569,11 @@ function selectSql() { return `
     agreement.version_number, agreement.state as agreement_state, agreement.permissions,
     agreement.creator_share_bps, agreement.enterprise_management_share_bps,
     (o.state = 'active' and exists (
-      select 1 from verification_records verification
-      where verification.subject_type = 'organization'
-        and verification.subject_id = o.id
-        and verification.purpose = 'org_kyb'
-        and verification.status = 'valid'
+      select 1
+      from private.current_verification_decision(
+        'organization', o.id, 'org_kyb'
+      ) verification
+      where verification.status = 'valid'
         and (verification.expires_at is null or verification.expires_at > now())
     )) as organization_kyb_ready,
     exists (select 1 from tier_waivers tw where tw.subject_type = 'organization' and tw.subject_id = o.id and tw.tier_key = 'enterprise' and tw.state = 'active' and tw.starts_at <= now() and (tw.ends_at is null or tw.ends_at > now())) as enterprise_entitlement_ready,

@@ -145,9 +145,11 @@ export async function requireAdminMutation<Body>(
   };
 }
 
-export async function featureFlagEnabled(repository: AdminRepository, key: string): Promise<boolean> {
-  const flags = await repository.listFeatureFlags();
-  const flag = flags.items.find((item) => item.key === key);
+export async function featureFlagEnabled(
+  repository: Pick<AdminRepository, "getFeatureFlag">,
+  key: string
+): Promise<boolean> {
+  const flag = await repository.getFeatureFlag(key);
 
   if (!flag || flag.state !== "active") {
     return false;

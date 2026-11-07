@@ -1,0 +1,30 @@
+{
+  "method": "Actual builder and verifier source transformed by node stripTypeScriptTypes; SDK/RPC/clock mocked; route/SQL overwrite verified statically, no live chain",
+  "firstExpiry": "2027-11-05T14:00:00.000Z",
+  "secondExpiry": "2027-11-05T14:00:05.000Z",
+  "deltaMs": 5000,
+  "inputState": "Chain account contains first setup; stored expected facts come from second GET for same intent",
+  "actual": {
+    "verified": false,
+    "failureCode": "expired",
+    "retryable": false
+  },
+  "controlUsingOriginalExpectedExpiry": {
+    "verified": true,
+    "retryable": false,
+    "facts": {
+      "subscriberWallet": "wallet",
+      "subscriberTokenAccount": "ata",
+      "tokenMint": "mint",
+      "authorityAddress": "authority",
+      "delegationAddress": "delegation",
+      "subscriptionPda": "delegation",
+      "planPda": null,
+      "programId": "program",
+      "collectorWallet": "collector",
+      "delegationExpiresAt": "2027-11-05T14:00:00.000Z",
+      "verifiedAt": "2026-11-04T14:00:05.000Z"
+    }
+  },
+  "expected": "First still-valid signed setup remains verifiable or explicitly superseded before signature"
+}

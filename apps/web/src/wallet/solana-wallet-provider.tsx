@@ -7,6 +7,11 @@ import { readPublicWebEnv } from "@/public-env";
 import { useCallback, useEffect, useMemo } from "react";
 import { useProviderSessionLogoutRegistration } from "./provider-session-logout";
 
+// wallet-adapter's ConnectionProvider creates a fresh default config object on every render. Pass
+// one stable object so parent payment-state rerenders do not replace the Connection and abort an
+// in-flight recovery attempt before its accepted signature can be broadcast.
+const solanaConnectionConfig = { commitment: "confirmed" } as const;
+
 export function SolanaWalletProvider({ children }: Readonly<{ children: React.ReactNode }>) {
   const env = useMemo(() => readPublicWebEnv(), []);
   const endpoint = useMemo(() => {
@@ -17,7 +22,7 @@ export function SolanaWalletProvider({ children }: Readonly<{ children: React.Re
   }, [env.NEXT_PUBLIC_SOLANA_CHAIN, env.NEXT_PUBLIC_SOLANA_RPC_URL]);
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
+    <ConnectionProvider config={solanaConnectionConfig} endpoint={endpoint}>
       <WalletProvider autoConnect={false} wallets={[]}>
         <WalletModalProvider>
           <WalletModalAccessibilityBridge />

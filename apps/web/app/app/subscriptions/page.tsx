@@ -6,8 +6,14 @@ import {
   type Subscription,
   type SubscriptionPlan
 } from "@/api-client";
+import {
+  subscriptionCursor,
+  subscriptionPageHref,
+  type SubscriptionCursorKey,
+  type SubscriptionSearchParams
+} from "@/subscriptions/subscription-page-navigation";
 import { requireAppAccess } from "@/supabase/route-guard";
-import { formatAssetAmount } from "@/format-asset-amount";
+import { formatTwoDecimalMinorAmount } from "@/format-asset-amount";
 import { AppShell } from "../../app-shell";
 import { Card, EmptyState, ErrorState, Fact, PageHeader, StatusPill } from "../../ui";
 import { SubscriptionAuthorizationPanel } from "../../subscriptions/subscription-authorization-panel";
@@ -15,21 +21,43 @@ import { SubscriptionCancelPanel } from "../../subscriptions/subscription-cancel
 
 export const dynamic = "force-dynamic";
 
-export default async function SubscriptionsPage() {
+export default async function SubscriptionsPage({ searchParams }: {
+  searchParams: Promise<SubscriptionSearchParams>;
+}) {
   await requireAppAccess("/app/subscriptions");
+  const query = await searchParams;
+  const platformCursor = subscriptionCursor(query, "platformCursor");
+  const creatorCursor = subscriptionCursor(query, "creatorCursor");
+  const historyCursor = subscriptionCursor(query, "historyCursor");
 
-  const [platformAccess, plans, subscriptions] = await Promise.all([
+  const [
+    platformAccess,
+    plans,
+    platformSubscriptionResult,
+    creatorMembershipResult,
+    subscriptionHistory
+  ] = await Promise.all([
     getPlatformAccess(),
     getSubscriptionPlans(),
-    getSubscriptions()
+    getSubscriptions({
+      scope: "platform",
+      ...(platformCursor ? { cursor: platformCursor } : {})
+    }),
+    getSubscriptions({
+      scope: "creator",
+      ...(creatorCursor ? { cursor: creatorCursor } : {})
+    }),
+    getSubscriptions({
+      view: "history",
+      ...(historyCursor ? { cursor: historyCursor } : {})
+    })
   ]);
   const platformPlans = plans.ok ? plans.data.items.filter((plan) => plan.scope === "platform") : [];
-  const creatorPlans = plans.ok ? plans.data.items.filter((plan) => plan.scope === "creator") : [];
-  const platformSubscriptions = subscriptions.ok
-    ? subscriptions.data.items.filter((subscription) => subscription.scope === "platform")
+  const platformSubscriptions = platformSubscriptionResult.ok
+    ? platformSubscriptionResult.data.items
     : [];
-  const creatorMemberships = subscriptions.ok
-    ? subscriptions.data.items.filter((subscription) => subscription.scope === "creator")
+  const creatorMemberships = creatorMembershipResult.ok
+    ? creatorMembershipResult.data.items
     : [];
 
   return (
@@ -40,7 +68,7 @@ export default async function SubscriptionsPage() {
             Choose a WeVid plan or manage memberships you joined from creator profiles.
           </PageHeader>
 
-          <section className="grid gap-3">
+          <section className="grid gap-3" id="platform-plans">
             <h2 className="text-base font-semibold tracking-normal">Platform plans</h2>
             {platformAccess.ok ? (
               <PlatformTierGrid access={platformAccess.data} plans={platformPlans} />
@@ -51,17 +79,10 @@ export default async function SubscriptionsPage() {
 
           <section className="grid gap-3">
             <h2 className="text-base font-semibold tracking-normal">Creator memberships</h2>
-            {plans.ok ? (
-              creatorPlans.length > 0 ? (
-                creatorPlans.map((plan) => <PlanRow plan={plan} key={plan.id} />)
-              ) : (
-                <EmptyState title="No creator memberships available">
-                  Membership offers will appear here and on creator profiles when available.
-                </EmptyState>
-              )
-            ) : (
-              <ErrorState result={plans} title="Subscription plans unavailable" context="Subscription plans" />
-            )}
+            <EmptyState title="Memberships start on creator profiles">
+              Find a creator and review their current offer before joining. {" "}
+              <a className="font-semibold underline" href="/app/search">Find creators</a>
+            </EmptyState>
           </section>
         </section>
 
@@ -78,6 +99,21 @@ export default async function SubscriptionsPage() {
                 {platformSubscriptions.map((subscription) => (
                   <SubscriptionSummary subscription={subscription} key={subscription.id} />
                 ))}
+                {platformSubscriptionResult.ok ? (
+                  <SubscriptionContinuation
+                    cursor={platformSubscriptionResult.data.nextCursor}
+                    cursorKey="platformCursor"
+                    label="More platform subscriptions"
+                    searchParams={query}
+                  />
+                ) : null}
+                {!platformSubscriptionResult.ok ? (
+                  <ErrorState
+                    result={platformSubscriptionResult}
+                    title="Platform subscriptions unavailable"
+                    context="Platform subscriptions"
+                  />
+                ) : null}
               </div>
             ) : (
               <ErrorState result={platformAccess} title="Platform access unavailable" context="Platform access" />
@@ -86,18 +122,57 @@ export default async function SubscriptionsPage() {
 
           <Card className="p-4">
             <p className="text-sm font-medium">Joined memberships</p>
-            {subscriptions.ok ? (
+            {creatorMembershipResult.ok ? (
               creatorMemberships.length > 0 ? (
-                creatorMemberships.map((subscription) => (
-                  <SubscriptionSummary subscription={subscription} key={subscription.id} />
-                ))
+                <>
+                  {creatorMemberships.map((subscription) => (
+                    <SubscriptionSummary subscription={subscription} key={subscription.id} />
+                  ))}
+                  <SubscriptionContinuation
+                    cursor={creatorMembershipResult.data.nextCursor}
+                    cursorKey="creatorCursor"
+                    label="More creator memberships"
+                    searchParams={query}
+                  />
+                </>
               ) : (
                 <EmptyState title="No joined memberships">
                   Joined creator memberships will appear here after activation.
                 </EmptyState>
               )
             ) : (
-              <ErrorState result={subscriptions} title="Subscriptions unavailable" context="Subscriptions" />
+              <ErrorState
+                result={creatorMembershipResult}
+                title="Subscriptions unavailable"
+                context="Subscriptions"
+              />
+            )}
+          </Card>
+
+          <Card className="p-4">
+            <p className="text-sm font-medium">Subscription history</p>
+            {subscriptionHistory.ok ? (
+              subscriptionHistory.data.items.length > 0 ? (
+                <>
+                  {subscriptionHistory.data.items.map((subscription) => (
+                    <SubscriptionSummary subscription={subscription} key={subscription.id} />
+                  ))}
+                  <SubscriptionContinuation
+                    cursor={subscriptionHistory.data.nextCursor}
+                    cursorKey="historyCursor"
+                    label="More subscription history"
+                    searchParams={query}
+                  />
+                </>
+              ) : (
+                <p className="mt-3 text-sm text-(--muted)">No cancelled or interrupted subscriptions.</p>
+              )
+            ) : (
+              <ErrorState
+                result={subscriptionHistory}
+                title="Subscription history unavailable"
+                context="Subscription history"
+              />
             )}
           </Card>
 
@@ -114,33 +189,50 @@ export default async function SubscriptionsPage() {
   );
 }
 
-function SubscriptionSummary({ subscription }: { subscription: Subscription }) {
+function SubscriptionContinuation({
+  cursor,
+  cursorKey,
+  label,
+  searchParams
+}: {
+  cursor: string | null;
+  cursorKey: SubscriptionCursorKey;
+  label: string;
+  searchParams: SubscriptionSearchParams;
+}) {
+  if (!cursor) return null;
   return (
-    <div className="mt-4 grid gap-3 text-sm">
-      <Fact label="Status" value={friendlyState(subscription.state)} />
-      <Fact label="Renewal" value="Automatic" />
-      <Fact label="Next collection" value={subscription.nextCollectionAt ?? "pending authorization"} />
-      <SubscriptionCancelPanel subscription={subscription} />
-    </div>
+    <a
+      className="secondary-button mt-4 w-fit"
+      href={subscriptionPageHref({ searchParams, cursorKey, cursor })}
+    >
+      {label}
+    </a>
   );
 }
 
-function PlanRow({ plan }: { plan: SubscriptionPlan }) {
+function SubscriptionSummary({ subscription }: { subscription: Subscription }) {
   return (
-    <Card className="p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="font-medium">{plan.label}</p>
-          <p className="mt-1 text-sm text-(--muted)">
-            {formatAssetAmount(plan.amountMinor, plan.currency)} every {plan.periodDays} days
-          </p>
-        </div>
-        <StatusPill tone={plan.providerState === "launch_approved" ? "good" : "warn"}>
-          {plan.providerState === "launch_approved" ? "Available" : "Coming soon"}
-        </StatusPill>
-      </div>
-      <SubscriptionAuthorizationPanel plan={plan} />
-    </Card>
+    <div className="mt-4 grid gap-3 text-sm">
+      {subscription.scope === "creator" && subscription.creator ? (
+        <Fact
+          label="Membership"
+          value={subscription.creator.displayName ?? `@${subscription.creator.handle}`}
+        />
+      ) : null}
+      <Fact label="Status" value={friendlyState(subscription.state)} />
+      <Fact label="Renewal" value="Automatic" />
+      <Fact label="Next collection" value={subscription.nextCollectionAt ?? "pending authorization"} />
+      {subscription.failureReason ? (
+        <>
+          <Fact label="Action needed" value={failureGuidance(subscription.failureReason)} />
+          <a className="secondary-button w-fit" href={failureActionHref(subscription)}>
+            {failureActionLabel(subscription.failureReason)}
+          </a>
+        </>
+      ) : null}
+      <SubscriptionCancelPanel subscription={subscription} />
+    </div>
   );
 }
 
@@ -167,7 +259,7 @@ function PlatformTierGrid({
                     ? "Custom contract"
                     : tier.monthlyPriceMinor === 0
                       ? "Included"
-                      : `${formatAssetAmount(tier.monthlyPriceMinor, tier.currency ?? "USDC")} / month`}
+                      : `${formatTwoDecimalMinorAmount(tier.monthlyPriceMinor, tier.currency ?? "USDC")} / month`}
                 </p>
               </div>
               <StatusPill tone={tier.key === access.currentTier.key ? "good" : "neutral"}>
@@ -203,4 +295,25 @@ function friendlyState(state: Subscription["state"]) {
   if (state === "renewal_pending") return "Confirming payment";
   if (state === "grace_period") return "Payment needs attention";
   return state.charAt(0).toUpperCase() + state.slice(1).replaceAll("_", " ");
+}
+
+function failureGuidance(reason: NonNullable<Subscription["failureReason"]>) {
+  if (reason === "insufficient_funds") return "Add funds; WeVid will retry the bounded collection.";
+  if (reason === "authorization_revoked") return "Reconnect wallet authorization from the plan page.";
+  if (reason === "provider_unavailable") return "Provider temporarily unavailable; retry later.";
+  return "Wallet setup no longer matches this plan; review and reconnect authorization.";
+}
+
+function failureActionHref(subscription: Subscription) {
+  if (subscription.failureReason === "insufficient_funds") return "/app/wallet";
+  if (subscription.failureReason === "provider_unavailable") return "/app/subscriptions";
+  return subscription.creator?.handle
+    ? `/profile/${encodeURIComponent(subscription.creator.handle)}`
+    : "/app/subscriptions#platform-plans";
+}
+
+function failureActionLabel(reason: NonNullable<Subscription["failureReason"]>) {
+  if (reason === "insufficient_funds") return "Open wallet";
+  if (reason === "provider_unavailable") return "Retry status";
+  return "Reconnect authorization";
 }

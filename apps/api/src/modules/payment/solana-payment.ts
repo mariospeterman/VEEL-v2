@@ -1,6 +1,7 @@
 import {
   Connection,
   type Commitment,
+  type FetchFn,
   Keypair,
   PublicKey,
   type ParsedInstruction,
@@ -86,10 +87,112 @@ export function createSolanaRpcSettlementVerifier(
   const connection = new Connection(rpcUrl, commitment);
 
   return {
-    async verifyTransfer(input) {
-      return verifySolanaTransfer(connection, input, commitment);
+    async verifyTransfer(input, options) {
+      const verificationConnection = options?.signal
+        ? createAbortableSolanaConnection(rpcUrl, commitment, options.signal)
+        : connection;
+      return verifySolanaTransfer(verificationConnection, input, commitment);
+    },
+    async verifyTransactionExpiry(input, options) {
+      const verificationConnection = options?.signal
+        ? createAbortableSolanaConnection(rpcUrl, commitment, options.signal)
+        : connection;
+      return verifySolanaTransactionExpiry(verificationConnection, input);
     }
   };
+}
+
+/**
+ * Proves that one exact wallet-signed transaction can no longer land. A missing settlement lookup
+ * alone is never enough: the recent blockhash must be expired and the signature must still be
+ * absent from the provider's recent and historical status indexes. The route then applies its
+ * terminal state through the same submitted-signature compare-and-set used by confirmation.
+ */
+export async function verifySolanaTransactionExpiry(
+  connection: Pick<Connection, "getSignatureStatuses" | "isBlockhashValid">,
+  input: {
+    signature: string;
+    signedTransactionBase64: string;
+    buyerWallet: string | null;
+  }
+): Promise<
+  | { state: "expired" }
+  | { state: "active" | "observed" | "invalid" }
+> {
+  const transaction = validateSignedPaymentTransaction(input);
+  if (!transaction) return { state: "invalid" };
+
+  // `confirmed` uses the current supermajority-voted chain view. A more recent blockhash can be
+  // valid there before it is visible from a finalized bank, so finalized would create false
+  // expiry proofs for transactions signed near the intent boundary.
+  const blockhash = await connection.isBlockhashValid(
+    transaction.recentBlockhash,
+    { commitment: "confirmed" }
+  );
+  if (blockhash.value) return { state: "active" };
+
+  // Once the blockhash is invalid, this transaction cannot newly land. The final status lookup
+  // fences a transaction that landed just before expiry but has not reached settlement finality.
+  const statuses = await connection.getSignatureStatuses(
+    [input.signature],
+    { searchTransactionHistory: true }
+  );
+  return statuses.value[0] ? { state: "observed" } : { state: "expired" };
+}
+
+/**
+ * Synchronously validates the exact transaction bytes before a payment-submission command can be
+ * durably accepted. The canonical bytes, embedded first signature, all required signatures, and
+ * fee payer must agree with the submitted command and the backend-bound buyer wallet.
+ */
+export function validateSignedPaymentTransaction(input: {
+  signature: string;
+  signedTransactionBase64: string;
+  buyerWallet: string | null;
+}): { recentBlockhash: string } | null {
+  const transaction = decodeSignedPaymentTransaction(input.signedTransactionBase64);
+  if (
+    !transaction ||
+    !input.buyerWallet ||
+    transaction.feePayer?.toBase58() !== input.buyerWallet ||
+    !transaction.signature ||
+    bs58.encode(transaction.signature) !== input.signature ||
+    !transaction.verifySignatures() ||
+    !transaction.recentBlockhash
+  ) {
+    return null;
+  }
+
+  return { recentBlockhash: transaction.recentBlockhash };
+}
+
+function decodeSignedPaymentTransaction(value: string): Transaction | null {
+  if (value.length === 0 || value.length > 4_096 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
+    return null;
+  }
+
+  try {
+    const bytes = Buffer.from(value, "base64");
+    if (bytes.length === 0 || bytes.toString("base64") !== value) return null;
+    return Transaction.from(bytes);
+  } catch {
+    return null;
+  }
+}
+
+function createAbortableSolanaConnection(
+  rpcUrl: string,
+  commitment: Extract<Commitment, "confirmed" | "finalized">,
+  signal: AbortSignal
+): Connection {
+  const abortableFetch = ((input: Parameters<FetchFn>[0], init?: Parameters<FetchFn>[1]) => {
+    return globalThis.fetch(
+      input as Parameters<typeof globalThis.fetch>[0],
+      { ...(init as RequestInit), signal }
+    ) as unknown as ReturnType<FetchFn>;
+  }) as FetchFn;
+
+  return new Connection(rpcUrl, { commitment, fetch: abortableFetch });
 }
 
 export async function verifySolanaTransfer(
@@ -104,7 +207,7 @@ export async function verifySolanaTransfer(
     };
   }
 
-  if (!isValidSignature(input.signature)) {
+  if (!isValidSolanaSignature(input.signature)) {
     return {
       confirmed: false,
       failureCode: "invalid_signature"
@@ -186,30 +289,7 @@ export async function verifySolanaTransfer(
     };
   }
 
-  const hasCreatorTransfer = instructions.some((instruction) =>
-    isMatchingTransfer(instruction, input, {
-      sourceWallet: input.buyerWallet ?? null,
-      destinationWallet: input.creatorWallet,
-      amountMinor: input.creatorAmountMinor
-    })
-  );
-  const hasEnterpriseTransfer =
-    input.enterpriseManagementAmountMinor === 0 ||
-    hasExpectedEnterpriseTransfer(instructions, input);
-  const hasPlatformFeeTransfer =
-    input.platformFeeAmountMinor === 0 ||
-    instructions.some((instruction) =>
-      isMatchingTransfer(instruction, input, {
-        sourceWallet: input.buyerWallet ?? null,
-        destinationWallet: input.platformFeeWallet,
-        amountMinor: input.platformFeeAmountMinor
-      })
-    );
-  const hasReferralTransfer =
-    input.referralAmountMinor === 0 ||
-    hasExpectedReferralTransfer(instructions, input);
-
-  return hasCreatorTransfer && hasEnterpriseTransfer && hasPlatformFeeTransfer && hasReferralTransfer
+  return hasExpectedSplitTransfers(instructions, input)
     ? {
         confirmed: true,
         blockTime
@@ -220,39 +300,82 @@ export async function verifySolanaTransfer(
       };
 }
 
-function hasExpectedEnterpriseTransfer(
+type ExpectedTransfer = {
+  sourceWallet?: string | null;
+  destinationWallet: string;
+  amountMinor: number;
+};
+
+function hasExpectedSplitTransfers(
   instructions: Array<ParsedInstruction | PartiallyDecodedInstruction>,
   input: PaymentSettlementInput
 ): boolean {
-  if (!input.enterpriseWallet) {
+  const expectedTransfers = expectedSplitTransfers(input);
+  if (!expectedTransfers) {
     return false;
   }
 
-  return instructions.some((instruction) =>
-    isMatchingTransfer(instruction, input, {
-      sourceWallet: input.buyerWallet ?? null,
-      destinationWallet: input.enterpriseWallet as string,
-      amountMinor: input.enterpriseManagementAmountMinor
-    })
-  );
+  const consumedInstructionIndexes = new Set<number>();
+  for (const expectedTransfer of expectedTransfers) {
+    const matchingInstructionIndex = instructions.findIndex(
+      (instruction, instructionIndex) =>
+        !consumedInstructionIndexes.has(instructionIndex) &&
+        isMatchingTransfer(instruction, input, expectedTransfer)
+    );
+
+    if (matchingInstructionIndex === -1) {
+      return false;
+    }
+
+    consumedInstructionIndexes.add(matchingInstructionIndex);
+  }
+
+  return true;
 }
 
-function hasExpectedReferralTransfer(
-  instructions: Array<ParsedInstruction | PartiallyDecodedInstruction>,
+function expectedSplitTransfers(
   input: PaymentSettlementInput
-): boolean {
-  if (!input.referralWallet) {
-    return false;
+): ExpectedTransfer[] | null {
+  const sourceWallet = input.buyerWallet ?? null;
+  const transfers: ExpectedTransfer[] = [
+    {
+      sourceWallet,
+      destinationWallet: input.creatorWallet,
+      amountMinor: input.creatorAmountMinor
+    }
+  ];
+
+  if (input.enterpriseManagementAmountMinor > 0) {
+    if (!input.enterpriseWallet) {
+      return null;
+    }
+    transfers.push({
+      sourceWallet,
+      destinationWallet: input.enterpriseWallet,
+      amountMinor: input.enterpriseManagementAmountMinor
+    });
   }
 
-  const referralWallet = input.referralWallet;
-  return instructions.some((instruction) =>
-    isMatchingTransfer(instruction, input, {
-      sourceWallet: input.buyerWallet ?? null,
-      destinationWallet: referralWallet,
+  if (input.platformFeeAmountMinor > 0) {
+    transfers.push({
+      sourceWallet,
+      destinationWallet: input.platformFeeWallet,
+      amountMinor: input.platformFeeAmountMinor
+    });
+  }
+
+  if (input.referralAmountMinor > 0) {
+    if (!input.referralWallet) {
+      return null;
+    }
+    transfers.push({
+      sourceWallet,
+      destinationWallet: input.referralWallet,
       amountMinor: input.referralAmountMinor
-    })
-  );
+    });
+  }
+
+  return transfers;
 }
 
 export function assertSolanaAddress(address: string): void {
@@ -367,7 +490,7 @@ function isMatchingMemo(
   }
 }
 
-function isValidSignature(signature: string): boolean {
+export function isValidSolanaSignature(signature: string): boolean {
   try {
     return bs58.decode(signature).length === 64;
   } catch {

@@ -1,0 +1,5 @@
+
+> veel-shoot-own-shine@0.0.0 deps:check /workspace/scratch/0635fbdaf32f/wevid-audit
+> node scripts/check-dependency-policy.mjs
+
+Dependency peer and vulnerable-resolution policy checks passed.

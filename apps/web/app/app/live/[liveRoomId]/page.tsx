@@ -15,7 +15,7 @@ export default async function LiveHostPage({ params }: { params: Promise<{ liveR
     <AppShell>
       <section className="mx-auto grid w-full max-w-4xl content-start gap-5">
         <PageHeader eyebrow="Live studio" title={result.ok ? result.data.title : "Live room"}>
-          Connect OBS, check the room, and end the broadcast from one private screen.
+          Preview your camera and microphone, start intentionally, and manage the room from one private screen.
         </PageHeader>
         {result.ok ? (
           <LiveHostWorkspace initialRoom={result.data} />

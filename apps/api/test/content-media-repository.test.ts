@@ -3,6 +3,34 @@ import type { PostgresSql, PostgresTransaction } from "../src/shared/postgres";
 import { createContentMediaRepositoryMethods } from "../src/modules/content/content-media-repository";
 
 describe("content media repository", () => {
+  it("authorizes ready compositions by publication state instead of stale processing state", async () => {
+    const queries: string[] = [];
+    const sql = vi.fn((strings: TemplateStringsArray) => {
+      queries.push(strings.join("?"));
+      return Promise.resolve([{
+        id: "00000000-0000-4000-8000-000000000040",
+        media_type: "vod",
+        caption: "provider-ready",
+        nsfw_label: "none"
+      }]);
+    }) as unknown as PostgresSql;
+    const repository = createContentMediaRepositoryMethods(sql);
+
+    await expect(repository.findOwnedContentForUpload({
+      supabaseUserId: "00000000-0000-4000-8000-000000000001",
+      contentId: "00000000-0000-4000-8000-000000000040"
+    })).resolves.toMatchObject({ mediaType: "vod" });
+    await expect(repository.findOwnedContentForPublication({
+      supabaseUserId: "00000000-0000-4000-8000-000000000001",
+      contentId: "00000000-0000-4000-8000-000000000040"
+    })).resolves.toMatchObject({ mediaType: "vod" });
+
+    expect(queries[0]).toContain("ci.state <> 'deleted'");
+    expect(queries[0]).toContain("ci.publish_state in ('draft', 'unpublished')");
+    expect(queries[0]).not.toContain("ci.state in ('draft', 'processing')");
+    expect(queries[1]).toContain("ci.publish_state in ('draft', 'unpublished', 'submitted_for_review')");
+  });
+
   it("does not approve moderation from provider playback sync", async () => {
     const { sql, queries, values } = createFakeSql();
     const repository = createContentMediaRepositoryMethods(sql);
@@ -51,6 +79,55 @@ describe("content media repository", () => {
 
     expect(queries.join("\n")).toContain("state = case when");
     expect(queries.join("\n")).not.toContain("moderation_state");
+  });
+
+  it("atomically repairs receipt-only delivery and keeps an unprocessed event retryable", async () => {
+    const queries: string[] = [];
+    const transaction = vi.fn((strings: TemplateStringsArray) => {
+      const query = strings.join("?");
+      queries.push(query);
+      return Promise.resolve(query.includes("select processed_at")
+        ? [{ processed_at: null }]
+        : []);
+    }) as unknown as PostgresTransaction;
+    Object.assign(transaction, { json: (value: unknown) => value });
+    const sql = {
+      begin: vi.fn(async (work: (tx: PostgresTransaction) => Promise<unknown>) => work(transaction))
+    } as unknown as PostgresSql;
+    const repository = createContentMediaRepositoryMethods(sql);
+
+    await expect(repository.recordMediaProviderWebhook({
+      provider: "bunny",
+      providerEventId: "receipt-existed-before-event",
+      eventType: "video.ready",
+      normalizedState: "ready",
+      replayPayload: { providerAssetId: "bunny-video-guid" }
+    })).resolves.toBe(true);
+
+    expect(sql.begin).toHaveBeenCalledOnce();
+    expect(queries.join("\n")).toContain("insert into provider_webhook_receipts");
+    expect(queries.join("\n")).toContain("insert into provider_events");
+    expect(queries.join("\n")).toContain("select processed_at");
+  });
+
+  it("suppresses only a provider event that already has processed_at", async () => {
+    const transaction = vi.fn((strings: TemplateStringsArray) => Promise.resolve(
+      strings.join("?").includes("select processed_at")
+        ? [{ processed_at: new Date("2026-11-04T12:00:00.000Z") }]
+        : []
+    )) as unknown as PostgresTransaction;
+    Object.assign(transaction, { json: (value: unknown) => value });
+    const sql = {
+      begin: vi.fn(async (work: (tx: PostgresTransaction) => Promise<unknown>) => work(transaction))
+    } as unknown as PostgresSql;
+    const repository = createContentMediaRepositoryMethods(sql);
+
+    await expect(repository.recordMediaProviderWebhook({
+      provider: "bunny",
+      providerEventId: "already-applied",
+      eventType: "video.ready",
+      normalizedState: "ready"
+    })).resolves.toBe(false);
   });
 
   it("does not reapply a normal webhook already completed by recovery", async () => {

@@ -23,6 +23,16 @@ export class AnalyticsQueryService {
     if (!scope) return null;
 
     const dimensions = request.dimensions ?? {};
+    if (scope.type === "platform") {
+      await this.repository.recordPlatformQueryAccess({
+        actorUserId,
+        purposeCode: scope.purposeCode,
+        metricKeys: request.metricKeys,
+        window: request.window,
+        comparisonWindow: request.comparisonWindow ?? null,
+        dimensions
+      });
+    }
     const watermark = await this.repository.getWatermark();
     const metrics: AnalyticsMetricResult[] = [];
 
@@ -191,7 +201,7 @@ function applyPrivacy(points: AnalyticsRawPoint[], minimumCohortSize: number): A
       value: suppressed ? null : point.value,
       numerator: suppressed ? null : point.numerator,
       denominator: suppressed ? null : point.denominator,
-      sampleSize: point.sampleSize,
+      sampleSize: suppressed ? null : point.sampleSize,
       privacyDecision: suppressed ? "suppressed_minimum_cohort" : "released"
     };
   });

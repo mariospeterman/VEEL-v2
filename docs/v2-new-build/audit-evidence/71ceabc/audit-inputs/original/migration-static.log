@@ -1,0 +1,5 @@
+
+> veel-shoot-own-shine@0.0.0 db:migrations:check /workspace/scratch/0635fbdaf32f/wevid-audit
+> node packages/database/scripts/check-migrations.mjs
+
+Database migration checks passed.

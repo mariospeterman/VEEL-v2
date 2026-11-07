@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: deterministic derived metrics, authorization, privacy, freshness, reconciliation, and insight projections
-Last updated: 2026-08-23
+Last updated: 2026-11-04
 Source of truth: yes for Convergence 03 product behavior
 
 Owns:
@@ -23,12 +23,12 @@ Launch scope:
 - one backend metric registry, typed daily projections and watermarks, deterministic backfill/reconciliation, one structured query service, and the minimum operations surface required before Analytics surfaces
 
 Implemented boundary:
-- migration `0110_analytics_core.sql` owns viewer, creator, creator-content, creator-product, organization-creator, platform-commerce, platform-operations, retention-cohort, and onboarding-funnel daily projections plus bounded typed profile-open, offer-impression, and onboarding-journey facts; versioned jobs, watermarks, reconciliation evidence, and privacy-suppression counters remain server-only
+- migration `0110_analytics_core.sql` owns viewer, creator, creator-content, creator-product, organization-creator, platform-commerce, platform-operations, retention-cohort, and onboarding-funnel daily projections plus bounded typed profile-open, offer-impression, and onboarding-journey facts; migration `0126_analytics_projection_retention_hardening.sql` adds exact playback-asset snapshots, indexed retention work, and server-only reconstruction boundaries
 - `POST /v1/analytics/query` accepts only registered v1 metric keys, a maximum of 20 unique metrics, bounded windows up to 366 days, `day` or `total` granularity, explicit UTC, and allowlisted dimensions
 - `POST /v1/analytics/onboarding-events` accepts only the closed lifecycle vocabulary, a random journey UUID, a bounded idempotency key, and a recent timestamp. It stores no email, wallet address, signature, provider token, identity document, raw provider payload, or arbitrary metadata; delivery never controls product behavior.
-- viewer results are self-only, creator results are self-only, Enterprise results recheck active membership/entitlement/agreement authority, and platform results require active staff plus a bounded purpose code
-- audience-derived results require a conservative cohort of at least five; suppressed values also suppress numerator and denominator, native-value metrics require explicit `SOL` or `USDC` without conversion, and every count/seconds/minor-unit scalar is serialized as a lossless decimal string
-- the existing worker runtime recomputes bounded two-day UTC windows transactionally so duplicate and late facts converge; retries, dead letters, parity evidence, and watermarks are exposed through `GET /v1/admin/analytics/health`
+- viewer results are self-only, creator results are self-only, Enterprise results recheck active membership/entitlement/agreement authority, and platform results require an active user and staff membership whose canonical effective permissions include `admin.analytics.read`, plus a bounded audited purpose code
+- audience-derived results require a conservative cohort of at least five; suppressed values also suppress numerator, denominator, and sample size, including current and comparison windows, while native-value metrics require explicit `SOL` or `USDC` without conversion and every released count/seconds/minor-unit scalar is serialized as a lossless decimal string
+- the worker recomputes the current UTC day once per minute and the prior UTC day once per hour so new facts do not wait for an hourly slot; retries, dead letters, per-source parity evidence, and watermarks are exposed through `GET /v1/admin/analytics/health`
 - staff can enqueue an audited, idempotent, maximum-366-day backfill or reconciliation through `POST /v1/admin/analytics/jobs`; the admin browser surface exposes both health and this bounded command without permitting direct projection edits
 
 Non-goals:
@@ -49,6 +49,8 @@ Analytics is a derived read authority. It never mutates or overrides the underly
 A dashboard, export, future MCP resource, and deterministic insight requesting the same authorized
 metric with the same scope, window, timezone, and filters must receive the same definition version,
 value, numerator, denominator, sample size, dimensions, data-through time, and privacy decision.
+For a suppressed point, value, numerator, denominator, and sample size are all `null`; consumers must
+not substitute a threshold, raw cohort, comparison delta, or adjacent dimension as a hidden count.
 
 Current account, entitlement, KYC, wallet, plan, queue item, payment intent, and provider status
 remain direct domain queries. Trends, rates, totals, comparisons, and cohorts belong to Analytics Core.
@@ -97,7 +99,7 @@ without becoming a public metric by itself.
 | Managed-creator reporting | Confirmed allocation count and creator-side, creator-net and management sums grouped by currency | `ANALYTICS_CORE` | Organization-creator daily projection consumes confirmed allocation facts. Authorization continues to require the canonical active relationship, membership, entitlement, agreement permission and creator consent. |
 | Content engagement counters | Transactional like/comment/share counters used by renderers and deterministic feed ranking | `KEEP_DIRECT` + `FACT_SOURCE` | Counter projection stays the low-latency content/read-model authority. Daily analytics derive from reaction/comment/share facts and reconcile to counters; analytics never feeds ranking. |
 | Feed impression intake | Bounded idempotent impression receipts and viewer-content impression state | `FACT_SOURCE` | Impression facts feed creator-content daily projections. Viewer identities are never exposed through analytics, and ranking continues to use its own bounded viewer state. |
-| Playback usage | Credited heartbeat seconds, playback sessions and monthly platform-usage windows used to enforce tier allowance | `KEEP_DIRECT` + `FACT_SOURCE` | Subscription/platform access keeps synchronous allowance authority. Analytics consumes credited heartbeats/session facts for watch-time and usage trends without changing allowance state. |
+| Playback usage | Atomically reserved playback-lease seconds, playback sessions, analytics heartbeats, and monthly platform-usage windows | `KEEP_DIRECT` + `FACT_SOURCE` | Subscription/platform access keeps synchronous allowance authority: the explicit session command reserves the bounded lease and heartbeats never debit it again. Each content session snapshots its exact release media asset; analytics aggregates observed heartbeats before the asset join and counts replays per viewer+target+day, so replacement/carousel assets cannot multiply time and distinct content is not a replay. |
 | Publication and access state | Current content publication, entitlement, subscription, Event Access Pass and live-room state | `KEEP_DIRECT` + `FACT_SOURCE` | Domain repositories remain current-state authority; analytics derives bounded counts/trends only. |
 | Web Vitals and OpenTelemetry | Privacy-minimized browser performance histograms plus API/worker traces and queue/provider diagnostics | `KEEP_DIRECT` | Observability remains operational telemetry, not user/creator product analytics and not a cohort/audience source. |
 | Admin operations dashboards | Current queues, retries, dead letters, provider health and support/payment state | `KEEP_DIRECT` | Existing admin repositories remain operational truth. Analytics ops adds only projection watermark, reconciliation, version and suppression health. |
@@ -146,13 +148,22 @@ Anonymous onboarding events are rate-limited, allowlisted observational telemetr
 identity, entitlement, payment, compliance, or other business authority.
 
 The existing worker runtime owns bounded leased batches, incremental watermarks, idempotent reruns,
-late-arriving facts, retry/dead-letter behavior, deterministic backfill, and source reconciliation.
-The initial schedule replaces each selected two-day UTC window in one transaction, records a
-versioned reconciliation run, and advances the watermark only after the recomputation commits. A queue
-lease may be retried or recovered by an audited admin action, while a bounded staff command can enqueue
-a backfill or reconciliation with exact idempotency-key/request-hash replay semantics. Neither path edits
-projection values or canonical facts directly.
-Reconciliation reports discrepancies and alerts; it never silently rewrites unexplained differences.
+late-arriving facts, retry/dead-letter behavior, deterministic backfill, raw-fact retention, and source
+reconciliation. Current-day work has a minute idempotency slot; a separate hourly prior-day window
+absorbs bounded late facts without rebuilding two full days on every tick. Each selected UTC day is
+replaced in one transaction, records a versioned reconciliation run, and advances the watermark only
+after the recomputation commits. Expired leases at their maximum attempt count are atomically moved to
+`dead_letter` before leasing, so process death cannot create an infinite reclaim loop.
+
+Profile-open and offer-impression receipts are purged after 30 days, and observational onboarding
+events after 90 days, in indexed 500-row-per-source transactions. The same transaction advances a
+server-only raw-retention boundary. A backfill that overlaps unavailable raw dates fails before deleting
+any retained aggregate; it cannot reconstruct a partial history and silently zero the projection. These
+observational telemetry facts do not carry financial/compliance legal holds; those records remain in
+their canonical ledgers. A bounded staff command can enqueue a safe backfill or reconciliation with
+exact idempotency-key/request-hash replay semantics. Neither path edits canonical facts directly.
+Reconciliation records every source/projection variance independently and derives health from the sum
+of absolute variances, so equal and opposite metric errors cannot cancel into `matched`.
 Hourly rollups require measured near-realtime value. A warehouse requires measured OLTP pressure,
 rollup duration, query latency, volume, or retention/cost evidence and is not a launch authority.
 
@@ -171,8 +182,11 @@ Authorization is resolved before query execution from the canonical actor, staff
 membership/role, managed-creator relationship and agreement, granted permissions, tier, and purpose.
 Creators see only their own profile/content. Enterprise queries require an active entitlement,
 membership, accepted agreement, exact granted analytics permission, and active creator consent.
-Staff queries require an active role; individual drilldown also requires a purpose code and audit.
-Browser parameters cannot broaden any scope.
+Platform staff queries require the same canonical effective `admin.analytics.read` permission used by
+the Admin surface: only registered role permissions plus active, global, non-revoked explicit grants
+apply, and both the user and membership must remain active. Every platform query requires a bounded
+purpose code and records an audit event with its metric keys, windows, and allowlisted dimensions.
+Browser parameters cannot broaden any scope, and MCP creator analytics remains creator-self-only.
 
 ## Privacy And Freshness
 
@@ -180,6 +194,12 @@ Aggregate audience metrics enforce minimum cohorts and suppression. The service 
 individual viewer lists, sensitive-trait or hidden-demographic inference, cross-creator audience
 identity, raw age/KYC evidence, or private-message analysis. Retention and export/delete behavior
 must remain compatible with the canonical privacy workflows.
+
+Suppression is applied independently to every current, daily, total, comparison, and dimension-filtered
+point. A suppressed point returns `null` for value, numerator, denominator, and sample size; if either
+side needed for a comparison is suppressed, comparison value, delta, and deterministic insight remain
+absent. This prevents creator count metrics whose raw value doubles as cohort size from disclosing the
+hidden cohort through response metadata.
 
 Near-realtime means an explicit watermark, `dataThrough`, lag, and visible stale state. Initial
 staging targets to validate are under 60 seconds for creator/user current-period projections, under

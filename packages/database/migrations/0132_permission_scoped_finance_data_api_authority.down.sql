@@ -1,0 +1,5 @@
+-- Browser-role revocation is intentionally irreversible. Application rollback
+-- keeps refund and managed-creator finance authority server-owned. Any future
+-- direct projection must be introduced by a reviewed forward migration with
+-- explicit minimal grants and permission-specific authorization; an any-staff
+-- policy is not sufficient.

@@ -66,8 +66,15 @@ export async function registerAnalyticsRoutes(app: FastifyInstance, options: Reg
     async (request, reply) => {
       const session = await verifyRequestSession(request, options.authVerifier);
       if (!session) return reply.code(401).send(unauthorizedResponse("Missing or invalid bearer token"));
+      const body = request.body as AnalyticsQueryRequest;
       try {
-        const result = await service.query(session.userId, request.body as AnalyticsQueryRequest);
+        if (body.scope.type === "platform" && !(await options.adminRepository.hasAdminPermission(
+          session.supabaseUserId,
+          "admin.analytics.read"
+        ))) {
+          return reply.code(403).send({ code: "forbidden", message: "Analytics read permission is required" });
+        }
+        const result = await service.query(session.userId, body);
         if (!result) return reply.code(403).send({ code: "forbidden", message: "Analytics scope is not available" });
         return reply.code(200).send(result);
       } catch (error) {
@@ -76,6 +83,9 @@ export async function registerAnalyticsRoutes(app: FastifyInstance, options: Reg
         }
         if (error instanceof AnalyticsRepositoryConfigurationError) {
           return reply.code(503).send({ code: "service_unavailable", message: "Analytics storage is not configured" });
+        }
+        if (error instanceof AdminRepositoryConfigurationError) {
+          return reply.code(403).send({ code: "forbidden", message: "Admin access is not configured" });
         }
         throw error;
       }

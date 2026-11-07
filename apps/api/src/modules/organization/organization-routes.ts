@@ -90,7 +90,7 @@ export async function registerOrganizationRoutes(
           organizationId,
           ...normalized,
           idempotencyKey,
-          requestHash: hashRequest(normalized)
+          requestHash: hashRequest({ organizationId, ...normalized })
         });
         return member
           ? reply.code(201).send(member)
@@ -117,7 +117,7 @@ export async function registerOrganizationRoutes(
           membershipId,
           decision,
           idempotencyKey,
-          requestHash: hashRequest({ decision })
+          requestHash: hashRequest({ membershipId, decision })
         });
         return member
           ? reply.send(member)
@@ -150,7 +150,7 @@ export async function registerOrganizationRoutes(
           membershipId,
           ...normalized,
           idempotencyKey,
-          requestHash: hashRequest(normalized)
+          requestHash: hashRequest({ organizationId, membershipId, ...normalized })
         });
         return member
           ? reply.send(member)

@@ -1,0 +1,28 @@
+{
+  "sourceSha": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "runtime": "v24.22.1",
+  "proofBoundary": "Actual compiled adapter with official documented token response shape supplied by synthetic fetch; no provider/browser call",
+  "requests": [
+    {
+      "url": "https://api.sumsub.com/resources/accessTokens/sdk",
+      "method": "POST",
+      "body": {
+        "ttlInSecs": 600,
+        "userId": "user:canonical-id",
+        "levelName": "age-level"
+      }
+    }
+  ],
+  "session": {
+    "provider": "sumsub",
+    "providerReference": "user:canonical-id",
+    "providerApplicantId": "user:canonical-id",
+    "launchUrl": "https://wevid.example/age/callback?provider=sumsub&token=audit-only-sdk-token",
+    "expiresAt": "2026-11-04T15:31:27.048Z",
+    "method": "gov_id_selfie",
+    "assuranceLevel": "documentary"
+  },
+  "launchOrigin": "https://wevid.example",
+  "launchPath": "/age/callback",
+  "observed": "Launch points to the WeVid callback rather than a hosted Sumsub verification or an implemented SDK launcher. Frontend static trace shows callback redirects directly to age-return polling and drops token."
+}

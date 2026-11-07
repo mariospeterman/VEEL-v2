@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import {
   ContentDraftIdempotencyConflictError,
+  ContentFormatRetiredError,
   ContentDraftOriginConflictError,
   ContentDraftPollCloseError,
   ContentDraftQuotaExceededError,
@@ -76,6 +77,10 @@ export function createContentDraftRepositoryMethods(
             await recordDraftOrigin(transaction, user.id, existing.id, input.origin);
             return existing;
           }
+        }
+
+        if (input.mediaType === "text" || input.mediaType === "poll") {
+          throw new ContentFormatRetiredError();
         }
 
         if (

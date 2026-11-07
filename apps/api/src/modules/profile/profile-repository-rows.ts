@@ -28,10 +28,20 @@ export interface CreatorProfileRow extends ProfileRow {
   membership_benefits: string[] | null;
   membership_amount_minor: string | number | null;
   membership_amount_atomic: string | number | null;
+  membership_asset_decimals: number | null;
+  membership_creator_amount_atomic: string | number | null;
+  membership_platform_fee_amount_atomic: string | number | null;
+  membership_allocation_amount_atomic: string | number | null;
+  membership_currency: components["schemas"]["Currency"] | null;
+  membership_period_days: number | null;
+  membership_period_seconds: number | null;
+  membership_billing_mode: components["schemas"]["SubscriptionPlan"]["billingMode"] | null;
   membership_provider_state: "staging_required" | "launch_approved" | "disabled" | null;
+  membership_provider: string | null;
   membership_token_mint: string | null;
   membership_token_program: "spl_token" | "token_2022" | null;
   membership_program_id: string | null;
+  membership_plan_pda: string | null;
   membership_merchant_wallet: string | null;
 }
 
@@ -73,6 +83,7 @@ export interface CreatorOnboardingRow {
 }
 
 export interface EarningsRow {
+  currency: components["schemas"]["Currency"];
   creator_earnings_minor: string | number | null;
   platform_fees_minor: string | number | null;
   referral_commissions_minor: string | number | null;
@@ -81,6 +92,7 @@ export interface EarningsRow {
 
 export interface ProductRow {
   product_type: components["schemas"]["ProductType"];
+  currency: components["schemas"]["Currency"];
   amount_minor: string | number;
   confirmed_payment_count: string | number;
 }

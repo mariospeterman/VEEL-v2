@@ -70,8 +70,20 @@ export function createEngagementPrivacyRepositoryMethods(
         with actor as (
           select id from users where supabase_user_id = ${input.supabaseUserId} limit 1
         )
-        select request.id, request.type, request.state, request.created_at, request.updated_at, request.completed_at
-        from data_requests request, actor
+        select request.id, request.type, request.state, request.created_at, request.updated_at, request.completed_at,
+          export_job.id as export_job_id, export_job.state as export_state,
+          export_job.progress_total_items as export_total_items,
+          export_job.progress_completed_items as export_completed_items,
+          export_job.progress_available_items as export_available_items,
+          export_job.progress_unavailable_items as export_unavailable_items,
+          export_job.attempt_count as export_attempt_count,
+          export_job.last_error_code as export_last_error_code,
+          export_job.snapshot_created_at as export_snapshot_created_at,
+          export_job.archive_ready_at as export_archive_ready_at,
+          export_job.downloadable_until as export_downloadable_until
+        from data_requests request
+        cross join actor
+        left join content_export_jobs export_job on export_job.data_request_id = request.id
         where request.requester_user_id = actor.id
         order by request.created_at desc
         limit 20
@@ -104,10 +116,22 @@ export function createEngagementPrivacyRepositoryMethods(
         if (!actor) throw new EngagementPolicyError("Data request is not allowed");
 
         const replays = await transaction<(DataRequestRow & { reason: string | null })[]>`
-          select id, type, state, reason, created_at, updated_at, completed_at
-          from data_requests
-          where requester_user_id = ${actor.id}
-            and idempotency_key = ${input.idempotencyKey}
+          select request.id, request.type, request.state, request.reason,
+            request.created_at, request.updated_at, request.completed_at,
+            export_job.id as export_job_id, export_job.state as export_state,
+            export_job.progress_total_items as export_total_items,
+            export_job.progress_completed_items as export_completed_items,
+            export_job.progress_available_items as export_available_items,
+            export_job.progress_unavailable_items as export_unavailable_items,
+            export_job.attempt_count as export_attempt_count,
+            export_job.last_error_code as export_last_error_code,
+            export_job.snapshot_created_at as export_snapshot_created_at,
+            export_job.archive_ready_at as export_archive_ready_at,
+            export_job.downloadable_until as export_downloadable_until
+          from data_requests request
+          left join content_export_jobs export_job on export_job.data_request_id = request.id
+          where request.requester_user_id = ${actor.id}
+            and request.idempotency_key = ${input.idempotencyKey}
           limit 1
         `;
         const replay = replays[0];
@@ -151,7 +175,24 @@ export function createEngagementPrivacyRepositoryMethods(
           )
           on conflict do nothing
         `;
-        return toDataRequest(row);
+        const hydrated = await transaction<DataRequestRow[]>`
+          select request.id, request.type, request.state,
+            request.created_at, request.updated_at, request.completed_at,
+            export_job.id as export_job_id, export_job.state as export_state,
+            export_job.progress_total_items as export_total_items,
+            export_job.progress_completed_items as export_completed_items,
+            export_job.progress_available_items as export_available_items,
+            export_job.progress_unavailable_items as export_unavailable_items,
+            export_job.attempt_count as export_attempt_count,
+            export_job.last_error_code as export_last_error_code,
+            export_job.snapshot_created_at as export_snapshot_created_at,
+            export_job.archive_ready_at as export_archive_ready_at,
+            export_job.downloadable_until as export_downloadable_until
+          from data_requests request
+          left join content_export_jobs export_job on export_job.data_request_id = request.id
+          where request.id = ${row.id}
+        `;
+        return toDataRequest(hydrated[0] ?? row);
       });
     }
   };
@@ -292,12 +333,37 @@ async function currentRelationshipState(
 }
 
 function toDataRequest(row: DataRequestRow) {
+  const contentExport = row.export_job_id && row.export_state && row.export_snapshot_created_at
+    ? {
+        id: row.export_job_id,
+        dataRequestId: row.id,
+        state: row.export_state,
+        progress: {
+          totalItems: Number(row.export_total_items ?? 0),
+          completedItems: Number(row.export_completed_items ?? 0),
+          availableItems: Number(row.export_available_items ?? 0),
+          unavailableItems: Number(row.export_unavailable_items ?? 0)
+        },
+        attemptCount: Number(row.export_attempt_count ?? 0),
+        lastErrorCode: row.export_last_error_code ?? null,
+        snapshotCreatedAt: row.export_snapshot_created_at.toISOString(),
+        archiveReadyAt: row.export_archive_ready_at?.toISOString() ?? null,
+        downloadableUntil: row.export_downloadable_until?.toISOString() ?? null,
+        canCancel: ["queued", "processing", "retry", "dead_letter"].includes(row.export_state),
+        canRetry: row.export_state === "dead_letter",
+        canDownload: row.export_state === "ready"
+          && row.export_downloadable_until !== null
+          && row.export_downloadable_until !== undefined
+          && row.export_downloadable_until.getTime() > Date.now()
+      }
+    : null;
   return {
     id: row.id,
     type: row.type,
     state: row.state,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at?.toISOString() ?? null,
-    completedAt: row.completed_at?.toISOString() ?? null
+    completedAt: row.completed_at?.toISOString() ?? null,
+    ...(row.type === "export" ? { contentExport } : {})
   };
 }

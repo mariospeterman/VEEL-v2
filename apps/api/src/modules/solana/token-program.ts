@@ -1,10 +1,12 @@
 import {
   address,
   createNoopSigner,
+  isSome,
   type Instruction as KitInstruction
 } from "@solana/kit";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ADDRESS,
+  AccountState,
   TOKEN_PROGRAM_ADDRESS,
   getCreateAssociatedTokenIdempotentInstruction,
   getTokenDecoder,
@@ -65,9 +67,21 @@ export function createCheckedTokenTransferInstruction(input: {
   }));
 }
 
-export function decodeTokenAccount(data: Uint8Array): { mint: string; owner: string } {
+export function decodeTokenAccount(data: Uint8Array): {
+  mint: string;
+  owner: string;
+  delegate: string | null;
+  delegatedAmount: bigint;
+  initialized: boolean;
+} {
   const token = getTokenDecoder().decode(data.subarray(0, getTokenSize()));
-  return { mint: token.mint, owner: token.owner };
+  return {
+    mint: token.mint,
+    owner: token.owner,
+    delegate: isSome(token.delegate) ? token.delegate.value : null,
+    delegatedAmount: token.delegatedAmount,
+    initialized: token.state === AccountState.Initialized
+  };
 }
 
 function toLegacyInstruction(instruction: KitInstruction): TransactionInstruction {

@@ -149,6 +149,10 @@ export async function registerWalletAuthRoutes(
         wallet: session.wallet
       });
     } catch (error) {
+      if (error instanceof WalletAuthChallengeInvalidError) {
+        return reply.code(400).send(validationResponse("Wallet auth challenge is invalid"));
+      }
+
       if (error instanceof WalletAuthAccountNotFoundError) {
         return reply.code(404).send({
           code: "account_not_found",
@@ -271,6 +275,8 @@ export async function registerWalletAuthRoutes(
       const session = await options.walletAuthRepository.exchangeRecoveryIdentity({
         provider: recoveryIdentity.provider,
         providerSubject: recoveryIdentity.providerSubject,
+        providerSessionId: recoveryIdentity.providerSessionId,
+        providerAuthenticatedAt: recoveryIdentity.authenticatedAt,
         ...(linkIntentToken ? { linkIntentToken } : {}),
         sessionExpiresAt: new Date(Date.now() + app.config.WALLET_AUTH_SESSION_TTL_SECONDS * 1000)
       });

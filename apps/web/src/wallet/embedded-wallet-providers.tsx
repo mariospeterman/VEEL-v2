@@ -13,7 +13,11 @@ export function EmbeddedWalletProviders({ children, purpose = "login" }: Readonl
   const env = readPublicWebEnv();
   const provider = embeddedWalletProviderConfig(env);
   const solanaChain = env.NEXT_PUBLIC_SOLANA_CHAIN;
-  const solanaRpcUrl = env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
+  const solanaRpcUrl = env.NEXT_PUBLIC_SOLANA_RPC_URL ?? (
+    solanaChain === "solana:mainnet"
+      ? "https://api.mainnet-beta.solana.com"
+      : "https://api.devnet.solana.com"
+  );
   const solanaSubscriptionsUrl = env.NEXT_PUBLIC_SOLANA_RPC_SUBSCRIPTIONS_URL ?? toWebSocketRpcUrl(solanaRpcUrl);
 
   const privyConfig = useMemo<PrivyClientConfig>(

@@ -1,9 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import type postgres from "postgres";
-import { ContentCompositionConflictError, ContentEventDraftConflictError } from "./content-errors.js";
+import {
+  ContentCompositionConflictError,
+  ContentEventDraftConflictError,
+  ContentFormatRetiredError
+} from "./content-errors.js";
 import { extractHashtagSlugs, toContentItem } from "./content-repository-mappers.js";
 import type { ContentRow } from "./content-repository-rows.js";
-import type { ContentRepository, UpdateOwnedContentInput } from "./types.js";
+import type { ContentItem, ContentRepository, UpdateOwnedContentInput } from "./types.js";
 import { recordContentSafetyDeclaration } from "./content-safety-repository.js";
 
 interface ContentUpdateRow extends ContentRow {
@@ -47,26 +51,46 @@ export function createContentUpdateRepositoryMethods(
         const actor = actorRows[0];
         if (!actor) return null;
 
-        let compositionReceiptKey: string | null = null;
+        const updateReceiptKey = `content:update:${actor.id}:${input.idempotencyKey}`;
         const hasCompositionUpdate = input.bodyTextProvided || Boolean(input.assetOrder);
+        await transaction`
+          insert into idempotency_keys (key, actor_user_id, scope, request_hash, expires_at)
+          values (${updateReceiptKey}, ${actor.id}, 'content.update', ${input.requestHash}, 'infinity'::timestamptz)
+          on conflict (key) do nothing
+        `;
+        const receipts = await transaction<{
+          request_hash: string;
+          response_body: { contentId?: string; response?: ContentItem } | null;
+        }[]>`
+          select request_hash, response_body from idempotency_keys where key = ${updateReceiptKey} for update
+        `;
+        const receipt = receipts[0];
+        if (!receipt || receipt.request_hash !== input.requestHash) {
+          throw new ContentCompositionConflictError("idempotency_conflict");
+        }
+        if (receipt.response_body?.response) {
+          return receipt.response_body.response;
+        }
+        if (receipt.response_body?.contentId) {
+          const replay = await selectOwnedCompositionRow(transaction, receipt.response_body.contentId, actor.id);
+          return replay ? toContentItem(replay, null) : null;
+        }
+
+        const ownedContentRows = await transaction<{ media_type: ContentRow["media_type"] }[]>`
+          select media_type
+          from content_items
+          where id = ${input.contentId}
+            and creator_user_id = ${actor.id}
+            and state <> 'deleted'
+          for update
+        `;
+        const ownedContent = ownedContentRows[0];
+        if (!ownedContent) return null;
+        if (ownedContent.media_type === "text" || ownedContent.media_type === "poll") {
+          throw new ContentFormatRetiredError();
+        }
+
         if (hasCompositionUpdate) {
-          compositionReceiptKey = `content:update:${actor.id}:${input.idempotencyKey}`;
-          await transaction`
-            insert into idempotency_keys (key, actor_user_id, scope, request_hash, expires_at)
-            values (${compositionReceiptKey}, ${actor.id}, 'content.update', ${input.requestHash ?? ""}, 'infinity'::timestamptz)
-            on conflict (key) do nothing
-          `;
-          const receipts = await transaction<{ request_hash: string; response_body: { contentId?: string } | null }[]>`
-            select request_hash, response_body from idempotency_keys where key = ${compositionReceiptKey} for update
-          `;
-          const receipt = receipts[0];
-          if (!receipt || receipt.request_hash !== input.requestHash) {
-            throw new ContentCompositionConflictError("idempotency_conflict");
-          }
-          if (receipt.response_body?.contentId) {
-            const replay = await selectOwnedCompositionRow(transaction, receipt.response_body.contentId, actor.id);
-            return replay ? toContentItem(replay, null) : null;
-          }
 
           const drafts = await transaction<{
             media_type: string;
@@ -182,16 +206,6 @@ export function createContentUpdateRepositoryMethods(
                 ) then 'pending'
                 else ci.moderation_state
               end,
-              published_at = case
-                when ci.publish_state = 'published' and (
-                  (${Boolean(input.nsfwLabel)} and ci.nsfw_label is distinct from ${input.nsfwLabel ?? ""})
-                  or (
-                    ${Boolean(input.representationMode)}
-                    and safety.representation_mode is distinct from ${input.representationMode ?? "not_declared"}
-                  )
-                ) then null
-                else ci.published_at
-              end,
               updated_at = now()
             from actor, current_safety safety
             where ci.id = ${input.contentId}
@@ -269,15 +283,15 @@ export function createContentUpdateRepositoryMethods(
 
         await upsertLinkedEventDraft(transaction, input, row.id, row.creator_id);
 
-        if (compositionReceiptKey) {
-          await transaction`
-            update idempotency_keys
-            set response_status = 200, response_body = ${transaction.json({ contentId: row.id })}::jsonb
-            where key = ${compositionReceiptKey}
-          `;
-        }
+        const response = toContentItem(row, null);
+        await transaction`
+          update idempotency_keys
+          set response_status = 200,
+              response_body = ${transaction.json({ contentId: row.id, response })}::jsonb
+          where key = ${updateReceiptKey}
+        `;
 
-        return toContentItem(row, null);
+        return response;
       });
 
       return result;

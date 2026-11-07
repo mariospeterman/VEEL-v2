@@ -220,7 +220,11 @@ export async function registerContentUploadRoutes(
 
     const idempotencyKey = request.headers["idempotency-key"];
 
-    if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0) {
+    if (
+      typeof idempotencyKey !== "string" ||
+      idempotencyKey.length === 0 ||
+      idempotencyKey.length > 255
+    ) {
       return reply.code(400).send({
         code: "validation_failed",
         message: "Idempotency-Key header is required"
@@ -233,16 +237,30 @@ export async function registerContentUploadRoutes(
       !body ||
       typeof body.contentId !== "string" ||
       typeof body.fileName !== "string" ||
+      body.fileName.length === 0 ||
+      body.fileName.length > 255 ||
       typeof body.mimeType !== "string" ||
-      !videoMimeTypes.has(body.mimeType)
+      !videoMimeTypes.has(body.mimeType) ||
+      !Number.isInteger(body.fileSizeBytes) ||
+      Number(body.fileSizeBytes) < 1 ||
+      Number(body.fileSizeBytes) > 5 * 1024 * 1024 * 1024 ||
+      typeof body.checksumSha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(body.checksumSha256)
     ) {
       return reply.code(400).send({
         code: "validation_failed",
-        message: "contentId, fileName, and supported video mimeType are required"
+        message: "A supported video, byte size, and SHA-256 checksum are required"
       });
     }
 
-    let unattachedVideoProviderAssetId: string | null = null;
+    const requestHash = createHash("sha256").update(JSON.stringify({
+      checksumSha256: body.checksumSha256,
+      contentId: body.contentId,
+      fileName: body.fileName,
+      fileSizeBytes: body.fileSizeBytes,
+      mimeType: body.mimeType
+    })).digest("hex");
+
     try {
       const content = await options.contentRepository.findOwnedContentForUpload({
         supabaseUserId: access.supabaseUserId,
@@ -277,88 +295,142 @@ export async function registerContentUploadRoutes(
         new Date(),
         abusePolicy.rollingWindowHours
       );
-      if (options.contentRepository.countMediaAssetsCreatedSince) {
-        const uploadCount = await options.contentRepository.countMediaAssetsCreatedSince({
-          supabaseUserId: access.supabaseUserId,
-          since: quotaWindowStart
-        });
-
-        if (uploadCount >= abusePolicy.dailyMediaUploadQuota) {
-          return reply
-            .code(429)
-            .send(quotaExceededResponse("Daily media upload quota has been reached"));
-        }
-      }
-
       if (!options.mediaUploadProvider.isConfigured()) {
         return reply.code(503).send({
           code: "service_unavailable",
           message: "Media upload provider is not configured"
         });
       }
-      const providerSession = await options.mediaUploadProvider.createUploadSession({
-        contentId: content.id,
-        title: content.caption || body.fileName,
-        mimeType: body.mimeType
-      });
-      unattachedVideoProviderAssetId = providerSession.providerAssetId;
+      if (
+        !options.contentRepository.reserveVideoAssetUpload ||
+        !options.contentRepository.recordVideoUploadProviderAsset ||
+        !options.contentRepository.completeVideoAssetUpload ||
+        !options.contentRepository.beginVideoUploadCompensation ||
+        !options.contentRepository.completeVideoUploadCompensation ||
+        !options.mediaUploadProvider.createProviderAsset ||
+        !options.mediaUploadProvider.createUploadSessionForProviderAsset
+      ) {
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Durable media upload recovery is unavailable"
+        });
+      }
 
-      const mediaAsset = await options.contentRepository.createMediaAsset({
+      const reservation = await options.contentRepository.reserveVideoAssetUpload({
         supabaseUserId: access.supabaseUserId,
         contentId: content.id,
-        provider: providerSession.provider,
-        providerAssetId: providerSession.providerAssetId,
-        providerState: "created",
+        idempotencyKey,
+        requestHash,
+        mimeType: body.mimeType as "video/mp4" | "video/quicktime" | "video/webm",
         quotaWindowStart,
         dailyMediaUploadQuota: abusePolicy.dailyMediaUploadQuota
       });
 
-      if (!mediaAsset?.id) {
-        throw new MediaUploadProviderError();
+      if (reservation.state === "provider_creation_pending") {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "This upload is already being provisioned; retry shortly"
+        });
       }
-      unattachedVideoProviderAssetId = null;
+
+      let providerAssetId = reservation.providerAssetId;
+      if (reservation.state === "create_provider_asset") {
+        const created = await options.mediaUploadProvider.createProviderAsset({
+          // The stable opaque title is an operator-reconciliation handle if
+          // the provider commits Create Video but its response is lost.
+          title: `wevid-upload:${reservation.mediaAssetId}`
+        });
+        providerAssetId = created.providerAssetId;
+        try {
+          await options.contentRepository.recordVideoUploadProviderAsset({
+            supabaseUserId: access.supabaseUserId,
+            idempotencyKey,
+            requestHash,
+            providerAssetId
+          });
+        } catch (recordError) {
+          // The provider object exists but was not attachable. Persist it in the
+          // existing cleanup authority before any best-effort delete attempt.
+          let cleanupScheduled = false;
+          if (options.contentRepository.scheduleUnattachedMediaProviderCleanup) {
+            try {
+              await options.contentRepository.scheduleUnattachedMediaProviderCleanup({
+                supabaseUserId: access.supabaseUserId,
+                contentId: content.id,
+                provider: "bunny",
+                providerAssetId,
+                assetKind: "video",
+                failureCode: "provider_record_failed"
+              });
+              cleanupScheduled = true;
+            } catch (cleanupScheduleError) {
+              request.log.error(
+                { cleanupScheduleError },
+                "Provider video cleanup could not be durably scheduled"
+              );
+            }
+          }
+          if (!cleanupScheduled && options.mediaUploadProvider.deleteProviderAsset) {
+            try {
+              await options.mediaUploadProvider.deleteProviderAsset({
+                providerAssetId,
+                assetKind: "video"
+              });
+            } catch (cleanupError) {
+              request.log.error({ cleanupError }, "Provider video emergency cleanup failed");
+            }
+          }
+          throw recordError;
+        }
+      }
+      if (!providerAssetId) throw new MediaUploadProviderError();
+
+      let completed;
+      try {
+        completed = await options.contentRepository.completeVideoAssetUpload({
+          supabaseUserId: access.supabaseUserId,
+          idempotencyKey,
+          requestHash
+        });
+      } catch (attachError) {
+        const cleanup = await options.contentRepository.beginVideoUploadCompensation({
+          supabaseUserId: access.supabaseUserId,
+          idempotencyKey,
+          requestHash,
+          failureCode: "provider_attach_failed"
+        });
+        try {
+          if (options.mediaUploadProvider.deleteProviderAsset) {
+            await options.mediaUploadProvider.deleteProviderAsset({
+              providerAssetId: cleanup.providerAssetId,
+              assetKind: "video"
+            });
+            await options.contentRepository.completeVideoUploadCompensation({
+              supabaseUserId: access.supabaseUserId,
+              idempotencyKey,
+              requestHash
+            });
+          }
+        } catch (cleanupError) {
+          request.log.warn({ cleanupError }, "Durable private video cleanup remains pending");
+        }
+        throw attachError;
+      }
+
+      // This signature is intentionally regenerated on every replay. The
+      // durable VideoId stays fixed while expired upload credentials rotate.
+      const providerSession = await options.mediaUploadProvider.createUploadSessionForProviderAsset({
+        providerAssetId: completed.providerAssetId
+      });
 
       return reply.code(201).send({
         uploadUrl: providerSession.uploadUrl,
         provider: providerSession.provider,
-        mediaAssetId: mediaAsset.id,
+        mediaAssetId: completed.mediaAssetId,
         headers: providerSession.headers,
         expiresAt: providerSession.expiresAt.toISOString()
       });
     } catch (error) {
-      if (unattachedVideoProviderAssetId) {
-        let providerDeleted = false;
-        try {
-          if (options.mediaUploadProvider.deleteProviderAsset) {
-            await options.mediaUploadProvider.deleteProviderAsset({
-              providerAssetId: unattachedVideoProviderAssetId,
-              assetKind: "video"
-            });
-            providerDeleted = true;
-          }
-        } catch (cleanupError) {
-          request.log.warn(
-            { cleanupError },
-            "Unattached private video requires provider cleanup"
-          );
-        }
-        if (!providerDeleted) {
-          if (!options.contentRepository.scheduleUnattachedMediaProviderCleanup) {
-            return reply.code(503).send({
-              code: "service_unavailable",
-              message: "Media cleanup recovery is unavailable"
-            });
-          }
-          await options.contentRepository.scheduleUnattachedMediaProviderCleanup({
-            supabaseUserId: access.supabaseUserId,
-            contentId: (request.body as Partial<CreateUploadRequest>).contentId!,
-            provider: "bunny",
-            providerAssetId: unattachedVideoProviderAssetId,
-            assetKind: "video",
-            failureCode: "provider_delete_failed"
-          });
-        }
-      }
       if (error instanceof ContentImageUploadConflictError) {
         if (error.reason === "quota_exceeded") {
           return reply

@@ -9,7 +9,7 @@ Owns:
 - cross-document audit conclusions for seller/agent posture, noncustodial money, product monetisation, compliance data, and liability-reducing product rules
 
 Defers to:
-- `business-monetisation.md`, `payments-and-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI, schema blueprint, provider ADRs, official provider docs, and counsel/tax review where narrower
+- `business-monetisation.md`, `payments-and-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI, the immutable migration chain for database shape, provider ADRs, official provider docs, and counsel/tax review where narrower
 
 Does not own:
 - legal advice, tax advice, provider account approval, final terms of service, or production launch approval
@@ -53,20 +53,22 @@ The platform must never create a second competing source of truth for the same r
 
 Veel records evidence, state transitions, reporting facts, exports, and accounting handoff status. It must not treat wallet approval, redirect state, frontend cache, notification delivery, dashboard aggregates, or support notes as a competing source of payment, access, reporting, or bookkeeping truth.
 
-## Gap Analysis
+## Archived Planning Gap Snapshot
+
+The table in this section is retained as a dated planning/audit snapshot from 2026-06-12. It is not current implementation or release evidence and must not be used to mark a feature complete, provider-approved, or launch-enabled. For merged implementation state use `current-implementation-status.md`; for exact external proof use release-bound staging evidence. The enduring liability rules elsewhere in this document remain active.
 
 | Area | Current state | Production gap |
 | --- | --- | --- |
 | Seller/agent model | Docs and schema support creator seller-of-record determinations and direct settlement. | Final terms, checkout copy, refund policy, and jurisdiction review must be reconciled before launch. |
 | Noncustodial payments | Payment intent, direct settlement model, compliance ledger, receipts, and admin read models exist. | Production provider evidence, SPL/USDC support, launch-approved Solana indexer, and counsel-reviewed refund/dispute copy remain. |
-| Memberships | Delegated Solana subscription foundation exists with cancel/revoke state. | Launch needs official delegated subscription staging evidence, recurring collection worker, grace/expiry operations, and wallet UX. |
+| Memberships | Planning target was delegated Solana subscription support. | Current release evidence, provider approval, consent/financial artifacts, real collection proof, and enabled-state gates must all be checked independently; this historical row is not proof. |
 | Live Passes | Live room, pass intent, chat, replay, and Livepeer boundary exist. | Provider launch approval, production stream access signing, and admin/event ops workflows remain. |
 | Event Access | Event/pass/check-in foundation, read-only admin Event Access ops projections, and audited provider-event replay enqueue/worker boundary exist. | Launch copy must avoid ticket-marketplace positioning; admin Event Access mutations, provider-specific replay adapters, refund/transfer/resale remain out of launch unless separately approved. |
 | Refunds/disputes | User request routes, admin review routes, RLS-backed request table, sanitized projections, persisted idempotency/request-hash dedupe, payment-intent withdrawal-waiver evidence fields, durable receipt/in-app confirmation evidence, pending email-provider delivery rows, and audit events exist. | Launch-approved email delivery, creator-initiated noncustodial refund transaction evidence, policy-approved entitlement revocation/replacement execution, withdrawal-function UI for EU consumers where rights still exist, provider/counsel-reviewed copy, and jurisdiction-specific consumer disclosures remain. |
 | Compliance ledger | DAC7/VAT docs and admin read routes exist; DAC8/CARF report reads are backend-gated by the paused `compliance.carf_exports` feature flag until explicitly enabled. | Export/filing workflows, USD snapshot provider, seller onboarding collection, and counsel/tax review remain. |
 | Creator verification | Age/profile/wallet foundations and the backend-owned Become Creator readiness checklist exist. | Identity/KYB provider approval, tax profile collection, and deeper conversion/support UX remain. |
 | Mutuals/Connections | Canonical Mutuals API routes such as `GET /v1/mutuals/feed` and `GET /v1/mutuals`, launch-facing frontend projections, and regression tests proving dating-named API aliases are gone exist. | Migration from dating-named historical table/type vocabulary, conduct UX, and hard social-money rule tests remain. |
-| Tiers | Free Verified, Veel Plus, Veel Studio, Enterprise are documented; organization member dashboards now expose software governance/readiness only. | Feature gates, admin overrides, and non-pay-to-win policy tests remain. |
+| Tiers | Free Verified, Veel Plus, individual Veel Studio, and organization-scoped Enterprise were documented. | Current feature gates, evidence, and non-pay-to-win policy must be verified in their owning artifacts. |
 | Notifications | OpenAPI routes, RLS-backed notification/preference/device/delivery-attempt tables, Fastify account routes, worker delivery queue boundary, server-only VAPID Web Push send-provider boundary, browser service-worker enrollment UI, Supabase Realtime projection publication/cache invalidation boundary, backend tests, settings preference reads, and admin health visibility exist. | Real VAPID secrets, staging push-service verification across target browsers, and live Supabase Realtime staging verification remain. |
 | User/creator/studio/enterprise/admin dashboards | User activity, creator onboarding/readiness, creator monetisation dashboard, member-scoped Studio/Enterprise dashboards with backend-derived RBAC permission rows, admin user/content/report moderation queues, admin organization KYB mutation, audited admin organization member role/state mutation, audited support case/support policy surfaces, refund/dispute review, privacy data request lifecycle, feature flag policy controls, sanitized audit-log reads, and admin ops panels exist. | Remaining admin route-map breadth, feature-gate enforcement depth, and deeper provider-backed KYB workflow depth remain. |
 
@@ -97,11 +99,12 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 - New money, access, Mutuals, recommendations, messaging, notification, admin, and AI slices must declare whether they touch the hard social-money rule.
 - Every monetised product must resolve price, recipients, fees, entitlement, tax/compliance metadata, and audit state server-side.
 - Notification events must be backend-derived from existing business state; browser push is delivery only.
-- Studio and Enterprise dashboards must be organization-scoped software/admin surfaces, not financial custody or payout surfaces.
+- Studio is an individual creator workspace; Enterprise is organization-scoped. Both are software/admin surfaces, never financial custody or payout surfaces.
 - Refund workflows are modeled as request, creator/admin review, optional creator-initiated refund transaction, entitlement revocation/replacement where policy allows, and audit evidence. The current implementation covers request/review/audit state only; it must not be used as payment truth, access truth, reporting truth, or bookkeeping truth.
 - Refund/dispute creation must use durable idempotency so retries cannot create duplicate refund obligations or duplicate support queues. Same key plus same request returns the existing record; same key plus different request conflicts.
 - Payment-intent creation must preserve the waiver/terms evidence used to reject ordinary change-of-mind refunds after immediate digital access. A missing or invalid waiver is a refund-review risk, not a reason to hide or delete payment evidence.
-- Data request workflows are privacy lifecycle records only; export/deletion execution requires separate policy-approved workers and identity-minimized projections.
+- Data requests remain the privacy lifecycle authority. Content-export execution now has a disabled-by-default, finite-lease worker and identity-minimized owner projection: it pins creator-owned revisions, exports retained source bytes when honestly available, and excludes messages, third-party PII, raw age/KYC/identity evidence, payment/wallet material, provider identifiers, and secrets. This does not implement account deletion, override takedown/retirement/paid-right retention, or promote the candidate Bunny path without exact staging approval.
+- Export downloads require the current canonical application owner plus a single-use database grant expiring within five minutes and are rate-limited and proxied without exposing Bunny object references. The proxy counts and hashes actual bytes against durable archive evidence. A pre-upload fence preserves ambiguous/cancelled provider-object cleanup state, while expiry returns completed archives to manual deletion confirmation; the admin privacy queue exposes that state. Automated provider deletion and production restore are intentionally not wired. A local/test-only streaming restore verifier enforces entry/file/aggregate limits, exact paths, no duplicates/extras/trailing data, manifest lengths and hashes, and a trusted expected archive SHA-256 without writing to a production provider or bypassing moderation.
 - Feature flags are audited software policy controls only; they cannot override payment truth, entitlement access truth, compliance reporting truth, accounting bookkeeping truth, or the hard social-money rule.
 
 ## Compliance Improvements
@@ -141,7 +144,7 @@ Veel records evidence, state transitions, reporting facts, exports, and accounti
 | Notifications/activity/messages | `realtime-messages-activity.md` |
 | Admin/ops | `admin-operations-dashboard.md` |
 | Contracts | `packages/contracts/openapi.yaml` |
-| Database | `packages/database/schema-blueprint.sql` and migrations |
+| Database | Ordered immutable files in `packages/database/migrations/`; `schema-blueprint.sql` is historical planning material only |
 
 ## Implementation Priority Order
 

@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import {
+  executeWithMutationCommandReceipt,
+  resolveMutationActorBySupabaseUserId
+} from "../../shared/mutation-command-receipt.js";
 import type { EventRepository } from "./types.js";
 import { EventIdempotencyConflictError } from "./event-errors.js";
 import { stripRequestHash } from "./event-repository-mappers.js";
@@ -11,7 +15,8 @@ export function createEventCoreRepositoryMethods(
 ): Pick<EventRepository, "createEvent" | "findEvent" | "updateEvent"> {
   return {
     async createEvent(input) {
-      const rows = await sql<EventRow[]>`
+      return sql.begin(async (transaction) => {
+        const selectedRows = await transaction<Array<{ id: string; request_hash: string | null }>>`
         with creator as (
           select id
           from users
@@ -94,16 +99,26 @@ export function createEventCoreRepositoryMethods(
           where exists (select 1 from inserted_event)
           returning id
         )
-        ${eventSelectSql(sql)}
-        join selected_event se on se.id = e.id
-      `;
-      const event = await eventFromRows(sql, rows);
+        select se.id, se.request_hash
+        from selected_event se
+        cross join (select count(*) from inserted_access_pass_types) access_pass_effect
+        `;
+        const selected = selectedRows[0];
+        const rows = selected
+          ? await transaction<EventRow[]>`
+              ${eventSelectSql(transaction)}
+              where e.id = ${selected.id}
+              limit 1
+            `
+          : [];
+        const event = await eventFromRows(transaction, rows, selected?.request_hash ?? undefined);
 
-      if (event.requestHash !== input.requestHash) {
-        throw new EventIdempotencyConflictError();
-      }
+        if (event.requestHash !== input.requestHash) {
+          throw new EventIdempotencyConflictError();
+        }
 
-      return stripRequestHash(event);
+        return stripRequestHash(event);
+      });
     },
     async findEvent(input) {
       const rows = await sql<EventRow[]>`
@@ -122,7 +137,28 @@ export function createEventCoreRepositoryMethods(
       return rows[0] ? stripRequestHash(await eventFromRows(sql, rows)) : null;
     },
     async updateEvent(input) {
-      const rows = await sql<EventRow[]>`
+      return sql.begin(async (transaction) => {
+        const actorUserId = await resolveMutationActorBySupabaseUserId(
+          transaction,
+          input.supabaseUserId
+        );
+        if (!actorUserId) return null;
+
+        return executeWithMutationCommandReceipt(transaction, {
+          actorUserId,
+          action: "event.update",
+          targetType: "event",
+          targetId: input.eventId,
+          idempotencyKey: input.idempotencyKey,
+          requestVersion: 1,
+          requestBody: {
+            eventId: input.eventId,
+            body: input.body,
+            requestHash: input.requestHash
+          },
+          responseStatus: 200
+        }, async () => {
+        const updatedRows = await transaction<Array<{ id: string }>>`
         with actor as (
           select id
           from users
@@ -148,11 +184,19 @@ export function createEventCoreRepositoryMethods(
             and e.creator_user_id = actor.id
           returning e.*
         )
-        ${eventSelectSql(sql)}
-        join updated_event ue on ue.id = e.id
-      `;
+        select id from updated_event
+        `;
+        const updated = updatedRows[0];
+        if (!updated) return null;
+        const rows = await transaction<EventRow[]>`
+          ${eventSelectSql(transaction)}
+          where e.id = ${updated.id}
+          limit 1
+        `;
 
-      return rows[0] ? stripRequestHash(await eventFromRows(sql, rows)) : null;
+        return rows[0] ? stripRequestHash(await eventFromRows(transaction, rows)) : null;
+        });
+      });
     }
   };
 }

@@ -1,0 +1,32 @@
+{
+  "scope": "All 118 exact migrations, existing-public-table default grants installed before replay; administrator seeds an expired adult Moment through all final-schema release predicates using synthetic normalized scan/consent/age facts; no triggers disabled. No upload/moderation/provider workflow or delivery URL tested.",
+  "applied": 118,
+  "errors": [],
+  "seededReleaseReady": [
+    {
+      "ready": true
+    }
+  ],
+  "unlinkedCurrentUser": [
+    {
+      "uid": null,
+      "protected": false
+    }
+  ],
+  "directExpiredAdultContent": [
+    {
+      "id": "00000000-0000-4000-8000-000000000090",
+      "caption": "expired-adult-fixture-caption",
+      "nsfw_label": "adult",
+      "distribution_mode": "moment",
+      "expires_at": "2026-11-03T15:22:25.550Z"
+    }
+  ],
+  "directMediaReferences": [
+    {
+      "content_item_id": "00000000-0000-4000-8000-000000000090",
+      "provider": "bunny",
+      "provider_asset_id": "private-provider-asset-fixture"
+    }
+  ]
+}

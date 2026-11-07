@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createECDH, randomBytes } from "node:crypto";
+import { EventEmitter } from "node:events";
+import webPush from "web-push";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildWorkerRuntime,
   runAnalyticsProjectionTick,
@@ -8,6 +11,7 @@ import {
   runNotificationDeliveryTick,
   runPaymentConfirmationEmailTick,
   runProviderEventReplayTick,
+  runSubscriptionAuthorizationReconciliationTick,
   runSubscriptionCollectionTick
 } from "../src/index";
 import type {
@@ -29,7 +33,10 @@ import type {
   NotificationDeliveryProvider,
   NotificationDeliveryRepository
 } from "../src/notification-delivery";
-import { createWebPushNotificationDeliveryProvider } from "../src/notification-delivery";
+import {
+  createWebPushNotificationDeliveryProvider,
+  sendBoundedWebPushRequest
+} from "../src/notification-delivery";
 import type {
   PaymentConfirmationEmailOutcome,
   PaymentConfirmationEmailProvider,
@@ -37,8 +44,10 @@ import type {
   QueuedPaymentConfirmationEmail
 } from "../src/payment-confirmation-email";
 import {
+  classifyResendFailure,
   createResendPaymentConfirmationEmailProvider,
-  createUnconfiguredPaymentConfirmationEmailProvider
+  createUnconfiguredPaymentConfirmationEmailProvider,
+  processPaymentConfirmationEmails
 } from "../src/payment-confirmation-email";
 import type {
   ProviderEventReplayAdapter,
@@ -53,23 +62,13 @@ import type {
   SubscriptionCollectionProvider,
   SubscriptionCollectionRepository
 } from "../src/subscription-collections";
-import type {
-  AnalyticsProjectionJob,
-  AnalyticsProjectionOutcome,
-  AnalyticsProjectionRepository
+import {
+  analyticsIncrementalWindows,
+  buildAnalyticsReconciliationEvidence,
+  type AnalyticsProjectionJob,
+  type AnalyticsProjectionOutcome,
+  type AnalyticsProjectionRepository
 } from "../src/analytics-projections";
-
-const webPushMock = vi.hoisted(() => ({
-  sendNotification: vi.fn()
-}));
-
-vi.mock("web-push", () => ({
-  default: webPushMock
-}));
-
-beforeEach(() => {
-  webPushMock.sendNotification.mockReset();
-});
 
 describe("buildWorkerRuntime", () => {
   it("registers recurring subscription queues", () => {
@@ -79,6 +78,7 @@ describe("buildWorkerRuntime", () => {
       name: "veel-worker",
       queues: [
         "analytics-projections",
+        "subscription-authorization-reconciliation",
         "subscription-collections",
         "notification-deliveries",
         "payment-confirmation-emails",
@@ -86,13 +86,19 @@ describe("buildWorkerRuntime", () => {
         "scheduled-publications",
         "live-safety",
         "media-moderation",
-        "media-asset-cleanups"
+        "media-asset-cleanups",
+        "content-exports"
       ],
       schedules: [
         {
           name: "analytics-projections",
           cadence: "every_minute",
           sourceIndex: "analytics_projection_jobs_lease_idx"
+        },
+        {
+          name: "subscription-authorization-reconciliation",
+          cadence: "every_minute",
+          sourceIndex: "subscription_authorization_intents_subscription_idx"
         },
         {
           name: "subscription-collections",
@@ -133,6 +139,11 @@ describe("buildWorkerRuntime", () => {
           name: "media-asset-cleanups",
           cadence: "every_minute",
           sourceIndex: "media_assets_provider_cleanup_idx"
+        },
+        {
+          name: "content-exports",
+          cadence: "every_minute",
+          sourceIndex: "content_export_jobs_lease_due_idx"
         }
       ]
     });
@@ -148,6 +159,9 @@ describe("runScheduledWorkerTick", () => {
       runners: {
         async analyticsProjections() {
           calls.push("analytics");
+        },
+        async contentExports() {
+          calls.push("content-exports");
         },
         async liveSafety() {
           calls.push("live-safety");
@@ -171,6 +185,9 @@ describe("runScheduledWorkerTick", () => {
         async scheduledPublications() {
           calls.push("scheduled-publications");
         },
+        async subscriptionAuthorizationReconciliation() {
+          calls.push("subscription-authorization-reconciliation");
+        },
         async subscriptionCollections() {
           calls.push("subscriptions");
         }
@@ -186,16 +203,19 @@ describe("runScheduledWorkerTick", () => {
     expect(calls.sort()).toEqual([
       "analytics",
       "asset-cleanups",
+      "content-exports",
       "email",
       "live-safety",
       "moderation",
       "notifications",
       "provider-replays",
       "scheduled-publications",
+      "subscription-authorization-reconciliation",
       "subscriptions"
     ]);
     expect(result).toEqual({
       analyticsProjections: "completed",
+      contentExports: "completed",
       liveSafety: "completed",
       mediaAssetCleanups: "completed",
       mediaModeration: "completed",
@@ -203,6 +223,7 @@ describe("runScheduledWorkerTick", () => {
       paymentConfirmationEmails: "failed",
       providerEventReplays: "completed",
       scheduledPublications: "completed",
+      subscriptionAuthorizationReconciliation: "completed",
       subscriptionCollections: "completed"
     });
     expect(errors).toEqual([
@@ -211,6 +232,67 @@ describe("runScheduledWorkerTick", () => {
         errorName: "Error"
       }
     ]);
+  });
+});
+
+describe("runSubscriptionAuthorizationReconciliationTick", () => {
+  beforeEach(() => {
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("does not claim or verify recurring authorization evidence while subscriptions are disabled", async () => {
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "false");
+    const reconcileDue = vi.fn();
+    const verifyAuthorization = vi.fn();
+
+    await expect(runSubscriptionAuthorizationReconciliationTick({
+      repository: { reconcileDue },
+      verifier: { verifyAuthorization }
+    })).resolves.toEqual({
+      claimed: 0,
+      verified: 0,
+      retrying: 0,
+      terminal: 0,
+      stale: 0
+    });
+
+    expect(reconcileDue).not.toHaveBeenCalled();
+    expect(verifyAuthorization).not.toHaveBeenCalled();
+  });
+
+  it("runs the durable authorization evidence boundary with the configured batch limit", async () => {
+    const reconcileDue = vi.fn(async () => ({
+      claimed: 1,
+      verified: 0,
+      retrying: 1,
+      terminal: 0,
+      stale: 0
+    }));
+
+    await expect(runSubscriptionAuthorizationReconciliationTick({
+      repository: { reconcileDue },
+      verifier: {
+        async verifyAuthorization() {
+          return {
+            verified: false,
+            failureCode: "transaction_not_found",
+            retryable: true
+          };
+        }
+      },
+      now: new Date("2026-11-05T12:00:00.000Z"),
+      limit: 7
+    })).resolves.toMatchObject({ claimed: 1, retrying: 1 });
+
+    expect(reconcileDue).toHaveBeenCalledWith(expect.objectContaining({
+      now: new Date("2026-11-05T12:00:00.000Z"),
+      limit: 7,
+      retryDelayMs: 60_000
+    }));
   });
 });
 
@@ -263,13 +345,49 @@ describe("runAnalyticsProjectionTick", () => {
     expect(repository.outcomes).toEqual([expect.objectContaining({ state: "completed" })]);
   });
 
+  it("enqueues current-day minute work and a bounded prior-day late-fact window", () => {
+    expect(analyticsIncrementalWindows(new Date("2026-11-04T14:37:22.000Z"))).toEqual([
+      {
+        reason: "incremental",
+        idempotencyKey: "incremental:2026-11-04T14:37",
+        windowStartsOn: "2026-11-04",
+        windowEndsOn: "2026-11-04"
+      },
+      {
+        reason: "late_fact",
+        idempotencyKey: "late-fact:2026-11-04T14",
+        windowStartsOn: "2026-11-03",
+        windowEndsOn: "2026-11-03"
+      }
+    ]);
+  });
+
+  it("does not let equal and opposite per-source variances reconcile as matched", () => {
+    const evidence = buildAnalyticsReconciliationEvidence({
+      sourceImpressions: 10,
+      projectedImpressions: 9,
+      projectedViewerImpressions: 11
+    }, 2, new Date("2026-11-04T14:37:00.000Z"));
+
+    expect(evidence).toMatchObject({
+      sourceRowCount: 20,
+      projectedRowCount: 20,
+      varianceCount: 2,
+      details: {
+        varianceCreatorImpressions: -1,
+        varianceViewerImpressions: 1,
+        netVariance: 0
+      }
+    });
+  });
+
   it("surfaces source-to-projection variance instead of treating it as matched", async () => {
     const repository = repositoryFixture({
       async projectWindow() {
         return {
           sourceRowCount: 5,
           projectedRowCount: 4,
-          varianceCount: -1,
+          varianceCount: 1,
           projectedTableRowCount: 3,
           dataThrough: new Date("2026-08-23T23:59:59.999Z"),
           details: { sourceImpressions: 5, projectedImpressions: 4 }
@@ -284,7 +402,7 @@ describe("runAnalyticsProjectionTick", () => {
     expect(repository.outcomes).toEqual([
       expect.objectContaining({
         state: "completed",
-        evidence: expect.objectContaining({ varianceCount: -1 })
+        evidence: expect.objectContaining({ varianceCount: 1 })
       })
     ]);
   });
@@ -609,7 +727,8 @@ describe("runNotificationDeliveryTick", () => {
       leased: 1,
       delivered: 1,
       failed: 0,
-      revoked: 0
+      revoked: 0,
+      skipped: 0
     });
     expect(provider.inputs[0]).toMatchObject({
       notificationId: "notification-1",
@@ -685,56 +804,92 @@ describe("runNotificationDeliveryTick", () => {
 });
 
 describe("createWebPushNotificationDeliveryProvider", () => {
-  it("sends sanitized notification payloads through VAPID web push", async () => {
-    webPushMock.sendNotification.mockResolvedValueOnce({ statusCode: 201, body: "", headers: {} });
+  it("sends only a fixed refresh hint through the bounded VAPID transport", async () => {
+    const requestSender = vi.fn(async () => undefined);
     const provider = createWebPushNotificationDeliveryProvider({
       vapidSubject: "mailto:ops@example.com",
       vapidPublicKey: "public-vapid-key",
-      vapidPrivateKey: "private-vapid-key"
+      vapidPrivateKey: "private-vapid-key",
+      requestSender
     });
 
     const outcome = await provider.deliver(notificationDeliveryFixture());
 
     expect(outcome).toEqual({ state: "delivered" });
-    expect(webPushMock.sendNotification).toHaveBeenCalledWith(
-      {
+    expect(requestSender).toHaveBeenCalledWith({
+      subscription: {
         endpoint: "https://push.example/subscription",
-        keys: {
-          p256dh: "p256dh-key",
-          auth: "auth-secret"
-        }
+        p256dh: "p256dh-key",
+        auth: "auth-secret"
       },
-      JSON.stringify({
-        notificationId: "notification-1",
-        title: "Wallet action required",
-        body: "Connect a wallet to use this feature.",
-        actionUrl: "/wallet"
-      }),
-      {
-        TTL: 3600,
-        timeout: 10_000,
-        urgency: "normal",
-        vapidDetails: {
-          subject: "mailto:ops@example.com",
-          publicKey: "public-vapid-key",
-          privateKey: "private-vapid-key"
-        }
-      }
-    );
+      payload: JSON.stringify({ type: "notification_refresh", version: 1 }),
+      vapidSubject: "mailto:ops@example.com",
+      vapidPublicKey: "public-vapid-key",
+      vapidPrivateKey: "private-vapid-key",
+      ttlSeconds: 3600,
+      timeoutMs: 10_000
+    });
   });
 
   it("revokes browser devices when the push service returns gone", async () => {
-    webPushMock.sendNotification.mockRejectedValueOnce({ statusCode: 410 });
+    const requestSender = vi.fn(async () => {
+      throw { statusCode: 410 };
+    });
     const provider = createWebPushNotificationDeliveryProvider({
       vapidSubject: "mailto:ops@example.com",
       vapidPublicKey: "public-vapid-key",
-      vapidPrivateKey: "private-vapid-key"
+      vapidPrivateKey: "private-vapid-key",
+      requestSender
     });
 
     await expect(provider.deliver(notificationDeliveryFixture())).resolves.toEqual({
       state: "revoked",
       failureCode: "push_subscription_gone"
     });
+  });
+
+  it("enforces one total deadline on a stalled pinned HTTPS request", async () => {
+    const request = new EventEmitter() as EventEmitter & {
+      destroy(error: Error): void;
+      end(): void;
+      write(body: Buffer): void;
+    };
+    request.write = vi.fn();
+    request.end = vi.fn();
+    request.destroy = vi.fn((error: Error) => request.emit("error", error));
+    const requestFactory = vi.fn(() => request) as unknown as typeof import("node:https").request;
+    const p256dh = createECDH("prime256v1").generateKeys().toString("base64url");
+    const vapid = webPush.generateVAPIDKeys();
+
+    await expect(
+      sendBoundedWebPushRequest(
+        {
+          subscription: {
+            endpoint: "https://fcm.googleapis.com/fcm/send/browser-token",
+            p256dh,
+            auth: randomBytes(16).toString("base64url")
+          },
+          payload: JSON.stringify({ type: "notification_refresh", version: 1 }),
+          vapidSubject: "mailto:ops@example.com",
+          vapidPublicKey: vapid.publicKey,
+          vapidPrivateKey: vapid.privateKey,
+          ttlSeconds: 3600,
+          timeoutMs: 250,
+          resolver: async () => [{ address: "8.8.8.8", family: 4 }]
+        },
+        { requestFactory }
+      )
+    ).rejects.toThrow("web_push_total_deadline_exceeded");
+    expect(requestFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: false,
+        hostname: "fcm.googleapis.com",
+        maxHeaderSize: 8 * 1024,
+        port: 443,
+        servername: "fcm.googleapis.com"
+      }),
+      expect.any(Function)
+    );
   });
 });
 
@@ -849,9 +1004,161 @@ describe("createResendPaymentConfirmationEmailProvider", () => {
     const requestInit = fetchImpl.mock.calls[0]?.at(1);
     expect(JSON.stringify(requestInit)).not.toMatch(/privateKey|serviceRole|rawPayload/i);
   });
+
+  it.each([
+    ["1000000000", "SOL", "1 SOL"],
+    ["1234567890", "SOL", "1.23456789 SOL"],
+    ["9007199254740991", "SOL", "9,007,199.254740991 SOL"],
+    ["1000000", "USDC", "1 USDC"],
+    ["15000000", "USDC", "15 USDC"],
+    ["1234567", "USDC", "1.234567 USDC"],
+    ["9007199254740991", "USDC", "9,007,199,254.740991 USDC"],
+    ["9007199254740993", "USDC", "9,007,199,254.740993 USDC"]
+  ])("renders %s atomic %s exactly in text and HTML", async (amountMinor, currency, expected) => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({ id: "resend-message-amount" }), { status: 200 })
+    );
+    const provider = createResendPaymentConfirmationEmailProvider({
+      apiKey: "resend-api-key",
+      from: "WeVid Receipts <receipts@example.test>",
+      webUrl: "https://wevid.example.test",
+      fetchImpl
+    });
+
+    await provider.send(paymentConfirmationEmailFixture({ amountMinor, currency }));
+
+    const request = fetchImpl.mock.calls[0]?.[1];
+    const payload = JSON.parse(String(request?.body)) as { text: string; html: string };
+    expect(payload.text).toContain(`Amount: ${expected}`);
+    expect(payload.html).toContain(`<li>Amount: ${expected}</li>`);
+    expect(payload.text).toContain("https://wevid.example.test/app/activity");
+  });
+
+  it.each([
+    [400, "validation_error", false, "resend_http_400"],
+    [409, "resource_locked", true, "resend_resource_locked"],
+    [409, "concurrent_idempotent_requests", true, "resend_concurrent_idempotent_requests"],
+    [422, "invalid_idempotent_request", false, "resend_invalid_idempotent_request"],
+    [429, "rate_limit_exceeded", true, "resend_http_429"],
+    [503, "application_error", true, "resend_http_503"]
+  ])("classifies Resend HTTP %s/%s without persisting provider detail", (status, name, retryable, failureCode) => {
+    expect(classifyResendFailure(status, name)).toEqual({ retryable, failureCode });
+  });
+
+  it("returns a retryable redacted failure when the Resend transport throws", async () => {
+    const provider = createResendPaymentConfirmationEmailProvider({
+      apiKey: "resend-api-key",
+      from: "Veel Receipts <receipts@example.test>",
+      webUrl: "https://veel.example.test",
+      fetchImpl: vi.fn(async () => {
+        throw new Error("provider body containing private diagnostics");
+      })
+    });
+
+    await expect(provider.send(paymentConfirmationEmailFixture())).resolves.toEqual({
+      state: "failed",
+      failureCode: "resend_transport_error",
+      retryable: true
+    });
+  });
+
+  it.each(["transport", "body"])(
+    "bounds a stalled Resend %s operation with one total deadline",
+    async (phase) => {
+      const fetchImpl = phase === "transport"
+        ? vi.fn(() => new Promise<Response>(() => undefined))
+        : vi.fn(async () => ({
+            ok: true,
+            status: 200,
+            json: () => new Promise<unknown>(() => undefined)
+          }) as Response);
+      const provider = createResendPaymentConfirmationEmailProvider({
+        apiKey: "resend-api-key",
+        from: "WeVid Receipts <receipts@example.test>",
+        webUrl: "https://wevid.example.test",
+        timeoutMs: 10,
+        fetchImpl
+      });
+
+      await expect(provider.send(paymentConfirmationEmailFixture())).resolves.toEqual({
+        state: "failed",
+        failureCode: "resend_total_deadline_exceeded",
+        retryable: true
+      });
+    }
+  );
+
+  it("lets later confirmations progress while an earlier provider call is stalled", async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstReleased = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const started: string[] = [];
+    const repository = fakePaymentConfirmationEmailRepository({
+      deliveries: [
+        paymentConfirmationEmailFixture({ deliveryId: "first" }),
+        paymentConfirmationEmailFixture({ deliveryId: "second" })
+      ]
+    });
+    const processing = processPaymentConfirmationEmails({
+      repository,
+      provider: {
+        isConfigured: true,
+        async send(delivery) {
+          started.push(delivery.deliveryId);
+          if (delivery.deliveryId === "first") await firstReleased;
+          return { state: "sent", providerMessageId: delivery.deliveryId };
+        }
+      },
+      concurrency: 2
+    });
+
+    await vi.waitFor(() => expect(started).toEqual(["first", "second"]));
+    await vi.waitFor(() => expect(repository.outcomes).toHaveLength(1));
+    expect(repository.outcomes[0]?.deliveryId).toBe("second");
+    releaseFirst?.();
+    await expect(processing).resolves.toMatchObject({ leased: 2, sent: 2 });
+  });
 });
 
 describe("runSubscriptionCollectionTick", () => {
+  beforeEach(() => {
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("does not open or mutate recurring collection authorities while subscriptions are disabled", async () => {
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "false");
+    const repository = fakeSubscriptionCollectionRepository({
+      dueCollections: [dueCollectionFixture()],
+      expired: 1
+    });
+    const provider = fakeSubscriptionCollectionProvider({
+      state: "confirmed",
+      collectionSignature: "must-not-run"
+    });
+    const expire = vi.spyOn(repository, "expireCancelledDueSubscriptions");
+    const lease = vi.spyOn(repository, "leaseDueCollections");
+    const collect = vi.spyOn(provider, "collect");
+
+    await expect(runSubscriptionCollectionTick({ repository, provider })).resolves.toEqual({
+      expired: 0,
+      leased: 0,
+      confirmed: 0,
+      failed: 0,
+      reconciling: 0,
+      revoked: 0,
+      cancelled: 0
+    });
+
+    expect(expire).not.toHaveBeenCalled();
+    expect(lease).not.toHaveBeenCalled();
+    expect(collect).not.toHaveBeenCalled();
+  });
+
   it("auto-renews due delegated subscriptions after provider-confirmed collection", async () => {
     const repository = fakeSubscriptionCollectionRepository({
       dueCollections: [dueCollectionFixture()],
@@ -873,7 +1180,9 @@ describe("runSubscriptionCollectionTick", () => {
       leased: 1,
       confirmed: 1,
       failed: 0,
-      revoked: 0
+      reconciling: 0,
+      revoked: 0,
+      cancelled: 0
     });
     expect(repository.outcomes).toEqual([
       {
@@ -902,7 +1211,7 @@ describe("runSubscriptionCollectionTick", () => {
     });
     const provider = fakeSubscriptionCollectionProvider({
       state: "failed",
-      failureCode: "insufficient_allowance",
+      failureCode: "subscription_delegated_allowance_mismatch",
       retryAt
     });
 
@@ -921,7 +1230,7 @@ describe("runSubscriptionCollectionTick", () => {
     expect(repository.outcomes[0]).toMatchObject({
       outcome: {
         state: "failed",
-        failureCode: "insufficient_allowance",
+        failureCode: "subscription_delegated_allowance_mismatch",
         retryAt
       }
     });
@@ -933,7 +1242,7 @@ describe("runSubscriptionCollectionTick", () => {
     });
     const provider = fakeSubscriptionCollectionProvider({
       state: "revoked",
-      failureCode: "delegation_revoked"
+      failureCode: "subscription_delegation_expired"
     });
 
     const result = await runSubscriptionCollectionTick({
@@ -951,14 +1260,17 @@ describe("runSubscriptionCollectionTick", () => {
     expect(repository.outcomes[0]).toMatchObject({
       outcome: {
         state: "revoked",
-        failureCode: "delegation_revoked"
+        failureCode: "subscription_delegation_expired"
       }
     });
   });
 
   it("reconciles a stale lease before considering another provider collection", async () => {
     const repository = fakeSubscriptionCollectionRepository({
-      dueCollections: [dueCollectionFixture({ attemptCount: 2 })]
+      dueCollections: [dueCollectionFixture({
+        attemptCount: 2,
+        broadcastSignature: "reconciled-signature"
+      })]
     });
     const collect = vi.fn();
     const provider: SubscriptionCollectionProvider = {
@@ -1135,9 +1447,13 @@ function dueCollectionFixture(
       overrides.providerIdempotencyKey ?? "subscription-1:2026-06-06T00:00:00.000Z",
     subscriptionId: overrides.subscriptionId ?? "subscription-1",
     subscriberUserId: overrides.subscriberUserId ?? "subscriber-1",
+    subscriberWallet: overrides.subscriberWallet ?? "11111111111111111111111111111111",
     planId: overrides.planId ?? "platform_plus_monthly",
-    amountMinor: overrides.amountMinor ?? 15000000n,
+    amountMinor: overrides.amountMinor ?? 1500n,
     amountAtomic: overrides.amountAtomic ?? 15000000n,
+    creatorAmountAtomic: overrides.creatorAmountAtomic ?? 0n,
+    platformAmountAtomic: overrides.platformAmountAtomic ?? 15000000n,
+    allocationAmountAtomic: overrides.allocationAmountAtomic ?? 0n,
     currency: overrides.currency ?? "USDC",
     periodStartsAt: overrides.periodStartsAt ?? new Date("2026-06-06T00:00:00.000Z"),
     periodEndsAt: overrides.periodEndsAt ?? new Date("2026-07-06T00:00:00.000Z"),
@@ -1149,7 +1465,29 @@ function dueCollectionFixture(
     tokenProgram: overrides.tokenProgram ?? "spl_token",
     provider: overrides.provider ?? "official_solana_subscription_program",
     programId: overrides.programId ?? "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44",
-    periodSeconds: overrides.periodSeconds ?? 30 * 86_400
+    periodSeconds: overrides.periodSeconds ?? 30 * 86_400,
+    delegationNonce: overrides.delegationNonce ?? 1,
+    assetDecimals: overrides.assetDecimals ?? 6,
+    scope: overrides.scope ?? "platform",
+    creatorUserId: overrides.creatorUserId ?? null,
+    creatorReceiverWallet: overrides.creatorReceiverWallet ?? null,
+    platformReceiverWallet:
+      overrides.platformReceiverWallet ?? "11111111111111111111111111111112",
+    termsVersion: overrides.termsVersion ?? "subscription-recurring-terms-v1",
+    withdrawalWaiverVersion:
+      overrides.withdrawalWaiverVersion ?? "subscription-initial-access-waiver-v1",
+    acceptedAt: overrides.acceptedAt ?? new Date("2026-06-01T00:00:00.000Z"),
+    solanaNetwork: overrides.solanaNetwork ?? "devnet",
+    broadcastSignature: overrides.broadcastSignature ?? null,
+    broadcastTransactionBase64: overrides.broadcastTransactionBase64 ?? null,
+    broadcastBlockhash: overrides.broadcastBlockhash ?? null,
+    broadcastLastValidBlockHeight: overrides.broadcastLastValidBlockHeight ?? null,
+    recipientKycRequired: overrides.recipientKycRequired ?? false,
+    recipientKycPolicyMode: overrides.recipientKycPolicyMode ?? "disabled",
+    recipientKycPolicyVersion:
+      overrides.recipientKycPolicyVersion ?? "platform-plan-not-applicable",
+    recipientKycDecisionReason:
+      overrides.recipientKycDecisionReason ?? "platform_plan_not_applicable"
   };
 }
 
@@ -1195,8 +1533,15 @@ function fakeSubscriptionCollectionRepository(input: {
     async leaseDueCollections() {
       return input.dueCollections ?? [];
     },
+    async authorizeCollectionBroadcast() {
+      return true;
+    },
+    async recordPreparedCollectionBroadcast() {
+      return true;
+    },
     async recordCollectionOutcome(outcome) {
       outcomes.push(outcome);
+      return true;
     }
   };
 }
@@ -1279,9 +1624,7 @@ function notificationDeliveryFixture(
     deviceId: overrides.deviceId ?? "device-1",
     userId: overrides.userId ?? "user-1",
     provider: overrides.provider ?? "web_push",
-    title: overrides.title ?? "Wallet action required",
-    body: overrides.body ?? "Connect a wallet to use this feature.",
-    actionUrl: overrides.actionUrl ?? "/wallet",
+    deviceSubscriptionGeneration: overrides.deviceSubscriptionGeneration ?? 1,
     endpoint: overrides.endpoint ?? "https://push.example/subscription",
     p256dh: overrides.p256dh ?? "p256dh-key",
     auth: overrides.auth ?? "auth-secret"
@@ -1326,6 +1669,11 @@ function fakeNotificationDeliveryRepository(input: {
     },
     async leaseDueDeliveries() {
       return input.deliveries ?? [];
+    },
+    async prepareDeliveryForDispatch(lease) {
+      return (input.deliveries ?? []).find(
+        (delivery) => delivery.attemptId === lease.attemptId
+      ) ?? null;
     },
     async recordDeliveryOutcome(outcome) {
       outcomes.push(outcome);

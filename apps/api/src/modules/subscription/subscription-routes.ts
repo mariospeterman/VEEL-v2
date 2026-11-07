@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
+import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
+import { KeysetPaginationCursorError } from "../../shared/keyset-pagination.js";
 import { calculateSettlementSplit } from "../payment/payment-amounts.js";
 import { assertSolanaAddress, SolanaPaymentConfigurationError } from "../payment/solana-payment.js";
 import {
@@ -15,6 +17,7 @@ import {
   verifySubscriptionReadyAccess
 } from "./subscription-route-utils.js";
 import {
+  SubscriptionCollectionInFlightError,
   SubscriptionIdempotencyConflictError,
   SubscriptionPolicyError,
   SubscriptionRepositoryConfigurationError
@@ -70,13 +73,20 @@ export async function registerSubscriptionRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
+    const query = request.query as { cursor?: string };
     try {
       const page = await options.subscriptionRepository.listPlans({
-        supabaseUserId: access.supabaseUserId
+        supabaseUserId: access.supabaseUserId,
+        limit: 20,
+        ...(query.cursor ? { cursor: query.cursor } : {})
       });
 
       return reply.code(200).send(page);
     } catch (error) {
+      if (error instanceof KeysetPaginationCursorError) {
+        return reply.code(400).send(validationResponse(error.message));
+      }
+
       if (error instanceof SubscriptionRepositoryConfigurationError) {
         request.log.warn({ error }, "Subscription plan lookup failed");
         return reply.code(503).send(serviceUnavailableResponse("Subscriptions are not configured"));
@@ -93,13 +103,33 @@ export async function registerSubscriptionRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
+    const query = request.query as {
+      cursor?: string;
+      scope?: string;
+      view?: string;
+    };
+    if (query.scope && query.scope !== "platform" && query.scope !== "creator") {
+      return reply.code(400).send(validationResponse("scope must be platform or creator"));
+    }
+    if (query.view && query.view !== "active" && query.view !== "history") {
+      return reply.code(400).send(validationResponse("view must be active or history"));
+    }
+
     try {
       const page = await options.subscriptionRepository.listSubscriptions({
-        supabaseUserId: access.supabaseUserId
+        supabaseUserId: access.supabaseUserId,
+        limit: 20,
+        view: query.view === "history" ? "history" : "active",
+        ...(query.cursor ? { cursor: query.cursor } : {}),
+        ...(query.scope ? { scope: query.scope as "platform" | "creator" } : {})
       });
 
       return reply.code(200).send(page);
     } catch (error) {
+      if (error instanceof KeysetPaginationCursorError) {
+        return reply.code(400).send(validationResponse(error.message));
+      }
+
       if (error instanceof SubscriptionRepositoryConfigurationError) {
         request.log.warn({ error }, "Subscription list lookup failed");
         return reply.code(503).send(serviceUnavailableResponse("Subscriptions are not configured"));
@@ -155,6 +185,7 @@ export async function registerSubscriptionRoutes(
           body: requestBody,
           tokenMint,
           programId: app.config.SUBSCRIPTIONS_SOLANA_PROGRAM_ID,
+          assetDecimals: app.config.PAYMENT_USDC_DECIMALS,
           amountAtomic,
           creatorAmountAtomic: split.creatorAmountAtomic,
           platformAmountAtomic: split.platformFeeAmountAtomic
@@ -234,6 +265,9 @@ export async function registerSubscriptionRoutes(
       if (readiness.config.collectorWallet) {
         assertSolanaAddress(readiness.config.collectorWallet);
       }
+      if (!readiness.config.merchantWallet) {
+        return reply.code(503).send(serviceUnavailableResponse("Subscriptions are unavailable: merchant_wallet_missing"));
+      }
       const intentBody = body as CreateSubscriptionIntentRequest;
       const intent = await options.subscriptionRepository.createAuthorizationIntent({
         supabaseUserId: access.supabaseUserId,
@@ -244,7 +278,10 @@ export async function registerSubscriptionRoutes(
         collectorAddress: readiness.config.collectorWallet,
         delegationProgramId: readiness.config.programId,
         provider: readiness.config.provider,
-        supportedMints: readiness.config.supportedMints
+        supportedMints: readiness.config.supportedMints,
+        platformReceiverWallet: readiness.config.merchantWallet,
+        assetDecimals: app.config.PAYMENT_USDC_DECIMALS,
+        network: readiness.config.network
       });
 
       return reply.code(201).send(intent);
@@ -336,13 +373,18 @@ export async function registerSubscriptionRoutes(
         amountAtomic: verificationContext.amountAtomic,
         periodDays: verificationContext.periodDays,
         periodSeconds: verificationContext.periodSeconds,
+        delegationNonce: verificationContext.delegationNonce,
         delegationExpiresAt: verificationContext.delegationExpiresAt,
         provider: verificationContext.provider,
         planId: verificationContext.planId,
         planPda: verificationContext.planPda,
         subscriptionPda: verificationContext.subscriptionPda,
         merchantWallet: verificationContext.merchantWallet,
-        expiresAt: verificationContext.expiresAt
+        expiresAt: verificationContext.expiresAt,
+        acceptedAt:
+          verificationContext.submittedSignature === submitBody.signature
+            ? verificationContext.submittedAt
+            : null
       });
       const subscription = await options.subscriptionRepository.submitAuthorization({
         supabaseUserId: access.supabaseUserId,
@@ -358,11 +400,16 @@ export async function registerSubscriptionRoutes(
 
       return reply.code(202).send(subscription);
     } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send(
+          conflictResponse("Idempotency key was already used for a different authorization submission")
+        );
+      }
+
       if (error instanceof SubscriptionRepositoryConfigurationError) {
         request.log.warn({ error }, "Subscription authorization submission failed");
         return reply.code(503).send(serviceUnavailableResponse("Subscriptions are not configured"));
       }
-
       throw error;
     }
   });
@@ -448,6 +495,11 @@ export async function registerSubscriptionRoutes(
       if (error instanceof SubscriptionRepositoryConfigurationError) {
         request.log.warn({ error }, "Subscription cancellation failed");
         return reply.code(503).send(serviceUnavailableResponse("Subscriptions are not configured"));
+      }
+      if (error instanceof SubscriptionCollectionInFlightError) {
+        return reply.code(409).send(conflictResponse(
+          "A collection is already signed or broadcasting; retry cancellation after it settles"
+        ));
       }
 
       throw error;

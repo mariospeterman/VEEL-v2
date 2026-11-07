@@ -1,13 +1,26 @@
--- Veel V2 schema blueprint.
--- Convert this into proper Supabase/Postgres migrations slice-by-slice.
--- This is not a generated migration file. Each slice must add RLS policies,
--- indexes, updated_at triggers, audit writes, and rollback strategy.
+-- Historical Veel V2 planning blueprint (non-authoritative).
+--
+-- This file is retained as design history and as a vocabulary cross-check only.
+-- It is not an executable migration, a current schema snapshot, or a source from
+-- which new migrations may be derived. The ordered immutable SQL files in
+-- packages/database/migrations are the database authority; repository queries
+-- and migration/integration tests prove compatibility with that final schema.
 
 create type staff_role as enum ('owner', 'admin', 'trust_safety', 'support', 'finance', 'ops', 'creator_success', 'event_ops', 'ai_ops', 'compliance', 'readonly_auditor');
 create type age_state as enum ('not_required', 'required', 'pending', 'verified', 'failed');
 create type content_state as enum ('draft', 'processing', 'ready', 'blocked', 'deleted');
 create type media_provider as enum ('bunny', 'livepeer');
-create type payment_state as enum ('pending', 'transaction_requested', 'submitted', 'confirmed', 'failed', 'expired');
+create type payment_state as enum (
+  'pending',
+  'transaction_requested',
+  'submitted',
+  'confirming',
+  'confirmed',
+  'settled',
+  'failed',
+  'expired',
+  'cancelled'
+);
 create type payment_product_type as enum (
   'tip',
   'support',
@@ -38,6 +51,7 @@ create table users (
   -- user_provider_identities; this value is null or the canonical users.id.
   supabase_user_id uuid unique,
   state text not null default 'active',
+  recovery_authentication_valid_after timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint users_legacy_supabase_id_canonical_check
@@ -1819,6 +1833,7 @@ create table mcp_tool_calls (
   connection_id uuid not null references mcp_connections(id),
   actor_user_id uuid not null references users(id),
   tool_name text not null,
+  tool_version text,
   state text not null,
   risk_level text not null,
   required_scopes text[] not null,

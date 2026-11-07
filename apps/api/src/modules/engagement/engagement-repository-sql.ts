@@ -3,21 +3,6 @@ import type postgres from "postgres";
 import type { EngagementState } from "./types.js";
 import type { EngagementStateRow } from "./engagement-repository-rows.js";
 
-export function preferencesSelectSql(sql: postgres.Sql, source: string) {
-  return sql.unsafe(`
-    select
-      vfp.default_feed_mode,
-      vfp.nsfw_preference,
-      coalesce(array_agg(distinct vhc.creator_user_id::text) filter (where vhc.creator_user_id is not null), array[]::text[]) as hidden_creator_ids,
-      coalesce(array_agg(distinct vht.topic) filter (where vht.topic is not null), array[]::text[]) as hidden_topics
-    from ${source}
-    join viewer_feed_preferences vfp on vfp.user_id = ${source}.user_id
-    left join viewer_hidden_creators vhc on vhc.user_id = vfp.user_id
-    left join viewer_hidden_topics vht on vht.user_id = vfp.user_id
-    group by vfp.user_id, vfp.default_feed_mode, vfp.nsfw_preference
-  `);
-}
-
 export function visibleContentSql(
   sql: postgres.Sql | postgres.TransactionSql,
   contentId: string,
@@ -34,7 +19,7 @@ export function visibleContentSql(
 }
 
 export async function engagementState(
-  sql: postgres.Sql,
+  sql: postgres.Sql | postgres.TransactionSql,
   supabaseUserId: string,
   contentId: string
 ): Promise<EngagementState> {

@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-06-03
-Source of truth: yes
+Last updated: 2026-11-04
+Source of truth: yes, only for motion timing and reduced-motion behavior
 
 Owns:
 - motion system decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -20,7 +20,8 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-This file defines the current motion language.
+This file defines the current narrow motion language. It does not own landing structure, routes,
+component names, or implementation status.
 
 ## Principles
 
@@ -31,10 +32,10 @@ This file defines the current motion language.
 
 ## Current motion use
 
-- desktop landing moves horizontally between panels
+- public landing uses semantic vertical sections with restrained CSS-only hero drift; it never scroll-jacks or hides story frames
 - shell content swaps inside a persistent frame
 - rail expansion, active nav, and segmented controls shift through color and background
-- sheets reveal quickly without bounce
+- existing panels and wallet dialogs reveal quickly without bounce
 
 ## Timing
 

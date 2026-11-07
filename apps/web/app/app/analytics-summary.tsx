@@ -1,4 +1,5 @@
 import type { AnalyticsQueryRequest, AnalyticsQueryResponse, ApiResult } from "@/api-client";
+import { formatAtomicAssetAmount } from "@/format-asset-amount";
 import { Card, ErrorState, Fact, StatusPill } from "../ui";
 
 export function AnalyticsSummary({
@@ -78,15 +79,6 @@ function formatMetric(value: string | number | null, unit: string, currency?: "S
     const minutes = (seconds % 3600n) / 60n;
     return hours > 0n ? `${hours}h ${minutes}m` : `${minutes}m`;
   }
-  if (unit === "minor_units" && currency) return formatNativeMinor(String(value), currency);
+  if (unit === "minor_units" && currency) return formatAtomicAssetAmount(String(value), currency);
   return BigInt(String(value)).toLocaleString("en-US");
-}
-
-function formatNativeMinor(value: string, currency: "SOL" | "USDC") {
-  const decimals = currency === "SOL" ? 9 : 6;
-  const scale = 10n ** BigInt(decimals);
-  const amount = BigInt(value);
-  const whole = amount / scale;
-  const fraction = (amount % scale).toString().padStart(decimals, "0").replace(/0+$/, "").slice(0, 4);
-  return `${whole.toLocaleString("en-US")}${fraction ? `.${fraction}` : ""} ${currency}`;
 }

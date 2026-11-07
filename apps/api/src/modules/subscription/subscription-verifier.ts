@@ -1,7 +1,10 @@
 import {
+  findRecurringDelegationPda,
+  findSubscriptionAuthorityPda,
   getRecurringDelegationDecoder,
   getSubscriptionAuthorityDecoder
 } from "@solana/subscriptions";
+import { address } from "@solana/kit";
 import { Connection, PublicKey } from "@solana/web3.js";
 import type { ServerEnv } from "@veel/config";
 import bs58 from "bs58";
@@ -23,12 +26,19 @@ import type {
 } from "./types.js";
 
 const memoProgramId = "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr";
+const defaultRpcDeadlineMs = 10_000;
+
+export interface SolanaSubscriptionAuthorizationVerifierOptions {
+  rpcDeadlineMs?: number;
+}
 
 export function createSolanaSubscriptionAuthorizationVerifier(
-  env?: ServerEnv
+  env?: ServerEnv,
+  options: SolanaSubscriptionAuthorizationVerifierOptions = {}
 ): SubscriptionAuthorizationVerifier {
   const config = env ? getSubscriptionProviderConfig(env) : null;
   const readiness = env ? checkSubscriptionProviderReadiness(env) : null;
+  const rpcDeadlineMs = options.rpcDeadlineMs ?? defaultRpcDeadlineMs;
 
   return {
     async verifyAuthorization(input) {
@@ -40,104 +50,264 @@ export function createSolanaSubscriptionAuthorizationVerifier(
       }
 
       try {
-        const connection = new Connection(rpcUrl, "finalized");
-        const transaction = await connection.getTransaction(input.signature, {
-          commitment: "finalized",
-          maxSupportedTransactionVersion: 0
-        });
-        if (!transaction || transaction.meta?.err) return failed("transaction_failed");
-        if (!transaction.blockTime || transaction.blockTime * 1000 > input.expiresAt.getTime()) {
-          return failed("intent_expired");
-        }
-
-        const accountKeys = transaction.transaction.message.getAccountKeys().staticAccountKeys;
-        const requiredSigner = accountKeys[0]?.toBase58();
-        if (requiredSigner !== input.subscriberWallet) return failed("subscriber_mismatch");
-        const instructions = transaction.transaction.message.compiledInstructions;
-        const hasProgram = instructions.some(
-          (instruction) => accountKeys[instruction.programIdIndex]?.toBase58() === input.delegationProgramId
-        );
-        if (!hasProgram) return failed("missing_authorization_evidence");
-        const expectedMemo = `wevid:subscription-auth:${input.setupReference}`;
-        const hasMemo = instructions.some((instruction) => {
-          if (accountKeys[instruction.programIdIndex]?.toBase58() !== memoProgramId) return false;
-          return Buffer.from(instruction.data).toString("utf8") === expectedMemo;
-        });
-        if (!hasMemo) return failed("missing_authorization_evidence");
-
-        const programKey = new PublicKey(input.delegationProgramId);
-        const [authorityInfo, delegationInfo] = await Promise.all([
-          connection.getAccountInfo(new PublicKey(input.authorityAddress), "finalized"),
-          connection.getAccountInfo(new PublicKey(input.delegationAddress), "finalized")
-        ]);
-        if (!authorityInfo) return failed("authority_not_found");
-        if (!delegationInfo) return failed("delegation_not_found");
-        if (!authorityInfo.owner.equals(programKey) || !delegationInfo.owner.equals(programKey)) {
-          return failed("program_id_mismatch");
-        }
-
-        const authority = getSubscriptionAuthorityDecoder().decode(authorityInfo.data);
-        const delegation = getRecurringDelegationDecoder().decode(delegationInfo.data);
-        if (authority.user !== input.subscriberWallet || delegation.header.delegator !== input.subscriberWallet) {
-          return failed("subscriber_mismatch");
-        }
-        if (authority.tokenMint !== input.tokenMint || delegation.mint !== input.tokenMint) {
-          return failed("mint_mismatch");
-        }
-        if (delegation.subscriptionAuthority !== input.authorityAddress) return failed("authority_not_found");
-        if (delegation.header.delegatee !== input.collectorAddress) return failed("collector_mismatch");
-        if (delegation.amountPerPeriod !== BigInt(input.amountAtomic)) return failed("amount_mismatch");
-        if (delegation.periodLengthS !== BigInt(input.periodSeconds)) return failed("period_mismatch");
-        const delegationExpiry = Number(delegation.expiryTs) * 1000;
-        if (
-          delegationExpiry <= Date.now() ||
-          Math.abs(delegationExpiry - input.delegationExpiresAt.getTime()) > 1_000
-        ) {
-          return failed("expired");
-        }
-
-        const tokenProgram = input.tokenProgram === "token_2022" ? TOKEN_2022_PROGRAM_ID : TOKEN_PROGRAM_ID;
-        const expectedAta = deriveAssociatedTokenAddress(
-          new PublicKey(input.tokenMint),
-          new PublicKey(input.subscriberWallet),
-          tokenProgram
-        );
-        if (expectedAta.toBase58() !== input.subscriberTokenAccount) return failed("subscriber_mismatch");
-        const tokenAccountInfo = await connection.getAccountInfo(expectedAta, "finalized");
-        if (!tokenAccountInfo || !tokenAccountInfo.owner.equals(tokenProgram)) return failed("subscriber_mismatch");
-        const tokenAccount = decodeTokenAccount(tokenAccountInfo.data);
-        if (
-          tokenAccount.owner !== input.subscriberWallet ||
-          tokenAccount.mint !== input.tokenMint
-        ) {
-          return failed("subscriber_mismatch");
-        }
-
-        return {
-          verified: true,
-          retryable: false,
-          facts: {
-            subscriberWallet: input.subscriberWallet,
-            subscriberTokenAccount: input.subscriberTokenAccount,
-            tokenMint: input.tokenMint,
-            authorityAddress: input.authorityAddress,
-            delegationAddress: input.delegationAddress,
-            subscriptionPda: input.delegationAddress,
-            planPda: null,
-            programId: input.delegationProgramId,
-            merchantWallet: input.merchantWallet,
-            collectorWallet: input.collectorAddress,
-            amountMinor: input.amountMinor,
-            periodDays: input.periodDays,
-            delegationExpiresAt: input.delegationExpiresAt.toISOString(),
-            verifiedAt: new Date().toISOString()
-          }
-        };
+        return await withRpcDeadline(verifyOnchainAuthorization({
+          input,
+          rpcUrl
+        }), rpcDeadlineMs);
       } catch {
         return failed("rpc_unavailable", { retryable: true });
       }
     }
   };
+}
+
+async function verifyOnchainAuthorization(input: {
+  input: VerifySubscriptionAuthorizationInput;
+  rpcUrl: string;
+}): Promise<SubscriptionAuthorizationVerificationResult> {
+  const { input: authorization } = input;
+  if (
+    !authorization.subscriberWallet ||
+    !authorization.tokenMint ||
+    !authorization.collectorAddress
+  ) {
+    return failed("provider_not_configured");
+  }
+  const connection = new Connection(input.rpcUrl, "finalized");
+  const statusResponse = await connection.getSignatureStatuses(
+    [authorization.signature],
+    { searchTransactionHistory: true }
+  );
+  const statusFailure = classifySubscriptionAuthorizationSignatureStatus(
+    statusResponse.value[0] ?? null
+  );
+  if (statusFailure) return statusFailure;
+
+  const transaction = await connection.getTransaction(authorization.signature, {
+    commitment: "finalized",
+    maxSupportedTransactionVersion: 0
+  });
+  if (!transaction) return failed("transaction_not_found", { retryable: true });
+  if (transaction.meta?.err) return failed("transaction_failed");
+  if (!transaction.blockTime || transaction.blockTime * 1000 > authorization.expiresAt.getTime()) {
+    return failed("intent_expired");
+  }
+
+  const accountKeys = transaction.transaction.message.getAccountKeys().staticAccountKeys;
+  const requiredSigner = accountKeys[0]?.toBase58();
+  if (requiredSigner !== authorization.subscriberWallet) return failed("subscriber_mismatch");
+  const instructions = transaction.transaction.message.compiledInstructions;
+  const hasProgram = instructions.some(
+    (instruction) =>
+      accountKeys[instruction.programIdIndex]?.toBase58() === authorization.delegationProgramId
+  );
+  if (!hasProgram) return failed("missing_authorization_evidence");
+  const expectedMemo = `wevid:subscription-auth:${authorization.setupReference}`;
+  const hasMemo = instructions.some((instruction) => {
+    if (accountKeys[instruction.programIdIndex]?.toBase58() !== memoProgramId) return false;
+    return Buffer.from(instruction.data).toString("utf8") === expectedMemo;
+  });
+  if (!hasMemo) return failed("missing_authorization_evidence");
+
+  const programKey = new PublicKey(authorization.delegationProgramId);
+  const [authorityInfo, delegationInfo] = await Promise.all([
+    connection.getAccountInfo(new PublicKey(authorization.authorityAddress), "finalized"),
+    connection.getAccountInfo(new PublicKey(authorization.delegationAddress), "finalized")
+  ]);
+  if (!authorityInfo) return failed("authority_not_found");
+  if (!delegationInfo) return failed("delegation_not_found");
+  if (!authorityInfo.owner.equals(programKey) || !delegationInfo.owner.equals(programKey)) {
+    return failed("program_id_mismatch");
+  }
+
+  const authority = getSubscriptionAuthorityDecoder().decode(authorityInfo.data);
+  const delegation = getRecurringDelegationDecoder().decode(delegationInfo.data);
+  const [expectedAuthorityAddress] = await findSubscriptionAuthorityPda(
+    {
+      user: address(authorization.subscriberWallet),
+      tokenMint: address(authorization.tokenMint)
+    },
+    { programAddress: address(authorization.delegationProgramId) }
+  );
+  if (expectedAuthorityAddress !== authorization.authorityAddress) {
+    return failed("authority_address_mismatch");
+  }
+  const [expectedDelegationAddress] = await findRecurringDelegationPda(
+    {
+      subscriptionAuthority: expectedAuthorityAddress,
+      delegator: address(authorization.subscriberWallet),
+      delegatee: address(authorization.collectorAddress),
+      nonce: authorization.delegationNonce
+    },
+    { programAddress: address(authorization.delegationProgramId) }
+  );
+  if (expectedDelegationAddress !== authorization.delegationAddress) {
+    return failed("delegation_address_mismatch");
+  }
+  if (
+    authority.user !== authorization.subscriberWallet ||
+    delegation.header.delegator !== authorization.subscriberWallet
+  ) {
+    return failed("subscriber_mismatch");
+  }
+  if (authority.tokenMint !== authorization.tokenMint || delegation.mint !== authorization.tokenMint) {
+    return failed("mint_mismatch");
+  }
+  if (delegation.subscriptionAuthority !== authorization.authorityAddress) return failed("authority_not_found");
+  if (delegation.header.delegatee !== authorization.collectorAddress) return failed("collector_mismatch");
+  if (delegation.amountPerPeriod !== BigInt(authorization.amountAtomic)) return failed("amount_mismatch");
+  if (delegation.periodLengthS !== BigInt(authorization.periodSeconds)) return failed("period_mismatch");
+  const delegationExpiry = Number(delegation.expiryTs) * 1000;
+  if (
+    delegationExpiry <= Date.now() ||
+    Math.abs(delegationExpiry - authorization.delegationExpiresAt.getTime()) > 1_000
+  ) {
+    return failed("expired");
+  }
+
+  const tokenProgram = authorization.tokenProgram === "token_2022"
+    ? TOKEN_2022_PROGRAM_ID
+    : TOKEN_PROGRAM_ID;
+  const expectedAta = deriveAssociatedTokenAddress(
+    new PublicKey(authorization.tokenMint),
+    new PublicKey(authorization.subscriberWallet),
+    tokenProgram
+  );
+  if (expectedAta.toBase58() !== authorization.subscriberTokenAccount) return failed("subscriber_mismatch");
+  const tokenAccountInfo = await connection.getAccountInfo(expectedAta, "finalized");
+  if (!tokenAccountInfo || !tokenAccountInfo.owner.equals(tokenProgram)) return failed("subscriber_mismatch");
+  const tokenAccount = decodeTokenAccount(tokenAccountInfo.data);
+  const linkageFailure = validateSubscriptionAccountLinkage({
+    authority: {
+      user: authority.user,
+      tokenMint: authority.tokenMint,
+      initId: authority.initId
+    },
+    delegation: {
+      delegator: delegation.header.delegator,
+      delegatee: delegation.header.delegatee,
+      initId: delegation.header.initId,
+      subscriptionAuthority: delegation.subscriptionAuthority,
+      mint: delegation.mint
+    },
+    tokenAccount,
+    expected: {
+      subscriberWallet: authorization.subscriberWallet,
+      collectorAddress: authorization.collectorAddress,
+      tokenMint: authorization.tokenMint,
+      authorityAddress: authorization.authorityAddress,
+      amountAtomic: BigInt(authorization.amountAtomic)
+    }
+  });
+  if (linkageFailure) return failed(linkageFailure);
+
+  return {
+    verified: true,
+    retryable: false,
+    facts: {
+      subscriberWallet: authorization.subscriberWallet,
+      subscriberTokenAccount: authorization.subscriberTokenAccount,
+      tokenMint: authorization.tokenMint,
+      authorityAddress: authorization.authorityAddress,
+      delegationAddress: authorization.delegationAddress,
+      subscriptionPda: authorization.delegationAddress,
+      planPda: null,
+      programId: authorization.delegationProgramId,
+      merchantWallet: authorization.merchantWallet,
+      collectorWallet: authorization.collectorAddress,
+      amountMinor: authorization.amountMinor,
+      periodDays: authorization.periodDays,
+      delegationExpiresAt: authorization.delegationExpiresAt.toISOString(),
+      verifiedAt: new Date().toISOString()
+    }
+  };
+}
+
+export function validateSubscriptionAccountLinkage(input: {
+  authority: { user: string; tokenMint: string; initId: bigint };
+  delegation: {
+    delegator: string;
+    delegatee: string;
+    initId: bigint;
+    subscriptionAuthority: string;
+    mint: string;
+  };
+  tokenAccount: {
+    owner: string;
+    mint: string;
+    delegate: string | null;
+    delegatedAmount: bigint;
+    initialized: boolean;
+  };
+  expected: {
+    subscriberWallet: string;
+    collectorAddress: string;
+    tokenMint: string;
+    authorityAddress: string;
+    amountAtomic: bigint;
+  };
+}): NonNullable<SubscriptionAuthorizationVerificationResult["failureCode"]> | null {
+  if (
+    input.authority.user !== input.expected.subscriberWallet ||
+    input.delegation.delegator !== input.expected.subscriberWallet ||
+    input.tokenAccount.owner !== input.expected.subscriberWallet
+  ) {
+    return "subscriber_mismatch";
+  }
+  if (
+    input.authority.tokenMint !== input.expected.tokenMint ||
+    input.delegation.mint !== input.expected.tokenMint ||
+    input.tokenAccount.mint !== input.expected.tokenMint
+  ) {
+    return "mint_mismatch";
+  }
+  if (input.delegation.subscriptionAuthority !== input.expected.authorityAddress) {
+    return "authority_address_mismatch";
+  }
+  if (input.authority.initId !== input.delegation.initId) {
+    return "authority_init_mismatch";
+  }
+  if (
+    !input.tokenAccount.initialized ||
+    input.tokenAccount.delegate !== input.expected.authorityAddress ||
+    input.tokenAccount.delegatedAmount < input.expected.amountAtomic
+  ) {
+    return "delegated_allowance_mismatch";
+  }
+  if (input.delegation.delegatee !== input.expected.collectorAddress) {
+    return "collector_mismatch";
+  }
+  return null;
+}
+
+export function classifySubscriptionAuthorizationSignatureStatus(
+  status: {
+    confirmationStatus?: "processed" | "confirmed" | "finalized" | null;
+    err: unknown;
+  } | null
+): SubscriptionAuthorizationVerificationResult | null {
+  if (!status) return failed("transaction_not_found", { retryable: true });
+  if (status.confirmationStatus !== "finalized") {
+    return failed("transaction_pending", { retryable: true });
+  }
+  if (status.err) return failed("transaction_failed");
+  return null;
+}
+
+function withRpcDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("SUBSCRIPTION_AUTHORIZATION_RPC_DEADLINE")), timeoutMs);
+    void promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 }
 
 function validateLocalFacts(
@@ -153,11 +323,16 @@ function validateLocalFacts(
   } catch {
     return failed("missing_authorization_evidence");
   }
-  if (input.expiresAt.getTime() <= Date.now()) return failed("intent_expired");
+  if (
+    input.expiresAt.getTime() <= Date.now() &&
+    (!input.acceptedAt || input.acceptedAt.getTime() > input.expiresAt.getTime())
+  ) {
+    return failed("intent_expired");
+  }
   if (!config || readiness?.ok !== true) {
     const reason = readiness?.ok === false ? readiness.reason : "provider_not_configured";
     return failed(reason === "rpc_unavailable" ? "rpc_unavailable" : "provider_not_configured", {
-      retryable: reason === "rpc_unavailable"
+      retryable: reason === "rpc_unavailable" || reason === "provider_not_configured"
     });
   }
   if (input.provider !== "official_solana_subscription_program") return failed("provider_not_configured");

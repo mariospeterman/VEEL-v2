@@ -1,0 +1,13 @@
+{
+  "splitUnderpayment": {
+    "quotedAtomic": 10000,
+    "actualTransferredAtomic": 5500,
+    "expectedConfirmed": false,
+    "actualConfirmed": true,
+    "note": "Actual verifier source evaluated with mocked RPC and native-only dependency stubs; identical creator/enterprise recipient is permitted by schema."
+  },
+  "emailAtomicDisplay": {
+    "actualAmountText": "Amount: 1000000000 SOL",
+    "expectedAmountText": "Amount: 1 SOL"
+  }
+}

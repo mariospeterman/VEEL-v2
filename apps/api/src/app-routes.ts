@@ -6,6 +6,7 @@ import { registerActivityRoutes } from "./modules/activity/activity-routes.js";
 import { registerAgeRoutes } from "./modules/age/age-routes.js";
 import { registerAiRoutes } from "./modules/ai/ai-routes.js";
 import { registerContentRoutes } from "./modules/content/content-routes.js";
+import { registerContentExportRoutes } from "./modules/content-export/content-export-routes.js";
 import { registerDiscoverRoutes } from "./modules/discover/discover-routes.js";
 import { registerEngagementRoutes } from "./modules/engagement/engagement-routes.js";
 import { registerEventRoutes } from "./modules/event/event-routes.js";
@@ -44,6 +45,8 @@ export async function registerApiRoutes(
     profileRepository,
     walletRepository,
     contentRepository,
+    contentExportRepository,
+    contentExportProvider,
     mediaUploadProvider,
     liveRepository,
     mutualsRepository,
@@ -61,6 +64,7 @@ export async function registerApiRoutes(
     referralRepository,
     refundRepository,
     notificationRepository,
+    webPushDnsResolver,
     organizationRepository,
     subscriptionRepository,
     subscriptionAuthorizationVerifier,
@@ -134,12 +138,20 @@ export async function registerApiRoutes(
     verificationRepository,
     subscriptionRepository
   });
+  await registerContentExportRoutes(app, {
+    authVerifier,
+    contentExportRepository,
+    contentExportProvider
+  });
   await registerDiscoverRoutes(app, {
     authVerifier,
     sessionRepository,
     ageRepository,
     walletRepository,
-    discoverRepository
+    discoverRepository,
+    mediaUploadProvider,
+    liveProvider,
+    subscriptionRepository
   });
   await registerEventRoutes(app, {
     authVerifier,
@@ -206,6 +218,7 @@ export async function registerApiRoutes(
   await registerNotificationRoutes(app, {
     authVerifier,
     notificationRepository,
+    webPushDnsResolver,
     vapidPublicKey: app.config.WEB_PUSH_VAPID_PUBLIC_KEY
   });
   await registerOrganizationRoutes(app, {

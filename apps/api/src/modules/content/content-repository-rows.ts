@@ -3,6 +3,7 @@ import type { ContentItem, Entitlement } from "./types.js";
 export type ContentMediaAssetProjection = NonNullable<ContentItem["mediaAssets"]>[number] & {
   playbackUrl?: string | null;
   providerPlayable?: boolean | null;
+  providerAssetId?: string | null;
 };
 
 export interface FeedRow {
@@ -14,7 +15,6 @@ export interface FeedRow {
   caption: string | null;
   nsfw_label: NonNullable<ContentItem["nsfwLabel"]>;
   created_at: Date;
-  ranking_score: number;
   creator_id: string;
   handle: string | null;
   display_name: string | null;

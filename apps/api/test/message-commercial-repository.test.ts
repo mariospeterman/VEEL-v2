@@ -16,7 +16,13 @@ describe("message commercial projections", () => {
           blocked: false
         }]);
       }
-      if (query.includes("from creator_media_offers")) {
+      if (query.includes("with interactions as")) {
+        return Promise.resolve([
+          { kind: "creator_request", id: "request-1", created_at: createdAt },
+          { kind: "media_offer", id: "offer-1", created_at: createdAt }
+        ]);
+      }
+      if (query.includes("select * from creator_media_offers")) {
         return Promise.resolve([{
           id: "offer-1",
           conversation_id: "conversation-1",
@@ -63,10 +69,12 @@ describe("message commercial projections", () => {
 
     const result = await listCommercialInteractions(sql, {
       supabaseUserId: "supabase-buyer",
-      conversationId: "conversation-1"
+      conversationId: "conversation-1",
+      limit: 50
     });
 
     expect(result?.mediaOffers[0]?.state).toBe("expired");
     expect(result?.creatorRequests[0]?.state).toBe("expired");
+    expect(result?.nextCursor).toBeNull();
   });
 });

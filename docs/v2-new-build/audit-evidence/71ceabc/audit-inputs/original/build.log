@@ -1,0 +1,78 @@
+
+> veel-shoot-own-shine@0.0.0 build /workspace/scratch/0635fbdaf32f/wevid-audit
+> pnpm -r --if-present build
+
+Scope: 9 of 10 workspace projects
+packages/config build$ tsc -b tsconfig.build.json --force
+packages/observability build$ tsc -b tsconfig.build.json --force
+packages/observability build: Done
+packages/config build: Done
+apps/api build$ tsc -p tsconfig.build.json
+apps/web build$ next build --webpack
+apps/web build: ▲ Next.js 16.3.2 (webpack)
+apps/web build: ✓ Running next.config.ts took 193ms
+apps/web build: Attention: Next.js now collects completely anonymous telemetry regarding usage.
+apps/web build: This information is used to shape Next.js' roadmap and prioritize features.
+apps/web build: You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+apps/web build: https://nextjs.org/telemetry
+apps/web build:   Creating an optimized production build ...
+apps/api build: Done
+apps/web build: ✓ Compiled successfully in 2.2min
+apps/web build:   Running TypeScript ...
+apps/web build:   Finished TypeScript in 15.6s ...
+apps/web build:   Collecting page data using 8 workers ...
+apps/web build:   Generating static pages using 8 workers (0/7) ...
+apps/web build:   Generating static pages using 8 workers (1/7) 
+apps/web build:   Generating static pages using 8 workers (3/7) 
+apps/web build:   Generating static pages using 8 workers (5/7) 
+apps/web build: ✓ Generating static pages using 8 workers (7/7) in 474ms
+apps/web build:   Finalizing page optimization ...
+apps/web build:   Collecting build traces ...
+apps/web build: Route (app)
+apps/web build: ┌ ƒ /
+apps/web build: ├ ƒ /_not-found
+apps/web build: ├ ƒ /admin
+apps/web build: ├ ƒ /admin/[section]
+apps/web build: ├ ƒ /admin/staff
+apps/web build: ├ ƒ /age
+apps/web build: ├ ƒ /age/callback
+apps/web build: ├ ƒ /app/activity
+apps/web build: ├ ƒ /app/assistant
+apps/web build: ├ ƒ /app/bits
+apps/web build: ├ ƒ /app/create
+apps/web build: ├ ƒ /app/enterprise
+apps/web build: ├ ƒ /app/home
+apps/web build: ├ ƒ /app/live/[liveRoomId]
+apps/web build: ├ ƒ /app/messages
+apps/web build: ├ ƒ /app/moments
+apps/web build: ├ ƒ /app/notifications
+apps/web build: ├ ƒ /app/profile
+apps/web build: ├ ƒ /app/profile/earnings
+apps/web build: ├ ƒ /app/search
+apps/web build: ├ ƒ /app/settings
+apps/web build: ├ ƒ /app/studio
+apps/web build: ├ ƒ /app/subscriptions
+apps/web build: ├ ƒ /app/wallet
+apps/web build: ├ ƒ /auth/confirm
+apps/web build: ├ ƒ /auth/logout
+apps/web build: ├ ƒ /content/[contentId]
+apps/web build: ├ ƒ /event-access/[eventId]
+apps/web build: ├ ƒ /legal/[slug]
+apps/web build: ├ ƒ /live/[liveRoomId]
+apps/web build: ├ ƒ /mutuals
+apps/web build: ├ ƒ /mutuals/feed
+apps/web build: ├ ƒ /oauth/mcp/consent
+apps/web build: ├ ƒ /offline
+apps/web build: ├ ƒ /passes
+apps/web build: ├ ƒ /performer-consent/[token]
+apps/web build: ├ ƒ /performer-consent/return
+apps/web build: ├ ƒ /profile/[handle]
+apps/web build: ├ ○ /robots.txt
+apps/web build: ├ ƒ /runtime-config.js
+apps/web build: └ ○ /sitemap.xml
+apps/web build: ƒ Proxy (Middleware)
+apps/web build: ○  (Static)   prerendered as static content
+apps/web build: ƒ  (Dynamic)  server-rendered on demand
+apps/web build: Done
+apps/worker build$ tsc -p tsconfig.build.json
+apps/worker build: Done

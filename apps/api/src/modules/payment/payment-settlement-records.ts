@@ -1,11 +1,16 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
-import type { RecordPaymentSubmissionInput, StoredPaymentIntent } from "./types.js";
+import {
+  paymentIntentStateForSettlement,
+  type RecordPaymentSubmissionInput,
+  type StoredPaymentIntent
+} from "./types.js";
 
 export async function insertSettlementAttempt(
   transaction: postgres.TransactionSql,
   input: RecordPaymentSubmissionInput
 ): Promise<void> {
+  const state = paymentIntentStateForSettlement(input.settlement);
   await transaction`
     insert into payment_settlement_attempts (
       id,
@@ -19,7 +24,7 @@ export async function insertSettlementAttempt(
       ${randomUUID()},
       ${input.paymentIntentId},
       ${input.signature},
-      ${input.settlement.confirmed ? "confirmed" : "submitted"},
+      ${state},
       ${input.settlement.failureCode ?? null},
       ${input.settlement.blockTime ?? null}
     )
@@ -32,7 +37,7 @@ export async function recordWalletTransaction(
     userId: string;
     paymentIntentId: string;
     signature: string;
-    state: "submitted" | "confirmed";
+    state: "submitted" | "confirmed" | "failed";
     amountMinor: number;
     currency: StoredPaymentIntent["currency"];
   }

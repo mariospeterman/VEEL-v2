@@ -1,4 +1,4 @@
-import type { Mutual, MutualsFeedItem, MutualsProfile } from "./types.js";
+import type { Mutual, MutualsProfile } from "./types.js";
 
 export interface MutualsProfileRow {
   enabled: boolean;
@@ -17,7 +17,8 @@ export interface MutualsFeedRow {
   display_name: string;
   avatar_url: string | null;
   title: string;
-  media_kind: MutualsFeedItem["mediaKind"];
+  media_type: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel";
+  cover_asset_kind: "image" | "video";
   poster_url: string | null;
   created_at: Date;
 }

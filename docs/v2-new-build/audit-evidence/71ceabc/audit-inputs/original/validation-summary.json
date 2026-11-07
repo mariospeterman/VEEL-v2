@@ -1,0 +1,114 @@
+{
+  "snapshot": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "date": "2026-11-04",
+  "toolchain": {
+    "node": "22.16.0",
+    "pnpm": "10.0.0"
+  },
+  "default_tests": {
+    "success": true,
+    "numTotalTests": 629,
+    "numPassedTests": 619,
+    "numFailedTests": 0,
+    "numPendingTests": 10
+  },
+  "coverage_counts": {
+    "full_text_review": 1024,
+    "binary_metadata_only": 34,
+    "svg_structural_review": 8,
+    "generated_verified": 2,
+    "canonical_symlink": 1
+  },
+  "checks": {
+    "doctor": {
+      "exit": 0,
+      "log": "doctor.log"
+    },
+    "docs-check": {
+      "exit": 0,
+      "log": "docs-check.log"
+    },
+    "dependency-policy": {
+      "exit": 0,
+      "log": "dependency-policy.log"
+    },
+    "affordances": {
+      "exit": 0,
+      "log": "affordances.log"
+    },
+    "migration-static": {
+      "exit": 0,
+      "log": "migration-static.log"
+    },
+    "deploy-preflight": {
+      "exit": 0,
+      "log": "deploy-preflight.log"
+    },
+    "lint": {
+      "exit": 0,
+      "log": "lint.log"
+    },
+    "typecheck": {
+      "exit": 0,
+      "log": "typecheck.log"
+    },
+    "build": {
+      "exit": 0,
+      "log": "build.log"
+    },
+    "contract-generation": {
+      "exit": 0,
+      "log": "contract-generation.log"
+    },
+    "unit-tests-json-run": {
+      "exit": 0,
+      "log": "unit-tests-json-run.log"
+    },
+    "production-dependency-audit": {
+      "exit": 1,
+      "log": "production-dependency-audit.json"
+    },
+    "playwright-install": {
+      "exit": 1,
+      "log": "playwright-install.log"
+    }
+  },
+  "dependency_metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 7,
+      "moderate": 38,
+      "high": 37,
+      "critical": 5
+    },
+    "dependencies": 1128,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 1128
+  },
+  "distinct_advisory_records": 85,
+  "hosted_supabase_or_external_provider_proven": false,
+  "browser_e2e_proven": false,
+  "source_status": "",
+  "source_head": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "limitations": [
+    "Mac dirty delta unavailable",
+    "Playwright truncated download",
+    "No usable native PostgreSQL/Docker",
+    "No live-provider credentials or approvals",
+    "No staging deployment or mainnet spending",
+    "Binary graphics metadata only"
+  ],
+  "independent_verification": {
+    "review_records": 159,
+    "source_hashes_verified": true,
+    "prior_full_review_reused": true,
+    "second_pass_full_repository_reread_claimed": false,
+    "probe_runtime": "Node24.22.1 supplemental; PGlite0.5.15; mock/provider boundaries recorded per probe",
+    "new_ids": [
+      "AUTH-22",
+      "AUTH-23",
+      "PAY-17"
+    ]
+  }
+}

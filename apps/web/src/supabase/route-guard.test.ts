@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { isE2eAuthEnabled } from "./e2e-auth";
-import { appAccessRedirectForPath, signInRedirectForPath } from "./route-guard";
+import {
+  appAccessRedirectForPath,
+  signInRedirectForPath,
+  walletSessionDestination
+} from "./access-redirect";
 
 describe("signInRedirectForPath", () => {
   it("keeps the protected route as a safe landing login next parameter", () => {
     expect(signInRedirectForPath("/app/wallet")).toBe("/?mode=login&next=%2Fapp%2Fwallet");
     expect(signInRedirectForPath("/mutuals/feed")).toBe("/?mode=login&next=%2Fmutuals%2Ffeed");
+    expect(signInRedirectForPath("/\\evil.example")).toBe("/?mode=login&next=%2F");
   });
 });
 
@@ -50,5 +55,12 @@ describe("appAccessRedirectForPath", () => {
     expect(appAccessRedirectForPath("/app/messages", "blocked")).toBe(
       "/?mode=login&next=%2Fapp%2Fmessages"
     );
+  });
+
+  it("keeps blocked wallet sessions on the login surface", () => {
+    expect(walletSessionDestination("/app/home", {
+      allowed: false,
+      reason: "blocked"
+    })).toBe("/?mode=login&next=%2Fapp%2Fhome");
   });
 });

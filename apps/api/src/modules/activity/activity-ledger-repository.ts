@@ -1,8 +1,24 @@
 import type postgres from "postgres";
+import {
+  bindCursorScope,
+  decodeTimestampIdCursor,
+  decodeTimestampKindIdCursor,
+  encodeTimestampIdCursor,
+  encodeTimestampKindIdCursor
+} from "../../shared/keyset-pagination.js";
 import { type ActivityRow, toActivityPage } from "./activity-repository-mappers.js";
 import type { ListActivityInput } from "./types.js";
 
+const activityCursorScope = "GET /v1/activity";
+const paymentActivityCursorScope = "GET /v1/activity/payments";
+const activityKinds = ["payment_intent", "wallet_transaction"] as const;
+
 export async function listActivity(sql: postgres.Sql, input: ListActivityInput) {
+  const cursorScope = bindCursorScope(activityCursorScope, {
+    actor: input.supabaseUserId,
+    sort: "created_at:desc,kind:desc,id:desc"
+  });
+  const cursor = decodeTimestampKindIdCursor(cursorScope, input.cursor, activityKinds);
   const rows = await sql<ActivityRow[]>`
     with target_user as (
       select id
@@ -93,15 +109,41 @@ export async function listActivity(sql: postgres.Sql, input: ListActivityInput) 
       union all
       select * from wallet_activity
     ) activity
-    where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
-    order by created_at desc
+    where (
+      ${cursor.timestamp}::timestamptz is null
+      or (
+        ${cursor.kind}::text is null
+        and created_at <= ${cursor.timestamp}::timestamptz
+      )
+      or (
+        ${cursor.kind}::text is not null
+        and (created_at, kind, id) < (
+          ${cursor.timestamp}::timestamptz,
+          ${cursor.kind}::text,
+          ${cursor.id}::uuid
+        )
+      )
+    )
+    order by created_at desc, kind desc, id desc
     limit ${input.limit + 1}
   `;
 
-  return toActivityPage(rows, input.limit);
+  return toActivityPage(rows, input.limit, (row) =>
+    encodeTimestampKindIdCursor(
+      cursorScope,
+      row.created_at,
+      row.kind,
+      row.id
+    )
+  );
 }
 
 export async function listPaymentActivity(sql: postgres.Sql, input: ListActivityInput) {
+  const cursorScope = bindCursorScope(paymentActivityCursorScope, {
+    actor: input.supabaseUserId,
+    sort: "created_at:desc,id:desc"
+  });
+  const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
   const rows = await sql<ActivityRow[]>`
     with target_user as (
       select id
@@ -152,10 +194,22 @@ export async function listPaymentActivity(sql: postgres.Sql, input: ListActivity
       order by rd.created_at desc
       limit 1
     ) latest_refund on true
-    where (${input.cursor ?? null}::timestamptz is null or pi.created_at < ${input.cursor ?? null}::timestamptz)
-    order by pi.created_at desc
+    where (
+      ${cursor.timestamp}::timestamptz is null
+      or (
+        ${cursor.id}::uuid is null
+        and pi.created_at <= ${cursor.timestamp}::timestamptz
+      )
+      or (
+        ${cursor.id}::uuid is not null
+        and (pi.created_at, pi.id) < (${cursor.timestamp}::timestamptz, ${cursor.id}::uuid)
+      )
+    )
+    order by pi.created_at desc, pi.id desc
     limit ${input.limit + 1}
   `;
 
-  return toActivityPage(rows, input.limit);
+  return toActivityPage(rows, input.limit, (row) =>
+    encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+  );
 }

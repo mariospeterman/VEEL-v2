@@ -1,32 +1,41 @@
-import { getMyContent, getMyCreatorDashboard, type CreatorDashboard } from "@/api-client";
+import { getCreatorProfile, getMyContent, getMyCreatorDashboard, type CreatorDashboard, type CreatorProfile } from "@/api-client";
 import { requireAppAccess } from "@/supabase/route-guard";
 import { AppShell } from "../../app-shell";
 import { ErrorState } from "../../ui";
 import { ProfileLogoutButton } from "./profile-logout-button";
-import { ProfileMediaGrid } from "./profile-media-grid";
+import { ProfileMediaGrid, type ProfileMediaFilter } from "./profile-media-grid";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams
+}: {
+  searchParams?: Promise<{ media?: string }>;
+}) {
   await requireAppAccess("/app/profile");
+  const params = await searchParams;
+  const mediaFilter: ProfileMediaFilter = params?.media === "bits" || params?.media === "moments"
+    ? params.media
+    : "posts";
   const [dashboard, media] = await Promise.all([getMyCreatorDashboard(), getMyContent()]);
+  const publicProfile = dashboard.ok ? await getCreatorProfile(dashboard.data.creator.handle) : null;
 
   return (
     <AppShell>
       <section className="mx-auto grid w-full max-w-5xl content-start gap-5">
-        {dashboard.ok ? <ProfileHeader dashboard={dashboard.data} postCount={media.ok ? media.data.items.filter((item) => item.publicationState === "published" && item.distributionMode === "post").length : 0} /> : (
+        {dashboard.ok ? <ProfileHeader dashboard={dashboard.data} stats={publicProfile?.ok ? publicProfile.data.stats : null} /> : (
           <ErrorState result={dashboard} title="Profile unavailable" context="Profile" />
         )}
 
-        <nav aria-label="Profile media" className="flex border-b border-(--line) text-sm font-semibold">
-          <a className="min-h-12 flex-1 border-b-2 border-(--foreground) px-3 py-3 text-center" href="#posts">Posts</a>
-          <a className="min-h-12 flex-1 px-3 py-3 text-center text-(--muted)" href="/app/bits">Bits</a>
-          <a className="min-h-12 flex-1 px-3 py-3 text-center text-(--muted)" href="/app/moments">Moments</a>
+        <nav aria-label="Your profile media" className="flex border-b border-(--line) text-sm font-semibold">
+          <MediaTab active={mediaFilter === "posts"} filter="posts" label="Posts" />
+          <MediaTab active={mediaFilter === "bits"} filter="bits" label="Bits" />
+          <MediaTab active={mediaFilter === "moments"} filter="moments" label="Moments" />
           <a className="min-h-12 flex-1 px-3 py-3 text-center text-(--muted)" href="/app/create?mode=live">Live</a>
         </nav>
 
-        <section id="posts">
-          {media.ok ? <ProfileMediaGrid page={media.data} /> : (
+        <section id="media">
+          {media.ok ? <ProfileMediaGrid filter={mediaFilter} key={mediaFilter} page={media.data} /> : (
             <ErrorState result={media} title="Your posts are unavailable" context="Profile posts" />
           )}
         </section>
@@ -46,7 +55,7 @@ export default async function ProfilePage() {
   );
 }
 
-function ProfileHeader({ dashboard, postCount }: { dashboard: CreatorDashboard; postCount: number }) {
+function ProfileHeader({ dashboard, stats }: { dashboard: CreatorDashboard; stats: CreatorProfile["stats"] | null }) {
   const initials = dashboard.creator.displayName.slice(0, 2).toUpperCase();
   return (
     <header className="grid gap-5 pt-2 sm:grid-cols-[128px_minmax(0,1fr)] sm:items-center">
@@ -58,11 +67,23 @@ function ProfileHeader({ dashboard, postCount }: { dashboard: CreatorDashboard; 
       </div>
       <div className="grid gap-4">
         <div className="hidden sm:block"><h1 className="text-2xl font-semibold tracking-tight">{dashboard.creator.displayName}</h1><p className="text-sm text-(--muted)">@{dashboard.creator.handle}</p></div>
-        <div className="flex gap-6 text-sm"><ProfileStat label="posts" value={postCount} /><ProfileStat label="followers" value="—" /><ProfileStat label="following" value="—" /></div>
+        <div className="flex gap-6 text-sm"><ProfileStat label="content" value={stats?.contentCount ?? "Unavailable"} /><ProfileStat label="followers" value={stats?.followerCount ?? "Unavailable"} /><ProfileStat label="following" value={stats?.followingCount ?? "Unavailable"} /></div>
         <p className="max-w-2xl text-sm leading-6 text-(--text-soft)">Your public identity and media live here. Creator analytics, verification, pricing, and earnings stay in Studio.</p>
         <div className="flex flex-wrap gap-2"><a className="min-h-11 rounded-lg bg-(--foreground) px-4 py-2.5 text-sm font-semibold text-(--background)" href="/app/settings#profile">Edit profile</a><a className="min-h-11 rounded-lg border border-(--line) px-4 py-2.5 text-sm font-semibold" href="/app/studio">Open Studio</a></div>
       </div>
     </header>
+  );
+}
+
+function MediaTab({ active, filter, label }: { active: boolean; filter: ProfileMediaFilter; label: string }) {
+  return (
+    <a
+      aria-current={active ? "page" : undefined}
+      className={`min-h-12 flex-1 px-3 py-3 text-center ${active ? "border-b-2 border-(--foreground)" : "text-(--muted)"}`}
+      href={`/app/profile?media=${filter}#media`}
+    >
+      {label}
+    </a>
   );
 }
 

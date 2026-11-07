@@ -1,0 +1,27 @@
+{
+  "runtime": "PGlite 0.5.15 PostgreSQL WASM; pgcrypto; auth functions and realtime publication compatibility bootstrap; not hosted Supabase/provider integration",
+  "migrationCount": 118,
+  "fixtureResults": [
+    {
+      "name": "current Didit distinct identity fixture",
+      "id": "71717171-7171-4171-8171-717171717171",
+      "supabaseId": "72727272-7272-4272-8272-727272727272",
+      "insert": "rejected",
+      "code": "23514",
+      "constraint": "users_legacy_supabase_id_canonical_check",
+      "message": "new row for relation \"users\" violates check constraint \"users_legacy_supabase_id_canonical_check\""
+    },
+    {
+      "name": "canonical equal identity fixture",
+      "id": "73737373-7373-4373-8373-737373737373",
+      "supabaseId": "73737373-7373-4373-8373-737373737373",
+      "insert": "success"
+    },
+    {
+      "name": "canonical provider-independent identity fixture",
+      "id": "74747474-7474-4474-8474-747474747474",
+      "supabaseId": null,
+      "insert": "success"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "scope": {
+    "type": "creator",
+    "creatorUserId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+  },
+  "window": {
+    "startDate": "2026-11-01",
+    "endDate": "2026-11-01"
+  },
+  "comparisonWindow": null,
+  "granularity": "total",
+  "timezone": "UTC",
+  "dataThrough": null,
+  "generatedAt": "2026-11-04T10:40:02.639Z",
+  "freshness": "unavailable",
+  "metrics": [
+    {
+      "metricKey": "creator.social.follower_starts",
+      "definitionVersion": 1,
+      "label": "New followers",
+      "unit": "count",
+      "dimensions": {},
+      "points": [
+        {
+          "bucketDate": null,
+          "value": null,
+          "numerator": null,
+          "denominator": null,
+          "sampleSize": "3",
+          "privacyDecision": "suppressed_minimum_cohort"
+        }
+      ],
+      "comparisonValue": null,
+      "deltaPercent": null
+    }
+  ],
+  "insights": []
+}

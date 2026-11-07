@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { parsePublicWebEnv } from "@veel/config/public";
+import { safeSameOriginPath } from "@/navigation/safe-same-origin-path";
 import { createSupabaseServerClient } from "@/supabase/server";
 
 type AppAccessReason =
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   const code = requestUrl.searchParams.get("code");
   const tokenHash = requestUrl.searchParams.get("token_hash");
   const type = requestUrl.searchParams.get("type") as EmailOtpType | null;
-  const next = safeNextPath(requestUrl.searchParams.get("next"));
+  const next = safeSameOriginPath(requestUrl.searchParams.get("next"), "/");
   const redirectUrl = new URL(next, requestUrl.origin);
 
   if (code || (tokenHash && type)) {
@@ -30,11 +31,10 @@ export async function GET(request: NextRequest) {
     if (!error) {
       const exchange = await exchangeRecoveryIdentity(request, data?.session?.access_token ?? null);
       if (exchange.error) {
-        redirectUrl.pathname = "/";
-        redirectUrl.search = "";
-        redirectUrl.searchParams.set("mode", "login");
-        redirectUrl.searchParams.set("error", exchange.error);
-        return NextResponse.redirect(redirectUrl);
+        return NextResponse.redirect(landingRedirect(requestUrl.origin, {
+          error: exchange.error,
+          mode: "login"
+        }));
       }
 
       let destination = redirectUrl;
@@ -48,15 +48,10 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  redirectUrl.pathname = "/";
-  redirectUrl.search = "";
-  redirectUrl.searchParams.set("mode", "login");
-  redirectUrl.searchParams.set("error", "auth_confirm_failed");
-  return NextResponse.redirect(redirectUrl);
-}
-
-function safeNextPath(value: string | null) {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
+  return NextResponse.redirect(landingRedirect(requestUrl.origin, {
+    error: "auth_confirm_failed",
+    mode: "login"
+  }));
 }
 
 async function confirmSupabaseAuth(

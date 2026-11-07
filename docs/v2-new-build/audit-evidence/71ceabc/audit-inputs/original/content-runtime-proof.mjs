@@ -1,0 +1,30 @@
+import { PGlite } from './db-proof-runtime/node_modules/@electric-sql/pglite/dist/index.js';
+import assert from 'node:assert/strict';
+const db = new PGlite();
+await db.exec(`create table events(id text primary key,title text);`);
+const created=await db.query(`with inserted_event as (insert into events values ('event-1','old') returning *), selected_event as (select * from inserted_event) select e.* from events e join selected_event se on se.id=e.id`);
+assert.equal(created.rows.length,0);
+const persisted=await db.query('select * from events');
+assert.equal(persisted.rows.length,1);
+const updated=await db.query(`with updated_event as (update events set title='new' where id='event-1' returning *) select e.* from events e join updated_event ue on ue.id=e.id`);
+assert.equal(updated.rows[0].title,'old');
+assert.equal((await db.query('select title from events')).rows[0].title,'new');
+await db.exec(`create table receipts(actor text,action text,target text,key text,primary key(actor,action,key)); create table reactions(actor text,target text,state text,last_key text,primary key(actor,target));`);
+const toggle=async key=>(await db.query(`with receipt as (insert into receipts values ('u','like','c',$1) on conflict(actor,action,key) do update set key=receipts.key returning actor,target), mutation as (insert into reactions select actor,target,'active',$1 from receipt on conflict(actor,target) do update set state=case when reactions.last_key=$1 then reactions.state when reactions.state='active' then 'inactive' else 'active' end,last_key=$1 returning state) select state from mutation`,[key])).rows[0].state;
+const toggleStates=[await toggle('A'),await toggle('B'),await toggle('A')];
+assert.deepEqual(toggleStates,['active','inactive','active']);
+await db.exec(`create table content_items(id text,media_type text);`);
+let missingColumn=null;
+try{await db.query('select ci.media_kind from content_items ci');}catch(e){missingColumn=e.code;}
+assert.equal(missingColumn,'42703');
+let cursorCast=null;
+try{await db.query('select $1::uuid',['2026-08-20T01:00:00.000Z']);}catch(e){cursorCast=e.code;}
+assert.equal(cursorCast,'22P02');
+await db.exec('create table page_items(id integer); insert into page_items select generate_series(1,25)');
+const page1=(await db.query('select id from page_items order by id limit 13')).rows;
+const nextCursor=page1[12].id;
+const page2=(await db.query('select id from page_items where id>$1 order by id limit 13',[nextCursor])).rows;
+assert.equal(page2[0].id,14);
+const result={engine:'PGlite actual PostgreSQL WASM; reduced schemas matching repository query shapes, not full deployed schema',eventCreate:{responseRows:created.rows.length,persistedRows:persisted.rows.length},eventUpdate:{responseTitle:updated.rows[0].title,persistedTitle:'new'},reactionReplay:{commands:['A','B','A'],states:toggleStates},mutualsColumnError:missingColumn,discoverTimestampAsUuidError:cursorCast,pagination:{firstReturned:Array.from({length:12},(_,i)=>i+1),nextCursor,secondFirst:page2[0].id,omittedId:13}};
+console.log(JSON.stringify(result,null,2));
+await db.close();

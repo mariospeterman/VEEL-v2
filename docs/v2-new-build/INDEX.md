@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: canonical architecture, current implementation truth, and production completion plan
-Last updated: 2026-08-25
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
 - canonical v2 docs navigation and source-of-truth matrix
 
 Defers to:
-- OpenAPI, schema blueprint, ADRs, provider docs where narrower
+- OpenAPI, immutable database migrations, ADRs, and official provider docs where narrower
 
 Does not own:
 - implementation details, provider payload shapes, migrations
@@ -40,19 +40,20 @@ pull-request truth comes from GitHub's single `wevid-active-slice` label.
 - Not a copy checklist.
 - Not an instruction to bulk-copy historical code.
 - Not an in-place upgrade plan.
-- Not a second source of truth beside OpenAPI, schema, ADRs, and this docs pack.
+- Not a second source of truth beside OpenAPI, the immutable migration chain, ADRs, and this docs pack.
 
 ## Source-Of-Truth Matrix
 
 | Decision area | Source of truth | Implementation dependency |
 | --- | --- | --- |
-| Product/platform behavior | `full-platform-blueprint.md`, `product-flows.md`, product docs | Tests and route screens must match these docs. |
+| Current system architecture | `app-architecture.md`, ADRs, and narrow implemented-domain docs | Runtime/module inventories and tests must match this map. `full-platform-blueprint.md` and `diagrams.md` are orientation aids, not competing authorities. |
+| Product/platform behavior | `product-flows.md` and narrow product docs | Tests and route screens must match the applicable narrow domain document. |
 | API shape | `packages/contracts/openapi.yaml` | Generated client and Fastify schemas must match exactly. |
-| Frontend routes/screens/gestures | `route-map.md`, `native-ui-ux-screens.md`, frontend docs, `apps/web/public/mockup/design.md`, `apps/web/public/mockup/*.png` | Next routes encode route state only. Mockups define visual direction; contracts and backend state still own behavior. |
-| Database shape | `packages/database/schema-blueprint.sql` until migrations exist | Migrations must be derived slice-by-slice from the blueprint. |
+| Frontend routes/components/providers/state | `frontend-architecture.md` and `route-map.md`; narrow landing/design/copy/motion/release docs only for their named domains | Source paths and tests establish implementation. `apps/web/public/mockup/*` is visual/historical reference only and cannot define routes, workflows, provider rules, or business truth. |
+| Database shape | Ordered immutable files in `packages/database/migrations/` | Migration checks and real-Postgres repository/API tests prove the resulting schema. `schema-blueprint.sql` is retained historical planning material only. |
 | Money/access/referral/tax truth | `liability-compliance-audit.md`, `payments-and-monetisation.md`, `business-monetisation.md`, `noncustodial-money-compliance.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI | Backend owns final state; frontend is UX/cache only. |
-| Payment/access/reporting/bookkeeping truth | `business-monetisation.md`, `liability-compliance-audit.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI, schema | Blockchain = payment truth; entitlements = access truth; compliance ledger = reporting truth; accounting integration = bookkeeping truth. No duplicate authority. |
-| Native creator commerce | `business-monetisation.md`, `payments-and-monetisation.md`, `providers/provider-map.md`, ADR 0002 | WeVid owns Product Offers and lightweight Orders/Fulfillment. Selected Solana Commerce Kit primitives provide payment presentation/interoperability only; no full commerce engine is canonical. |
+| Payment/access/reporting/bookkeeping truth | `business-monetisation.md`, `liability-compliance-audit.md`, `compliance/dac7-dac8-vat-system.md`, OpenAPI, immutable migrations | Blockchain = payment truth; entitlements = access truth; compliance ledger = reporting truth; accounting integration = bookkeeping truth. No duplicate authority. |
+| Native creator commerce | `business-monetisation.md`, `payments-and-monetisation.md`, `providers/provider-map.md`, ADR 0002 | WeVid owns Product Offers and lightweight Orders/Fulfillment. The isolated exact-pinned `@solana/pay` codec provides transaction-request/QR interoperability only; Commerce Kit is retired and no full commerce engine is canonical. |
 | Provider boundaries | `providers/provider-map.md`, provider-specific docs, ADRs | Use official provider docs/SDKs first; adapters hide secrets. |
 | Universal identity and onboarding | `embedded-wallet-onboarding.md`, `auth-supabase-realtime.md`, `providers/identity-provider-wiring.md` | One WeVid user/profile; three visible steps; Privy or external wallet converge on one backend session; Supabase recovery is optional. |
 | Security/compliance | compliance docs, `safety-admin-ai.md`, ADRs | Age, moderation, audit, and privacy rules block launch if incomplete. |
@@ -65,17 +66,18 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 
 1. [Current implementation status](current-implementation-status.md)
 2. [Build plan](build-plan.md)
-3. [Full platform blueprint](full-platform-blueprint.md)
-4. [App architecture](app-architecture.md)
+3. [App architecture](app-architecture.md)
+4. [Full platform orientation blueprint](full-platform-blueprint.md)
 5. [Stack decision](stack-decision.md)
 6. [ADR: Fastify and Supabase decision](adr/0001-fastify-supabase-decision.md)
 7. [ADR: 2026 provider decisions](adr/0002-provider-decisions-2026.md)
 8. [ADR: provider-native media safety and consent](adr/0003-provider-native-media-safety.md)
 9. [ADR: independent eligibility authorities](adr/0004-independent-eligibility-authorities.md)
 8. [Route map](route-map.md)
-9. [Initial contracts and schema](contracts-and-schema.md)
+9. [Contracts and database authority guide](contracts-and-schema.md)
 10. [Infrastructure and research decisions](infra-decisions.md)
 11. [Render-safe diagrams](diagrams.md)
+12. [Add keys and test the core app](add-keys-and-test-core-app.md)
 
 ## Product And UX
 
@@ -141,12 +143,12 @@ The older Veel repository is reference-only. It can inform lessons and test idea
 
 ## How To Use In A New Repo
 
-1. Open this repository as the new build scaffold.
-2. Keep `docs/v2-new-build/` as the canonical architecture pack until implementation moves docs into final folders.
+1. Open this repository as the current implementation workspace.
+2. Use this index to route to the narrow authority; do not treat every accepted document as an equal source of truth.
 3. Keep `AGENTS.md`, `CLAUDE.md`, and `.cursor/rules/veel-v2.mdc` aligned with this index.
 4. Create clean workspace tooling, `.gitignore`, `.cursorignore`, `.env.example`, and CI files from these docs.
 5. Install GStack only after this folder and repo rules are present.
-6. Start with [Build plan](build-plan.md), then implement the first 10 tickets listed there.
+6. Start with [Current implementation status](current-implementation-status.md) and [Build plan](build-plan.md), then follow the next approved slice.
 
 ## Build From These Docs
 

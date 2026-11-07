@@ -1,5 +1,7 @@
 import type { FastifyRateLimitStoreCtor } from "@fastify/rate-limit";
 import type { FastifyInstance } from "fastify";
+import type { WebPushDnsResolver } from "@veel/config";
+import { createBunnyContentExportProvider, type ContentExportProvider } from "./content-export-provider.js";
 import { createPostgresAnalyticsRepository } from "./modules/analytics/analytics-repository.js";
 import type { AnalyticsRepository } from "./modules/analytics/types.js";
 import { createPostgresAdminRepository } from "./modules/admin/admin-repository.js";
@@ -14,6 +16,8 @@ import type { AiRepository } from "./modules/ai/types.js";
 import { createPostgresContentRepository } from "./modules/content/content-repository.js";
 import { createBunnyStreamUploadAdapter } from "./modules/content/media-upload-adapter.js";
 import type { ContentRepository, MediaUploadProviderAdapter } from "./modules/content/types.js";
+import { createPostgresContentExportRepository } from "./modules/content-export/content-export-repository.js";
+import type { ContentExportRepository } from "./modules/content-export/types.js";
 import { createPostgresDiscoverRepository } from "./modules/discover/discover-repository.js";
 import type { DiscoverRepository } from "./modules/discover/types.js";
 import { createPostgresEngagementRepository } from "./modules/engagement/engagement-repository.js";
@@ -98,6 +102,8 @@ export interface BuildApiOptions {
   ageProviderWaterfall?: AgeProviderWaterfall;
   analyticsRepository?: AnalyticsRepository;
   contentRepository?: ContentRepository;
+  contentExportRepository?: ContentExportRepository;
+  contentExportProvider?: ContentExportProvider;
   mutualsRepository?: MutualsRepository;
   discoverRepository?: DiscoverRepository;
   eventRepository?: EventRepository;
@@ -117,6 +123,7 @@ export interface BuildApiOptions {
   referralRepository?: ReferralRepository;
   refundRepository?: RefundRepository;
   notificationRepository?: NotificationRepository;
+  webPushDnsResolver?: WebPushDnsResolver;
   organizationRepository?: OrganizationRepository;
   subscriptionRepository?: SubscriptionRepository;
   subscriptionAuthorizationVerifier?: SubscriptionAuthorizationVerifier;
@@ -143,6 +150,8 @@ export interface ApiDependencies {
   analyticsRepository: AnalyticsRepository;
   profileRepository: ProfileRepository;
   contentRepository: ContentRepository;
+  contentExportRepository: ContentExportRepository;
+  contentExportProvider: ContentExportProvider;
   mutualsRepository: MutualsRepository;
   discoverRepository: DiscoverRepository;
   eventRepository: EventRepository;
@@ -161,6 +170,7 @@ export interface ApiDependencies {
   referralRepository: ReferralRepository;
   refundRepository: RefundRepository;
   notificationRepository: NotificationRepository;
+  webPushDnsResolver: WebPushDnsResolver | undefined;
   organizationRepository: OrganizationRepository;
   subscriptionRepository: SubscriptionRepository;
   subscriptionAuthorizationVerifier: SubscriptionAuthorizationVerifier;
@@ -204,6 +214,25 @@ export function createApiDependencies(
       options.profileRepository ?? createPostgresProfileRepository(postgresClient),
     contentRepository:
       options.contentRepository ?? createPostgresContentRepository(postgresClient),
+    contentExportRepository:
+      options.contentExportRepository ?? createPostgresContentExportRepository(postgresClient),
+    contentExportProvider:
+      options.contentExportProvider ?? createBunnyContentExportProvider({
+        enabled: app.config.CONTENT_EXPORTS_ENABLED,
+        storageApiEndpoint: app.config.BUNNY_STORAGE_API_ENDPOINT,
+        ...(app.config.BUNNY_STORAGE_ACCESS_KEY
+          ? { storageAccessKey: app.config.BUNNY_STORAGE_ACCESS_KEY }
+          : {}),
+        ...(app.config.BUNNY_STORAGE_ZONE_NAME
+          ? { storageZoneName: app.config.BUNNY_STORAGE_ZONE_NAME }
+          : {}),
+        ...(app.config.BUNNY_STREAM_ORIGINAL_PULL_ZONE_URL
+          ? { streamOriginalPullZoneUrl: app.config.BUNNY_STREAM_ORIGINAL_PULL_ZONE_URL }
+          : {}),
+        ...(app.config.BUNNY_STREAM_CDN_TOKEN_KEY
+          ? { streamCdnTokenKey: app.config.BUNNY_STREAM_CDN_TOKEN_KEY }
+          : {})
+      }),
     mutualsRepository:
       options.mutualsRepository ?? createPostgresMutualsRepository(postgresClient),
     discoverRepository:
@@ -244,6 +273,7 @@ export function createApiDependencies(
       createPostgresNotificationRepository(postgresClient, {
         encryptionKey: app.config.NOTIFICATION_DEVICE_ENCRYPTION_KEY
       }),
+    webPushDnsResolver: options.webPushDnsResolver,
     organizationRepository:
       options.organizationRepository ?? createPostgresOrganizationRepository(postgresClient),
     subscriptionRepository:

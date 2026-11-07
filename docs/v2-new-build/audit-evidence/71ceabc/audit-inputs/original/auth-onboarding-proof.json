@@ -1,0 +1,30 @@
+{
+  "method": "Actual createPostgresAgeRepository canonical SELECT and registerSessionRoutes handler; minimal PGlite seeded with exact generic-webhook omitted-field shape, valid auth/profile/wallet dependencies; not a full provider-webhook integration",
+  "database": {
+    "state": "provisional",
+    "result_over_threshold": null,
+    "threshold_age": null
+  },
+  "ageStatus": {
+    "state": "verified",
+    "provider": "didit"
+  },
+  "session": {
+    "status": 200,
+    "body": {
+      "authenticated": true,
+      "appAccessState": {
+        "allowed": true,
+        "reason": "ready"
+      },
+      "user": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "handle": "creator",
+        "displayName": "Creator",
+        "avatarUrl": null,
+        "badges": []
+      }
+    }
+  },
+  "creatorAgeReady": false
+}

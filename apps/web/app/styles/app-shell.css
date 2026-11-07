@@ -61,6 +61,7 @@
 
   .rail-link,
   .bottom-link,
+  .mobile-quick-action,
   .top-action,
   .theme-toggle {
     min-height: 44px;
@@ -90,6 +91,7 @@
   }
 
   .rail-link:hover,
+  .mobile-quick-action:hover,
   .top-action:hover,
   .bottom-link:hover,
   .theme-toggle:hover {
@@ -100,6 +102,7 @@
 
   .rail-link[data-active="true"],
   .bottom-link[data-active="true"],
+  .mobile-quick-action[data-active="true"],
   .top-action[data-active="true"] {
     border-color: color-mix(in srgb, var(--accent) 48%, transparent);
     background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--accent-3) 8%, transparent));
@@ -148,6 +151,17 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  .mobile-quick-actions {
+    display: none;
+  }
+
+  .mobile-quick-action {
+    width: 40px;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
   }
 
   .top-action,

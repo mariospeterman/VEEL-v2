@@ -15,7 +15,8 @@ Read these first:
 4. [Build plan](docs/v2-new-build/build-plan.md)
 5. [App architecture](docs/v2-new-build/app-architecture.md)
 6. [Stack decision](docs/v2-new-build/stack-decision.md)
-7. [AI tooling rules](docs/ai-tooling/agent-operating-rules.md)
+7. [Add keys and test the core app](docs/v2-new-build/add-keys-and-test-core-app.md)
+8. [AI tooling rules](docs/ai-tooling/agent-operating-rules.md)
 
 ## Intended Stack
 
@@ -28,7 +29,7 @@ Read these first:
 - Media: Bunny Stream for VOD, Livepeer for live/replay
 - Safety: third-party age assurance, KYC/KYB only where needed
 - Package manager: pnpm 10.0.0 through Corepack
-- Runtime: Node.js 22.16.0 for local development and CI
+- Runtime: Node.js 24.22.2 LTS for local development and CI
 
 ## Repo Shape
 
@@ -73,7 +74,7 @@ Use the first 10 tickets in [build-plan.md](docs/v2-new-build/build-plan.md#firs
 
 Use the committed version files as the source of truth:
 
-- Node.js: `22.16.0`
+- Node.js: `24.22.2`
 - pnpm: `10.0.0`
 
 With `nvm`:
@@ -86,7 +87,7 @@ corepack prepare pnpm@10.0.0 --activate
 pnpm install --frozen-lockfile
 ```
 
-Without `nvm`, install Node.js `22.16.0`, then run the same Corepack and install commands.
+Without `nvm`, install Node.js `24.22.2`, then run the same Corepack and install commands.
 
 The root bootstrap script performs the Corepack activation and frozen install:
 

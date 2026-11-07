@@ -7,7 +7,6 @@ import {
   dailyQuotaWindowStart,
   resolveContentCreationAbusePolicy
 } from "../content/content-route-shared.js";
-import { ContentDraftPollCloseError } from "../content/content-errors.js";
 import type {
   AiOriginClassification,
   ContentRepository,
@@ -124,19 +123,8 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     version: "1.0.0",
     description: "Prepare an idempotent SFW private creator draft for review in WeVid. This cannot publish.",
     inputSchema: objectSchema({
-      mediaType: { type: "string", enum: ["bit", "clip", "image", "vod", "live_replay", "text", "poll"] },
-      caption: { type: "string", maxLength: 2_000 },
-      bodyText: { type: "string", minLength: 1, maxLength: 10_000 },
-      poll: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          question: { type: "string", minLength: 1, maxLength: 500 },
-          options: { type: "array", minItems: 2, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 200 } },
-          closesAt: { type: ["string", "null"], format: "date-time" }
-        },
-        required: ["question", "options"]
-      }
+      mediaType: { type: "string", enum: ["bit", "clip", "image", "vod", "live_replay", "carousel"] },
+      caption: { type: "string", maxLength: 2_000 }
     }, ["mediaType"]),
     outputSchema: objectSchema({ draft: { type: "object" }, nextAction: { type: "string", const: "review_in_wevid" } }, ["draft", "nextAction"]),
     requiredScopes: ["creator.drafts.write"],
@@ -342,36 +330,26 @@ export async function runMcpTool(input: {
       const body = privateDraftInput(input.params);
       const abusePolicy = await resolveContentCreationAbusePolicy(input.contentRepository);
       const requestHash = hashIdempotencyPayload(body);
-      let content;
-      try {
-        content = await input.contentRepository.createDraft({
-          supabaseUserId: input.connection.supabaseUserId,
-          idempotencyKey: `mcp-private-draft:${input.connection.id}:${requestHash}`,
-          requestHash,
-          mediaType: body.mediaType,
-          caption: body.caption,
-          bodyText: body.bodyText,
-          poll: body.poll,
-          visibility: "private",
-          nsfwLabel: "none",
-          representationMode: "not_declared",
-          contentSafetyPolicyAccepted: false,
-          quotaWindowStart: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours),
-          dailyDraftQuota: abusePolicy.dailyContentDraftQuota,
-          origin: {
-            kind: "mcp",
-            connectionId: input.connection.id,
-            toolName: "creator_create_private_draft",
-            toolVersion: input.tool.version,
-            requestHash
-          }
-        });
-      } catch (error) {
-        if (error instanceof ContentDraftPollCloseError) {
-          throw new McpToolValidationError("Poll closesAt must be a future ISO date-time or null");
+      const content = await input.contentRepository.createDraft({
+        supabaseUserId: input.connection.supabaseUserId,
+        idempotencyKey: `mcp-private-draft:${input.connection.id}:${requestHash}`,
+        requestHash,
+        mediaType: body.mediaType,
+        caption: body.caption,
+        visibility: "private",
+        nsfwLabel: "none",
+        representationMode: "not_declared",
+        contentSafetyPolicyAccepted: false,
+        quotaWindowStart: dailyQuotaWindowStart(new Date(), abusePolicy.rollingWindowHours),
+        dailyDraftQuota: abusePolicy.dailyContentDraftQuota,
+        origin: {
+          kind: "mcp",
+          connectionId: input.connection.id,
+          toolName: "creator_create_private_draft",
+          toolVersion: input.tool.version,
+          requestHash
         }
-        throw error;
-      }
+      });
       return {
         draft: { contentId: content.id, mediaType: content.mediaType, caption: content.caption ?? null, visibility: "private" },
         nextAction: "review_in_wevid"
@@ -486,14 +464,12 @@ function readAnnotations(title: string): McpToolDefinition["annotations"] {
 }
 
 function privateDraftInput(value: unknown): {
-  mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "text" | "poll";
+  mediaType: "bit" | "clip" | "image" | "vod" | "live_replay" | "carousel";
   caption: string | null;
-  bodyText?: string;
-  poll?: { question: string; options: string[]; closesAt?: string | null };
 } {
   const body = objectValue(value);
-  assertAllowedKeys(body, ["mediaType", "caption", "bodyText", "poll"]);
-  const mediaType = stringEnum(body.mediaType, ["bit", "clip", "image", "vod", "live_replay", "text", "poll"]);
+  assertAllowedKeys(body, ["mediaType", "caption"]);
+  const mediaType = stringEnum(body.mediaType, ["bit", "clip", "image", "vod", "live_replay", "carousel"]);
   if (body.caption !== undefined && (typeof body.caption !== "string" || body.caption.length > 2_000)) {
     throw new McpToolValidationError("Draft caption must contain at most 2000 characters");
   }
@@ -501,20 +477,6 @@ function privateDraftInput(value: unknown): {
   const caption = trimmedCaption.length > 0 ? trimmedCaption : null;
 
   if (!mediaType) throw new McpToolValidationError("A supported mediaType is required");
-  if (mediaType === "text") {
-    if (body.poll !== undefined) throw new McpToolValidationError("Text drafts cannot include poll input");
-    if (typeof body.bodyText !== "string" || body.bodyText.trim().length < 1 || body.bodyText.length > 10_000) {
-      throw new McpToolValidationError("Text drafts require bodyText between one and 10000 characters");
-    }
-    return { mediaType, caption, bodyText: body.bodyText.trim() };
-  }
-  if (mediaType === "poll") {
-    if (body.bodyText !== undefined) throw new McpToolValidationError("Poll drafts cannot include bodyText");
-    return { mediaType, caption, poll: parsePoll(body.poll) };
-  }
-  if (body.bodyText !== undefined || body.poll !== undefined) {
-    throw new McpToolValidationError("Media drafts cannot include text or poll composition input");
-  }
   return { mediaType, caption };
 }
 
@@ -644,38 +606,6 @@ function safeDecodeReference(value: string): string {
     }
   }
   return decoded;
-}
-
-function parsePoll(value: unknown): { question: string; options: string[]; closesAt?: string | null } {
-  const poll = objectValue(value);
-  assertAllowedKeys(poll, ["question", "options", "closesAt"]);
-  if (typeof poll.question !== "string" || poll.question.trim().length < 1 || poll.question.length > 500) {
-    throw new McpToolValidationError("Poll drafts require a question between one and 500 characters");
-  }
-  if (!Array.isArray(poll.options) || poll.options.length < 2 || poll.options.length > 4) {
-    throw new McpToolValidationError("Poll drafts require between two and four options");
-  }
-  const options = poll.options.map((option) => {
-    if (typeof option !== "string" || option.trim().length < 1 || option.length > 200) {
-      throw new McpToolValidationError("Poll options must contain between one and 200 characters");
-    }
-    return option.trim();
-  });
-  if (new Set(options.map((option) => option.toLowerCase())).size !== options.length) {
-    throw new McpToolValidationError("Poll options must be unique");
-  }
-  if (
-    poll.closesAt !== undefined &&
-    poll.closesAt !== null &&
-    !isIsoDateTime(poll.closesAt)
-  ) {
-    throw new McpToolValidationError("Poll closesAt must be a future ISO date-time or null");
-  }
-  return {
-    question: poll.question.trim(),
-    options,
-    ...(poll.closesAt !== undefined ? { closesAt: poll.closesAt as string | null } : {})
-  };
 }
 
 function creatorAnalyticsInput(value: unknown): AnalyticsQueryRequest {

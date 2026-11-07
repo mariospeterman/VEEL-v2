@@ -1,0 +1,956 @@
+{
+  "runtime": "PGlite PostgreSQL WASM0.5.15, pgcrypto extension; auth.uid/auth.jwt stubbed from JWT setting; empty Supabase realtime publication; no hosted Supabase services",
+  "applied": [
+    "0001_foundation.sql",
+    "0002_age_verifications.sql",
+    "0003_wallets.sql",
+    "0004_wallet_link_challenges.sql",
+    "0005_age_provider_waterfall.sql",
+    "0006_content_feed_foundation.sql",
+    "0007_media_upload_boundary.sql",
+    "0008_content_access_projection.sql",
+    "0009_payment_intents.sql",
+    "0010_content_unlock_entitlements.sql",
+    "0011_tip_support_settlement_ledger.sql",
+    "0012_referral_attribution_commissions.sql",
+    "0013_bunny_vod_playback_projection.sql",
+    "0014_livepeer_live_rooms_pass_chat_replay.sql",
+    "0015_messages_paid_messages.sql",
+    "0016_activity_wallet_transactions.sql",
+    "0017_rls_policy_baseline.sql",
+    "0018_foreign_key_performance_indexes.sql",
+    "0019_creator_monetisation_settings.sql",
+    "0020_admin_ops_indexes.sql",
+    "0021_events_ticketing.sql",
+    "0022_event_ticketing_fk_indexes.sql",
+    "0023_dating_mode.sql",
+    "0024_dating_fk_indexes.sql",
+    "0025_ai_mcp_scoped_assistant.sql",
+    "0026_ai_mcp_fk_indexes.sql",
+    "0027_engagement_feed_safety.sql",
+    "0028_subscription_foundation.sql",
+    "0029_subscription_fk_indexes.sql",
+    "0030_compliance_tax_foundation.sql",
+    "0031_compliance_tax_fk_indexes.sql",
+    "0032_discover_hashtags.sql",
+    "0033_wallet_onramp_sessions.sql",
+    "0034_notifications_foundation.sql",
+    "0035_organization_memberships.sql",
+    "0036_organization_memberships_advisor_fixes.sql",
+    "0037_notification_delivery_queue.sql",
+    "0038_notification_delivery_advisor_fixes.sql",
+    "0039_realtime_projection_publication.sql",
+    "0040_organization_member_admin_workflow.sql",
+    "0041_support_case_policy_surface.sql",
+    "0042_support_case_advisor_fixes.sql",
+    "0043_refund_dispute_request_workflow.sql",
+    "0044_admin_data_request_feature_flag_surfaces.sql",
+    "0045_seed_feature_flag_policy_defaults.sql",
+    "0046_admin_moderation_report_states.sql",
+    "0047_provider_event_replay_requests.sql",
+    "0048_provider_event_replay_request_advisor_fixes.sql",
+    "0049_event_access_mutuals_canonical_names.sql",
+    "0050_event_access_payment_product_type.sql",
+    "0051_live_room_provider_reservation.sql",
+    "0052_content_preview_controls.sql",
+    "0053_content_publish_state.sql",
+    "0054_event_content_link.sql",
+    "0055_content_creation_abuse_policy_seed.sql",
+    "0056_event_access_purchase_request_state.sql",
+    "0057_refund_request_idempotency.sql",
+    "0058_payment_withdrawal_waiver_evidence.sql",
+    "0059_payment_durable_confirmations.sql",
+    "0060_payment_confirmation_email_delivery.sql",
+    "0061_provider_event_replay_payload.sql",
+    "0062_refund_remediation_evidence.sql",
+    "0063_creator_split_payment_settlement.sql",
+    "0064_solana_subscription_verifier_hardening.sql",
+    "0065_external_mcp_connector_foundation.sql",
+    "0066_mcp_oauth_completion.sql",
+    "0067_wallet_first_auth.sql",
+    "0068_profile_media_links.sql",
+    "0069_normalized_verification_domain.sql",
+    "0070_profile_avatar_storage_bucket.sql",
+    "0071_profile_avatar_storage_limit.sql",
+    "0072_platform_tier_authority.sql",
+    "0073_live_access_modes.sql",
+    "0074_supabase_advisor_fk_indexes.sql",
+    "0075_platform_tier_policy_plan_index.sql",
+    "0076_revoke_exposed_wallet_sessions.sql",
+    "0077_universal_account_media_safety.sql",
+    "0078_legacy_age_archive_deny_policy.sql",
+    "0079_worker_lease_reliability.sql",
+    "0080_worker_queue_recovery_private.sql",
+    "0081_worker_queue_recovery_actor_index.sql",
+    "0082_payment_checkout_and_usdc.sql",
+    "0083_platform_usage_accounting.sql",
+    "0084_message_idempotency.sql",
+    "0085_audit_event_idempotency.sql",
+    "0086_adult_publisher_identity.sql",
+    "0087_recipient_monetisation_policy.sql",
+    "0088_media_safety_and_consent.sql",
+    "0089_media_safety_fk_indexes.sql",
+    "0090_monetisation_performer_enterprise_authorities.sql",
+    "0091_canonical_identity_session_security.sql",
+    "0092_sfw_publication_review_projection.sql",
+    "0093_media_appeal_idempotency_hash.sql",
+    "0094_social_graph_feed_projections.sql",
+    "0095_realtime_messages_notifications.sql",
+    "0096_one_time_monetisation_checkout.sql",
+    "0097_sfw_live_controls_and_chat.sql",
+    "0098_recurring_membership_authority.sql",
+    "0099_enterprise_managed_creator_authority.sql",
+    "0100_content_draft_idempotency_lifetime.sql",
+    "0101_payment_ledger_atomic_safety.sql",
+    "0102_checkout_consent_idempotency_lifetime.sql",
+    "0103_payment_commercial_policy.sql",
+    "0104_provider_event_delivery_order.sql",
+    "0105_live_room_provider_observation.sql",
+    "0106_media_release_evidence.sql",
+    "0107_canonical_access_identity.sql",
+    "0108_policy_content_eligibility_convergence.sql",
+    "0109_universal_composer_authority.sql",
+    "0110_analytics_core.sql",
+    "0111_auth_lifecycle_purpose.sql",
+    "0112_realtime_messaging_live_safety.sql",
+    "0113_consumer_social_privacy.sql",
+    "0114_mcp_profile_bridge.sql",
+    "0115_mcp_media_provenance_bridge.sql",
+    "0116_staff_permission_registry_and_staging_fixtures.sql",
+    "0117_moments_and_scheduled_publication.sql",
+    "0118_landing_convergence_analytics.sql"
+  ],
+  "errors": [],
+  "catalog": [
+    {
+      "tablename": "age_verifications",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "ai_sessions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "ai_tool_calls",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_creator_content_daily",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_creator_daily",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_creator_product_daily",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_offer_impression_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_onboarding_daily",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_onboarding_journey_events",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_organization_creator_daily",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_platform_commerce_daily",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_platform_operations_daily",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_privacy_suppression_daily",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_profile_open_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_projection_jobs",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_projection_watermarks",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_reconciliation_runs",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_retention_daily",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "analytics_viewer_daily",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "app_sessions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "audit_events",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "blocks",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "buyer_location_evidence",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "carf_report_lines",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "carf_reports",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "comment_mentions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "comment_reactions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "comments",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "compliance_exports",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "compliance_ledger_entries",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "compliance_review_queue",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_access_rules",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_engagement_counters",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_hashtags",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_items",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_poll_options",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_poll_votes",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_polls",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_publication_jobs",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_reactions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_safety_declarations",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "content_saves",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "conversation_members",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "conversations",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "creator_media_offers",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "creator_monetisation_settings",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "creator_onboarding_action_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "dac7_report_lines",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "dac7_reports",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "data_requests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "direct_message_requests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "engagement_action_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "enterprise_action_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "entitlement_events",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "entitlements",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "event_access_pass_types",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "event_access_passes",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "event_access_purchase_requests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "event_access_requests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "events",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "feature_flags",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "feed_impression_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "follow_action_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "hashtags",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "idempotency_keys",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "identity_verifications",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "jurisdiction_tax_rules",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "live_chat_messages",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "live_pass_purchase_requests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "live_passes",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "live_replay_assets",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "live_room_control_actions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "live_rooms",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "live_safety_monitoring_events",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "live_safety_provider_actions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "live_safety_sessions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "managed_creator_agreements",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "managed_creator_allocation_records",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "managed_creator_relationships",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "mcp_connections",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "mcp_media_upload_capabilities",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "mcp_private_draft_origins",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "mcp_tool_calls",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "media_assets",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "media_moderation_appeals",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "media_moderation_jobs",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "media_safety_cases",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "message_action_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "message_attachments",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "message_reactions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "messages",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "mutual_interests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "mutual_profiles",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "mutuals",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "notification_action_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "notification_delivery_attempts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "notification_devices",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "notification_preferences",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "notifications",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "oauth_access_tokens",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "oauth_authorization_codes",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "oauth_authorization_requests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "oauth_clients",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "organization_memberships",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "organization_settlement_wallets",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "organization_support_policies",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "organizations",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "paid_message_delivery_requests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "partner_campaigns",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "partner_contracts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "payment_commercial_policy_overrides",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "payment_confirmation_deliveries",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "payment_intents",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "payment_ledger_entries",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "payment_settlement_attempts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "performer_consent_requests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "performer_consents",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "performer_subjects",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "platform_fee_statements",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "platform_playback_heartbeats",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "platform_playback_sessions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "platform_tier_policies",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "platform_usage_windows",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "product_tax_matrix",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "profiles",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "provider_event_replay_requests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "provider_events",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "provider_media_scan_events",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "provider_webhook_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "realtime_connection_events",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "realtime_topic_versions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "receipt_lines",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "recipient_monetisation_overrides",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "recipient_monetisation_policies",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "recipient_monetisation_risk_assessments",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "recovery_link_intents",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "referral_abuse_flags",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "referral_attributions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "referral_commissions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "referral_programs",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "referral_tokens",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "refund_remediation_evidence",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "refunds_and_disputes",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "regulatory_report_workflows",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "reports",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "seller_of_record_determinations",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "share_records",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "staff_invitations",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "staff_membership_action_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "staff_memberships",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "staff_permissions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "staging_fixture_resources",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "structured_creator_requests",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "subscription_action_receipts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "subscription_authorization_intents",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "subscription_collections",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "subscription_events",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "subscription_plans",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "subscriptions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "support_cases",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "tax_adjustments",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "tax_profile_versions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "tax_profiles",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "tier_waivers",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "user_follows",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "user_mutes",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "user_provider_identities",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "user_social_counts",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "users",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "vat_determinations",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "vat_invoice_lines",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "vat_invoices",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "verification_events",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "verification_records",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "verification_sessions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "viewer_content_impressions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "viewer_feed_preferences",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "viewer_hidden_creators",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "viewer_hidden_topics",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "wallet_auth_challenges",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "wallet_link_challenges",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "wallet_onramp_sessions",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "wallet_transaction_records",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "wallets",
+      "rowsecurity": true
+    },
+    {
+      "tablename": "worker_queue_recovery_requests",
+      "rowsecurity": true
+    }
+  ],
+  "rolledBack": [
+    "0118_landing_convergence_analytics.down.sql",
+    "0117_moments_and_scheduled_publication.down.sql",
+    "0116_staff_permission_registry_and_staging_fixtures.down.sql",
+    "0115_mcp_media_provenance_bridge.down.sql",
+    "0114_mcp_profile_bridge.down.sql",
+    "0113_consumer_social_privacy.down.sql",
+    "0112_realtime_messaging_live_safety.down.sql",
+    "0111_auth_lifecycle_purpose.down.sql",
+    "0110_analytics_core.down.sql",
+    "0109_universal_composer_authority.down.sql",
+    "0108_policy_content_eligibility_convergence.down.sql",
+    "0107_canonical_access_identity.down.sql",
+    "0106_media_release_evidence.down.sql",
+    "0105_live_room_provider_observation.down.sql",
+    "0104_provider_event_delivery_order.down.sql",
+    "0103_payment_commercial_policy.down.sql",
+    "0102_checkout_consent_idempotency_lifetime.down.sql",
+    "0101_payment_ledger_atomic_safety.down.sql",
+    "0100_content_draft_idempotency_lifetime.down.sql",
+    "0099_enterprise_managed_creator_authority.down.sql",
+    "0098_recurring_membership_authority.down.sql",
+    "0097_sfw_live_controls_and_chat.down.sql",
+    "0096_one_time_monetisation_checkout.down.sql",
+    "0095_realtime_messages_notifications.down.sql",
+    "0094_social_graph_feed_projections.down.sql",
+    "0093_media_appeal_idempotency_hash.down.sql",
+    "0092_sfw_publication_review_projection.down.sql",
+    "0091_canonical_identity_session_security.down.sql",
+    "0090_monetisation_performer_enterprise_authorities.down.sql",
+    "0089_media_safety_fk_indexes.down.sql",
+    "0088_media_safety_and_consent.down.sql",
+    "0087_recipient_monetisation_policy.down.sql",
+    "0086_adult_publisher_identity.down.sql",
+    "0085_audit_event_idempotency.down.sql",
+    "0084_message_idempotency.down.sql",
+    "0083_platform_usage_accounting.down.sql",
+    "0082_payment_checkout_and_usdc.down.sql",
+    "0081_worker_queue_recovery_actor_index.down.sql",
+    "0080_worker_queue_recovery_private.down.sql",
+    "0079_worker_lease_reliability.down.sql",
+    "0078_legacy_age_archive_deny_policy.down.sql",
+    "0077_universal_account_media_safety.down.sql",
+    "0076_revoke_exposed_wallet_sessions.down.sql",
+    "0075_platform_tier_policy_plan_index.down.sql",
+    "0074_supabase_advisor_fk_indexes.down.sql",
+    "0073_live_access_modes.down.sql",
+    "0072_platform_tier_authority.down.sql",
+    "0071_profile_avatar_storage_limit.down.sql",
+    "0070_profile_avatar_storage_bucket.down.sql",
+    "0069_normalized_verification_domain.down.sql",
+    "0068_profile_media_links.down.sql",
+    "0067_wallet_first_auth.down.sql",
+    "0066_mcp_oauth_completion.down.sql",
+    "0065_external_mcp_connector_foundation.down.sql",
+    "0064_solana_subscription_verifier_hardening.down.sql",
+    "0063_creator_split_payment_settlement.down.sql",
+    "0062_refund_remediation_evidence.down.sql",
+    "0061_provider_event_replay_payload.down.sql",
+    "0060_payment_confirmation_email_delivery.down.sql",
+    "0059_payment_durable_confirmations.down.sql",
+    "0058_payment_withdrawal_waiver_evidence.down.sql",
+    "0057_refund_request_idempotency.down.sql",
+    "0056_event_access_purchase_request_state.down.sql",
+    "0055_content_creation_abuse_policy_seed.down.sql",
+    "0054_event_content_link.down.sql",
+    "0053_content_publish_state.down.sql",
+    "0052_content_preview_controls.down.sql",
+    "0051_live_room_provider_reservation.down.sql",
+    "0050_event_access_payment_product_type.down.sql",
+    "0049_event_access_mutuals_canonical_names.down.sql",
+    "0048_provider_event_replay_request_advisor_fixes.down.sql",
+    "0047_provider_event_replay_requests.down.sql",
+    "0046_admin_moderation_report_states.down.sql",
+    "0045_seed_feature_flag_policy_defaults.down.sql",
+    "0044_admin_data_request_feature_flag_surfaces.down.sql",
+    "0043_refund_dispute_request_workflow.down.sql",
+    "0042_support_case_advisor_fixes.down.sql",
+    "0041_support_case_policy_surface.down.sql",
+    "0040_organization_member_admin_workflow.down.sql"
+  ],
+  "rollbackError": {
+    "file": "0039_realtime_projection_publication.down.sql",
+    "code": "42601",
+    "message": "syntax error at or near \"exists\""
+  }
+}

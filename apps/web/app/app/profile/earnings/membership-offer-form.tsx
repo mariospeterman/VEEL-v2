@@ -7,13 +7,19 @@ import {
   disableCreatorMembershipOffer,
   upsertCreatorMembershipOffer
 } from "@/api-mutations";
+import { AssetAmountInputError } from "@/format-asset-amount";
+import {
+  formatSubscriptionPriceInput,
+  isValidSubscriptionPriceInput,
+  parseSubscriptionPriceInput
+} from "@/subscription-price-input";
 import { Card, StatusPill } from "../../../ui";
 
 export function MembershipOfferForm({ initialOffer }: { initialOffer: SubscriptionPlan | null }) {
   const [offer, setOffer] = useState(initialOffer);
   const [label, setLabel] = useState(initialOffer?.label ?? "Monthly membership");
   const [description, setDescription] = useState(initialOffer?.description ?? "");
-  const [price, setPrice] = useState(((initialOffer?.amountMinor ?? 1000) / 100).toFixed(2));
+  const [price, setPrice] = useState(formatSubscriptionPriceInput(initialOffer?.amountMinor ?? 1000));
   const [benefits, setBenefits] = useState((initialOffer?.benefits ?? []).join("\n"));
   const [pending, setPending] = useState<"save" | "disable" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -22,7 +28,7 @@ export function MembershipOfferForm({ initialOffer }: { initialOffer: Subscripti
     setPending("save");
     setMessage(null);
     try {
-      const amountMinor = Math.round(Number(price) * 100);
+      const amountMinor = parseSubscriptionPriceInput(price);
       const updated = await upsertCreatorMembershipOffer({
         label,
         amountMinor,
@@ -32,7 +38,13 @@ export function MembershipOfferForm({ initialOffer }: { initialOffer: Subscripti
       setOffer(updated);
       setMessage("Offer saved. New joins remain closed until recurring payments pass staging proof.");
     } catch (error) {
-      setMessage(error instanceof ApiMutationError ? error.message : "Membership offer could not be saved.");
+      setMessage(
+        error instanceof AssetAmountInputError
+          ? error.message
+          : error instanceof ApiMutationError
+            ? error.message
+            : "Membership offer could not be saved."
+      );
     } finally {
       setPending(null);
     }
@@ -71,7 +83,14 @@ export function MembershipOfferForm({ initialOffer }: { initialOffer: Subscripti
       </label>
       <label className="grid gap-1 text-sm">
         <span className="font-medium">Monthly price (USDC)</span>
-        <input className="min-h-11 rounded border border-(--line) bg-(--background) px-3" min="1" max="1000" onChange={(event) => setPrice(event.target.value)} step="0.01" type="number" value={price} />
+        <input
+          className="min-h-11 rounded border border-(--line) bg-(--background) px-3"
+          inputMode="decimal"
+          maxLength={7}
+          onChange={(event) => setPrice(event.target.value)}
+          pattern="[0-9]+([.][0-9]{1,2})?"
+          value={price}
+        />
       </label>
       <label className="grid gap-1 text-sm">
         <span className="font-medium">Description</span>
@@ -82,7 +101,7 @@ export function MembershipOfferForm({ initialOffer }: { initialOffer: Subscripti
         <textarea className="min-h-28 rounded border border-(--line) bg-(--background) p-3" onChange={(event) => setBenefits(event.target.value)} placeholder="One benefit per line" value={benefits} />
       </label>
       <div className="flex flex-wrap gap-2">
-        <button className="primary-button" disabled={pending !== null || label.trim().length < 2 || !Number.isFinite(Number(price))} onClick={() => void save()} type="button">
+        <button className="primary-button" disabled={pending !== null || label.trim().length < 2 || !isValidSubscriptionPriceInput(price)} onClick={() => void save()} type="button">
           {pending === "save" ? "Saving" : offer ? "Update membership" : "Create membership"}
         </button>
         {offer ? (

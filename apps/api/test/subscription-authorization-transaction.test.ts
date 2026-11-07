@@ -22,6 +22,8 @@ describe("createSubscriptionAuthorizationTransaction", () => {
     const context: SubscriptionAuthorizationVerificationContext = {
       authorizationIntentId: "00000000-0000-4000-8000-000000000071",
       setupReference: "00000000-0000-4000-8000-000000000072",
+      submittedSignature: null,
+      submittedAt: null,
       delegationProgramId: programId,
       collectorAddress: collector,
       subscriberWallet: subscriber,
@@ -31,11 +33,11 @@ describe("createSubscriptionAuthorizationTransaction", () => {
       tokenMint: mint,
       tokenProgram: "spl_token",
       amountMinor: 1000,
-      amountAtomic: 10_000_000,
+      amountAtomic: "10000000",
       periodDays: 30,
       periodSeconds: 2_592_000,
       delegationNonce: 0,
-      delegationExpiresAt: null,
+      delegationExpiresAt: new Date("2027-11-05T12:00:00.000Z"),
       provider: "official_solana_subscription_program",
       planId: "creator_test_monthly",
       planPda: null,
@@ -60,5 +62,59 @@ describe("createSubscriptionAuthorizationTransaction", () => {
       .toBe(`wevid:subscription-auth:${context.setupReference}`);
     expect(transaction.signatures).toHaveLength(1);
     expect(transaction.signatures[0]?.publicKey.toBase58()).toBe(subscriber);
+  });
+
+  it("keeps persisted delegation terms stable while refreshing only the recent blockhash", async () => {
+    vi.spyOn(Connection.prototype, "getAccountInfo").mockResolvedValue(null);
+    vi.spyOn(Connection.prototype, "getLatestBlockhash")
+      .mockResolvedValueOnce({
+        blockhash: "11111111111111111111111111111111",
+        lastValidBlockHeight: 100
+      })
+      .mockResolvedValueOnce({
+        blockhash: Keypair.generate().publicKey.toBase58(),
+        lastValidBlockHeight: 200
+      });
+    const context: SubscriptionAuthorizationVerificationContext = {
+      authorizationIntentId: "00000000-0000-4000-8000-000000000081",
+      setupReference: "00000000-0000-4000-8000-000000000082",
+      submittedSignature: null,
+      submittedAt: null,
+      delegationProgramId: programId,
+      collectorAddress: Keypair.generate().publicKey.toBase58(),
+      subscriberWallet: Keypair.generate().publicKey.toBase58(),
+      authorityAddress: null,
+      delegationAddress: null,
+      subscriberTokenAccount: null,
+      tokenMint: Keypair.generate().publicKey.toBase58(),
+      tokenProgram: "spl_token",
+      amountMinor: 1250,
+      amountAtomic: "12500000",
+      periodDays: 30,
+      periodSeconds: 2_592_000,
+      delegationNonce: 41,
+      delegationExpiresAt: new Date("2027-11-05T12:00:00.000Z"),
+      provider: "official_solana_subscription_program",
+      planId: "creator_stable_monthly",
+      planPda: null,
+      subscriptionPda: null,
+      merchantWallet: Keypair.generate().publicKey.toBase58(),
+      expiresAt: new Date("2026-11-05T12:15:00.000Z")
+    };
+
+    const first = await createSubscriptionAuthorizationTransaction({
+      context,
+      rpcUrl: "https://api.devnet.solana.com"
+    });
+    const second = await createSubscriptionAuthorizationTransaction({
+      context,
+      rpcUrl: "https://api.devnet.solana.com"
+    });
+
+    expect(second.authorityAddress).toBe(first.authorityAddress);
+    expect(second.delegationAddress).toBe(first.delegationAddress);
+    expect(second.subscriberTokenAccount).toBe(first.subscriberTokenAccount);
+    expect(second.delegationExpiresAt).toBe(first.delegationExpiresAt);
+    expect(second.transaction).not.toBe(first.transaction);
   });
 });

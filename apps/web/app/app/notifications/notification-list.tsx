@@ -3,32 +3,44 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { useState } from "react";
-import type { Notification } from "@/api-client";
-import { markNotificationRead } from "@/api-mutations";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { NotificationPage } from "@/api-client";
+import { getNotificationsForMutation, markNotificationRead } from "@/api-mutations";
 import { safeMutationMessage } from "@/api-errors";
+import { safeSameOriginPath } from "@/navigation/safe-same-origin-path";
 
-export function NotificationList({ initialItems }: { initialItems: Notification[] }) {
-  const [items, setItems] = useState(initialItems);
+export function NotificationList({ actorUserId, initialPage }: { actorUserId: string; initialPage: NotificationPage }) {
+  const queryClient = useQueryClient();
+  const queryKey = ["notifications", actorUserId] as const;
+  const notifications = useQuery({
+    initialData: initialPage,
+    queryFn: getNotificationsForMutation,
+    queryKey
+  });
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function markRead(notificationId: string) {
+    await queryClient.cancelQueries({ queryKey });
+    const previous = queryClient.getQueryData<NotificationPage>(queryKey);
     setPendingId(notificationId);
     setError(null);
-    setItems((current) => current.map((item) => item.id === notificationId ? {
-      ...item,
-      state: "read",
-      readAt: new Date().toISOString()
-    } : item));
+    queryClient.setQueryData<NotificationPage>(queryKey, (current) => ({
+      ...current,
+      items: (current?.items ?? []).map((item) => item.id === notificationId ? {
+        ...item,
+        state: "read",
+        readAt: new Date().toISOString()
+      } : item)
+    }));
     try {
       const updated = await markNotificationRead(notificationId);
-      setItems((current) => current.map((item) => item.id === updated.id ? updated : item));
+      queryClient.setQueryData<NotificationPage>(queryKey, (current) => ({
+        ...current,
+        items: (current?.items ?? []).map((item) => item.id === updated.id ? updated : item)
+      }));
     } catch (reason) {
-      setItems((current) => current.map((item) => item.id === notificationId ? {
-        ...item,
-        state: "unread",
-        readAt: null
-      } : item));
+      if (previous) queryClient.setQueryData(queryKey, previous);
       setError(safeMutationMessage(reason, "Notification"));
     } finally {
       setPendingId(null);
@@ -37,7 +49,13 @@ export function NotificationList({ initialItems }: { initialItems: Notification[
 
   return (
     <div className="divide-y divide-(--line)">
-      {items.map((item) => {
+      {notifications.data.items.length === 0 ? (
+        <div className="p-5 text-center">
+          <h2 className="font-semibold">You’re all caught up</h2>
+          <p className="mt-2 text-sm text-(--muted)">New account activity appears here.</p>
+        </div>
+      ) : null}
+      {notifications.data.items.map((item) => {
         const actionUrl = safeInternalAction(item.actionUrl);
         return (
           <article className={item.state === "unread" ? "bg-(--accent-soft) p-4" : "p-4"} key={item.id}>
@@ -69,5 +87,5 @@ export function NotificationList({ initialItems }: { initialItems: Notification[
 }
 
 function safeInternalAction(value: string | null | undefined) {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : null;
+  return safeSameOriginPath(value, null);
 }

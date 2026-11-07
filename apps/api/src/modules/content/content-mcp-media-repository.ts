@@ -237,12 +237,9 @@ export function createContentMcpMediaRepositoryMethods(sql: PostgresSql): McpMed
                 verification.status = 'valid'
                 and verification.result_over_threshold is true
                 and (verification.expires_at is null or verification.expires_at > now())
-              from verification_records verification
-              where verification.subject_type = 'user'
-                and verification.subject_id = actor.id
-                and verification.purpose = 'age_access'
-              order by verification.created_at desc, verification.id desc
-              limit 1
+              from private.current_verification_decision(
+                'user', actor.id, 'age_access'
+              ) verification
             ), false) as age_eligible,
             content.media_type, content.visibility, content.nsfw_label,
             content.state as content_state, content.publish_state

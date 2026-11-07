@@ -1,12 +1,12 @@
 # Veel V2 Full Platform Blueprint
 
 Status: accepted
-Scope: complete standalone Veel platform blueprint
+Scope: full-platform orientation map
 Last updated: 2026-06-05
-Source of truth: yes
+Source of truth: no; `app-architecture.md`, ADRs, contracts, migrations, and narrow domain docs own current behavior
 
 Owns:
-- complete Veel product, workflow, provider, and business map
+- orientation and cross-domain vocabulary only
 
 Defers to:
 - OpenAPI/schema/route-map for exact build contracts
@@ -20,7 +20,7 @@ Launch scope:
 Non-goals:
 - implementation code or vendor secrets
 
-This is the single visual blueprint for building the full Veel v2 platform from scratch. The historical context is a reference for validated product lessons, provider edge cases, and tests only. Do not port historical architecture wholesale.
+This is a broad orientation map retained from the new-build planning phase. It is not a competing current architecture or implementation checklist. The historical context is a reference for validated product lessons, provider edge cases, and tests only. Do not port historical architecture wholesale.
 
 Use this document to understand how every major module relates before writing code.
 
@@ -68,7 +68,8 @@ Frontend
 Backend
   Fastify modular monolith
   worker process for async/provider jobs
-  Supabase Auth + Postgres + Realtime
+  WeVid opaque application sessions + Supabase Postgres + scoped Realtime
+  Optional Supabase Auth recovery exchange
   OpenTelemetry and structured logging
 
 Providers
@@ -150,7 +151,7 @@ Frontend never computes final access, final commission, final pass state, final 
 
 | Area | V2 docs | Backend module | Frontend surface | Providers |
 | --- | --- | --- | --- | --- |
-| Landing/onboarding | `frontend/design-system.md`, `frontend/component-map.md`, `embedded-wallet-onboarding.md` | auth, age, wallet | landing, enter, onboarding | Supabase Auth, wallet provider, funding path |
+| Landing/onboarding | `frontend/design-system.md`, `frontend/component-map.md`, `embedded-wallet-onboarding.md` | auth, age, wallet | landing, enter, onboarding | wallet provider, optional Supabase recovery, funding path |
 | App shell/navigation/gestures | `native-ui-ux-screens.md`, `frontend-architecture.md` | profile/session policy | app shell, nav, gesture layer | none |
 | Home/Bits/media viewer | `product-flows.md`, `native-ui-ux-screens.md`, `recommendation-discovery.md`, `frontend/component-map.md` | content, recommendation, engagement, access | Home, Bits, media viewer | Bunny/Livepeer playback |
 | Create/Edit media | `product-flows.md`, `media-live-providers.md`, `frontend/component-map.md` | content, media, moderation | Create/Edit | Bunny TUS, Livepeer, moderation |
@@ -302,7 +303,9 @@ Realtime:
   Supabase Realtime for selected messages/notifications/live/activity events
 
 Identity/session:
-  Supabase Auth
+  WeVid users.id + opaque backend application session
+  optional Supabase Auth recovery exchange only
+  scoped Supabase Realtime JWT only for authorized transport subscriptions
 
 Database:
   Supabase Postgres with RLS and API-side policy

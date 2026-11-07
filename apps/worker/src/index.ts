@@ -1,8 +1,17 @@
 import { parseServerEnv } from "@veel/config";
 import { createCanonicalProviderReplayRuntime } from "@veel/api/provider-event-replay-runtime";
 import { createBunnyStreamUploadAdapter } from "@veel/api/media-upload-provider";
+import { createBunnyContentExportProvider } from "@veel/api/content-export-provider";
 import { createLivepeerProviderAdapter } from "@veel/api/live-provider";
+import { createSolanaSubscriptionAuthorizationVerifier } from "@veel/api/subscription-authorization-verifier-runtime";
 import { pathToFileURL } from "node:url";
+import {
+  createPostgresContentExportRepository,
+  processContentExports,
+  type ContentExportProvider,
+  type ContentExportRepository,
+  type ProcessContentExportsResult
+} from "./content-exports.js";
 import {
   createPostgresLiveSafetyRepository,
   processLiveSafety,
@@ -60,6 +69,12 @@ import {
   type ProviderEventReplayRepository
 } from "./provider-event-replay.js";
 import {
+  createPostgresSubscriptionAuthorizationReconciliationRepository,
+  processSubscriptionAuthorizationReconciliations,
+  type ProcessSubscriptionAuthorizationReconciliationsResult,
+  type SubscriptionAuthorizationReconciliationRepository
+} from "./subscription-authorization-reconciliation.js";
+import {
   createPostgresSubscriptionCollectionRepository,
   createSolanaSubscriptionCollectionProvider,
   createUnconfiguredSubscriptionCollectionProvider,
@@ -83,6 +98,7 @@ export const buildWorkerRuntime = () => {
     environment: config.NODE_ENV,
     queues: [
       "analytics-projections",
+      "subscription-authorization-reconciliation",
       "subscription-collections",
       "notification-deliveries",
       "payment-confirmation-emails",
@@ -90,13 +106,19 @@ export const buildWorkerRuntime = () => {
       "scheduled-publications",
       "live-safety",
       "media-moderation",
-      "media-asset-cleanups"
+      "media-asset-cleanups",
+      "content-exports"
     ],
     schedules: [
       {
         name: "analytics-projections",
         cadence: "every_minute",
         sourceIndex: "analytics_projection_jobs_lease_idx"
+      },
+      {
+        name: "subscription-authorization-reconciliation",
+        cadence: "every_minute",
+        sourceIndex: "subscription_authorization_intents_subscription_idx"
       },
       {
         name: "subscription-collections",
@@ -137,6 +159,11 @@ export const buildWorkerRuntime = () => {
         name: "media-asset-cleanups",
         cadence: "every_minute",
         sourceIndex: "media_assets_provider_cleanup_idx"
+      },
+      {
+        name: "content-exports",
+        cadence: "every_minute",
+        sourceIndex: "content_export_jobs_lease_due_idx"
       }
     ]
   };
@@ -240,6 +267,18 @@ export async function runSubscriptionCollectionTick(input: {
   limit?: number;
 } = {}): Promise<ProcessSubscriptionCollectionsResult> {
   const config = parseServerEnv(process.env);
+  if (!config.SUBSCRIPTIONS_ENABLED) {
+    return {
+      expired: 0,
+      leased: 0,
+      confirmed: 0,
+      failed: 0,
+      reconciling: 0,
+      revoked: 0,
+      cancelled: 0
+    };
+  }
+
   const repository =
     input.repository ?? createPostgresSubscriptionCollectionRepository(config.DATABASE_URL);
   const provider = input.provider ?? (
@@ -265,6 +304,43 @@ export async function runSubscriptionCollectionTick(input: {
     return await processDueSubscriptionCollections({
       repository,
       provider,
+      ...(input.now ? { now: input.now } : {}),
+      ...(input.limit ? { limit: input.limit } : {})
+    });
+  } finally {
+    if (!input.repository) {
+      await repository.close?.();
+    }
+  }
+}
+
+export async function runSubscriptionAuthorizationReconciliationTick(input: {
+  repository?: SubscriptionAuthorizationReconciliationRepository;
+  verifier?: ReturnType<typeof createSolanaSubscriptionAuthorizationVerifier>;
+  now?: Date;
+  limit?: number;
+} = {}): Promise<ProcessSubscriptionAuthorizationReconciliationsResult> {
+  const config = parseServerEnv(process.env);
+  if (!config.SUBSCRIPTIONS_ENABLED) {
+    return {
+      claimed: 0,
+      verified: 0,
+      retrying: 0,
+      terminal: 0,
+      stale: 0
+    };
+  }
+
+  const repository = input.repository ??
+    createPostgresSubscriptionAuthorizationReconciliationRepository({
+      ...(config.DATABASE_URL ? { databaseUrl: config.DATABASE_URL } : {})
+    });
+  const verifier = input.verifier ?? createSolanaSubscriptionAuthorizationVerifier(config);
+
+  try {
+    return await processSubscriptionAuthorizationReconciliations({
+      repository,
+      verifier,
       ...(input.now ? { now: input.now } : {}),
       ...(input.limit ? { limit: input.limit } : {})
     });
@@ -390,6 +466,53 @@ export async function runMediaAssetCleanupTick(input: {
   }
 }
 
+export async function runContentExportTick(input: {
+  repository?: ContentExportRepository;
+  provider?: ContentExportProvider;
+  now?: Date;
+  limit?: number;
+} = {}): Promise<ProcessContentExportsResult> {
+  const config = parseServerEnv(process.env);
+  if (!input.repository && !input.provider && !config.CONTENT_EXPORTS_ENABLED) {
+    return {
+      leased: 0,
+      ready: 0,
+      retrying: 0,
+      deadLettered: 0,
+      cancelled: 0,
+      quarantined: 0,
+      sourceHoldsExpired: 0
+    };
+  }
+  const repository = input.repository ?? createPostgresContentExportRepository(config.DATABASE_URL);
+  const provider = input.provider ?? createBunnyContentExportProvider({
+    enabled: config.CONTENT_EXPORTS_ENABLED,
+    storageApiEndpoint: config.BUNNY_STORAGE_API_ENDPOINT,
+    ...(config.BUNNY_STORAGE_ACCESS_KEY
+      ? { storageAccessKey: config.BUNNY_STORAGE_ACCESS_KEY }
+      : {}),
+    ...(config.BUNNY_STORAGE_ZONE_NAME
+      ? { storageZoneName: config.BUNNY_STORAGE_ZONE_NAME }
+      : {}),
+    ...(config.BUNNY_STREAM_ORIGINAL_PULL_ZONE_URL
+      ? { streamOriginalPullZoneUrl: config.BUNNY_STREAM_ORIGINAL_PULL_ZONE_URL }
+      : {}),
+    ...(config.BUNNY_STREAM_CDN_TOKEN_KEY
+      ? { streamCdnTokenKey: config.BUNNY_STREAM_CDN_TOKEN_KEY }
+      : {})
+  });
+  try {
+    return await processContentExports({
+      repository,
+      provider,
+      ...(input.now ? { now: input.now } : {}),
+      ...(input.limit ? { limit: input.limit } : {})
+    });
+  } finally {
+    if (!input.repository) await repository.close?.();
+  }
+}
+
 export async function runScheduledPublicationTick(input: {
   repository?: ScheduledPublicationRepository;
   now?: Date;
@@ -410,6 +533,7 @@ export async function runScheduledPublicationTick(input: {
 
 export interface ScheduledWorkerTickResult {
   analyticsProjections: "completed" | "failed";
+  contentExports: "completed" | "failed";
   liveSafety: "completed" | "failed";
   mediaAssetCleanups: "completed" | "failed";
   mediaModeration: "completed" | "failed";
@@ -417,6 +541,7 @@ export interface ScheduledWorkerTickResult {
   paymentConfirmationEmails: "completed" | "failed";
   providerEventReplays: "completed" | "failed";
   scheduledPublications: "completed" | "failed";
+  subscriptionAuthorizationReconciliation: "completed" | "failed";
   subscriptionCollections: "completed" | "failed";
 }
 
@@ -427,6 +552,7 @@ export interface WorkerLogger {
 
 export interface WorkerTickRunners {
   analyticsProjections(): Promise<unknown>;
+  contentExports(): Promise<unknown>;
   liveSafety(): Promise<unknown>;
   mediaAssetCleanups(): Promise<unknown>;
   mediaModeration(): Promise<unknown>;
@@ -434,6 +560,7 @@ export interface WorkerTickRunners {
   paymentConfirmationEmails(): Promise<unknown>;
   providerEventReplays(): Promise<unknown>;
   scheduledPublications(): Promise<unknown>;
+  subscriptionAuthorizationReconciliation(): Promise<unknown>;
   subscriptionCollections(): Promise<unknown>;
 }
 
@@ -454,6 +581,7 @@ export async function runScheduledWorkerTick(input: {
   const logger = input.logger ?? defaultWorkerLogger;
   const runners = input.runners ?? {
     analyticsProjections: () => runAnalyticsProjectionTick({ limit: config.WORKER_BATCH_LIMIT }),
+    contentExports: () => runContentExportTick({ limit: config.WORKER_BATCH_LIMIT }),
     liveSafety: () => runLiveSafetyTick({ limit: config.WORKER_BATCH_LIMIT }),
     mediaAssetCleanups: () => runMediaAssetCleanupTick({ limit: config.WORKER_BATCH_LIMIT }),
     mediaModeration: () => runMediaModerationTick({ limit: config.WORKER_BATCH_LIMIT }),
@@ -461,10 +589,13 @@ export async function runScheduledWorkerTick(input: {
     paymentConfirmationEmails: () => runPaymentConfirmationEmailTick({ limit: config.WORKER_BATCH_LIMIT }),
     providerEventReplays: () => runProviderEventReplayTick({ limit: config.WORKER_BATCH_LIMIT }),
     scheduledPublications: () => runScheduledPublicationTick({ limit: config.WORKER_BATCH_LIMIT }),
+    subscriptionAuthorizationReconciliation: () =>
+      runSubscriptionAuthorizationReconciliationTick({ limit: config.WORKER_BATCH_LIMIT }),
     subscriptionCollections: () => runSubscriptionCollectionTick({ limit: config.WORKER_BATCH_LIMIT })
   };
   const tasks = [
     ["analyticsProjections", runners.analyticsProjections],
+    ["contentExports", runners.contentExports],
     ["liveSafety", runners.liveSafety],
     ["mediaAssetCleanups", runners.mediaAssetCleanups],
     ["mediaModeration", runners.mediaModeration],
@@ -472,6 +603,7 @@ export async function runScheduledWorkerTick(input: {
     ["paymentConfirmationEmails", runners.paymentConfirmationEmails],
     ["providerEventReplays", runners.providerEventReplays],
     ["scheduledPublications", runners.scheduledPublications],
+    ["subscriptionAuthorizationReconciliation", runners.subscriptionAuthorizationReconciliation],
     ["subscriptionCollections", runners.subscriptionCollections]
   ] as const;
   const results = await Promise.all(
@@ -514,6 +646,7 @@ export function startWorkerProcess(input: {
     if (stopping) {
       return Promise.resolve<ScheduledWorkerTickResult>({
         analyticsProjections: "completed",
+        contentExports: "completed",
         liveSafety: "completed",
         mediaAssetCleanups: "completed",
         mediaModeration: "completed",
@@ -521,6 +654,7 @@ export function startWorkerProcess(input: {
         paymentConfirmationEmails: "completed",
         providerEventReplays: "completed",
         scheduledPublications: "completed",
+        subscriptionAuthorizationReconciliation: "completed",
         subscriptionCollections: "completed"
       });
     }

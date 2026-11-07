@@ -29,6 +29,7 @@ export interface AnalyticsProjectionOutcome {
 }
 
 export interface AnalyticsProjectionRepository {
+  purgeExpiredRawFacts?(input: { now: Date; limitPerSource: number }): Promise<Record<string, number>>;
   enqueueIncremental(now: Date): Promise<void>;
   leaseJobs(input: { now: Date; limit: number }): Promise<AnalyticsProjectionJob[]>;
   projectWindow(job: AnalyticsProjectionJob): Promise<AnalyticsProjectionEvidence>;
@@ -50,6 +51,7 @@ export async function processAnalyticsProjections(input: {
   limit?: number;
 }): Promise<ProcessAnalyticsProjectionsResult> {
   const now = input.now ?? new Date();
+  await input.repository.purgeExpiredRawFacts?.({ now, limitPerSource: 500 });
   await input.repository.enqueueIncremental(now);
   const jobs = await input.repository.leaseJobs({ now, limit: input.limit ?? 10 });
   const result: ProcessAnalyticsProjectionsResult = {
@@ -84,31 +86,202 @@ export async function processAnalyticsProjections(input: {
   return result;
 }
 
+export function analyticsIncrementalWindows(now: Date): Array<{
+  reason: "incremental" | "late_fact";
+  idempotencyKey: string;
+  windowStartsOn: string;
+  windowEndsOn: string;
+}> {
+  const minuteSlot = now.toISOString().slice(0, 16);
+  const hourSlot = now.toISOString().slice(0, 13);
+  const currentDay = now.toISOString().slice(0, 10);
+  const priorDay = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() - 1
+  )).toISOString().slice(0, 10);
+  return [
+    {
+      reason: "incremental",
+      idempotencyKey: `incremental:${minuteSlot}`,
+      windowStartsOn: currentDay,
+      windowEndsOn: currentDay
+    },
+    {
+      reason: "late_fact",
+      idempotencyKey: `late-fact:${hourSlot}`,
+      windowStartsOn: priorDay,
+      windowEndsOn: priorDay
+    }
+  ];
+}
+
+export function buildAnalyticsReconciliationEvidence(
+  counts: Record<string, number>,
+  projectedTableRowCount: number,
+  dataThrough: Date
+): AnalyticsProjectionEvidence {
+  const comparisons = [
+    ["CreatorImpressions", "sourceImpressions", "projectedImpressions"],
+    ["ViewerImpressions", "sourceImpressions", "projectedViewerImpressions"],
+    ["ProfileOpens", "sourceProfileOpens", "projectedProfileOpens"],
+    ["OfferImpressions", "sourceOfferImpressions", "projectedOfferImpressions"],
+    ["OnboardingEvents", "sourceOnboardingEvents", "projectedOnboardingEvents"],
+    ["CreatorPurchases", "sourcePurchases", "projectedPurchases"],
+    ["PlatformPurchases", "sourcePlatformPurchases", "projectedPlatformPurchases"],
+    ["Allocations", "sourceAllocations", "projectedAllocations"],
+    ["ProviderFailures", "sourceProviderFailures", "projectedProviderFailures"]
+  ] as const;
+  const details: Record<string, number> = { ...counts };
+  let sourceRowCount = 0;
+  let projectedRowCount = 0;
+  let varianceCount = 0;
+
+  for (const [label, sourceKey, projectedKey] of comparisons) {
+    const source = counts[sourceKey] ?? 0;
+    const projected = counts[projectedKey] ?? 0;
+    const variance = projected - source;
+    details[`variance${label}`] = variance;
+    sourceRowCount += source;
+    projectedRowCount += projected;
+    varianceCount += Math.abs(variance);
+  }
+  details.netVariance = projectedRowCount - sourceRowCount;
+
+  return {
+    sourceRowCount,
+    projectedRowCount,
+    varianceCount,
+    projectedTableRowCount,
+    dataThrough,
+    details
+  };
+}
+
 export function createPostgresAnalyticsProjectionRepository(databaseUrl: string): AnalyticsProjectionRepository {
   const sql = postgres(databaseUrl, { max: 4, idle_timeout: 20, prepare: false });
 
   return {
+    async purgeExpiredRawFacts(input) {
+      return sql.begin(async (transaction) => {
+        const sources = [
+          {
+            sourceKey: "profile_open_receipts",
+            deleteRows: () => transaction<{ source_date: string }[]>`
+              with due as (
+                select actor_user_id, idempotency_key
+                from analytics_profile_open_receipts
+                where expires_at <= ${input.now.toISOString()}::timestamptz
+                order by expires_at, actor_user_id, idempotency_key
+                for update skip locked
+                limit ${input.limitPerSource}
+              )
+              delete from analytics_profile_open_receipts receipt
+              using due
+              where receipt.actor_user_id = due.actor_user_id
+                and receipt.idempotency_key = due.idempotency_key
+              returning receipt.created_at::date::text as source_date
+            `
+          },
+          {
+            sourceKey: "offer_impression_receipts",
+            deleteRows: () => transaction<{ source_date: string }[]>`
+              with due as (
+                select user_id, idempotency_key
+                from analytics_offer_impression_receipts
+                where expires_at <= ${input.now.toISOString()}::timestamptz
+                order by expires_at, user_id, idempotency_key
+                for update skip locked
+                limit ${input.limitPerSource}
+              )
+              delete from analytics_offer_impression_receipts receipt
+              using due
+              where receipt.user_id = due.user_id
+                and receipt.idempotency_key = due.idempotency_key
+              returning receipt.created_at::date::text as source_date
+            `
+          },
+          {
+            sourceKey: "onboarding_journey_events",
+            deleteRows: () => transaction<{ source_date: string }[]>`
+              with due as (
+                select journey_id, idempotency_key
+                from analytics_onboarding_journey_events
+                where expires_at <= ${input.now.toISOString()}::timestamptz
+                order by expires_at, journey_id, idempotency_key
+                for update skip locked
+                limit ${input.limitPerSource}
+              )
+              delete from analytics_onboarding_journey_events event
+              using due
+              where event.journey_id = due.journey_id
+                and event.idempotency_key = due.idempotency_key
+              returning event.occurred_at::date::text as source_date
+            `
+          }
+        ] as const;
+        const counts: Record<string, number> = {};
+
+        for (const source of sources) {
+          const deleted = await source.deleteRows();
+          counts[source.sourceKey] = deleted.length;
+          const unavailableThrough = deleted.reduce<string | null>(
+            (latest, row) => !latest || row.source_date > latest ? row.source_date : latest,
+            null
+          );
+          if (!unavailableThrough) continue;
+          await transaction`
+            insert into analytics_raw_retention_boundaries (
+              source_key, unavailable_through, rows_purged, last_purged_at, updated_at
+            ) values (
+              ${source.sourceKey}, ${unavailableThrough}::date, ${deleted.length},
+              ${input.now.toISOString()}::timestamptz, ${input.now.toISOString()}::timestamptz
+            )
+            on conflict (source_key) do update
+            set unavailable_through = greatest(
+                  analytics_raw_retention_boundaries.unavailable_through,
+                  excluded.unavailable_through
+                ),
+                rows_purged = analytics_raw_retention_boundaries.rows_purged + excluded.rows_purged,
+                last_purged_at = excluded.last_purged_at,
+                updated_at = excluded.updated_at
+          `;
+        }
+
+        return counts;
+      });
+    },
+
     async enqueueIncremental(now) {
-      const hourSlot = now.toISOString().slice(0, 13);
-      await sql`
-        insert into analytics_projection_jobs (
-          projection_key, definition_version, window_starts_on, window_ends_on,
-          reason, idempotency_key, next_attempt_at
-        ) values (
-          'analytics_core', 1,
-          ((${now.toISOString()}::timestamptz at time zone 'UTC')::date - 1),
-          ((${now.toISOString()}::timestamptz at time zone 'UTC')::date),
-          'incremental',
-          ${`incremental:${hourSlot}`},
-          ${now.toISOString()}::timestamptz
-        )
-        on conflict (projection_key, idempotency_key) do nothing
-      `;
+      for (const window of analyticsIncrementalWindows(now)) {
+        await sql`
+          insert into analytics_projection_jobs (
+            projection_key, definition_version, window_starts_on, window_ends_on,
+            reason, idempotency_key, next_attempt_at
+          ) values (
+            'analytics_core', 1, ${window.windowStartsOn}::date, ${window.windowEndsOn}::date,
+            ${window.reason}, ${window.idempotencyKey}, ${now.toISOString()}::timestamptz
+          )
+          on conflict (projection_key, idempotency_key) do nothing
+        `;
+      }
     },
 
     async leaseJobs(input) {
       const leaseToken = randomUUID();
-      const rows = await sql<{
+      const rows = await sql.begin(async (transaction) => {
+        await transaction`
+          update analytics_projection_jobs
+          set state = 'dead_letter',
+              leased_until = null,
+              lease_token = null,
+              last_error_code = 'analytics_projection_attempts_exhausted',
+              updated_at = ${input.now.toISOString()}::timestamptz
+          where state in ('queued', 'retry', 'leased')
+            and attempt_count >= max_attempts
+            and (state <> 'leased' or leased_until < ${input.now.toISOString()}::timestamptz)
+        `;
+        return transaction<{
         id: string;
         projection_key: string;
         definition_version: number;
@@ -118,15 +291,16 @@ export function createPostgresAnalyticsProjectionRepository(databaseUrl: string)
         attempt_count: number;
         max_attempts: number;
         lease_token: string;
-      }[]>`
+        }[]>`
         with due as (
           select id
           from analytics_projection_jobs
-          where (
+          where attempt_count < max_attempts
+            and ((
               state in ('queued', 'retry') and next_attempt_at <= ${input.now.toISOString()}::timestamptz
             ) or (
               state = 'leased' and leased_until < ${input.now.toISOString()}::timestamptz
-            )
+            ))
           order by window_starts_on, created_at, id
           for update skip locked
           limit ${input.limit}
@@ -142,7 +316,8 @@ export function createPostgresAnalyticsProjectionRepository(databaseUrl: string)
         returning job.id, job.projection_key, job.definition_version,
           job.window_starts_on::text, job.window_ends_on::text, job.reason,
           job.attempt_count, job.max_attempts, job.lease_token::text
-      `;
+        `;
+      });
       return rows.map((row) => ({
         id: row.id,
         projectionKey: row.projection_key,
@@ -164,6 +339,16 @@ export function createPostgresAnalyticsProjectionRepository(databaseUrl: string)
         await transaction`
           select pg_advisory_xact_lock(hashtextextended(${job.projectionKey}, 0))
         `;
+        const unavailableSources = await transaction<{ source_key: string; unavailable_through: string }[]>`
+          select source_key, unavailable_through::text
+          from analytics_raw_retention_boundaries
+          where unavailable_through >= ${job.windowStartsOn}::date
+          order by unavailable_through desc, source_key
+          limit 1
+        `;
+        if (unavailableSources[0]) {
+          throw new Error("ANALYTICS_RAW_RETENTION_BOUNDARY");
+        }
         await transaction`
           delete from analytics_creator_daily
           where bucket_date between ${job.windowStartsOn}::date and ${job.windowEndsOn}::date
@@ -246,18 +431,26 @@ export function createPostgresAnalyticsProjectionRepository(databaseUrl: string)
             like_count, comment_count, save_count, share_count,
             audience_sample_size, updated_at
           )
-          with session_stats as (
+          with heartbeat_totals as (
+            select heartbeat.session_id,
+              coalesce(sum(heartbeat.credited_seconds), 0)::bigint as credited_seconds
+            from platform_playback_heartbeats heartbeat
+            group by heartbeat.session_id
+          ),
+          session_stats as (
             select session.created_at::date as bucket_date,
               content.creator_user_id, content.id as content_item_id, content.media_type,
               session.user_id, session.id as session_id,
-              coalesce(sum(heartbeat.credited_seconds), 0)::bigint as credited_seconds,
-              max(asset.duration_ms)::bigint as duration_ms
+              coalesce(heartbeat.credited_seconds, 0)::bigint as credited_seconds,
+              asset.duration_ms::bigint as duration_ms
             from platform_playback_sessions session
             join content_items content on session.target_type = 'content' and content.id = session.target_id
-            left join platform_playback_heartbeats heartbeat on heartbeat.session_id = session.id
-            left join media_assets asset on asset.content_item_id = content.id and asset.duration_ms is not null
+            left join heartbeat_totals heartbeat on heartbeat.session_id = session.id
+            left join media_assets asset
+              on asset.id = session.media_asset_id
+              and asset.content_item_id = content.id
+              and asset.duration_ms is not null
             where session.created_at::date between ${job.windowStartsOn}::date and ${job.windowEndsOn}::date
-            group by 1, 2, 3, 4, 5, 6
           ),
           viewer_playback as (
             select bucket_date, creator_user_id, content_item_id, media_type, user_id,
@@ -376,19 +569,24 @@ export function createPostgresAnalyticsProjectionRepository(databaseUrl: string)
             save_count, share_count, hide_count, report_count, app_session_count,
             return_session_count, updated_at
           )
-          with playback_sessions as (
-            select session.created_at::date as bucket_date, session.user_id, session.id,
-              coalesce(sum(heartbeat.credited_seconds), 0)::bigint as credited_seconds,
-              max(asset.duration_ms)::bigint as duration_ms
-            from platform_playback_sessions session
-            left join platform_playback_heartbeats heartbeat on heartbeat.session_id = session.id
-            left join content_items content on session.target_type = 'content' and content.id = session.target_id
-            left join media_assets asset on asset.content_item_id = content.id and asset.duration_ms is not null
-            where session.created_at::date between ${job.windowStartsOn}::date and ${job.windowEndsOn}::date
-            group by 1, 2, 3
+          with heartbeat_totals as (
+            select heartbeat.session_id,
+              coalesce(sum(heartbeat.credited_seconds), 0)::bigint as credited_seconds
+            from platform_playback_heartbeats heartbeat
+            group by heartbeat.session_id
           ),
-          viewer_playback as (
-            select bucket_date, user_id,
+          playback_sessions as (
+            select session.created_at::date as bucket_date, session.user_id, session.id,
+              session.target_type, session.target_id,
+              coalesce(heartbeat.credited_seconds, 0)::bigint as credited_seconds,
+              asset.duration_ms::bigint as duration_ms
+            from platform_playback_sessions session
+            left join heartbeat_totals heartbeat on heartbeat.session_id = session.id
+            left join media_assets asset on asset.id = session.media_asset_id
+            where session.created_at::date between ${job.windowStartsOn}::date and ${job.windowEndsOn}::date
+          ),
+          viewer_target_playback as (
+            select bucket_date, user_id, target_type, target_id,
               count(*) filter (where credited_seconds >= 2) as qualified_views,
               sum(credited_seconds) as watch_seconds,
               count(*) filter (
@@ -398,6 +596,16 @@ export function createPostgresAnalyticsProjectionRepository(databaseUrl: string)
               count(*) filter (where credited_seconds < 2) as early_skips,
               greatest(count(*) filter (where credited_seconds >= 2) - 1, 0) as replays
             from playback_sessions
+            group by 1, 2, 3, 4
+          ),
+          viewer_playback as (
+            select bucket_date, user_id,
+              sum(qualified_views) as qualified_views,
+              sum(watch_seconds) as watch_seconds,
+              sum(completed_views) as completed_views,
+              sum(early_skips) as early_skips,
+              sum(replays) as replays
+            from viewer_target_playback
             group by 1, 2
           ),
           facts as (
@@ -766,22 +974,11 @@ export function createPostgresAnalyticsProjectionRepository(databaseUrl: string)
           sourceProviderFailures: Number(parity?.source_provider_failures ?? 0),
           projectedProviderFailures: Number(parity?.projected_provider_failures ?? 0)
         };
-        const sourceRowCount = details.sourceImpressions * 2 + details.sourceProfileOpens
-          + details.sourceOfferImpressions + details.sourceOnboardingEvents + details.sourcePurchases
-          + details.sourcePlatformPurchases + details.sourceAllocations + details.sourceProviderFailures;
-        const projectedRowCount = details.projectedImpressions + details.projectedViewerImpressions
-          + details.projectedProfileOpens + details.projectedOfferImpressions
-          + details.projectedOnboardingEvents + details.projectedPurchases
-          + details.projectedPlatformPurchases + details.projectedAllocations
-          + details.projectedProviderFailures;
-        return {
-          sourceRowCount,
-          projectedRowCount,
-          varianceCount: projectedRowCount - sourceRowCount,
-          projectedTableRowCount: Number(parity?.projected_table_rows ?? 0),
-          dataThrough: parity?.data_through ?? new Date(0),
-          details
-        };
+        return buildAnalyticsReconciliationEvidence(
+          details,
+          Number(parity?.projected_table_rows ?? 0),
+          parity?.data_through ?? new Date(0)
+        );
       }) as Promise<AnalyticsProjectionEvidence>;
     },
 

@@ -14,7 +14,7 @@ export default async function MomentsPage({
   await requireAppAccess("/app/moments");
   const [params, preferences] = await Promise.all([searchParams, getFeedPreferences()]);
   const feed = await getHomeFeed(
-    preferences.ok ? preferences.data.defaultMode : "recommended",
+    preferences.ok ? preferences.data.defaultMode : "latest",
     "moments"
   );
 

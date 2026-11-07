@@ -1,10 +1,51 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildApi } from "../src/app.js";
+import { VerificationProviderHttpError } from "../src/modules/verification/verification-provider-adapters.js";
 import type { VerificationRepository } from "../src/modules/verification/types.js";
 
 const organizationId = "00000000-0000-4000-8000-000000000301";
 
 describe("organization verification authorization", () => {
+  it("keeps a selected contextual attempt reserved when provider creation is ambiguous", async () => {
+    const fail = vi.fn();
+    const sessionId = "00000000-0000-4000-8000-000000000302";
+    const app = await buildApi({
+      authVerifier: verifier(),
+      verificationRepository: repository({
+        async reservePendingSession() {
+          return { id: sessionId, subjectReference: `wevid:user:subject:creator_kyc:${sessionId}` };
+        },
+        async selectPendingSessionProvider() {
+          return true;
+        },
+        async completePendingSession() {},
+        async failPendingSession(input) {
+          fail(input);
+        }
+      }),
+      verificationProviderWaterfall: {
+        async createSession(input) {
+          await input.onProviderSelected?.({
+            provider: "didit",
+            method: "gov_id_selfie",
+            assuranceLevel: "documentary",
+            reusable: false
+          });
+          throw new VerificationProviderHttpError("didit", 503, "response lost");
+        }
+      }
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/verification/sessions",
+      headers: { authorization: "Bearer valid", "idempotency-key": "creator-kyc-ambiguous-1" },
+      payload: { purpose: "creator_kyc", providerPreference: "provider_first", source: "earnings" }
+    });
+    expect(response.statusCode).toBe(503);
+    expect(fail).not.toHaveBeenCalled();
+    await app.close();
+  }, 60_000);
+
   it("rejects before creating an external KYB provider session", async () => {
     let providerCalls = 0;
     const app = await buildApi({

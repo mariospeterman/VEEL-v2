@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
 import {
   EventIdempotencyConflictError,
   EventRepositoryConfigurationError
@@ -101,7 +102,8 @@ export async function registerEventCoreRoutes(
       return reply.code(access.statusCode).send(access.body);
     }
 
-    if (!requiredIdempotencyKey(request)) {
+    const idempotencyKey = requiredIdempotencyKey(request);
+    if (!idempotencyKey) {
       return reply.code(400).send(validationResponse("Idempotency-Key header is required"));
     }
 
@@ -117,6 +119,8 @@ export async function registerEventCoreRoutes(
       const event = await options.eventRepository.updateEvent({
         supabaseUserId: access.supabaseUserId,
         eventId,
+        idempotencyKey,
+        requestHash: hashJson({ eventId, body }),
         body: body as UpdateEventRequest
       });
 
@@ -126,6 +130,9 @@ export async function registerEventCoreRoutes(
 
       return reply.code(200).send(event);
     } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send(conflictResponse("Idempotency key was already used"));
+      }
       if (error instanceof EventRepositoryConfigurationError) {
         request.log.warn({ error }, "Event update failed");
         return reply.code(503).send(serviceUnavailableResponse("Events are not configured"));

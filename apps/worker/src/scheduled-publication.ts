@@ -127,12 +127,18 @@ export function createPostgresScheduledPublicationRepository(databaseUrl?: strin
             job.attempt_count,
             content.publish_state,
             content.distribution_mode,
-            (content.state in ('blocked', 'deleted') or content.moderation_state = 'blocked' or creator.state <> 'active') as terminally_blocked,
+            (
+              content.state in ('blocked', 'deleted')
+              or content.moderation_state = 'blocked'
+              or creator.state <> 'active'
+              or content.media_type in ('text', 'poll')
+            ) as terminally_blocked,
             (
               content.publish_state = 'scheduled'
               and content.scheduled_for <= ${input.now}
               and content.moderation_state = 'approved'
-              and (content.state = 'ready' or content.media_type in ('text', 'poll'))
+              and content.state = 'ready'
+              and content.media_type not in ('text', 'poll')
               and private.content_safety_release_ready(content.id)
               and private.content_composition_provider_ready(content.id)
             ) as release_ready

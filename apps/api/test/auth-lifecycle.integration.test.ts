@@ -6,17 +6,14 @@ import {
   WalletAuthChallengeInvalidError
 } from "../src/modules/auth/wallet-auth-repository.js";
 import { createPostgresClient } from "../src/shared/postgres.js";
+import { guardedIntegrationDatabaseUrl } from "./integration-database.js";
 
 const enabled = ["1", "true"].includes(process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS ?? "");
 const describeIntegration = enabled ? describe : describe.skip;
 
 describeIntegration("purpose-bound authentication against migrated Postgres", () => {
   it("keeps login lookup-only and makes onboarding duplicate-safe", async () => {
-    const databaseUrl = process.env.API_INTEGRATION_DATABASE_URL ?? process.env.DATABASE_URL;
-    const databaseHost = safeDatabaseHost(databaseUrl);
-    if (!databaseUrl || !["127.0.0.1", "localhost"].includes(databaseHost ?? "")) {
-      throw new Error("A loopback API_INTEGRATION_DATABASE_URL is required");
-    }
+    const databaseUrl = guardedIntegrationDatabaseUrl();
 
     const sql = createPostgresClient(databaseUrl);
     const repository = createPostgresWalletAuthRepository(sql);
@@ -117,6 +114,40 @@ describeIntegration("purpose-bound authentication against migrated Postgres", ()
         expiresAt
       });
 
+      const concurrentLogin = await repository.createChallenge({
+        chain: "solana_devnet",
+        provider: "phantom",
+        purpose: "login",
+        address,
+        message: `Purpose: login\nNonce: ${randomUUID()}`,
+        nonceHash: randomUUID(),
+        expiresAt
+      });
+      challengeIds.push(concurrentLogin.id);
+      const concurrentResults = await Promise.allSettled([
+        repository.createSessionFromChallenge({
+          challengeId: concurrentLogin.id,
+          purpose: "login",
+          expiresAt
+        }),
+        repository.createSessionFromChallenge({
+          challengeId: concurrentLogin.id,
+          purpose: "login",
+          expiresAt
+        })
+      ]);
+      expect(concurrentResults.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+      const loser = concurrentResults.find((result) => result.status === "rejected");
+      expect(loser).toMatchObject({ status: "rejected" });
+      if (loser?.status === "rejected") {
+        expect(loser.reason).toBeInstanceOf(WalletAuthChallengeInvalidError);
+      }
+      await expect(repository.createSessionFromChallenge({
+        challengeId: concurrentLogin.id,
+        purpose: "login",
+        expiresAt
+      })).rejects.toBeInstanceOf(WalletAuthChallengeInvalidError);
+
       const scopedCounts = await sql<{ users: string; wallets: string; sessions: string }[]>`
         select
           count(distinct wallet.user_id)::text as users,
@@ -127,7 +158,7 @@ describeIntegration("purpose-bound authentication against migrated Postgres", ()
         where wallet.chain = 'solana_devnet'
           and wallet.address = ${address}
       `;
-      expect(scopedCounts[0]).toEqual({ users: "1", wallets: "1", sessions: "3" });
+      expect(scopedCounts[0]).toEqual({ users: "1", wallets: "1", sessions: "4" });
 
       const audits = await sql<{ action: string; purpose: string }[]>`
         select action, metadata->>'purpose' as purpose
@@ -164,13 +195,4 @@ async function identityCounts(sql: ReturnType<typeof createPostgresClient>) {
       (select count(*)::text from app_sessions) as sessions
   `;
   return rows[0];
-}
-
-function safeDatabaseHost(databaseUrl: string | undefined): string | null {
-  if (!databaseUrl) return null;
-  try {
-    return new URL(databaseUrl).hostname;
-  } catch {
-    return null;
-  }
 }

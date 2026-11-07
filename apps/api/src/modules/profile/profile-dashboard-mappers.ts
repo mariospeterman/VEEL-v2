@@ -5,7 +5,7 @@ import { toUserResource } from "./profile-user-mappers.js";
 
 export function toCreatorDashboard(
   row: DashboardRow,
-  earnings: EarningsRow | undefined,
+  earnings: EarningsRow[],
   products: ProductRow[],
   recentPayments: RecentPaymentRow[]
 ): CreatorMonetisationDashboardResource {
@@ -37,11 +37,17 @@ export function toCreatorDashboard(
       blockedReasons
     },
     earnings: {
-      currency: "SOL",
-      creatorEarningsMinor: Number(earnings?.creator_earnings_minor ?? 0),
-      platformFeesMinor: Number(earnings?.platform_fees_minor ?? 0),
-      referralCommissionsMinor: Number(earnings?.referral_commissions_minor ?? 0),
-      confirmedPaymentCount: Number(earnings?.confirmed_payment_count ?? 0)
+      assets: earnings.map((asset) => ({
+        currency: asset.currency,
+        creatorEarningsAtomic: String(asset.creator_earnings_minor ?? 0),
+        platformFeesAtomic: String(asset.platform_fees_minor ?? 0),
+        referralCommissionsAtomic: String(asset.referral_commissions_minor ?? 0),
+        confirmedPaymentCount: Number(asset.confirmed_payment_count ?? 0)
+      })),
+      confirmedPaymentCount: earnings.reduce(
+        (total, asset) => total + Number(asset.confirmed_payment_count ?? 0),
+        0
+      )
     },
     products: productSummaries(row, products),
     recentActivity: recentPayments.map(toActivityItem)
@@ -91,18 +97,30 @@ export function productSummaries(
     paid_message: row.paid_messages_enabled,
     creator_subscription: row.subscriptions_enabled
   };
-  const productRows = new Map(products.map((product) => [product.product_type, product]));
+  const productRows = new Map<components["schemas"]["ProductType"], ProductRow[]>();
+  for (const product of products) {
+    productRows.set(product.product_type, [
+      ...(productRows.get(product.product_type) ?? []),
+      product
+    ]);
+  }
 
   return (Object.keys(enabledByProduct) as components["schemas"]["ProductType"][]).map(
     (productType) => {
-      const product = productRows.get(productType);
+      const productAssets = productRows.get(productType) ?? [];
 
       return {
         productType,
         enabled: Boolean(enabledByProduct[productType]),
-        confirmedPaymentCount: Number(product?.confirmed_payment_count ?? 0),
-        amountMinor: Number(product?.amount_minor ?? 0),
-        currency: "SOL"
+        confirmedPaymentCount: productAssets.reduce(
+          (total, asset) => total + Number(asset.confirmed_payment_count ?? 0),
+          0
+        ),
+        assets: productAssets.map((asset) => ({
+          currency: asset.currency,
+          amountAtomic: String(asset.amount_minor),
+          confirmedPaymentCount: Number(asset.confirmed_payment_count)
+        }))
       };
     }
   );

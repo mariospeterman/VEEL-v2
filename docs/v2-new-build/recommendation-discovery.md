@@ -1,350 +1,204 @@
 # WeVid V2 Recommendation And Discovery Architecture
 
 Status: accepted
-Scope: Home feed, Bits feed, Discover, hashtags, mentions, NSFW controls, ranking safety
-Last updated: 2026-08-20
+Scope: Home feed, Bits feed, Discover, hashtags, mentions, NSFW controls, and ordering safety
+Last updated: 2026-11-05
 Source of truth: yes for v2 content delivery and discovery
 
 Owns:
-- recommendation discovery decisions for its named domain
+- chronological Home/Bits ordering and the named discovery behavior
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- `INDEX.md`, `route-map.md`, OpenAPI, the immutable migration chain, and narrower ADRs
 
 Does not own:
-- unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
+- provider credentials, payment or entitlement truth, moderation decisions, or hidden ordering rules
 
 Launch scope:
-- accepted v2 launch or phased behavior stated in this document
+- simple photo, video, and live discovery for verified adults
 
 Non-goals:
-- historical-context inference, duplicate systems, and unapproved provider/product expansion
+- behavioral recommendation scoring, paid visibility, a second eligibility system, or a second feed
 
-Veel should feel like a premium social video app, but recommendation quality must not depend on addictive dark patterns or frontend-only state. Ranking is a backend-owned read model with user controls, safety filters, and measurable business outcomes.
+WeVid launches with a simple chronological media feed. The backend remains responsible for access,
+safety, visibility, and stable pagination, but it does not score, boost, shuffle, or treat a bounded
+authorization-work batch as a ranking window or corpus ceiling.
 
-Current implementation state:
+Discovery quality and safety must not depend on addictive dark patterns or frontend-only state.
 
-- `GET /v1/content/feed` is the canonical protected Home/Bits read model. It accepts an explicit `surface=home|bits`, `mode`, and opaque compound cursor and returns ranking metadata with each page.
-- `GET /v1/discover/search`, `/hashtags`, `/hashtags/{slug}`, `/creators`, `/events`, and `/live` are implemented as protected Discover read models.
-- The route requires authenticated app readiness server-side: profile, verified age state, and wallet readiness.
-- Captions are parsed server-side for normalized hashtags. Frontend does not submit trusted hashtag state.
-- Eligibility is applied before scoring through `private.eligible_content(...)`: ready/published/approved media, active age-ready creator and public profile, age-ready viewer or constrained anonymous preview, public/follower/member visibility, active entitlement where applicable, viewer content preference, hidden creators/topics, blocks, and viewer reports. Feed, detail, Discover, public profile, share, unlock, and engagement consume this same gate. Anonymous public profiles are public-visibility and Safe-only. Bits additionally accepts only Bit/clip media. Following has no recommendation fallback and returns active followed creators only.
-- `deterministic_v1` freezes `generatedAt` and the prior-impression baseline on page one, then carries the same instant, feed mode/surface, an opaque fingerprint of the viewer's eligible ranking inputs, and `(ranking_score, created_at, id)` in a validated cursor. New posts and impressions emitted by the active scroll cannot shift that walk. Eligibility, follow, or engagement changes alter the read-time fingerprint and make the client restart from page one instead of skipping re-ranked items. This avoids any global mutation lock. Cross-surface reuse, stale fingerprints, and duplicate regressions are covered against more than one page of real Postgres fixtures. Access-rule and entitlement validity is always evaluated at request time.
-- Ranking uses only follow, bounded freshness, projected engagement quality, creator diversity, bounded exploration, and prior-impression de-prioritisation. Purchase value, wallet balance, settlement, creator earnings, checkout, membership, and Commerce Kit data are not queried and cannot influence ranking.
-- Engagement counters and follow counts are maintained as bounded write-time projections. The feed reads those projections, selects page IDs before playback/access lateral reads, and avoids count-correlated subqueries and per-card API calls.
-- The web Home surface renders the mixed feed plus its real live rail. `/app/bits` renders the same canonical projection as an immersive vertical surface. Both mount playback only for the active item, preload only the next poster, restore route scroll, reconcile real engagement/follow mutations, and render explicit loading/error/empty/exhausted states. Neither surface renders local business-data fixtures or raw provider payloads.
-- Create exposes the required human labels `Safe for everyone`, `Adult`, and `Explicit`. Adult/Explicit drafts and provider uploads remain private and resumable before adult-publisher verification; only explicit submission/publication rechecks the contextual adult-publisher capability. This never invokes creator KYC or earnings setup.
+## Current Product Contract
+
+- `GET /v1/content/feed` is the canonical protected Home/Bits read model. It accepts
+  `surface=home|bits`, `mode=latest|following`, and an opaque scope-bound keyset cursor.
+- `latest` is the default and returns eligible media in reverse publication order. `following`
+  applies the same ordering after restricting creators to active follows; it has no fallback.
+- Home and Bits exclude retired `text` and `poll` formats. Historical authorized detail, owner,
+  admin, and export reads remain available through their existing lifecycle authority.
+- Bits accepts only the short-video media types admitted by its surface contract. Home accepts the
+  launch photo/video media set. A Moment may appear only through its contextual Moment surface and
+  lifecycle; it is not a separate ranked format.
+- The canonical `private.eligible_content(...)` decision continues to apply current release,
+  moderation, profile, age, visibility, entitlement, preference, hide, block, report, and Moment
+  expiry policy before delivery.
+- The active page path first selects an indexed chronological candidate batch of 128–512 IDs inside
+  one repeatable-read, read-only transaction, then rechecks those IDs through that canonical policy
+  before hydrating delivery resources. A fully denied batch advances through its last chronological
+  key rather than scanning or returning stale authorization. This is a correctness/work-bounding
+  design, not measured scalability evidence; representative native plans, p95/p99 latency, and
+  long-session metadata/memory measurements remain required before a performance claim.
+- Playback and image resources are issued only after that current access decision. Locked,
+  exhausted, rejected, quarantined, or revoked content does not receive a usable provider resource.
+- Engagement and relationship counts may be shown, but they never change ordering.
+
+Chronological ordering inputs:
+- `published_at DESC`
+- `id DESC` as the stable tie-break
+
+The first page captures an upper `(published_at, id)` bound. Every continuation cursor carries that
+bound, the last delivered or fully scanned candidate key, the viewer identity, the surface, and the canonical mode. This keeps
+the walk stable when newer media is published, preserves timestamp ties, rejects cross-account or
+cross-surface reuse, and has no fixed corpus ceiling. Current eligibility is rechecked on each page,
+so revoked items are skipped without granting stale access.
 
 ## Feed Surfaces
 
 ```text
 Home
-  mixed feed: live/moments/replays rail + media cards
-  ranking tabs: For You, Following
+  mixed photo/video feed plus live and Moment context
+  tabs: Latest, Following
   content filter: Both, Safe only, Adult only
 
 Bits
   immersive short-video feed
-  free/discoverable by default
-  vertical swipe/scroll = next or previous media
+  tabs: Latest, Following
+  vertical scroll = next or previous media
 
 Discover
-  search + hashtags + creators + events + content categories
+  search + hashtags + creators + events + live
 
 Profile
-  creator-owned grid/tabs
+  creator-owned photo/video grid and authorized historical detail
 
 Mutuals Mode
-  explicit opt-in creator media only when both creator and viewer have Mutuals enabled
+  explicit opt-in creator media only when both parties have Mutuals enabled
 ```
 
-Home/Bits gesture lock: the visible action rail owns like, comment, save, share, and Support; Not interested remains a visible action/menu. Horizontal swipes never create Mutuals, buy a product, join an event, grant paid access, or send funds. Event and future product media may expose at most one primary contextual CTA (`View Event`/`Get Access` or `View Product`/`Buy Product`), followed by explicit detail and confirmation. Money never affects ranking, Mutuals priority, or message priority.
+Home/Bits gesture lock: visible controls own Like, Comment, Save, Share, Support, and Not interested.
+Gestures never create Mutuals, purchase access, join an event, grant an entitlement, or transfer
+funds. A contextual commercial action may be rendered after an item is selected, but it cannot
+change selection or order.
 
-Future native Product Offers are contextual metadata, not ranking authority. A profile, Post, Bit, or live stream may expose one eligible offer after backend policy/moderation filtering, but purchase value, wallet balance, checkout completion, seller revenue, or Commerce Kit events cannot buy recommendation weight, creator visibility, Mutuals priority, or message priority. Commerce Kit has no role in feed selection.
+## Feed Modes And Viewing Controls
 
-## Feed Modes
+- `Latest`: all currently eligible launch media, newest publication first. This is the default.
+- `Following`: the same order, limited to creators the viewer actively follows.
+- `default_feed_mode` is only `latest | following`.
+- `nsfw_preference` is independent and remains `both | sfw | nsfw`.
+- `Both`, `Safe only`, and `Adult only` are viewing filters, not ordering modes.
 
-Home should expose simple controls, not too many categories:
+The deprecated `recommended` request value may be accepted only as a compatibility alias that
+normalizes to `latest`; responses and newly stored preferences use `latest`. No compatibility path
+may restore scoring.
 
-- `Recommended`: recommended mixed media, default.
-- `Following`: creators the viewer follows.
-- Ranking mode and content preference are independent controls. `default_feed_mode` is only `recommended | following`; `nsfw_preference` is only `both | sfw | nsfw`.
-- `Both`: safe and adult/explicit media.
-- `Safe only`: excludes adult and explicit media.
-- `Adult only`: includes only adult and explicit media.
+## Discover
 
-Do not make dozens of top-level categories at launch. Use hashtags, search, and Discover for finer navigation.
+`GET /v1/discover/search`, `/hashtags`, `/hashtags/{slug}`, `/creators`, `/events`, and `/live`
+remain protected read models. Grouped search uses an independent scope-bound opaque cursor for each
+group. The web client advances only the requested group, merges by stable identity, rejects stale
+query/account responses, stops non-advancing cursors, and exposes accessible load, retry, and
+exhausted states.
 
-Reason:
+Content results use the canonical content projection and delivery decision. Live results use the
+canonical room access, safety, replay, and Livepeer credential decision. Provider identifiers and
+unsigned stored delivery resources are never exposed as playback.
 
-- too many categories create decision friction
-- hashtags are creator-native and flexible
-- backend can still use internal categories for safety/ranking
-- visible feed controls stay simple and mobile-friendly
+## Hashtags And Mentions
 
-## Hashtags
+Hashtags and mentions remain metadata and notification primitives, not ordering inputs.
 
-Hashtags are the creator/user-facing categorization system.
-
-Rules:
-
-- `#tag` is parsed server-side from captions.
-- Hashtag pages/search are discoverable.
-- Hashtags can influence feed ranking but cannot override safety or age gates.
-- Admin can block, merge, or de-rank abusive hashtags.
-- Creator AI can suggest hashtags, but creator confirms them.
-- Hashtags are normalized lowercase for indexing.
-
-Data:
-
-```text
-hashtags
-  id
-  slug
-  display_name
-  state: active | blocked | restricted
-
-content_hashtags
-  content_item_id
-  hashtag_id
-```
-
-## Mentions
-
-Mentions are relationship and notification primitives, not just text decoration.
-
-Rules:
-
-- `@handle` is parsed server-side from captions/comments.
-- Mentioned user receives notification unless muted/blocked.
-- Mentions link to public profile.
-- Block graph suppresses mention notifications.
-- Admin can disable abusive mention patterns.
-- Mentions are not payment/referral attribution by themselves.
-
-Data:
-
-```text
-content_mentions
-  content_item_id
-  mentioned_user_id
-  source: caption | comment | live_chat
-
-mention_notifications
-  mention_id
-  recipient_user_id
-  state: pending | delivered | muted | blocked
-```
-
-## Creator Categories
-
-Use a tiny controlled category list only for internal routing, moderation, and Discover filters.
-
-Launch category examples:
-
-- fitness
-- music
-- beauty
-- comedy
-- lifestyle
-- education
-- gaming
-- events
-- adult
-
-Creator-facing UI should prefer hashtags first. Categories can be optional metadata or admin-derived.
+- `#tag` and `@handle` are parsed server-side from captions/comments.
+- Hashtags are normalized lowercase and may be blocked or restricted by audited policy.
+- Mentions resolve active profiles and are suppressed by blocks and mutes.
+- Hashtag pages and search may filter their own result sets chronologically.
+- Creator AI may suggest caption metadata only after creator confirmation.
+- Neither hashtags nor mentions can override access, age, or moderation policy.
 
 ## NSFW/SFW Viewing Controls
 
-Veel is 18+ only, so NSFW/SFW is not an account type or app-access gate. It is a per-media rating and a viewer preference filter for age-verified adults.
+WeVid is 18+ only. Rating is per media item and viewing preference is per verified adult.
 
-Recommended launch behavior:
-
-- before age verification: no protected app access
-- after age verification and wallet setup: viewer can choose feed preference
-- default feed mode for new verified users: `Recommended`
-- default safety preference: `both`
-- quick Home/Bits content filter independent from `For You`/`Following`
-- one-click `Both`, `Safe only`, and `Adult only` preference under Settings
-- clear content warnings and report/block controls
-
-Creator Create/Edit:
-
-- required `nsfw_label`; `none` means SFW
-- optional content warning category
-- moderation can correct or override labels
-- repeated mislabeling can restrict monetisation/discovery
-- Mutuals is not a Create/Edit field; creator profile/settings controls Mutuals-active visibility on media
-
-Publishing policy is capability-based on one universal account:
-
-- age assurance permits SFW upload and publishing
-- adult-publisher eligibility is required only for `adult` or `explicit` media
-- creator KYC controls earning readiness, not ordinary SFW publishing
-- Studio and Enterprise access comes from backend plan/organization policy, never from KYC alone
-
-NSFW states:
-
-```text
-none
-adult
-explicit
-restricted
-blocked
-```
-
-## Recommendation Inputs
-
-Backend ranking may use:
-
-- follows
-- likes/saves/comments/shares
-- watch completion
-- replays
-- skips
-- reports/blocks
-- creator freshness
-- content freshness
-- hashtag/topic match
-- language/region where relevant
-- paid/unlocked state
-- creator quality/safety signals
-- diversity/fairness constraints
-- ranking mode: Recommended / Following
-- content preference: Both / Safe only / Adult only
-
-Do not use:
-
-- private message content
-- raw age/KYC provider data
-- raw wallet balances
-- sensitive identity data
-- AI-inferred sensitive traits
-- hidden paid ranking boost
-- referral commission eligibility as a ranking shortcut
-
-## Ranking Goals
-
-Rank for:
-
-- relevant media discovery
-- creator monetisation opportunity
-- safe adult-content handling
-- diversity across creators
-- healthy engagement
-- low report/block rate
-- conversion to legitimate purchases/unlocks/tickets/subscriptions
-
-Do not rank only for:
-
-- infinite watch time
-- rage/sexual shock amplification
-- manipulative scarcity
-- low-intent dating swipes
+- App access remains unavailable before required age readiness.
+- New verified users default to `latest` and the configured safe viewing baseline.
+- Create requires `Safe for everyone`, `Adult`, or `Explicit` on media.
+- Adult/Explicit drafts may remain private and resumable before adult-publisher verification;
+  submission/publication rechecks that contextual capability.
+- Creator KYC controls earning readiness, not ordinary SFW publication.
+- Moderation can correct labels and restrict unsafe or repeatedly mislabeled media.
 
 ## Read Model
 
 ```text
 content_items
-  -> content_feed_projection
-  -> personalized_feed_candidates
-  -> ranked_feed_response
-
-engagement_events
-  -> user_interest_projection
-  -> creator_quality_projection
-
-moderation/safety
-  -> eligibility filters before ranking
+  -> current canonical eligibility
+  -> surface/media-format filter
+  -> latest or active-follow filter
+  -> (published_at, id) keyset page
+  -> current access and delivery projection
 ```
 
-The launch `deterministic_v1` pipeline is:
+No engagement projection, wallet fact, checkout fact, purchase history, creator earnings, referral,
+membership, or entitlement value participates in ordering. Entitlements remain an access input only.
 
-1. filter by policy, age, block graph, visibility
-2. boost following
-3. boost fresh content
-4. boost good engagement ratio
-5. diversify creators
-6. apply the independent content preference
-7. apply prior-impression de-prioritisation and bounded deterministic exploration
-8. freeze the page-one timestamp and impression baseline, bind the cursor to mode/surface and an eligible-input fingerprint, and paginate by `(ranking_score, created_at, id)`
+## User And Admin Controls
 
-Only add ML/vector personalization after enough data exists.
+Required user controls:
 
-## Transparency And User Controls
-
-Feed ranking must be explainable enough for users, admins, and compliance review.
-
-Required launch controls:
-
-- `Why am I seeing this?` summary on media detail/menu
-- hide creator
-- hide hashtag/topic
+- Latest and Following tabs
+- independent NSFW/SFW preference
+- hide creator or topic
 - block/report creator
-- reset recommendations
-- Following feed that does not rely on behavioral profiling
-- NSFW/SFW preference stored under Settings
-- moderation and safety filters applied before ranking
+- stable load-more/continuation behavior
 
-Paid distribution rule:
-
-- do not silently sell ranking boost in For You
-- any paid promotion product must be labeled, user-control aware, policy-reviewed, and covered by a separate ADR
-- creator monetisation potential can be a business metric, but it cannot override safety, reports, blocks, age gates, or user feed preferences
+Admin may inspect feed health, correct labels, block unsafe content/hashtags, and review report rates.
+Admin cannot sell or manually assign ordering priority, bypass age/access policy for viewer resources,
+or expose private signals.
 
 ## Feed API
 
 ```text
-GET /v1/content/feed?mode=recommended
-GET /v1/content/feed?mode=following
-PATCH /v1/feed/preferences { "defaultMode": "recommended|following", "nsfwPreference": "both|sfw|nsfw" }
+GET /v1/content/feed?mode=latest&surface=home
+GET /v1/content/feed?mode=following&surface=bits
+PATCH /v1/feed/preferences { "defaultMode": "latest|following", "nsfwPreference": "both|sfw|nsfw" }
 POST /v1/feed/impressions
 GET /v1/discover/hashtags/:slug
-GET /v1/discover/search?q=...
+GET /v1/discover/search?q=...&contentCursor=...&creatorCursor=...&hashtagCursor=...&eventCursor=...&liveCursor=...
 ```
 
-API responses include:
+Responses include the content projection, creator relationship, access/safety state, engagement
+display state, and opaque continuation cursor. `rankingVersion` is a compatibility field whose
+chronological value is `chronological_v1`; it does not imply scoring.
 
-- content item
-- creator relationship state
-- access state
-- NSFW/content warning state
-- engagement counts/state
-- reason hints only if safe, e.g. `following`, `fresh`, `popular in #fitness`
+## Retired Ranking History
 
-Do not expose ranking internals or sensitive signals.
-
-## Admin Controls
-
-Admin can:
-
-- inspect feed health
-- de-rank or block content/hashtags
-- correct NSFW labels
-- view report/block rates by tag/category
-- inspect creator discovery health
-- run recommendation QA samples
-- see revenue/conversion by feed mode
-
-Admin cannot:
-
-- bypass age gate for normal viewer resources
-- expose raw private/sensitive signals
-- hide unsafe content without audit trail
+The previous `deterministic_v1` implementation created a server-side session containing at most 512
+ranked IDs for 30 minutes. A rollback-only 100,000-row PostgreSQL plan measured 100,520 function
+rows, about 1.0 million shared-buffer hits, temporary spill, and roughly 8.5 seconds because the
+canonical eligibility function materialized the eligible set before joining the bounded candidate
+window. These figures remain historical evidence for why that architecture was retired. They are
+not a launch target, fallback design, or permission to restore a fixed feed ceiling.
 
 ## Tests
 
-- unverified user cannot enter protected app/feed
-- `Safe only` excludes adult and explicit media on every public content surface
-- `Adult only` includes only adult and explicit media and remains behind platform 18+ access
-- anonymous public profile content is Safe-only
-- ranking tabs never overwrite the saved content preference
-- following mode returns followed creators only or primarily, depending fallback policy
-- blocked creators/content do not appear
-- hashtags parse and normalize
-- mentions notify unless muted/blocked
-- creator mislabel correction is audited
-- feed pagination is stable
-- replayed and concurrent impression keys increment at most once; changed-content key reuse returns conflict
-- Home and Bits render from the real feed contract on desktop and mobile
-- ranking does not expose internal sensitive signals
+- an unverified user cannot enter the protected feed
+- Latest orders by `published_at DESC, id DESC`
+- Following uses the identical keyset order and has no fallback
+- pagination preserves ties, rejects wrong scope/account, and traverses beyond 512 items
+- a newer insert after page one does not shift the bounded walk
+- a revoked item is omitted when a later page is read
+- Home/Bits exclude retired text and poll formats
+- Safe only and Adult only remain independent of feed mode
+- blocked, hidden, reported, expired, or unauthorized media does not appear
+- Home/Bits retain at most 60 mounted cards while preserving visible/focused anchors and Back state
+- grouped Discover cursors remain independent and stale responses cannot overwrite current results
+- content/live discovery never exposes an unauthorized Bunny or Livepeer resource
+- money, purchase, entitlement value, and engagement do not affect ordering

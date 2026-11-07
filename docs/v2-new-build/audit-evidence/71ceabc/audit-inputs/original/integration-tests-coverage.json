@@ -1,0 +1,132 @@
+{
+  "repository": "mariospeterman/VEEL-v2",
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "audit_date": "2026-11-04",
+  "scope": "all apps/api/test/*.integration.test.ts source files",
+  "source_edits": false,
+  "total_files": 7,
+  "total_lines": 9740,
+  "files": [
+    {
+      "path": "apps/api/test/admin-staff.integration.test.ts",
+      "bytes": 10315,
+      "sha256": "f7552e7221c47eab027ddcdf7f132860743d98326f02327add144ded55f287c6",
+      "line_count": 221,
+      "review_method": "full_text_read",
+      "reviewed_ranges": [
+        [
+          1,
+          221
+        ]
+      ],
+      "fully_read": true,
+      "vitest_executed_by_this_sub_audit": false
+    },
+    {
+      "path": "apps/api/test/analytics-core.integration.test.ts",
+      "bytes": 17515,
+      "sha256": "08ec305e108458afecdc19516bf763fe7c2af3769d26339dc6167d10694ec9b6",
+      "line_count": 373,
+      "review_method": "full_text_read",
+      "reviewed_ranges": [
+        [
+          1,
+          373
+        ]
+      ],
+      "fully_read": true,
+      "vitest_executed_by_this_sub_audit": false
+    },
+    {
+      "path": "apps/api/test/auth-lifecycle.integration.test.ts",
+      "bytes": 6861,
+      "sha256": "f1f77e3a6eab41e31d789eadee7e50a6d5e985afddab09738783233a66f3f880",
+      "line_count": 176,
+      "review_method": "full_text_read",
+      "reviewed_ranges": [
+        [
+          1,
+          176
+        ]
+      ],
+      "fully_read": true,
+      "vitest_executed_by_this_sub_audit": false
+    },
+    {
+      "path": "apps/api/test/authenticated-happy-path.integration.test.ts",
+      "bytes": 269662,
+      "sha256": "c6c801b1f7163d13baaf897a10cd5a93e4f3a5e5b55bca8acd122d96d80ee1d1",
+      "line_count": 7227,
+      "review_method": "full_text_read",
+      "reviewed_ranges": [
+        [
+          1,
+          7227
+        ]
+      ],
+      "fully_read": true,
+      "vitest_executed_by_this_sub_audit": false
+    },
+    {
+      "path": "apps/api/test/didit-verification.integration.test.ts",
+      "bytes": 3961,
+      "sha256": "061738c0e14177bae175899716fb84de9a4c7c281798fc62942241db9a64d041",
+      "line_count": 96,
+      "review_method": "full_text_read",
+      "reviewed_ranges": [
+        [
+          1,
+          96
+        ]
+      ],
+      "fully_read": true,
+      "vitest_executed_by_this_sub_audit": false
+    },
+    {
+      "path": "apps/api/test/mcp-profile-bridge.integration.test.ts",
+      "bytes": 46727,
+      "sha256": "1c56506034ec3ed41dab4e4786f111e7aa27ebfbd6aaf1aec7c0a206df8f2a0e",
+      "line_count": 1041,
+      "review_method": "full_text_read",
+      "reviewed_ranges": [
+        [
+          1,
+          1041
+        ]
+      ],
+      "fully_read": true,
+      "vitest_executed_by_this_sub_audit": false
+    },
+    {
+      "path": "apps/api/test/policy-content-eligibility.integration.test.ts",
+      "bytes": 24636,
+      "sha256": "67066c0d04c1218e00e1df1d00e56c9c9873914ae4f7b15ea1dc0d37e0e11386",
+      "line_count": 606,
+      "review_method": "full_text_read",
+      "reviewed_ranges": [
+        [
+          1,
+          606
+        ]
+      ],
+      "fully_read": true,
+      "vitest_executed_by_this_sub_audit": false
+    }
+  ],
+  "execution": {
+    "all_vitest_integration_suites_run_by_this_sub_audit": false,
+    "isolated_postgresql_proof": {
+      "runtime": "PGlite0.5.15",
+      "forward_migrations_applied": 118,
+      "proof_file": "/workspace/scratch/0635fbdaf32f/integration-fixture-proof.json",
+      "script_file": "/workspace/scratch/0635fbdaf32f/db-proof-runtime/integration-fixture-proof.mjs",
+      "actual_provider_contact": false,
+      "result": "distinct canonical/legacy identity fixture rejected23514; equal and NULL controls accepted"
+    }
+  },
+  "limitations": [
+    "Full textual source review is distinct from execution.",
+    "PGlite proof is PostgreSQL compatibility execution, not hosted Supabase/provider acceptance.",
+    "Parent agent owns unit/lint/typecheck/build and wider runtime audit."
+  ]
+}

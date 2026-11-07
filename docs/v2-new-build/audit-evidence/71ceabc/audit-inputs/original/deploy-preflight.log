@@ -1,0 +1,5 @@
+
+> veel-shoot-own-shine@0.0.0 deploy:check /workspace/scratch/0635fbdaf32f/wevid-audit
+> node scripts/check-deploy-readiness.mjs
+
+Local release preflight passed; no deployment was performed. Skeleton, rollback, and observability files are present.

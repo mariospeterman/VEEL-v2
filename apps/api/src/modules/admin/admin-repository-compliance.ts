@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import type { AdminRepository } from "./types.js";
 import {
   ComplianceLedgerRow,
@@ -6,6 +7,8 @@ import {
   VatDeterminationRow,
   ReceiptRow,
   InvoiceRow,
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
   pageSize,
   page,
   toComplianceLedgerEntry,
@@ -20,6 +23,10 @@ export function createComplianceRepository(
 ): Pick<AdminRepository, "listComplianceLedger" | "listDac7Reports" | "listCarfReports" | "listVatDeterminations" | "listReceipts" | "listInvoices"> {
   return {
     async listComplianceLedger(input) {
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/ledger", {
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ComplianceLedgerRow[]>`
         select
           id,
@@ -48,36 +55,79 @@ export function createComplianceRepository(
           immutable_hash,
           created_at
         from compliance_ledger_entries
-        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
-        order by created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or created_at < ${cursor.timestamp}::timestamptz
+          or (
+            created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
+        order by created_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toComplianceLedgerEntry);
+      return page(rows, toComplianceLedgerEntry, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async listDac7Reports(input) {
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/dac7/reports", {
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ComplianceReportRow[]>`
         select id, reporting_year, jurisdiction, state, line_count, export_id::text, null::boolean as carf_reporting_required, created_at, exported_at
         from dac7_reports
-        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
-        order by created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or created_at < ${cursor.timestamp}::timestamptz
+          or (
+            created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
+        order by created_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, (row) => toComplianceReport(row, "dac7"));
+      return page(
+        rows,
+        (row) => toComplianceReport(row, "dac7"),
+        (row) => encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async listCarfReports(input) {
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/carf/reports", {
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ComplianceReportRow[]>`
         select id, reporting_year, jurisdiction, state, line_count, export_id::text, carf_reporting_required, created_at, exported_at
         from carf_reports
-        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
-        order by created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or created_at < ${cursor.timestamp}::timestamptz
+          or (
+            created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
+        order by created_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, (row) => toComplianceReport(row, "carf"));
+      return page(
+        rows,
+        (row) => toComplianceReport(row, "carf"),
+        (row) => encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async listVatDeterminations(input) {
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/vat/determinations", {
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<VatDeterminationRow[]>`
         select
           id,
@@ -94,14 +144,27 @@ export function createComplianceRepository(
           review_state,
           created_at
         from vat_determinations
-        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
-        order by created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or created_at < ${cursor.timestamp}::timestamptz
+          or (
+            created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
+        order by created_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toVatDetermination);
+      return page(rows, toVatDetermination, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async listReceipts(input) {
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/receipts", {
+        sort: "issued_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ReceiptRow[]>`
         select
           id,
@@ -115,23 +178,45 @@ export function createComplianceRepository(
           state,
           issued_at
         from receipts
-        where (${input.cursor ?? null}::timestamptz is null or issued_at < ${input.cursor ?? null}::timestamptz)
-        order by issued_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or issued_at < ${cursor.timestamp}::timestamptz
+          or (
+            issued_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
+        order by issued_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toReceipt);
+      return page(rows, toReceipt, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.issued_at, row.id)
+      );
     },
     async listInvoices(input) {
+      const cursorScope = bindCursorScope("GET /v1/admin/compliance/invoices", {
+        sort: "issued_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<InvoiceRow[]>`
         select id, invoice_number, seller_of_record, buyer_user_id, seller_user_id, total_amount_minor, vat_amount_minor, currency, state, issued_at
         from vat_invoices
-        where (${input.cursor ?? null}::timestamptz is null or issued_at < ${input.cursor ?? null}::timestamptz)
-        order by issued_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or issued_at < ${cursor.timestamp}::timestamptz
+          or (
+            issued_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
+        order by issued_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toInvoice);
+      return page(rows, toInvoice, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.issued_at, row.id)
+      );
     },
   };
 }
