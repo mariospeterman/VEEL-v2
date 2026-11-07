@@ -1204,14 +1204,22 @@ describeIntegration("content export snapshot locking against migrated Postgres",
           ${`archive-sequence-${dataRequestId}`}, clock_timestamp()
         )
       `;
-      const jobs = await setupSql<Array<{ id: string }>>`
-        select id from content_export_jobs where data_request_id = ${dataRequestId}
+      const jobs = await setupSql<Array<{ id: string; next_attempt_at: Date }>>`
+        select id, next_attempt_at
+        from content_export_jobs
+        where data_request_id = ${dataRequestId}
       `;
       jobId = jobs[0]?.id;
-      if (!jobId) throw new Error("Content export job was not created");
+      const firstNextAttemptAt = jobs[0]?.next_attempt_at;
+      if (!jobId || !firstNextAttemptAt) throw new Error("Content export job was not created");
 
       const workerRepository = createPostgresContentExportRepository({ sql: setupSql });
-      const leaseInput = { now: new Date(), limit: 1, leaseDurationMs: 60_000 };
+      // Lease just beyond the persisted boundary after Postgres microseconds are parsed into a JS Date.
+      const leaseInput = {
+        now: new Date(firstNextAttemptAt.getTime() + 1),
+        limit: 1,
+        leaseDurationMs: 60_000
+      };
       const firstLease = await workerRepository.leaseDueExports(leaseInput);
       expect(firstLease[0]).toMatchObject({
         jobId,
@@ -1230,10 +1238,15 @@ describeIntegration("content export snapshot locking against migrated Postgres",
         jobId,
         idempotencyKey: `native-retry-${jobId}`
       })).resolves.toMatchObject({ state: "queued", attemptCount: 0 });
+      const retriedJobs = await setupSql<Array<{ next_attempt_at: Date }>>`
+        select next_attempt_at from content_export_jobs where id = ${jobId}
+      `;
+      const secondNextAttemptAt = retriedJobs[0]?.next_attempt_at;
+      if (!secondNextAttemptAt) throw new Error("Retried content export job was not queued");
 
       const secondLease = await workerRepository.leaseDueExports({
         ...leaseInput,
-        now: new Date()
+        now: new Date(secondNextAttemptAt.getTime() + 1)
       });
       expect(secondLease[0]).toMatchObject({
         jobId,

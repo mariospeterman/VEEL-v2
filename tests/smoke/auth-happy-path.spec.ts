@@ -480,7 +480,8 @@ async function installControllableVideoMetadata(page: Page) {
     if (!srcDescriptor?.get || !srcDescriptor.set) return;
     const getSrc = srcDescriptor.get;
     const setSrc = srcDescriptor.set;
-    let releaseHeldMetadata: (() => void) | null = null;
+    const heldMedia = new Set<HTMLMediaElement>();
+    let metadataReleased = false;
 
     Object.defineProperty(HTMLMediaElement.prototype, "src", {
       configurable: true,
@@ -491,8 +492,8 @@ async function installControllableVideoMetadata(page: Page) {
       set(this: HTMLMediaElement, value: string) {
         setSrc.call(this, value);
         Object.defineProperty(this, "duration", { configurable: true, value: 120 });
-        if (!releaseHeldMetadata && value.startsWith("blob:")) {
-          releaseHeldMetadata = () => this.dispatchEvent(new Event("loadedmetadata"));
+        if (!metadataReleased && value.startsWith("blob:")) {
+          heldMedia.add(this);
           return;
         }
         queueMicrotask(() => this.dispatchEvent(new Event("loadedmetadata")));
@@ -501,9 +502,11 @@ async function installControllableVideoMetadata(page: Page) {
 
     (window as typeof window & { __releaseWevidVideoMetadata?: () => void })
       .__releaseWevidVideoMetadata = () => {
-        const release = releaseHeldMetadata;
-        releaseHeldMetadata = null;
-        release?.();
+        metadataReleased = true;
+        for (const media of heldMedia) {
+          queueMicrotask(() => media.dispatchEvent(new Event("loadedmetadata")));
+        }
+        heldMedia.clear();
       };
   });
 }

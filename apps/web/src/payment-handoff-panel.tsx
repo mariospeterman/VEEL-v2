@@ -363,7 +363,9 @@ export function PaymentHandoffPanel({
 
   return (
     <div className="grid gap-3" data-checkout-state={state}>
-      <p className="text-sm leading-6 text-(--muted)">{message ?? idleCopy}</p>
+      {state !== "error" ? (
+        <p className="text-sm leading-6 text-(--muted)">{message ?? idleCopy}</p>
+      ) : null}
 
       {state === "idle" || state === "error" ? (
         <button className="primary-button" disabled={disabled} onClick={() => void prepareCheckout()} type="button">
@@ -448,7 +450,7 @@ export function PaymentHandoffPanel({
         </div>
       ) : null}
       {message && state === "error" ? (
-        <div className="grid gap-2 rounded border border-[#7f1d1d] bg-[#450a0a] px-3 py-2 text-sm text-[#fecaca]">
+        <div className="grid gap-2 rounded border border-[#7f1d1d] bg-[#450a0a] px-3 py-2 text-sm text-[#fecaca]" role="alert">
           <p>{message}</p>
           <button className="secondary-button justify-self-start" onClick={() => void prepareCheckout()} type="button">Try again</button>
         </div>
