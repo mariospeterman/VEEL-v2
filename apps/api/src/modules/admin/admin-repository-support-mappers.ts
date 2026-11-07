@@ -59,6 +59,8 @@ export interface DataRequestRow {
   content_export_job_state: AdminDataRequest["contentExportJobState"];
   content_export_cleanup_state: AdminDataRequest["contentExportCleanupState"];
   content_export_archive_upload_started_at: Date | null;
+  content_export_cleanup_required_attempt_count: string | number | null;
+  content_export_oldest_cleanup_required_attempt_at: Date | null;
   created_at: Date;
   updated_at: Date | null;
   completed_at: Date | null;
@@ -127,6 +129,12 @@ export function toDataRequest(row: DataRequestRow): AdminDataRequest {
     contentExportCleanupState: isContentExport ? row.content_export_cleanup_state : null,
     contentExportArchiveUploadStartedAt: isContentExport
       ? row.content_export_archive_upload_started_at?.toISOString() ?? null
+      : null,
+    contentExportCleanupRequiredAttemptCount: isContentExport
+      ? Number(row.content_export_cleanup_required_attempt_count ?? 0)
+      : null,
+    contentExportOldestCleanupRequiredAttemptAt: isContentExport
+      ? row.content_export_oldest_cleanup_required_attempt_at?.toISOString() ?? null
       : null,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at?.toISOString() ?? null,

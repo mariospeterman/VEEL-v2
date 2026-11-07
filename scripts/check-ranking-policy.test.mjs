@@ -25,8 +25,8 @@ describe("chronological feed policy", () => {
       "page_ids as materialized (",
       "select content.id from content_items content",
       "order by content.published_at desc, content.id desc",
-      "select",
-      "          ci.id,"
+      "            select",
+      "              ci.id,"
     ].join("\n");
 
     assert.deepEqual(feedRankingImplementationChecks(repository), [[

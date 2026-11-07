@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   coalesceContentAccessRefresh,
   contentAccessSourceKey,
+  createContentAccessRefreshGeneration,
   createContentAccessRetryScheduler,
   isAuthoritativeContentAccessDenial,
   playbackAccessSourceKey,
@@ -252,5 +253,27 @@ describe("coalesceContentAccessRefresh", () => {
     });
 
     expect(new Set([first, second, third])).toHaveLength(3);
+  });
+
+  it("fences stale live success and denial while preserving a current denial", () => {
+    const fence = createContentAccessRefreshGeneration("resource-a");
+    const requestA = fence.capture("signed-a");
+    let playback = "initial-a";
+    let unavailable = false;
+
+    fence.advance("resource-b");
+    const requestB = fence.capture("signed-b");
+    if (fence.isCurrent(requestB)) playback = "renewed-b";
+    expect(playback).toBe("renewed-b");
+
+    // A late success or authoritative denial from A cannot overwrite B.
+    if (fence.isCurrent(requestA)) playback = "late-renewed-a";
+    if (fence.isCurrent(requestA)) unavailable = true;
+    expect(playback).toBe("renewed-b");
+    expect(unavailable).toBe(false);
+
+    // The same denial remains authoritative for B's current generation.
+    if (fence.isCurrent(requestB)) unavailable = true;
+    expect(unavailable).toBe(true);
   });
 });

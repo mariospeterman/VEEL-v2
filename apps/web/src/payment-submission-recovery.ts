@@ -56,6 +56,8 @@ export interface PaymentRecoveryStorage {
   removeItem(key: string): void;
 }
 
+export type PaymentSubmissionRecoveryDisposition = "blocked" | "invalid" | "retry";
+
 export function paymentSubmissionRecoveryKey(scope: PaymentSubmissionBrowserScope): string {
   return `${paymentSubmissionRecoveryPrefix}${scope.actorUserId}:${scope.clientSessionScope}:${encodeURIComponent(scope.recoveryScope)}`;
 }
@@ -118,6 +120,22 @@ export function removePendingPaymentSubmission(
   }
 
   storage.removeItem(paymentSubmissionRecoveryKey(scope));
+}
+
+export function applyPaymentSubmissionDeliveryResult(
+  storage: PaymentRecoveryStorage,
+  record: PendingPaymentSubmission,
+  result: "accepted" | "accepted_expired" | "blocked" | "invalid" | "uncertain"
+): PaymentSubmissionRecoveryDisposition {
+  if (result === "invalid") {
+    removePendingPaymentSubmission(storage, record, {
+      intentId: record.intentId,
+      signature: record.signature
+    });
+    return "invalid";
+  }
+
+  return result === "blocked" ? "blocked" : "retry";
 }
 
 export function clearPaymentSubmissionRecovery(storage: PaymentRecoveryStorage): void {

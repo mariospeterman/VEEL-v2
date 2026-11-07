@@ -2199,7 +2199,7 @@ paths:
     post:
       operationId: submitPaymentSignature
       tags: [Payments]
-      summary: Record wallet-submitted signature before confirmed evidence
+      summary: Record wallet-submitted signature and reconcile exact signed bytes before confirmed evidence
       parameters:
         - $ref: "#/components/parameters/PaymentIntentId"
         - $ref: "#/components/parameters/RequiredIdempotencyKey"
@@ -5258,9 +5258,14 @@ components:
         externalLabel: { type: string, minLength: 1, maxLength: 120 }
         allowedUses:
           type: array
-          minItems: 1
+          description: Must include capture, upload, and distribution; additional approved uses may also be requested.
+          minItems: 3
           uniqueItems: true
           items: { $ref: "#/components/schemas/PerformerAllowedUse" }
+          allOf:
+            - contains: { const: capture }
+            - contains: { const: upload }
+            - contains: { const: distribution }
       oneOf:
         - required: [performerHandle]
         - required: [externalLabel]
@@ -6020,9 +6025,10 @@ components:
         refundPolicy: { $ref: "#/components/schemas/PaymentIntentRefundPolicy" }
     SubmitPaymentSignatureRequest:
       type: object
-      required: [signature]
+      required: [signature, signedTransactionBase64]
       properties:
         signature: { type: string }
+        signedTransactionBase64: { type: string, minLength: 1, maxLength: 4096 }
     AcceptPaymentIntentTermsRequest:
       type: object
       additionalProperties: false
@@ -7325,7 +7331,7 @@ components:
         resolvedAt: { type: [string, "null"], format: date-time }
     AdminDataRequest:
       type: object
-      required: [id, requesterUserId, type, state, privacyBoundary, contentExportJobId, contentExportJobState, contentExportCleanupState, contentExportArchiveUploadStartedAt, createdAt, updatedAt]
+      required: [id, requesterUserId, type, state, privacyBoundary, contentExportJobId, contentExportJobState, contentExportCleanupState, contentExportArchiveUploadStartedAt, contentExportCleanupRequiredAttemptCount, contentExportOldestCleanupRequiredAttemptAt, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         requesterUserId: { type: string, format: uuid }
@@ -7336,6 +7342,8 @@ components:
         contentExportJobState: { type: [string, "null"], enum: [queued, processing, retry, ready, cancelled, dead_letter, expired, null] }
         contentExportCleanupState: { type: [string, "null"], enum: [not_ready, retained_private, manual_confirmation_required, manual_delete_confirmed, null] }
         contentExportArchiveUploadStartedAt: { type: [string, "null"], format: date-time }
+        contentExportCleanupRequiredAttemptCount: { type: [integer, "null"], minimum: 0, description: "Admin-only count of non-winning archive attempts whose private provider objects still require confirmed cleanup." }
+        contentExportOldestCleanupRequiredAttemptAt: { type: [string, "null"], format: date-time, description: "Oldest unresolved archive-attempt cleanup timestamp; remains visible even after a later attempt wins." }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: [string, "null"], format: date-time }
         completedAt: { type: [string, "null"], format: date-time }

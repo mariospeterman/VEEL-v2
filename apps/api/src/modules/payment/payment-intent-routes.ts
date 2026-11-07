@@ -16,7 +16,8 @@ import {
   hashPaymentCheckoutToken,
   isValidSolanaSignature,
   paymentMemo,
-  SolanaPaymentConfigurationError
+  SolanaPaymentConfigurationError,
+  validateSignedPaymentTransaction
 } from "./solana-payment.js";
 import {
   createStoredWeVidTransactionRequestUrl,
@@ -42,6 +43,10 @@ import { mutationRateLimit } from "../../shared/rate-limits.js";
 import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
 import { defaultPaymentCommercialPolicy } from "./payment-commercial-policy.js";
 import { PaymentSubmissionWriteConflictError } from "./payment-submission.js";
+import {
+  verifyPaymentSettlementWithinDeadline,
+  verifyPaymentTransactionExpiryWithinDeadline
+} from "./payment-settlement-deadline.js";
 
 export async function registerPaymentIntentRoutes(
   app: FastifyInstance,
@@ -468,6 +473,16 @@ export async function registerPaymentIntentRoutes(
         return reply.code(400).send(validationResponse("signature must be a valid Solana transaction signature"));
       }
 
+      if (
+        typeof body.signedTransactionBase64 !== "string" ||
+        body.signedTransactionBase64.length === 0 ||
+        body.signedTransactionBase64.length > 4_096
+      ) {
+        return reply.code(400).send(validationResponse(
+          "signedTransactionBase64 is required and must be a bounded base64 transaction"
+        ));
+      }
+
       const params = request.params as { paymentIntentId?: string };
 
       try {
@@ -480,6 +495,16 @@ export async function registerPaymentIntentRoutes(
           return reply.code(404).send(notFoundResponse("Payment intent was not found"));
         }
 
+        if (!validateSignedPaymentTransaction({
+          signature: body.signature,
+          signedTransactionBase64: body.signedTransactionBase64,
+          buyerWallet: intent.buyerWallet
+        })) {
+          return reply.code(400).send(validationResponse(
+            "signedTransactionBase64 must contain the exact valid payer-signed transaction"
+          ));
+        }
+
         if (intent.withdrawalWaiverRequired && !intent.withdrawalWaiverAcceptedAt) {
           return reply.code(409).send({
             code: "conflict",
@@ -488,6 +513,16 @@ export async function registerPaymentIntentRoutes(
         }
 
         if (!["pending", "transaction_requested", "submitted"].includes(intent.state)) {
+          const exactReplay = await options.paymentRepository.hasSubmissionCommandReceipt?.({
+            supabaseUserId: access.supabaseUserId,
+            paymentIntentId: intent.id,
+            idempotencyKey,
+            signature: body.signature
+          });
+          if (exactReplay) {
+            return reply.code(202).send();
+          }
+
           return reply.code(409).send({
             code: "conflict",
             message: "Payment intent cannot accept a transaction submission in its current state"
@@ -513,7 +548,7 @@ export async function registerPaymentIntentRoutes(
 
         let settlement: Awaited<ReturnType<typeof options.settlementVerifier.verifyTransfer>>;
         try {
-          settlement = await options.settlementVerifier.verifyTransfer({
+          settlement = await verifyPaymentSettlementWithinDeadline(options.settlementVerifier, {
             signature: body.signature,
             referenceAddress: intent.referenceAddress,
             memo: paymentMemo(intent.id),
@@ -540,6 +575,43 @@ export async function registerPaymentIntentRoutes(
             "Payment signature was accepted but immediate settlement verification is unavailable"
           );
           return reply.code(202).send();
+        }
+
+        if (
+          !settlement.confirmed &&
+          settlement.failureCode === "not_found" &&
+          intent.expiresAt <= new Date() &&
+          options.settlementVerifier.verifyTransactionExpiry
+        ) {
+          try {
+            const expiry = await verifyPaymentTransactionExpiryWithinDeadline(
+              options.settlementVerifier,
+              {
+                signature: body.signature,
+                signedTransactionBase64: body.signedTransactionBase64,
+                buyerWallet: intent.buyerWallet
+              }
+            );
+
+            if (expiry.state === "invalid") {
+              return reply.code(400).send(validationResponse(
+                "signedTransactionBase64 must contain the exact valid payer-signed transaction"
+              ));
+            }
+
+            if (expiry.state === "expired") {
+              settlement = {
+                confirmed: false,
+                failureCode: "signed_transaction_expired"
+              };
+            }
+          } catch (error) {
+            request.log.warn(
+              { error, paymentIntentId: intent.id },
+              "Expired payment submission remains recoverable while transaction expiry proof is unavailable"
+            );
+            return reply.code(202).send();
+          }
         }
 
         try {

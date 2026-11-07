@@ -444,6 +444,12 @@ export async function registerEngagementRoutes(
       if (requestType !== "export" && requestType !== "delete") {
         return reply.code(400).send(validationResponse("type must be export or delete"));
       }
+      if (requestType === "export" && !app.config.CONTENT_EXPORTS_ENABLED) {
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Content export is temporarily unavailable"
+        });
+      }
       if (reason !== undefined && (reason.length < 3 || reason.length > 500)) {
         return reply.code(400).send(validationResponse("reason must be between 3 and 500 characters"));
       }

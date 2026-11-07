@@ -187,11 +187,15 @@ export interface VerificationRepository {
     requestHash: string;
     policyVersion?: string | null;
     termsAcceptedAt?: Date | null;
-  }): Promise<{ id: string; subjectReference: string }>;
+  }): Promise<{
+    id: string;
+    subjectReference: string;
+    requiresManualReview?: boolean;
+  }>;
   selectPendingSessionProvider?(input: {
     sessionId: string;
     selection: VerificationProviderSelection;
-  }): Promise<void>;
+  }): Promise<boolean>;
   completePendingSession?(input: {
     sessionId: string;
     providerSession: VerificationProviderSession;

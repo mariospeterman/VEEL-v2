@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyPaymentSubmissionDeliveryResult,
   clearPaymentSubmissionRecovery,
   paymentSubmissionRecoveryKey,
   readPendingPaymentSubmission,
@@ -56,6 +57,18 @@ describe("payment submission browser recovery", () => {
     clearPaymentSubmissionRecovery(storage);
     expect(storage.getItem(paymentSubmissionRecoveryKey(record))).toBeNull();
     expect(storage.getItem("unrelated")).toBe("keep");
+  });
+
+  it("clears only a definitively invalid pre-broadcast record and retains uncertain recovery", () => {
+    const storage = new MemoryStorage();
+    const record = paymentRecord();
+    storePendingPaymentSubmission(storage, record);
+
+    expect(applyPaymentSubmissionDeliveryResult(storage, record, "uncertain")).toBe("retry");
+    expect(readPendingPaymentSubmission(storage, record)).toEqual(record);
+
+    expect(applyPaymentSubmissionDeliveryResult(storage, record, "invalid")).toBe("invalid");
+    expect(readPendingPaymentSubmission(storage, record)).toBeNull();
   });
 });
 

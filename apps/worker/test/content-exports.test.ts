@@ -1,4 +1,8 @@
 import { createHash } from "node:crypto";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type postgres from "postgres";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -18,6 +22,8 @@ const job: QueuedContentExportJob = {
   jobId: "00000000-0000-4000-8000-000000000010",
   dataRequestId: "00000000-0000-4000-8000-000000000011",
   requesterUserId: "00000000-0000-4000-8000-000000000012",
+  archiveAttemptId: "00000000-0000-4000-8000-000000000014",
+  archiveAttemptSequence: "1",
   archiveObjectKey: "exports/00000000-0000-4000-8000-000000000012/00000000-0000-4000-8000-000000000010.tar",
   snapshotCreatedAt: new Date("2026-11-06T00:00:00.000Z"),
   sourceHoldUntil: new Date("2026-11-07T00:00:00.000Z"),
@@ -137,6 +143,27 @@ describe("content export worker", () => {
     expect(restoredBytes.get("content/00000000-0000-4000-8000-000000000020/assets/00000000-0000-4000-8000-000000000021.webp")).toEqual(bytes);
     expect(archive.toString("utf8")).not.toContain("secret/provider/object.webp");
     expect(archive.toString("utf8")).not.toContain("secret-livepeer-id");
+
+    const systemRestoreDirectory = mkdtempSync(join(tmpdir(), "wevid-content-export-tar-"));
+    try {
+      const archivePath = join(systemRestoreDirectory, "export.tar");
+      const outputDirectory = join(systemRestoreDirectory, "restored");
+      writeFileSync(archivePath, archive);
+      mkdirSync(outputDirectory);
+      const extracted = spawnSync("tar", ["-xf", archivePath, "-C", outputDirectory], { encoding: "utf8" });
+      expect(extracted.status, extracted.stderr).toBe(0);
+      const systemBytes = readFileSync(join(
+        outputDirectory,
+        "content/00000000-0000-4000-8000-000000000020/assets/00000000-0000-4000-8000-000000000021.webp"
+      ));
+      expect(systemBytes).toEqual(bytes);
+      expect(createHash("sha256").update(systemBytes).digest("hex"))
+        .toBe(createHash("sha256").update(bytes).digest("hex"));
+      expect(JSON.parse(readFileSync(join(outputDirectory, "manifest.json"), "utf8")))
+        .toMatchObject({ schemaVersion: 1, archiveFormat: "ustar" });
+    } finally {
+      rmSync(systemRestoreDirectory, { recursive: true, force: true });
+    }
 
     const archiveWithTrailingData = Buffer.concat([archive, Buffer.from([1])]);
     await expect(restoreContentExportTar({
@@ -260,6 +287,159 @@ describe("content export worker", () => {
     expect(jobOutcomes).toEqual([{ state: "cancelled" }]);
   });
 
+  it("keeps a stale slow PUT isolated from the newer winning archive pointer", async () => {
+    const firstJob = {
+      ...job,
+      totalItems: 1,
+      archiveAttemptId: "00000000-0000-4000-8000-000000000071",
+      archiveAttemptSequence: "1",
+      archiveObjectKey: "exports/00000000-0000-4000-8000-000000000012/00000000-0000-4000-8000-000000000072.tar",
+      leaseToken: "00000000-0000-4000-8000-000000000073",
+      attemptCount: 1
+    };
+    const secondJob = {
+      ...firstJob,
+      archiveAttemptId: "00000000-0000-4000-8000-000000000074",
+      archiveAttemptSequence: "2",
+      archiveObjectKey: "exports/00000000-0000-4000-8000-000000000012/00000000-0000-4000-8000-000000000075.tar",
+      leaseToken: "00000000-0000-4000-8000-000000000076",
+      attemptCount: 2
+    };
+    const singleItemSnapshot = { ...snapshot, items: [snapshot.items[0]!] };
+    const firstUploadStarted = deferred<void>();
+    const releaseFirstUpload = deferred<void>();
+    const objects = new Map<string, Buffer>();
+    let publishedObjectKey: string | null = null;
+    const provider: ContentExportProvider = {
+      async openSource() {
+        return {
+          state: "available",
+          byteLength: bytes.byteLength,
+          body: (async function* () { yield bytes; })()
+        };
+      },
+      async uploadArchive(input) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of input.body) chunks.push(Buffer.from(chunk));
+        if (input.archiveObjectKey === firstJob.archiveObjectKey) {
+          firstUploadStarted.resolve(undefined);
+          await releaseFirstUpload.promise;
+        }
+        objects.set(input.archiveObjectKey, Buffer.concat(chunks));
+      }
+    };
+    const firstRepository = memoryRepository({
+      itemOutcomes: [], jobOutcomes: [], jobOverride: firstJob, snapshotOverride: singleItemSnapshot
+    });
+    firstRepository.recordJobOutcome = async () => null;
+    const secondRepository = memoryRepository({
+      itemOutcomes: [], jobOutcomes: [], jobOverride: secondJob, snapshotOverride: singleItemSnapshot
+    });
+    secondRepository.recordJobOutcome = async (record) => {
+      if (record.outcome.state === "ready") publishedObjectKey = secondJob.archiveObjectKey;
+      return record.outcome;
+    };
+
+    const stale = processContentExports({ repository: firstRepository, provider });
+    await firstUploadStarted.promise;
+    const winner = await processContentExports({ repository: secondRepository, provider });
+    expect(winner.ready).toBe(1);
+    expect(publishedObjectKey).toBe(secondJob.archiveObjectKey);
+    const winningBytes = Buffer.from(objects.get(secondJob.archiveObjectKey)!);
+
+    releaseFirstUpload.resolve(undefined);
+    await stale;
+    expect(objects.get(secondJob.archiveObjectKey)).toEqual(winningBytes);
+    expect(objects.has(firstJob.archiveObjectKey)).toBe(true);
+    expect(publishedObjectKey).toBe(secondJob.archiveObjectKey);
+  });
+
+  it("restarts after a lost upload response with a new key and publishes only the retry", async () => {
+    const firstJob = {
+      ...job,
+      totalItems: 1,
+      archiveAttemptId: "00000000-0000-4000-8000-000000000091",
+      archiveAttemptSequence: "1",
+      archiveObjectKey: "exports/00000000-0000-4000-8000-000000000012/00000000-0000-4000-8000-000000000092.tar",
+      leaseToken: "00000000-0000-4000-8000-000000000093",
+      attemptCount: 1
+    };
+    const restartedJob = {
+      ...firstJob,
+      archiveAttemptId: "00000000-0000-4000-8000-000000000094",
+      archiveAttemptSequence: "2",
+      archiveObjectKey: "exports/00000000-0000-4000-8000-000000000012/00000000-0000-4000-8000-000000000095.tar",
+      leaseToken: "00000000-0000-4000-8000-000000000096",
+      attemptCount: 2
+    };
+    const singleItemSnapshot = { ...snapshot, items: [snapshot.items[0]!] };
+    const objects = new Map<string, Buffer>();
+    let uploadNumber = 0;
+    let publishedObjectKey: string | null = null;
+    const provider: ContentExportProvider = {
+      async openSource() {
+        return {
+          state: "available",
+          byteLength: bytes.byteLength,
+          body: (async function* () { yield bytes; })()
+        };
+      },
+      async uploadArchive(input) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of input.body) chunks.push(Buffer.from(chunk));
+        objects.set(input.archiveObjectKey, Buffer.concat(chunks));
+        uploadNumber += 1;
+        if (uploadNumber === 1) throw new Error("provider accepted bytes but response was lost");
+      }
+    };
+    const firstOutcomes: ContentExportJobOutcome[] = [];
+    const firstRepository = memoryRepository({
+      itemOutcomes: [], jobOutcomes: firstOutcomes, jobOverride: firstJob, snapshotOverride: singleItemSnapshot
+    });
+    const restartedRepository = memoryRepository({
+      itemOutcomes: [], jobOutcomes: [], jobOverride: restartedJob, snapshotOverride: singleItemSnapshot
+    });
+    restartedRepository.recordJobOutcome = async (record) => {
+      if (record.outcome.state === "ready") publishedObjectKey = restartedJob.archiveObjectKey;
+      return record.outcome;
+    };
+
+    await expect(processContentExports({ repository: firstRepository, provider }))
+      .resolves.toMatchObject({ retrying: 1, ready: 0 });
+    expect(firstOutcomes[0]).toMatchObject({ state: "retry" });
+    await expect(processContentExports({ repository: restartedRepository, provider }))
+      .resolves.toMatchObject({ ready: 1, retrying: 0 });
+
+    expect([...objects.keys()]).toEqual([firstJob.archiveObjectKey, restartedJob.archiveObjectKey]);
+    expect(publishedObjectKey).toBe(restartedJob.archiveObjectKey);
+    expect(objects.get(firstJob.archiveObjectKey)).toEqual(objects.get(restartedJob.archiveObjectKey));
+  });
+
+  it("dead-letters a transient failure on attempt eight", async () => {
+    const jobOutcomes: ContentExportJobOutcome[] = [];
+    const repository = memoryRepository({
+      itemOutcomes: [],
+      jobOutcomes,
+      jobOverride: { ...job, attemptCount: 8 }
+    });
+    const provider: ContentExportProvider = {
+      async openSource() {
+        return {
+          state: "available",
+          byteLength: bytes.byteLength,
+          body: (async function* () { yield bytes; })()
+        };
+      },
+      async uploadArchive() {
+        throw new Error("transient provider failure");
+      }
+    };
+
+    await expect(processContentExports({ repository, provider }))
+      .resolves.toMatchObject({ deadLettered: 1, retrying: 0 });
+    expect(jobOutcomes[0]).toMatchObject({ state: "dead_letter" });
+  });
+
   it("does not relabel or count an outcome after the finite lease is lost", async () => {
     const jobOutcomes: ContentExportJobOutcome[] = [];
     const repository = memoryRepository({ itemOutcomes: [], jobOutcomes, cancelled: true });
@@ -288,12 +468,18 @@ describe("content export worker", () => {
           id: cancelledJobId,
           data_request_id: "00000000-0000-4000-8000-000000000041",
           requester_user_id: job.requesterUserId,
-          cancel_requested_at: new Date("2026-11-06T00:59:00.000Z")
+          cancel_requested_at: new Date("2026-11-06T00:59:00.000Z"),
+          state: "processing",
+          lease_token: "00000000-0000-4000-8000-000000000051",
+          source_hold_until: new Date("2026-11-06T01:00:00.000Z")
         }, {
           id: failedJobId,
           data_request_id: "00000000-0000-4000-8000-000000000042",
           requester_user_id: job.requesterUserId,
-          cancel_requested_at: null
+          cancel_requested_at: null,
+          state: "processing",
+          lease_token: "00000000-0000-4000-8000-000000000052",
+          source_hold_until: new Date("2026-11-06T01:00:00.000Z")
         }];
       }
       return [];
@@ -318,6 +504,20 @@ describe("content export worker", () => {
     expect(jobUpdates[1]?.values).toContain("dead_letter");
     expect(jobUpdates[1]?.values).toContain("export_source_hold_expired");
 
+    const attemptUpdates = queries.filter(({ text }) =>
+      text.includes("update content_export_archive_attempts")
+    );
+    expect(attemptUpdates).toHaveLength(2);
+    for (const update of attemptUpdates) {
+      expect(update.text).toContain("when upload_started_at is null then 'abandoned'");
+      expect(update.text).toContain("else 'cleanup_required'");
+      expect(update.text).toContain("state in ('allocated', 'uploading', 'uploaded')");
+      const jobUpdateIndex = queries.findIndex(({ text, values }) =>
+        text.includes("update content_export_jobs") && values.includes(update.values[0])
+      );
+      expect(queries.indexOf(update)).toBeLessThan(jobUpdateIndex);
+    }
+
     const requestUpdates = queries.filter(({ text }) => text.includes("update data_requests"));
     expect(requestUpdates[0]?.values).toEqual(expect.arrayContaining([
       "cancelled",
@@ -331,11 +531,162 @@ describe("content export worker", () => {
     const auditInserts = queries.filter(({ text }) => text.includes("insert into audit_events"));
     expect(auditInserts[0]?.values).toEqual(expect.arrayContaining([
       "content_export_cancelled",
-      `worker:content-export:${cancelledJobId}:source-hold-cancelled`
+      `worker:content-export:${cancelledJobId}:source-hold:2026-11-06T01:00:00.000Z:source-hold-cancelled`
     ]));
     expect(auditInserts[1]?.values).toEqual(expect.arrayContaining([
       "content_export_source_hold_expired",
-      `worker:content-export:${failedJobId}:source-hold-expired`
+      `worker:content-export:${failedJobId}:source-hold:2026-11-06T01:00:00.000Z:source-hold-expired`
+    ]));
+  });
+
+  it("terminalizes an expired eighth lease instead of creating a non-runnable retry", async () => {
+    const exhaustedJobId = "00000000-0000-4000-8000-000000000081";
+    const exhaustedRequestId = "00000000-0000-4000-8000-000000000082";
+    const { queries, sql } = postgresFixture((query) => {
+      if (query.includes("select id, data_request_id, requester_user_id, attempt_count")) {
+        return [{
+          id: exhaustedJobId,
+          data_request_id: exhaustedRequestId,
+          requester_user_id: job.requesterUserId,
+          attempt_count: 8,
+          archive_attempt_sequence: "8",
+          cancel_requested_at: null,
+          lease_token: "00000000-0000-4000-8000-000000000083"
+        }];
+      }
+      if (query.includes("update content_export_archive_attempts") && query.includes("returning state")) {
+        return [{ state: "abandoned" }];
+      }
+      return [];
+    });
+    const repository = createPostgresContentExportRepository({ sql });
+
+    await expect(repository.leaseDueExports({
+      now: new Date("2026-11-06T01:00:00.000Z"),
+      limit: 5,
+      leaseDurationMs: 60_000
+    })).resolves.toEqual([]);
+
+    const terminal = queries.find(({ text }) =>
+      text.includes("update content_export_jobs") && text.includes("export_attempt_budget_exhausted")
+    );
+    expect(terminal?.text).toContain("export_attempt_budget_exhausted");
+    expect(terminal?.values).toEqual(expect.arrayContaining([exhaustedJobId]));
+    const request = queries.find(({ text }) =>
+      text.includes("update data_requests") && text.includes("export_attempt_budget_exhausted")
+    );
+    expect(request?.values).toEqual(expect.arrayContaining([exhaustedRequestId]));
+    const audit = queries.find(({ text, values }) =>
+      text.includes("insert into audit_events") && values.includes("content_export_attempt_budget_exhausted")
+    );
+    expect(audit?.values).toEqual(expect.arrayContaining([
+      "content_export_attempt_budget_exhausted",
+      `worker:content-export:${exhaustedJobId}:archive-attempt:8:attempt-budget-exhausted`
+    ]));
+    expect(audit?.values).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        archiveAttemptState: "abandoned",
+        cleanupRequiresConfirmation: false
+      })
+    ]));
+    const reclaimSelection = queries.find(({ text }) =>
+      text.includes("select id, data_request_id, requester_user_id, attempt_count")
+    );
+    expect(reclaimSelection?.text).toContain("for update skip locked");
+    expect(queries.some(({ text }) =>
+      text.includes("update content_export_archive_attempts attempt") && text.includes("from content_export_jobs")
+    )).toBe(false);
+    const retryRecovery = queries.find(({ text }) =>
+      text.includes("set state = 'retry'") && text.includes("attempt_count <")
+    );
+    expect(retryRecovery).toBeUndefined();
+  });
+
+  it("requires cleanup confirmation for an exhausted lease only after upload started", async () => {
+    const exhaustedJobId = "00000000-0000-4000-8000-000000000084";
+    const { queries, sql } = postgresFixture((query) => {
+      if (query.includes("select id, data_request_id, requester_user_id, attempt_count")) {
+        return [{
+          id: exhaustedJobId,
+          data_request_id: "00000000-0000-4000-8000-000000000085",
+          requester_user_id: job.requesterUserId,
+          attempt_count: 8,
+          archive_attempt_sequence: "8",
+          cancel_requested_at: null,
+          lease_token: "00000000-0000-4000-8000-000000000086"
+        }];
+      }
+      if (query.includes("update content_export_archive_attempts") && query.includes("returning state")) {
+        return [{ state: "cleanup_required" }];
+      }
+      return [];
+    });
+    const repository = createPostgresContentExportRepository({ sql });
+
+    await expect(repository.leaseDueExports({
+      now: new Date("2026-11-06T01:00:00.000Z"),
+      limit: 1,
+      leaseDurationMs: 60_000
+    })).resolves.toEqual([]);
+
+    const audit = queries.find(({ text, values }) =>
+      text.includes("insert into audit_events") && values.includes("content_export_attempt_budget_exhausted")
+    );
+    expect(audit?.values).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        archiveAttemptState: "cleanup_required",
+        cleanupRequiresConfirmation: true
+      })
+    ]));
+  });
+
+  it("allocates monotonic archive identities when a dead-letter retry resets its budget", async () => {
+    let leaseNumber = 0;
+    const { queries, sql } = postgresFixture((query) => {
+      if (query.includes("snapshot_created_at, source_hold_until, attempt_count")) {
+        return [{
+          id: job.jobId,
+          data_request_id: job.dataRequestId,
+          requester_user_id: job.requesterUserId,
+          snapshot_created_at: job.snapshotCreatedAt,
+          source_hold_until: job.sourceHoldUntil,
+          attempt_count: 0,
+          progress_total_items: 0
+        }];
+      }
+      if (query.includes("returning id, archive_attempt_sequence")) {
+        leaseNumber += 1;
+        return [{ id: job.jobId, archive_attempt_sequence: String(8 + leaseNumber) }];
+      }
+      return [];
+    });
+    const repository = createPostgresContentExportRepository({ sql });
+    const leaseInput = {
+      now: new Date("2026-11-06T01:00:00.000Z"),
+      limit: 1,
+      leaseDurationMs: 60_000
+    };
+
+    const firstCycle = await repository.leaseDueExports(leaseInput);
+    const secondCycle = await repository.leaseDueExports(leaseInput);
+
+    expect(firstCycle[0]).toMatchObject({ attemptCount: 1, archiveAttemptSequence: "9" });
+    expect(secondCycle[0]).toMatchObject({ attemptCount: 1, archiveAttemptSequence: "10" });
+    const attemptInserts = queries.filter(({ text }) =>
+      text.includes("insert into content_export_archive_attempts")
+    );
+    expect(attemptInserts).toHaveLength(2);
+    expect(attemptInserts[0]?.values.slice(2, 4)).toEqual(["9", 1]);
+    expect(attemptInserts[1]?.values.slice(2, 4)).toEqual(["10", 1]);
+    const startAudits = queries.filter(({ text, values }) =>
+      text.includes("insert into audit_events") && values.includes("content_export_processing_started")
+    );
+    expect(startAudits).toHaveLength(2);
+    expect(startAudits[0]?.values).toEqual(expect.arrayContaining([
+      `worker:content-export:${job.jobId}:archive-attempt:9:started`
+    ]));
+    expect(startAudits[1]?.values).toEqual(expect.arrayContaining([
+      `worker:content-export:${job.jobId}:archive-attempt:10:started`
     ]));
   });
 
@@ -370,6 +721,25 @@ describe("content export worker", () => {
     const cancellationFence = queries.find(({ text }) => text.includes(") as cancelled"));
     expect(cancellationFence?.text).toContain("source_hold_until <= clock_timestamp()");
   });
+
+  it("distinguishes an authorized NULL restriction from an absent or denied source row", async () => {
+    const repositoryFor = (rows: Array<{ unavailable_reason: string | null }>) => {
+      const { sql } = postgresFixture((query) => query.includes("end as unavailable_reason") ? rows : []);
+      return createPostgresContentExportRepository({ sql });
+    };
+
+    await expect(repositoryFor([{ unavailable_reason: null }]).findCurrentItemUnavailableReason({
+      job,
+      item: snapshot.items[0]!
+    })).resolves.toBeNull();
+    await expect(repositoryFor([]).findCurrentItemUnavailableReason({
+      job,
+      item: snapshot.items[0]!
+    })).resolves.toBe("export_source_not_authorized");
+    await expect(repositoryFor([{ unavailable_reason: "provider_object_retired" }])
+      .findCurrentItemUnavailableReason({ job, item: snapshot.items[0]! }))
+      .resolves.toBe("provider_object_retired");
+  });
 });
 
 function memoryRepository(input: {
@@ -388,6 +758,7 @@ function memoryRepository(input: {
     async heartbeat() { return true; },
     async isCancellationRequested() { return input.cancelled ?? false; },
     async markArchiveUploadStarted() { return !(input.cancelled ?? false); },
+    async markArchiveUploadCompleted() { return !(input.cancelled ?? false); },
     async recordJobOutcome(record) {
       input.jobOutcomes.push(record.outcome);
       return record.outcome;
@@ -418,4 +789,14 @@ function postgresFixture(
     begin<T>(work: (tx: postgres.TransactionSql) => Promise<T>): Promise<T>;
   }).begin = (work) => work(transaction);
   return { queries, sql };
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
 }

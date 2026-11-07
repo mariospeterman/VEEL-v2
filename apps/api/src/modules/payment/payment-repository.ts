@@ -22,7 +22,10 @@ export {
   PaymentRepositoryConfigurationError
 } from "./payment-repository-errors.js";
 import { PaymentIntentRow, toStoredPaymentIntent } from "./payment-intent-mapper.js";
-import { recordPaymentSubmission } from "./payment-submission.js";
+import {
+  hasPaymentSubmissionCommandReceipt,
+  recordPaymentSubmission
+} from "./payment-submission.js";
 import { calculateSettlementSplit } from "./payment-amounts.js";
 
 interface SettlementAuthorityRow {
@@ -71,6 +74,9 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
         throw new PaymentRepositoryConfigurationError();
       },
       async recordCheckoutPayer() {
+        throw new PaymentRepositoryConfigurationError();
+      },
+      async hasSubmissionCommandReceipt() {
         throw new PaymentRepositoryConfigurationError();
       },
       async recordSubmission() {
@@ -604,7 +610,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
       const rows = await sql<{ expires_at: Date }[]>`
         update payment_intents pi
         set
-          state = case when state = 'pending' then 'transaction_requested' else state end,
+          state = case when pi.state = 'pending' then 'transaction_requested' else pi.state end,
           transaction_request_url = ${input.storedTransactionRequestUrl},
           checkout_token_hash = ${input.checkoutTokenHash},
           transaction_requested_at = now(),
@@ -640,6 +646,9 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
       `;
 
       return rows[0] ? toStoredPaymentIntent(rows[0]) : null;
+    },
+    async hasSubmissionCommandReceipt(input) {
+      return hasPaymentSubmissionCommandReceipt(sql, input);
     },
     async recordSubmission(input) {
       await recordPaymentSubmission(sql, input);

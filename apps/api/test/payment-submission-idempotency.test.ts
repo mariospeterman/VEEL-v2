@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PostgresSql, PostgresTransaction } from "../src/shared/postgres.js";
-import { recordPaymentSubmission } from "../src/modules/payment/payment-submission.js";
+import {
+  hasPaymentSubmissionCommandReceipt,
+  recordPaymentSubmission
+} from "../src/modules/payment/payment-submission.js";
 import { MutationCommandIdempotencyConflictError } from "../src/shared/mutation-command-receipt.js";
 
 describe("payment submission command receipts", () => {
@@ -8,6 +11,9 @@ describe("payment submission command receipts", () => {
     const actorId = uuidFor(1);
     const paymentIntentId = uuidFor(2);
     let receipt: {
+      actor_user_id: string;
+      action: string;
+      idempotency_key: string;
       target_type: string;
       target_id: string;
       request_version: number;
@@ -36,10 +42,20 @@ describe("payment submission command receipts", () => {
         return Promise.resolve([{ id: actorId }]);
       }
       if (query.includes("from mutation_command_receipts")) {
-        return Promise.resolve(receipt ? [receipt] : []);
+        return Promise.resolve(
+          receipt &&
+            receipt.actor_user_id === values[0] &&
+            receipt.action === values[1] &&
+            receipt.idempotency_key === values[2]
+            ? [receipt]
+            : []
+        );
       }
       if (query.includes("insert into mutation_command_receipts")) {
         receipt = {
+          actor_user_id: String(values[0]),
+          action: String(values[1]),
+          idempotency_key: String(values[4]),
           target_type: String(values[2]),
           target_id: String(values[3]),
           request_version: Number(values[5]),
@@ -77,6 +93,12 @@ describe("payment submission command receipts", () => {
       recordPaymentSubmission(sql, input)
     ]);
     await expect(recordPaymentSubmission(sql, input)).resolves.toBeUndefined();
+    await expect(hasPaymentSubmissionCommandReceipt(sql, {
+      supabaseUserId: input.supabaseUserId,
+      paymentIntentId,
+      idempotencyKey: input.idempotencyKey,
+      signature: input.signature
+    })).resolves.toBe(true);
     expect(settlementAttempts).toBe(1);
     expect(receipt).toMatchObject({
       target_type: "payment_intent",
@@ -89,6 +111,18 @@ describe("payment submission command receipts", () => {
       ...input,
       signature: "changed-signature"
     })).rejects.toBeInstanceOf(MutationCommandIdempotencyConflictError);
+    await expect(hasPaymentSubmissionCommandReceipt(sql, {
+      supabaseUserId: input.supabaseUserId,
+      paymentIntentId,
+      idempotencyKey: input.idempotencyKey,
+      signature: "changed-signature"
+    })).rejects.toBeInstanceOf(MutationCommandIdempotencyConflictError);
+    await expect(hasPaymentSubmissionCommandReceipt(sql, {
+      supabaseUserId: input.supabaseUserId,
+      paymentIntentId,
+      idempotencyKey: "different-command-key",
+      signature: input.signature
+    })).resolves.toBe(false);
     expect(settlementAttempts).toBe(1);
   });
 });

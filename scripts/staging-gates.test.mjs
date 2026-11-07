@@ -96,6 +96,7 @@ describe("strict staging convergence gates", () => {
     const missing = inspectStagingEnvironment({ DEPLOY_ENV: "staging", NODE_ENV: "production" });
     expect(missing.some((result) => result.status === "BLOCKED")).toBe(true);
     expect(missing.find((result) => result.name === "subscriptions")?.status).toBe("BLOCKED");
+    expect(missing.find((result) => result.name === "content_exports")?.status).toBe("DISABLED");
     expect(missing.find((result) => result.name === "mcp")?.status).toBe("BLOCKED");
 
     const env = completeDoctorEnv();
@@ -109,8 +110,17 @@ describe("strict staging convergence gates", () => {
     expect(unsafe.find((result) => result.name === "moderation")?.invalid).toContain("MEDIA_MODERATION_MODE=shadow|enforced|launch_approved");
     expect(unsafe.find((result) => result.name === "rate_limiting")?.invalid).toContain("API_RATE_LIMIT_STORE_DRIVER=redis");
 
-    env.SUBSCRIPTIONS_ENABLED = "maybe";
-    expect(inspectStagingEnvironment(env).find((result) => result.name === "subscriptions")?.status).toBe("INVALID");
+    env.SUBSCRIPTIONS_ENABLED = "true";
+    expect(inspectStagingEnvironment(env).find((result) => result.name === "subscriptions")).toMatchObject({
+      status: "INVALID",
+      invalid: ["SUBSCRIPTIONS_ENABLED=false"]
+    });
+
+    env.CONTENT_EXPORTS_ENABLED = "true";
+    expect(inspectStagingEnvironment(env).find((result) => result.name === "content_exports")).toMatchObject({
+      status: "INVALID",
+      invalid: ["CONTENT_EXPORTS_ENABLED=false"]
+    });
 
     env.SUPABASE_PROJECT_REF = env.SUPABASE_PRODUCTION_PROJECT_REF;
     expect(inspectStagingEnvironment(env).find((result) => result.name === "core")?.invalid).toContain("production_project_ref");
@@ -348,6 +358,7 @@ function completeDoctorEnv() {
     OTEL_REQUIRED: "true",
     OTEL_SDK_DISABLED: "false",
     SUBSCRIPTIONS_ENABLED: "false",
+    CONTENT_EXPORTS_ENABLED: "false",
     MCP_ENABLED: "false",
     LEGAL_DOCUMENTS_APPROVED: "true"
   };

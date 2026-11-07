@@ -47,6 +47,96 @@ function baseRepository(overrides: Partial<AgeRepository>): AgeRepository {
 }
 
 describe("durable age attempt routes", () => {
+  it("lets only one concurrent replay cross the provider-create claim", async () => {
+    let claimed = false;
+    let remoteCreates = 0;
+    let attempt: AgeSessionAttemptResource = {
+      id: sessionId,
+      provider: null,
+      providerReference: null,
+      launchUrl: null,
+      expiresAt: "2026-11-07T12:00:00.000Z",
+      launchState: "reserved",
+      status: "created",
+      resumable: false
+    };
+    const repository = baseRepository({
+      async reservePendingAgeVerification() {
+        return {
+          id: sessionId,
+          subjectReference: `wevid:user:${userId}:age_access:${sessionId}`,
+          attempt,
+          shouldCreateProviderSession: true
+        };
+      },
+      async selectPendingAgeProvider(input) {
+        if (claimed) return false;
+        claimed = true;
+        attempt = {
+          ...attempt,
+          provider: input.provider,
+          launchState: "reconciling",
+          status: "submitted",
+          resumable: true
+        };
+        return true;
+      },
+      async completePendingAgeVerification() {
+        attempt = {
+          ...attempt,
+          providerReference: "yoti-session-claim",
+          launchUrl: "https://age.yoti.example/session/claim",
+          launchState: "ready",
+          status: "pending"
+        };
+      },
+      async findAgeVerificationAttempt() {
+        return attempt;
+      }
+    });
+    const app = await buildApi({
+      authVerifier,
+      ageRepository: repository,
+      ageProviderWaterfall: {
+        async createSession(input) {
+          await input.onProviderSelected?.({
+            provider: "yoti",
+            method: "age_estimation",
+            assuranceLevel: "medium",
+            reusable: false
+          });
+          remoteCreates += 1;
+          return {
+            provider: "yoti",
+            providerReference: "yoti-session-claim",
+            launchUrl: "https://age.yoti.example/session/claim",
+            expiresAt: new Date("2026-11-07T12:00:00.000Z")
+          };
+        }
+      }
+    });
+    await app.ready();
+
+    const responses = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: "/v1/age/sessions",
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "age-claim-race" },
+        payload: { providerPreference: "yoti" }
+      }),
+      app.inject({
+        method: "POST",
+        url: "/v1/age/sessions",
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "age-claim-race" },
+        payload: { providerPreference: "yoti" }
+      })
+    ]);
+
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([201, 202]);
+    expect(remoteCreates).toBe(1);
+    await app.close();
+  }, 60_000);
+
   it("keeps an ambiguous create reconciling and reuses it for a different key", async () => {
     let attempt: AgeSessionAttemptResource = {
       id: sessionId,
@@ -93,6 +183,7 @@ describe("durable age attempt routes", () => {
           launchState: "reconciling",
           status: "submitted"
         };
+        return true;
       },
       async completePendingAgeVerification() {},
       async failPendingAgeVerification() {
@@ -165,7 +256,9 @@ describe("durable age attempt routes", () => {
           shouldCreateProviderSession: true
         };
       },
-      async selectPendingAgeProvider() {},
+      async selectPendingAgeProvider() {
+        return true;
+      },
       async completePendingAgeVerification() {},
       async failPendingAgeVerification(input) {
         fail(input);
@@ -292,6 +385,50 @@ describe("durable age attempt routes", () => {
 
     await app.close();
   });
+
+  it("returns an actionable manual-review state when an unreferenced handoff expires", async () => {
+    const terminal: AgeSessionAttemptResource = {
+      id: sessionId,
+      provider: "yoti",
+      providerReference: null,
+      launchUrl: null,
+      expiresAt: "2026-11-06T12:00:00.000Z",
+      launchState: "reserved",
+      status: "needs_review",
+      resumable: false
+    };
+    const repository = baseRepository({
+      async recordAgeVerificationReconciliationAttempt(input) {
+        expect(input).toEqual({ userId, sessionId });
+        return terminal;
+      }
+    });
+    const reconcileSession = vi.fn();
+    const app = await buildApi({
+      authVerifier,
+      ageRepository: repository,
+      ageProviderWaterfall: {
+        async createSession() {
+          throw new Error("must not create another provider session");
+        },
+        reconcileSession
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/age/sessions/${sessionId}/resume`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "age-resume-terminal-0001"
+      }
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json()).toEqual(terminal);
+    expect(reconcileSession).not.toHaveBeenCalled();
+    await app.close();
+  }, 60_000);
 
   it("returns a controlled provider error while keeping a referenced attempt resumable", async () => {
     const attempt: AgeSessionAttemptResource = {

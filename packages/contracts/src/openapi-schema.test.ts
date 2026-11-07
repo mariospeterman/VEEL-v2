@@ -174,6 +174,36 @@ describe("OpenAPI 3.1 schema semantics", () => {
     expectInvalid(monetisation, { ...monetisationBase, membershipOffer: "plan-1" });
   });
 
+  it("requires exact signed transaction bytes on every payment signature submission", () => {
+    const paymentSubmission = compileComponent("SubmitPaymentSignatureRequest");
+
+    expectValid(paymentSubmission, {
+      signature: "solana-signature",
+      signedTransactionBase64: "dHJhbnNhY3Rpb24=",
+    });
+    expectInvalid(paymentSubmission, { signature: "solana-signature" });
+    expectInvalid(paymentSubmission, {
+      signature: "solana-signature",
+      signedTransactionBase64: "",
+    });
+  });
+
+  it("requires performer consent requests to include the distribution baseline", () => {
+    const createPerformerConsentRequest = compileComponent("CreatePerformerConsentRequest");
+    const request = {
+      externalLabel: "Guest performer",
+      allowedUses: ["capture", "upload", "distribution", "promotion"],
+    };
+
+    expectValid(createPerformerConsentRequest, request);
+    for (const omitted of ["capture", "upload", "distribution"]) {
+      expectInvalid(createPerformerConsentRequest, {
+        ...request,
+        allowedUses: request.allowedUses.filter((value) => value !== omitted),
+      });
+    }
+  });
+
   it("requires a complete age-session resource for durable and direct handoffs", () => {
     const ageSession = compileComponent("AgeSession");
 

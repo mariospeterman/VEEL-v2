@@ -268,8 +268,8 @@ export async function resumeAgeSession(
   );
 }
 
-export async function getCurrentSession(): Promise<SessionState> {
-  return authenticatedGet<SessionState>("/v1/session");
+export async function getCurrentSession(signal?: AbortSignal): Promise<SessionState> {
+  return authenticatedGet<SessionState>("/v1/session", signal);
 }
 
 export async function createVerificationSession(
@@ -1050,9 +1050,13 @@ export async function createPaymentIntent(
   );
 }
 
-export async function getPaymentIntent(paymentIntentId: string): Promise<PaymentIntent> {
+export async function getPaymentIntent(
+  paymentIntentId: string,
+  signal?: AbortSignal
+): Promise<PaymentIntent> {
   return authenticatedGet<PaymentIntent>(
-    `/v1/payments/intents/${encodeURIComponent(paymentIntentId)}`
+    `/v1/payments/intents/${encodeURIComponent(paymentIntentId)}`,
+    signal
   );
 }
 
@@ -1077,21 +1081,25 @@ export async function getPaymentTransactionRequest(paymentIntentId: string): Pro
 
 export async function createSolanaPayCheckoutTransaction(
   checkoutUrl: string,
-  account: string
+  account: string,
+  signal?: AbortSignal
 ): Promise<TransactionRequestPostResponse> {
-  return publicCapabilityMutation<TransactionRequestPostResponse>(checkoutUrl, { account });
+  return publicCapabilityMutation<TransactionRequestPostResponse>(checkoutUrl, { account }, signal);
 }
 
 export async function submitPaymentSignature(
   paymentIntentId: string,
   signature: string,
-  idempotencyKey?: string
+  signedTransactionBase64: string,
+  idempotencyKey?: string,
+  signal?: AbortSignal
 ): Promise<void> {
   return authenticatedEmptyMutation(
     `/v1/payments/intents/${encodeURIComponent(paymentIntentId)}/submissions`,
     "POST",
-    { signature },
-    idempotencyKey
+    { signature, signedTransactionBase64 },
+    idempotencyKey,
+    signal
   );
 }
 

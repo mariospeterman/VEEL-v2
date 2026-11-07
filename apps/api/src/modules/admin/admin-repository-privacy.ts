@@ -238,6 +238,10 @@ export function createPrivacyRepository(
           export_job.state as content_export_job_state,
           export_job.cleanup_state as content_export_cleanup_state,
           export_job.archive_upload_started_at as content_export_archive_upload_started_at,
+          coalesce(export_attempts.cleanup_required_attempt_count, 0)::text
+            as content_export_cleanup_required_attempt_count,
+          export_attempts.oldest_cleanup_required_attempt_at
+            as content_export_oldest_cleanup_required_attempt_at,
           request.created_at,
           request.updated_at,
           request.completed_at
@@ -245,6 +249,14 @@ export function createPrivacyRepository(
         left join content_export_jobs export_job
           on request.type = 'export'
           and export_job.data_request_id = request.id
+        left join lateral (
+          select
+            count(*) as cleanup_required_attempt_count,
+            min(attempt.created_at) as oldest_cleanup_required_attempt_at
+          from content_export_archive_attempts attempt
+          where attempt.job_id = export_job.id
+            and attempt.state = 'cleanup_required'
+        ) export_attempts on true
         where (
           ${cursor.timestamp}::timestamptz is null
           or request.created_at < ${cursor.timestamp}::timestamptz
@@ -362,6 +374,10 @@ export function createPrivacyRepository(
             export_job.state as content_export_job_state,
             export_job.cleanup_state as content_export_cleanup_state,
             export_job.archive_upload_started_at as content_export_archive_upload_started_at,
+            coalesce(export_attempts.cleanup_required_attempt_count, 0)::text
+              as content_export_cleanup_required_attempt_count,
+            export_attempts.oldest_cleanup_required_attempt_at
+              as content_export_oldest_cleanup_required_attempt_at,
             updated_request.created_at,
             updated_request.updated_at,
             updated_request.completed_at
@@ -369,6 +385,14 @@ export function createPrivacyRepository(
           left join content_export_jobs export_job
             on updated_request.type = 'export'
             and export_job.data_request_id = updated_request.id
+          left join lateral (
+            select
+              count(*) as cleanup_required_attempt_count,
+              min(attempt.created_at) as oldest_cleanup_required_attempt_at
+            from content_export_archive_attempts attempt
+            where attempt.job_id = export_job.id
+              and attempt.state = 'cleanup_required'
+          ) export_attempts on true
           where exists (select 1 from audit_insert)
         `;
 

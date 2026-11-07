@@ -65,6 +65,36 @@ describe("performer consent routes", () => {
     await app.close();
   });
 
+  it("rejects performer requests that omit a required distribution use", async () => {
+    const createRequest = vi.fn();
+    const app = await buildApi({
+      authVerifier: {
+        async verifyToken() {
+          return { userId: "00000000-0000-4000-8000-000000000001", supabaseUserId: "00000000-0000-4000-8000-000000000001", sessionId: "00000000-0000-4000-8000-000000000099", authenticatedAt: new Date(), authenticationMethod: "wallet" as const };
+        }
+      },
+      performerRepository: performerRepository({ createRequest })
+    });
+
+    for (const allowedUses of [
+      ["upload", "distribution", "promotion"],
+      ["capture", "distribution", "promotion"],
+      ["capture", "upload", "promotion"]
+    ]) {
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/content/${invitation.contentId}/performers`,
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "performer-request-required-uses" },
+        payload: { externalLabel: "Guest performer", allowedUses }
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().code).toBe("validation_failed");
+    }
+    expect(createRequest).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("does not expose a mismatched invitation token on an idempotent retry", async () => {
     const app = await buildApi({
       authVerifier: {

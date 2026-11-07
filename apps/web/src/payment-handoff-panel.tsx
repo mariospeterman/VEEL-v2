@@ -17,6 +17,7 @@ import {
   paymentProjectionCheckoutState,
   refreshPaymentProjection
 } from "@/payment-confirmation-projection";
+import { runPaymentOperationWithDeadline } from "@/payment-operation-deadline";
 import {
   paymentSubmissionRecoveryPrefix,
   readPendingPaymentSubmission,
@@ -30,6 +31,8 @@ const PaymentWalletRuntime = dynamic(
   () => import("./payment-wallet-runtime").then((module) => module.PaymentWalletRuntime),
   { ssr: false }
 );
+
+const paymentRecoveryRetryMs = 5_000;
 
 interface PaymentHandoffPanelProps {
   createIntent: (idempotencyKey: string) => Promise<PaymentIntent | null>;
@@ -77,58 +80,96 @@ export function PaymentHandoffPanel({
     projectionRefresh.current = onConfirmed;
   }, [onConfirmed]);
 
-  const restorePendingCheckout = useCallback(async (): Promise<boolean> => {
-    const session = await getCurrentSession();
-    if (!session.authenticated || !session.user) return false;
+  const restorePendingCheckout = useCallback((parentSignal?: AbortSignal): Promise<boolean> => {
+    return runPaymentOperationWithDeadline(async (signal) => {
+      const session = await getCurrentSession(signal);
+      if (!session.authenticated || !session.user) return false;
 
-    const browserScope: PaymentSubmissionBrowserScope = {
-      actorUserId: session.user.id,
-      clientSessionScope: session.clientSessionScope,
-      recoveryScope
-    };
-    const record = readPendingPaymentSubmission(window.localStorage, browserScope);
-    if (!record) return false;
+      const browserScope: PaymentSubmissionBrowserScope = {
+        actorUserId: session.user.id,
+        clientSessionScope: session.clientSessionScope,
+        recoveryScope
+      };
+      const record = readPendingPaymentSubmission(window.localStorage, browserScope);
+      if (!record) return false;
 
-    setPendingSubmission(record);
-    setState("submitted");
-    setMessage("A signed transaction is already pending. Reusing it without requesting another wallet payment.");
+      setPendingSubmission(record);
+      setState("submitted");
+      setMessage("A signed transaction is already pending. Reusing it without requesting another wallet payment.");
 
-    try {
-      const current = await getPaymentIntent(record.intentId);
-      setIntent(current);
-      const confirmedState = paymentProjectionCheckoutState(
-        current.state,
-        Boolean(projectionRefresh.current)
-      );
-      if (confirmedState) {
-        removeRecoveryRecord(record);
-        setPendingSubmission(null);
-        setState(confirmedState);
-        setMessage(
-          confirmedState === "awaiting_projection"
-            ? "Payment confirmed by the backend. Waiting for the canonical access record."
-            : readyCopy
+      try {
+        const current = await getPaymentIntent(record.intentId, signal);
+        setIntent(current);
+        const confirmedState = paymentProjectionCheckoutState(
+          current.state,
+          Boolean(projectionRefresh.current)
         );
-      } else if (["failed", "expired", "cancelled"].includes(current.state)) {
-        removeRecoveryRecord(record);
-        setPendingSubmission(null);
-        checkoutAttempt.current = null;
-        setState("error");
-        setMessage(`Payment ${current.state}`);
+        if (confirmedState) {
+          removeRecoveryRecord(record);
+          setPendingSubmission(null);
+          setState(confirmedState);
+          setMessage(
+            confirmedState === "awaiting_projection"
+              ? "Payment confirmed by the backend. Waiting for the canonical access record."
+              : readyCopy
+          );
+        } else if (["failed", "expired", "cancelled"].includes(current.state)) {
+          removeRecoveryRecord(record);
+          setPendingSubmission(null);
+          checkoutAttempt.current = null;
+          setState("error");
+          setMessage(`Payment ${current.state}`);
+        }
+      } catch (error) {
+        if (signal.aborted) throw error;
+        // Keep the durable browser record and recovery-only runtime active. A temporary API failure
+        // must never reveal a second transaction-building path.
       }
-    } catch {
-      // Keep the durable browser record and recovery-only runtime active. A temporary API failure
-      // must never reveal a second transaction-building path.
-    }
 
-    return true;
+      return true;
+    }, { signal: parentSignal });
   }, [readyCopy, recoveryScope]);
 
   useEffect(() => {
     let cancelled = false;
-    void restorePendingCheckout().catch(() => {
-      // The normal checkout action performs the same check and exposes any actionable API error.
-    });
+    let restoreRunning = false;
+    let rerunRequested = false;
+    let retryTimer: number | undefined;
+    const controller = new AbortController();
+
+    const scheduleRetry = () => {
+      if (cancelled || retryTimer !== undefined) return;
+      retryTimer = window.setTimeout(() => {
+        retryTimer = undefined;
+        startRestore();
+      }, paymentRecoveryRetryMs);
+    };
+
+    const startRestore = () => {
+      if (cancelled) return;
+      if (restoreRunning) {
+        rerunRequested = true;
+        return;
+      }
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+        retryTimer = undefined;
+      }
+      restoreRunning = true;
+      void restorePendingCheckout(controller.signal)
+        .catch(() => {
+          scheduleRetry();
+        })
+        .finally(() => {
+          restoreRunning = false;
+          if (rerunRequested && !cancelled) {
+            rerunRequested = false;
+            startRestore();
+          }
+        });
+    };
+
+    startRestore();
 
     const onStorage = (event: StorageEvent) => {
       if (
@@ -136,12 +177,14 @@ export function PaymentHandoffPanel({
         event.storageArea === window.localStorage &&
         event.key?.startsWith(paymentSubmissionRecoveryPrefix)
       ) {
-        void restorePendingCheckout();
+        startRestore();
       }
     };
     window.addEventListener("storage", onStorage);
     return () => {
       cancelled = true;
+      controller.abort(new Error("Payment recovery restoration unmounted"));
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       window.removeEventListener("storage", onStorage);
     };
   }, [restorePendingCheckout]);
@@ -151,12 +194,16 @@ export function PaymentHandoffPanel({
     const paymentIntentId = activeIntentId;
 
     let cancelled = false;
+    const controller = new AbortController();
     async function poll() {
       for (let attempt = 0; attempt < 15; attempt += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, 2_000));
         if (cancelled) return;
         try {
-          const current = await getPaymentIntent(paymentIntentId);
+          const current = await runPaymentOperationWithDeadline(
+            (signal) => getPaymentIntent(paymentIntentId, signal),
+            { signal: controller.signal }
+          );
           if (cancelled) return;
           setIntent(current);
           const confirmedState = paymentProjectionCheckoutState(
@@ -183,20 +230,21 @@ export function PaymentHandoffPanel({
             if (pendingSubmission) removeRecoveryRecord(pendingSubmission);
             setPendingSubmission(null);
             checkoutAttempt.current = null;
-            throw new Error(`Payment ${current.state}`);
+            setState("error");
+            setMessage(`Payment ${current.state}`);
+            return;
           }
         } catch (error) {
-          if (!cancelled) {
-            if (pendingSubmission) {
-              setState("submitted");
-              setMessage(
-                "The signed transaction is retained while onchain verification is temporarily unavailable."
-              );
-            } else {
-              setState("error");
-              setMessage(safeMutationMessage(error, "Payment"));
-            }
+          if (cancelled || controller.signal.aborted) return;
+          if (pendingSubmission) {
+            setState("submitted");
+            setMessage(
+              "The signed transaction is retained while onchain verification is temporarily unavailable."
+            );
+            continue;
           }
+          setState("error");
+          setMessage(safeMutationMessage(error, "Payment"));
           return;
         }
       }
@@ -209,6 +257,7 @@ export function PaymentHandoffPanel({
     void poll();
     return () => {
       cancelled = true;
+      controller.abort(new Error("Payment finality polling changed"));
     };
   }, [activeIntentId, pendingSubmission, readyCopy, state]);
 
@@ -286,22 +335,31 @@ export function PaymentHandoffPanel({
     }
   }
 
-  function directWalletSubmitted(record: PendingPaymentSubmission) {
+  const directWalletSubmitted = useCallback((record: PendingPaymentSubmission) => {
     setPendingSubmission(record);
-    if (intent?.id !== record.intentId) setIntent(null);
+    setIntent((current) => current?.id === record.intentId ? current : null);
     setState("submitted");
     setMessage("Signed transaction retained. WeVid is broadcasting and verifying this exact payment onchain.");
-  }
+  }, []);
 
   function fail(error: unknown) {
     setState("error");
     setMessage(safeMutationMessage(error, "Payment"));
   }
 
-  function walletFailed(error: unknown) {
+  const walletFailed = useCallback((error: unknown) => {
     setState("wallet");
     setMessage(`${safeMutationMessage(error, "Wallet approval")} Use the QR code or wallet link to continue.`);
-  }
+  }, []);
+
+  const recoveryFailed = useCallback(() => {
+    setPendingSubmission(null);
+    setIntent(null);
+    setTransaction(null);
+    checkoutAttempt.current = null;
+    setState("error");
+    setMessage("The retained wallet transaction is invalid. Start a fresh checkout to continue.");
+  }, []);
 
   return (
     <div className="grid gap-3" data-checkout-state={state}>
@@ -371,7 +429,7 @@ export function PaymentHandoffPanel({
       {pendingSubmission && state === "submitted" ? (
         <PaymentWalletRuntime
           intentId={pendingSubmission.intentId}
-          onError={() => undefined}
+          onError={recoveryFailed}
           onSubmitted={directWalletSubmitted}
           quote={null}
           recoveryScope={recoveryScope}

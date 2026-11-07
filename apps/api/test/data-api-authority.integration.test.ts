@@ -21,6 +21,24 @@ const canonicalIdentityAuthorityMigration = readFileSync(
   ),
   "utf8"
 );
+const verificationEvidenceAuthorityMigration = readFileSync(
+  new URL(
+    "../../../packages/database/migrations/0140_verification_policy_acl_age_attempt.sql",
+    import.meta.url
+  ),
+  "utf8"
+);
+
+const verificationEvidenceTables = [
+  "verification_sessions",
+  "verification_records",
+  "verification_events",
+  "provider_events",
+  "provider_webhook_receipts",
+  "provider_event_replay_requests",
+  "idempotency_keys",
+  "audit_events"
+] as const;
 
 const permissionScopedFinanceTables = [
   "refunds_and_disputes",
@@ -61,6 +79,7 @@ const serverOwnedTables = [
   "organizations",
   ...permissionScopedFinanceTables,
   ...canonicalIdentityTables,
+  ...verificationEvidenceTables,
   "user_social_counts",
   "content_engagement_counters",
   "comments",
@@ -245,6 +264,235 @@ describeIntegration("server-owned Data API authority", () => {
       await sql`
         delete from user_provider_identities
         where id = any(${[targetIdentityId, ...actorIdentityIds]}::uuid[])
+      `;
+      await sql`delete from users where id = any(${allUserIds}::uuid[])`;
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("closes retained grants over populated verification and provider evidence", async () => {
+    const sql = createPostgresClient(guardedIntegrationDatabaseUrl());
+    const targetUserId = randomUUID();
+    const verificationSessionId = randomUUID();
+    const verificationRecordId = randomUUID();
+    const verificationEventId = randomUUID();
+    const providerEventId = randomUUID();
+    const providerReceiptId = randomUUID();
+    const replayRequestId = randomUUID();
+    const auditEventId = randomUUID();
+    const actors = [
+      { membershipId: randomUUID(), membershipState: "active", role: "event_ops", userId: randomUUID() },
+      { membershipId: randomUUID(), membershipState: "active", role: "support", userId: randomUUID() },
+      { membershipId: randomUUID(), membershipState: "active", role: "finance", userId: randomUUID() },
+      { membershipId: randomUUID(), membershipState: "active", role: "trust_safety", userId: randomUUID() },
+      { membershipId: randomUUID(), membershipState: "revoked", role: "event_ops", userId: randomUUID() },
+      { membershipId: null, membershipState: null, role: null, userId: randomUUID() }
+    ] as const;
+    const actorIdentityIds = actors.map(() => randomUUID());
+    const allUserIds = [targetUserId, ...actors.map((actor) => actor.userId)];
+    const membershipIds = actors.flatMap((actor) =>
+      actor.membershipId === null ? [] : [actor.membershipId]
+    );
+
+    try {
+      for (const userId of allUserIds) {
+        await sql`
+          insert into users (id, supabase_user_id, state)
+          values (${userId}, ${userId}, 'active')
+        `;
+      }
+      for (const [index, actor] of actors.entries()) {
+        const identityId = actorIdentityIds[index];
+        if (!identityId) throw new Error("Missing authority actor identity id");
+        await sql`
+          insert into user_provider_identities (
+            id, provider, provider_subject, user_id, status, linked_at
+          ) values (
+            ${identityId}, 'supabase', ${actor.userId}, ${actor.userId}, 'active', now()
+          )
+        `;
+        if (actor.membershipId && actor.role && actor.membershipState) {
+          await sql`
+            insert into staff_memberships (id, user_id, role, state, granted_by_user_id)
+            values (
+              ${actor.membershipId}, ${actor.userId}, ${actor.role},
+              ${actor.membershipState}, ${actor.userId}
+            )
+          `;
+        }
+      }
+      await sql`
+        insert into verification_sessions (
+          id, subject_type, subject_id, purpose, provider, requested_method,
+          status, assurance_level, reusable
+        ) values (
+          ${verificationSessionId}, 'user', ${targetUserId}, 'creator_kyc',
+          'internal', 'manual_review', 'created', 'high', false
+        )
+      `;
+      await sql`
+        insert into verification_records (
+          id, subject_type, subject_id, purpose, status, provider,
+          provider_reference, method, assurance_level, reusable, metadata
+        ) values (
+          ${verificationRecordId}, 'user', ${targetUserId}, 'creator_kyc',
+          'valid', 'internal', 'cross-user-provider-reference', 'manual_review',
+          'high', false, ${sql.json({ evidence: "cross-user-normalized-evidence" })}
+        )
+      `;
+      await sql`
+        insert into verification_events (
+          id, session_id, provider, event_type, idempotency_key, payload_hash
+        ) values (
+          ${verificationEventId}, ${verificationSessionId}, 'didit',
+          'decision.completed', ${`verification-event-${verificationEventId}`},
+          ${"a".repeat(64)}
+        )
+      `;
+      await sql`
+        insert into provider_events (
+          id, provider, provider_event_id, event_type, normalized_state, replay_payload
+        ) values (
+          ${providerEventId}, 'didit', ${`provider-event-${providerEventId}`},
+          'decision.completed', 'processed', ${sql.json({ evidence: "normalized" })}
+        )
+      `;
+      await sql`
+        insert into provider_webhook_receipts (
+          id, provider, webhook_type, signature_hash, idempotency_key, state
+        ) values (
+          ${providerReceiptId}, 'didit', 'decision.completed', ${"b".repeat(64)},
+          ${`provider-receipt-${providerReceiptId}`}, 'processed'
+        )
+      `;
+      await sql`
+        insert into provider_event_replay_requests (
+          id, provider_event_id, requested_by_user_id, idempotency_key, reason
+        ) values (
+          ${replayRequestId}, ${providerEventId}, ${targetUserId},
+          ${`provider-replay-${replayRequestId}`}, 'integration_authority_probe'
+        )
+      `;
+      await sql`
+        insert into idempotency_keys (
+          key, actor_user_id, scope, request_hash, response_status,
+          response_body, expires_at
+        ) values (
+          ${`authority-probe-${targetUserId}`}, ${targetUserId}, 'authority_probe',
+          ${"c".repeat(64)}, 200, ${sql.json({ privateResult: true })},
+          now() + interval '1 hour'
+        )
+      `;
+      await sql`
+        insert into audit_events (
+          id, actor_user_id, subject_type, subject_id, action, metadata
+        ) values (
+          ${auditEventId}, ${targetUserId}, 'user', ${targetUserId},
+          'authority.probe', ${sql.json({ evidence: "audit-only" })}
+        )
+      `;
+
+      const eventOps = actors[0];
+      await sql.begin(async (transaction) => {
+        await transaction.unsafe(`
+          grant select on table ${verificationEvidenceTables.join(", ")}
+          to authenticated
+        `);
+        await transaction.unsafe(`
+          create policy verification_sessions_select_self_org_performer_or_staff
+            on verification_sessions for select to authenticated
+            using ((select private.is_staff_member()));
+          create policy verification_records_select_self_org_performer_or_staff
+            on verification_records for select to authenticated
+            using ((select private.is_staff_member()));
+          create policy verification_events_staff_select
+            on verification_events for select to authenticated
+            using ((select private.is_staff_member()));
+          create policy provider_events_select_staff
+            on provider_events for select to authenticated
+            using ((select private.is_staff_member()));
+          create policy provider_webhook_receipts_select_staff
+            on provider_webhook_receipts for select to authenticated
+            using ((select private.is_staff_member()));
+          create policy provider_event_replay_requests_staff_select
+            on provider_event_replay_requests for select to authenticated
+            using ((select private.is_staff_member()));
+          create policy idempotency_keys_select_staff
+            on idempotency_keys for select to authenticated
+            using ((select private.is_staff_member()));
+          create policy audit_events_select_actor_or_staff
+            on audit_events for select to authenticated
+            using ((select private.is_staff_member()));
+        `);
+        await assumeBrowserRole(transaction, "authenticated", eventOps.userId);
+        const leaked = await transaction<Array<{
+          provider_reference: string | null;
+          metadata: Record<string, unknown>;
+        }>>`
+          select provider_reference, metadata
+          from verification_records
+          where id = ${verificationRecordId}
+        `;
+        expect(leaked).toEqual([{
+          provider_reference: "cross-user-provider-reference",
+          metadata: { evidence: "cross-user-normalized-evidence" }
+        }]);
+        await transaction.unsafe("reset role");
+        await transaction.unsafe(verificationEvidenceAuthorityMigration);
+      });
+
+      const catalog = await sql<Array<{
+        authenticated_select: boolean;
+        backend_select: boolean;
+        policy_count: number;
+        table_name: string;
+      }>>`
+        select
+          relation.relname as table_name,
+          has_table_privilege('authenticated', relation.oid, 'select')
+            as authenticated_select,
+          has_table_privilege(current_user, relation.oid, 'select') as backend_select,
+          (
+            select count(*)::integer
+            from pg_policies policy
+            where policy.schemaname = 'public' and policy.tablename = relation.relname
+          ) as policy_count
+        from pg_class relation
+        join pg_namespace namespace on namespace.oid = relation.relnamespace
+        where namespace.nspname = 'public'
+          and relation.relname = any(${verificationEvidenceTables}::text[])
+        order by relation.relname
+      `;
+      expect(catalog).toHaveLength(verificationEvidenceTables.length);
+      expect(catalog.every((row) => !row.authenticated_select)).toBe(true);
+      expect(catalog.every((row) => row.backend_select && row.policy_count === 0)).toBe(true);
+
+      for (const actor of actors) {
+        for (const table of verificationEvidenceTables) {
+          await expect(sql.begin(async (transaction) => {
+            await assumeBrowserRole(transaction, "authenticated", actor.userId);
+            await transaction.unsafe(`select 1 from public.${table} limit 1`);
+          })).rejects.toMatchObject({ code: "42501" });
+        }
+      }
+      for (const table of verificationEvidenceTables) {
+        await expect(sql.begin(async (transaction) => {
+          await assumeBrowserRole(transaction, "anon");
+          await transaction.unsafe(`select 1 from public.${table} limit 1`);
+        })).rejects.toMatchObject({ code: "42501" });
+      }
+    } finally {
+      await sql`delete from provider_event_replay_requests where id = ${replayRequestId}`;
+      await sql`delete from provider_events where id = ${providerEventId}`;
+      await sql`delete from provider_webhook_receipts where id = ${providerReceiptId}`;
+      await sql`delete from verification_events where id = ${verificationEventId}`;
+      await sql`delete from verification_records where id = ${verificationRecordId}`;
+      await sql`delete from verification_sessions where id = ${verificationSessionId}`;
+      await sql`delete from idempotency_keys where actor_user_id = ${targetUserId}`;
+      await sql`delete from audit_events where id = ${auditEventId}`;
+      await sql`delete from staff_memberships where id = any(${membershipIds}::uuid[])`;
+      await sql`
+        delete from user_provider_identities where id = any(${actorIdentityIds}::uuid[])
       `;
       await sql`delete from users where id = any(${allUserIds}::uuid[])`;
       await sql.end({ timeout: 5 });

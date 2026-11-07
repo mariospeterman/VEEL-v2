@@ -159,16 +159,17 @@ Use Dockerized Fastify first because Veel needs:
 
 Use edge/serverless later only for isolated stateless endpoints. A full serverless conversion is not a launch requirement.
 
-## Node 22 / pnpm 10 Decision
+## Node 24 / pnpm 10 Decision
 
-Decision: **pin CI and the launch build to Node.js 22.23.4 and pnpm 10.0.0.**
+Decision: **pin CI and the launch build to Node.js 24.22.2 LTS and pnpm 10.0.0.**
 
-Why Node 22 instead of the newest current runtime:
+Why Node 24 instead of the newest current runtime:
 
 - Node.js production guidance favors Active LTS or Maintenance LTS lines for production systems.
-- Provider SDK compatibility matters more than runtime novelty for payments, wallets, media, realtime, workers, and observability.
-- Node 22 gives a stable LTS baseline while still supporting modern TypeScript, Web Crypto, fetch, and current framework tooling.
-- Newer Node majors can be evaluated after provider SDKs, Docker images, OpenTelemetry, Playwright, and CI are proven green.
+- The installed `@solana-program/token@0.15.0` manifest requires Node `>=24.0.0`; keeping Node 22 would leave the API and worker outside the SDK's published support contract.
+- Node 24 is the smallest current LTS major that satisfies that contract; `24.22.2` is its current security-patched release. This avoids changing the reviewed Solana Kit 7/token 0.15 dependency family. The official [Node release archive](https://nodejs.org/en/blog/release) and [Solana token releases](https://github.com/solana-program/token/releases) are the primary metadata references.
+- Provider SDK compatibility matters more than runtime novelty for payments, wallets, media, realtime, workers, and observability. A newer major can be evaluated only after Docker, OpenTelemetry, Playwright, and CI are proven on it.
+- Runtime promotion still requires the exact API, worker, token-account decoder, transaction-builder, subscription-verifier, tests, and production build to execute under the pinned Node 24.22.2 image; a version-file change alone is not acceptance evidence.
 
 Why pnpm 10:
 

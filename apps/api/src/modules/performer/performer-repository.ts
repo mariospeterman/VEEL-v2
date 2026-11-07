@@ -162,7 +162,19 @@ export function createPostgresPerformerRepository(database?: string | PostgresSq
           )
           select
             ${input.contentId}, ps.id, ${scope.owner_user_id}, ${input.idempotencyKey},
-            case when ps.verification_status = 'valid' then 'pending' else 'verification_required' end,
+            case when exists (
+              select 1
+              from private.current_verification_decision(
+                'performer', ps.id, 'performer_eligibility'
+              ) current_performer
+              where current_performer.status = 'valid'
+                and current_performer.result_over_threshold is true
+                and current_performer.threshold_age >= 18
+                and (
+                  current_performer.expires_at is null
+                  or current_performer.expires_at > now()
+                )
+            ) then 'pending' else 'verification_required' end,
             ${input.allowedUses}, ${policyVersion}, ${releaseVersion}, ${scope.content_revision},
             ${input.invitationTokenHash ?? null}, ${input.invitationExpiresAt ?? null}
           from performer_subjects ps
@@ -277,43 +289,28 @@ async function deriveReusablePerformerEvidence(
     select
       'performer', ${performerSubjectId}, 'performer_eligibility', 'valid',
       source.provider, source.provider_reference, source.method, source.jurisdiction,
-      18, true, source.assurance_level, source.verified_at, source.expires_at,
+      source.threshold_age, source.result_over_threshold, source.assurance_level,
+      source.verified_at, source.expires_at,
       source.reusable, source.id, source.provider_event_at,
       jsonb_build_object('source', 'performer_evidence_reuse', 'evidence_reuse', true)
-    from (
-      select *
-      from private.current_verification_decision(
-        'user', ${linkedUserId}, 'adult_publisher_eligibility'
-      )
-      union all
-      select *
-      from private.current_verification_decision(
-        'user', ${linkedUserId}, 'creator_kyc'
-      )
+    from private.current_verification_decision(
+      'user', ${linkedUserId}, 'adult_publisher_eligibility'
     ) source
     where source.status = 'valid'
       and source.assurance_level in ('high', 'documentary')
+      and source.threshold_age >= 18
       and source.result_over_threshold is true
       and (source.expires_at is null or source.expires_at > now())
-      and (
-        source.purpose = 'adult_publisher_eligibility'
-        or coalesce((
-          select age.status = 'valid'
-            and age.result_over_threshold is true
-            and (age.expires_at is null or age.expires_at > now())
-          from private.current_verification_decision(
-            'user', ${linkedUserId}, 'age_access'
-          ) age
-        ), false)
-      )
       and not coalesce((
         select existing.status = 'valid'
+          and existing.threshold_age >= 18
+          and existing.result_over_threshold is true
           and (existing.expires_at is null or existing.expires_at > now())
         from private.current_verification_decision(
           'performer', ${performerSubjectId}, 'performer_eligibility'
         ) existing
       ), false)
-    order by (source.purpose = 'adult_publisher_eligibility') desc, source.verified_at desc
+    order by source.verified_at desc
     limit 1
   `;
 }
@@ -330,9 +327,27 @@ async function respond(transaction: PostgresTransaction, input: {
     verification_status: string;
     state: "pending" | "verification_required" | "accepted" | "rejected";
   }[]>`
-    select pcr.id, pcr.performer_subject_id, ps.verification_status, pcr.state
+    select
+      pcr.id,
+      pcr.performer_subject_id,
+      case
+        when current_performer.status = 'valid'
+          and current_performer.result_over_threshold is true
+          and current_performer.threshold_age >= 18
+          and (
+            current_performer.expires_at is null
+            or current_performer.expires_at > now()
+        ) then 'valid'
+        when current_performer.status = 'valid' then 'pending'
+        when current_performer.status = 'invalid' then 'blocked'
+        else coalesce(current_performer.status, 'pending')
+      end as verification_status,
+      pcr.state
     from performer_consent_requests pcr
     join performer_subjects ps on ps.id = pcr.performer_subject_id
+    left join lateral private.current_verification_decision(
+      'performer', ps.id, 'performer_eligibility'
+    ) current_performer on true
     left join users linked on linked.id = ps.linked_user_id
     join content_safety_declarations csd on csd.content_item_id = pcr.content_item_id
     where (${input.requestId}::uuid is null or pcr.id = ${input.requestId})
@@ -424,12 +439,27 @@ function requestSelect() {
   return `
     select pcr.id, pcr.content_item_id, pcr.content_revision, ci.caption, ci.media_type,
       ci.nsfw_label, ps.display_label, profile.handle, ps.linked_user_id, pcr.state,
-      ps.verification_status, pcr.allowed_uses, pcr.invitation_expires_at
+      case
+        when current_performer.status = 'valid'
+          and current_performer.result_over_threshold is true
+          and current_performer.threshold_age >= 18
+          and (
+            current_performer.expires_at is null
+            or current_performer.expires_at > now()
+          ) then 'valid'
+        when current_performer.status = 'valid' then 'pending'
+        when current_performer.status = 'invalid' then 'blocked'
+        else coalesce(current_performer.status, 'pending')
+      end as verification_status,
+      pcr.allowed_uses, pcr.invitation_expires_at
     from performer_consent_requests pcr
     join performer_subjects ps on ps.id = pcr.performer_subject_id
     join content_items ci on ci.id = pcr.content_item_id
     join users owner on owner.id = ci.creator_user_id
     left join profiles profile on profile.user_id = ps.linked_user_id
+    left join lateral private.current_verification_decision(
+      'performer', ps.id, 'performer_eligibility'
+    ) current_performer on true
   `;
 }
 

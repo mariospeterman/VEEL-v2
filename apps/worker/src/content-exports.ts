@@ -32,6 +32,8 @@ export interface QueuedContentExportJob {
   jobId: string;
   dataRequestId: string;
   requesterUserId: string;
+  archiveAttemptId: string;
+  archiveAttemptSequence: string;
   archiveObjectKey: string;
   snapshotCreatedAt: Date;
   sourceHoldUntil: Date;
@@ -129,6 +131,12 @@ export interface ContentExportRepository {
   markArchiveUploadStarted(input: {
     job: QueuedContentExportJob;
     now: Date;
+  }): Promise<boolean>;
+  markArchiveUploadCompleted(input: {
+    job: QueuedContentExportJob;
+    now: Date;
+    archiveByteSize: number;
+    archiveSha256: string;
   }): Promise<boolean>;
   recordJobOutcome(input: {
     job: QueuedContentExportJob;
@@ -455,6 +463,18 @@ async function processOneContentExport(input: {
     archiveObjectKey: input.job.archiveObjectKey,
     body: hashedArchive
   });
+  if (archiveByteSize <= tarBlockBytes * 2) {
+    throw new ContentExportPermanentError("export_archive_invalid");
+  }
+  const archiveSha256 = archiveHash.digest("hex");
+  if (!await input.repository.markArchiveUploadCompleted({
+    job: input.job,
+    now: new Date(),
+    archiveByteSize,
+    archiveSha256
+  })) {
+    throw new ContentExportCancelledError();
+  }
   for (const item of exportedItems) {
     if (await input.repository.findCurrentItemUnavailableReason({ job: input.job, item })) {
       throw new ContentExportPermanentError("export_source_restricted_before_release");
@@ -465,13 +485,10 @@ async function processOneContentExport(input: {
     // It is never linked as downloadable when cancellation wins this fence.
     throw new ContentExportCancelledError();
   }
-  if (archiveByteSize <= tarBlockBytes * 2) {
-    throw new ContentExportPermanentError("export_archive_invalid");
-  }
   return {
     state: "ready",
     archiveByteSize,
-    archiveSha256: archiveHash.digest("hex"),
+    archiveSha256,
     availableItems,
     unavailableItems
   };
@@ -495,6 +512,7 @@ export function createPostgresContentExportRepository(
       async heartbeat() { return false; },
       async isCancellationRequested() { return true; },
       async markArchiveUploadStarted() { return false; },
+      async markArchiveUploadCompleted() { return false; },
       async recordJobOutcome(input) { return input.outcome; },
       async quarantineExpiredArchives() { return 0; },
       async expireElapsedSourceHolds() { return 0; }
@@ -506,55 +524,141 @@ export function createPostgresContentExportRepository(
   return {
     async leaseDueExports(input) {
       return sql.begin(async (transaction) => {
-        const staleCancelled = await transaction<Array<{
+        const staleLeases = await transaction<Array<{
           id: string;
           data_request_id: string;
           requester_user_id: string;
+          attempt_count: number;
+          archive_attempt_sequence: string;
+          cancel_requested_at: Date | null;
+          lease_token: string;
         }>>`
-          update content_export_jobs
-          set state = 'cancelled', lease_token = null, leased_until = null,
-              next_attempt_at = null, updated_at = clock_timestamp()
+          select id, data_request_id, requester_user_id, attempt_count,
+            archive_attempt_sequence, cancel_requested_at, lease_token
+          from content_export_jobs
           where state = 'processing'
             and leased_until <= ${input.now}
-            and cancel_requested_at is not null
-          returning id, data_request_id, requester_user_id
-        `;
-        for (const stale of staleCancelled) {
-          await transaction`
-            update data_requests
-            set state = 'cancelled', reason = 'cancelled_by_requester',
-                updated_at = clock_timestamp(), completed_at = null
-            where id = ${stale.data_request_id} and type = 'export'
-          `;
-          await insertWorkerAudit(transaction, {
-            actorUserId: stale.requester_user_id,
-            jobId: stale.id,
-            action: "content_export_cancelled",
-            idempotencyKey: `worker:content-export:${stale.id}:stale-lease-cancelled`,
-            metadata: { recoveredFromExpiredLease: true }
-          });
-        }
-        await transaction`
-          update content_export_jobs
-          set state = 'retry', next_attempt_at = ${input.now}, lease_token = null,
-              leased_until = null, last_error_code = 'export_lease_expired',
-              updated_at = clock_timestamp()
-          where state = 'processing'
-            and leased_until <= ${input.now}
-            and cancel_requested_at is null
             and source_hold_until > ${input.now}
+          order by leased_until, id
+          for update skip locked
+          limit ${input.limit}
         `;
+        for (const stale of staleLeases) {
+          // Locking and revalidating the job happens before touching its
+          // provider attempt. A concurrent heartbeat either owns the row (so
+          // SKIP LOCKED leaves both rows unchanged) or loses after this
+          // transaction has atomically terminalized the lease.
+          const terminalAttempts = await transaction<Array<{
+            state: "abandoned" | "cleanup_required";
+          }>>`
+            update content_export_archive_attempts
+            set state = case
+                  when upload_started_at is null then 'abandoned'
+                  else 'cleanup_required'
+                end,
+                updated_at = clock_timestamp()
+            where job_id = ${stale.id}
+              and lease_token = ${stale.lease_token}
+              and state in ('allocated', 'uploading', 'uploaded')
+            returning state
+          `;
+          const terminalAttemptState = terminalAttempts[0]?.state;
+          if (!terminalAttemptState) {
+            throw new Error(`Content export ${stale.id} has no active archive attempt for its expired lease`);
+          }
+          const cleanupRequiresConfirmation = terminalAttemptState === "cleanup_required";
+
+          if (stale.cancel_requested_at) {
+            await transaction`
+              update content_export_jobs
+              set state = 'cancelled', lease_token = null, leased_until = null,
+                  next_attempt_at = null, updated_at = clock_timestamp()
+              where id = ${stale.id}
+                and state = 'processing'
+                and lease_token = ${stale.lease_token}
+                and leased_until <= ${input.now}
+                and cancel_requested_at is not null
+            `;
+            await transaction`
+              update data_requests
+              set state = 'cancelled', reason = 'cancelled_by_requester',
+                  updated_at = clock_timestamp(), completed_at = null
+              where id = ${stale.data_request_id} and type = 'export'
+            `;
+            await insertWorkerAudit(transaction, {
+              actorUserId: stale.requester_user_id,
+              jobId: stale.id,
+              action: "content_export_cancelled",
+              idempotencyKey: `worker:content-export:${stale.id}:archive-attempt:${stale.archive_attempt_sequence}:stale-lease-cancelled`,
+              metadata: {
+                archiveAttemptSequence: stale.archive_attempt_sequence,
+                archiveAttemptState: terminalAttemptState,
+                cleanupRequiresConfirmation,
+                recoveredFromExpiredLease: true
+              }
+            });
+            continue;
+          }
+
+          if (Number(stale.attempt_count) >= maximumAttempts) {
+            await transaction`
+              update content_export_jobs
+              set state = 'dead_letter', next_attempt_at = null,
+                  lease_token = null, leased_until = null,
+                  last_error_code = 'export_attempt_budget_exhausted',
+                  updated_at = clock_timestamp()
+              where id = ${stale.id}
+                and state = 'processing'
+                and lease_token = ${stale.lease_token}
+                and leased_until <= ${input.now}
+                and cancel_requested_at is null
+                and attempt_count >= ${maximumAttempts}
+            `;
+            await transaction`
+              update data_requests
+              set state = 'failed', reason = 'export_attempt_budget_exhausted',
+                  updated_at = clock_timestamp(), completed_at = null
+              where id = ${stale.data_request_id} and type = 'export'
+            `;
+            await insertWorkerAudit(transaction, {
+              actorUserId: stale.requester_user_id,
+              jobId: stale.id,
+              action: "content_export_attempt_budget_exhausted",
+              idempotencyKey: `worker:content-export:${stale.id}:archive-attempt:${stale.archive_attempt_sequence}:attempt-budget-exhausted`,
+              metadata: {
+                attemptCount: Number(stale.attempt_count),
+                archiveAttemptSequence: stale.archive_attempt_sequence,
+                archiveAttemptState: terminalAttemptState,
+                providerDeletionAutomated: false,
+                cleanupRequiresConfirmation
+              }
+            });
+            continue;
+          }
+
+          await transaction`
+            update content_export_jobs
+            set state = 'retry', next_attempt_at = ${input.now}, lease_token = null,
+                leased_until = null, last_error_code = 'export_lease_expired',
+                updated_at = clock_timestamp()
+            where id = ${stale.id}
+              and state = 'processing'
+              and lease_token = ${stale.lease_token}
+              and leased_until <= ${input.now}
+              and cancel_requested_at is null
+              and attempt_count < ${maximumAttempts}
+          `;
+        }
         const rows = await transaction<Array<{
           id: string;
           data_request_id: string;
           requester_user_id: string;
-          archive_object_key: string;
           snapshot_created_at: Date;
           source_hold_until: Date;
           attempt_count: number;
           progress_total_items: number;
         }>>`
-          select id, data_request_id, requester_user_id, archive_object_key,
+          select id, data_request_id, requester_user_id,
             snapshot_created_at, source_hold_until, attempt_count, progress_total_items
           from content_export_jobs
           where state in ('queued', 'retry')
@@ -569,10 +673,16 @@ export function createPostgresContentExportRepository(
         const jobs: QueuedContentExportJob[] = [];
         for (const row of rows) {
           const leaseToken = randomUUID();
-          const leased = await transaction<{ id: string }[]>`
+          const archiveAttemptId = randomUUID();
+          const archiveObjectKey = `exports/${row.requester_user_id}/${randomUUID()}.tar`;
+          const leased = await transaction<Array<{
+            id: string;
+            archive_attempt_sequence: string;
+          }>>`
             update content_export_jobs
             set state = 'processing',
                 attempt_count = attempt_count + 1,
+                archive_attempt_sequence = archive_attempt_sequence + 1,
                 next_attempt_at = null,
                 lease_token = ${leaseToken},
                 leased_until = ${new Date(input.now.getTime() + input.leaseDurationMs)},
@@ -582,9 +692,20 @@ export function createPostgresContentExportRepository(
               and state in ('queued', 'retry')
               and source_hold_until > ${input.now}
               and cancel_requested_at is null
-            returning id
+            returning id, archive_attempt_sequence
           `;
           if (!leased[0]) continue;
+          const archiveAttemptSequence = String(leased[0].archive_attempt_sequence);
+
+          await transaction`
+            insert into content_export_archive_attempts (
+              id, job_id, attempt_sequence, attempt_count, lease_token, object_key, state
+            ) values (
+              ${archiveAttemptId}, ${row.id}, ${archiveAttemptSequence},
+              ${Number(row.attempt_count) + 1},
+              ${leaseToken}, ${archiveObjectKey}, 'allocated'
+            )
+          `;
 
           await transaction`
             update content_export_job_items
@@ -618,14 +739,20 @@ export function createPostgresContentExportRepository(
             actorUserId: row.requester_user_id,
             jobId: row.id,
             action: "content_export_processing_started",
-            idempotencyKey: `worker:content-export:${row.id}:attempt:${Number(row.attempt_count) + 1}:started`,
-            metadata: { attemptCount: Number(row.attempt_count) + 1 }
+            idempotencyKey: `worker:content-export:${row.id}:archive-attempt:${archiveAttemptSequence}:started`,
+            metadata: {
+              archiveAttemptId,
+              archiveAttemptSequence,
+              attemptCount: Number(row.attempt_count) + 1
+            }
           });
           jobs.push({
             jobId: row.id,
             dataRequestId: row.data_request_id,
             requesterUserId: row.requester_user_id,
-            archiveObjectKey: row.archive_object_key,
+            archiveAttemptId,
+            archiveAttemptSequence,
+            archiveObjectKey,
             snapshotCreatedAt: row.snapshot_created_at,
             sourceHoldUntil: row.source_hold_until,
             leaseToken,
@@ -750,7 +877,9 @@ export function createPostgresContentExportRepository(
           and job.lease_token = ${input.job.leaseToken}
           and job.leased_until > clock_timestamp()
       `;
-      return rows[0]?.unavailable_reason ?? "export_source_not_authorized";
+      return rows.length === 0
+        ? "export_source_not_authorized"
+        : rows[0]!.unavailable_reason;
     },
 
     async recordItemOutcome(input) {
@@ -864,18 +993,54 @@ export function createPostgresContentExportRepository(
         `;
         const row = rows[0];
         if (!row) return false;
+        const attempts = await transaction<{ id: string }[]>`
+          update content_export_archive_attempts
+          set state = 'uploading', upload_started_at = ${input.now},
+              updated_at = clock_timestamp()
+          where id = ${input.job.archiveAttemptId}
+            and job_id = ${input.job.jobId}
+            and lease_token = ${input.job.leaseToken}
+            and state = 'allocated'
+          returning id
+        `;
+        if (!attempts[0]) throw new ContentExportCancelledError();
         await insertWorkerAudit(transaction, {
           actorUserId: row.requester_user_id,
           jobId: input.job.jobId,
           action: "content_export_archive_upload_started",
-          idempotencyKey: `worker:content-export:${input.job.jobId}:attempt:${input.job.attemptCount}:archive-upload-started`,
+          idempotencyKey: `worker:content-export:${input.job.jobId}:archive-attempt:${input.job.archiveAttemptSequence}:archive-upload-started`,
           metadata: {
+            archiveAttemptId: input.job.archiveAttemptId,
+            archiveAttemptSequence: input.job.archiveAttemptSequence,
             attemptCount: input.job.attemptCount,
             cleanupState: "manual_confirmation_required"
           }
         });
         return true;
       });
+    },
+
+    async markArchiveUploadCompleted(input) {
+      const rows = await sql<{ id: string }[]>`
+        update content_export_archive_attempts attempt
+        set state = 'uploaded', upload_completed_at = ${input.now},
+            archive_byte_size = ${input.archiveByteSize},
+            archive_sha256 = ${input.archiveSha256},
+            updated_at = clock_timestamp()
+        from content_export_jobs job
+        where attempt.id = ${input.job.archiveAttemptId}
+          and attempt.job_id = ${input.job.jobId}
+          and attempt.lease_token = ${input.job.leaseToken}
+          and attempt.state = 'uploading'
+          and job.id = attempt.job_id
+          and job.state = 'processing'
+          and job.lease_token = ${input.job.leaseToken}
+          and job.leased_until > ${input.now}
+          and job.source_hold_until > clock_timestamp()
+          and job.cancel_requested_at is null
+        returning attempt.id
+      `;
+      return Boolean(rows[0]);
     },
 
     async recordJobOutcome(input) {
@@ -897,10 +1062,29 @@ export function createPostgresContentExportRepository(
         const current = jobRows[0];
         if (!current) return null;
 
-        const outcome = contentExportOutcomeAfterCancellationFence(
+        let outcome: ContentExportJobOutcome = contentExportOutcomeAfterCancellationFence(
           input.outcome,
           current.cancel_requested_at !== null
         );
+        if (outcome.state === "ready") {
+          // Keep the final publication fence in the same transaction as the
+          // winner pointer. The job row is already locked above; canonical
+          // content writers lock content before media, so retain that order
+          // before touching the archive-attempt row below.
+          const releaseRestriction = await findLockedContentExportReleaseRestriction(
+            transaction,
+            {
+              jobId: input.job.jobId,
+              requesterUserId: current.requester_user_id
+            }
+          );
+          if (releaseRestriction) {
+            outcome = {
+              state: "dead_letter",
+              errorCode: "export_source_restricted_before_release"
+            };
+          }
+        }
         const retrying = outcome.state === "retry";
         const nextAttemptAt = retrying
           ? new Date(input.now.getTime() + retryDelayMs(input.job.attemptCount))
@@ -908,6 +1092,33 @@ export function createPostgresContentExportRepository(
         const availableUntil = outcome.state === "ready"
           ? new Date(input.now.getTime() + 24 * 60 * 60 * 1000)
           : null;
+        const attemptRows = outcome.state === "ready"
+          ? await transaction<{ id: string }[]>`
+              update content_export_archive_attempts
+              set state = 'published', published_at = ${input.now},
+                  updated_at = clock_timestamp()
+              where id = ${input.job.archiveAttemptId}
+                and job_id = ${input.job.jobId}
+                and lease_token = ${input.job.leaseToken}
+                and state = 'uploaded'
+                and archive_byte_size = ${outcome.archiveByteSize}
+                and archive_sha256 = ${outcome.archiveSha256}
+              returning id
+            `
+          : await transaction<{ id: string }[]>`
+              update content_export_archive_attempts
+              set state = case
+                    when upload_started_at is null then 'abandoned'
+                    else 'cleanup_required'
+                  end,
+                  updated_at = clock_timestamp()
+              where id = ${input.job.archiveAttemptId}
+                and job_id = ${input.job.jobId}
+                and lease_token = ${input.job.leaseToken}
+                and state in ('allocated', 'uploading', 'uploaded')
+              returning id
+            `;
+        if (!attemptRows[0]) return null;
         await transaction`
           update content_export_jobs
           set state = ${outcome.state},
@@ -919,6 +1130,10 @@ export function createPostgresContentExportRepository(
                   ? outcome.errorCode
                   : null
               },
+              archive_object_key = case
+                when ${outcome.state === "ready"} then ${input.job.archiveObjectKey}
+                else archive_object_key
+              end,
               archive_byte_size = ${outcome.state === "ready" ? outcome.archiveByteSize : null},
               archive_sha256 = ${outcome.state === "ready" ? outcome.archiveSha256 : null},
               archive_ready_at = ${outcome.state === "ready" ? input.now : null},
@@ -976,8 +1191,10 @@ export function createPostgresContentExportRepository(
           actorUserId: current.requester_user_id,
           jobId: input.job.jobId,
           action,
-          idempotencyKey: `worker:content-export:${input.job.jobId}:attempt:${input.job.attemptCount}:${action}`,
+          idempotencyKey: `worker:content-export:${input.job.jobId}:archive-attempt:${input.job.archiveAttemptSequence}:${action}`,
           metadata: {
+            archiveAttemptId: input.job.archiveAttemptId,
+            archiveAttemptSequence: input.job.archiveAttemptSequence,
             attemptCount: input.job.attemptCount,
             errorCode: outcome.state === "retry" || outcome.state === "dead_letter"
               ? outcome.errorCode
@@ -1035,8 +1252,12 @@ export function createPostgresContentExportRepository(
           data_request_id: string;
           requester_user_id: string;
           cancel_requested_at: Date | null;
+          state: "queued" | "retry" | "processing";
+          lease_token: string | null;
+          source_hold_until: Date;
         }>>`
-          select id, data_request_id, requester_user_id, cancel_requested_at
+          select id, data_request_id, requester_user_id, cancel_requested_at,
+            state, lease_token, source_hold_until
           from content_export_jobs
           where (
               state in ('queued', 'retry')
@@ -1054,6 +1275,19 @@ export function createPostgresContentExportRepository(
           const requestReason = cancelled ? "cancelled_by_requester" : "export_source_hold_expired";
           const action = cancelled ? "content_export_cancelled" : "content_export_source_hold_expired";
           const auditSuffix = cancelled ? "source-hold-cancelled" : "source-hold-expired";
+          if (row.state === "processing" && row.lease_token) {
+            await transaction`
+              update content_export_archive_attempts
+              set state = case
+                    when upload_started_at is null then 'abandoned'
+                    else 'cleanup_required'
+                  end,
+                  updated_at = clock_timestamp()
+              where job_id = ${row.id}
+                and lease_token = ${row.lease_token}
+                and state in ('allocated', 'uploading', 'uploaded')
+            `;
+          }
           await transaction`
             update content_export_jobs
             set state = ${jobState}, next_attempt_at = null,
@@ -1077,7 +1311,7 @@ export function createPostgresContentExportRepository(
             actorUserId: row.requester_user_id,
             jobId: row.id,
             action,
-            idempotencyKey: `worker:content-export:${row.id}:${auditSuffix}`,
+            idempotencyKey: `worker:content-export:${row.id}:source-hold:${row.source_hold_until.toISOString()}:${auditSuffix}`,
             metadata: {
               providerDeletionMayResume: true,
               cancellationRequested: cancelled,
@@ -1093,6 +1327,54 @@ export function createPostgresContentExportRepository(
       if (ownsSql) await sql.end({ timeout: 5 });
     }
   };
+}
+
+async function findLockedContentExportReleaseRestriction(
+  transaction: postgres.TransactionSql,
+  input: { jobId: string; requesterUserId: string }
+): Promise<string | null> {
+  const contents = await transaction<Array<{ unavailable_reason: string | null }>>`
+    select case
+      when content.creator_user_id is distinct from ${input.requesterUserId}::uuid
+        then 'export_source_not_authorized'
+      when content.state::text in ('blocked', 'deleted')
+        then 'content_restricted_by_safety_or_takedown'
+      else null
+    end as unavailable_reason
+    from content_export_job_contents snapshot
+    join content_items content on content.id = snapshot.content_item_id
+    where snapshot.job_id = ${input.jobId}
+    order by snapshot.content_item_id
+    for update of content
+  `;
+
+  // Only exported media bytes can become a downloadable source. Initial or
+  // live unavailable items stay manifest-only and need no provider-object
+  // fence. Lock assets after their content rows to match composer writers.
+  const assets = await transaction<Array<{ unavailable_reason: string | null }>>`
+    select case
+      when asset.content_item_id is distinct from item.content_item_id
+        then 'export_source_not_authorized'
+      when asset.provider::text is distinct from item.source_provider
+        or asset.provider_asset_id is distinct from item.source_object_reference
+        then 'export_source_changed_after_snapshot'
+      when asset.provider_cleanup_lease_token is not null
+        then 'provider_cleanup_already_leased'
+      when asset.provider_cleanup_state = 'completed'
+        then 'provider_object_retired'
+      else null
+    end as unavailable_reason
+    from content_export_job_items item
+    join media_assets asset on asset.id = item.media_asset_id
+    where item.job_id = ${input.jobId}
+      and item.state = 'exported'
+    order by item.content_item_id, item.media_asset_id
+    for update of asset
+  `;
+
+  return contents.find((row) => row.unavailable_reason)?.unavailable_reason
+    ?? assets.find((row) => row.unavailable_reason)?.unavailable_reason
+    ?? null;
 }
 
 async function insertWorkerAudit(

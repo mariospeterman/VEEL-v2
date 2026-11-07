@@ -20,6 +20,9 @@ interface PerformerRouteOptions {
 const allowedUseValues = new Set<PerformerAllowedUse>([
   "capture", "upload", "distribution", "monetisation", "live", "replay", "promotion"
 ]);
+const requiredDistributionUses: readonly PerformerAllowedUse[] = [
+  "capture", "upload", "distribution"
+];
 
 export async function registerPerformerRoutes(app: FastifyInstance, options: PerformerRouteOptions): Promise<void> {
   app.get("/v1/content/:contentId/performers", async (request, reply) => {
@@ -52,6 +55,7 @@ export async function registerPerformerRoutes(app: FastifyInstance, options: Per
       !Array.isArray(allowedUses) || allowedUses.length === 0 ||
       new Set(allowedUses).size !== allowedUses.length ||
       allowedUses.some((value) => !allowedUseValues.has(value)) ||
+      requiredDistributionUses.some((value) => !allowedUses.includes(value)) ||
       typeof idempotencyKey !== "string" || idempotencyKey.length === 0 || idempotencyKey.length > 128
     ) {
       return reply.code(400).send({ code: "validation_failed", message: "Provide one performer and valid allowed uses" });

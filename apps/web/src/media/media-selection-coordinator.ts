@@ -9,11 +9,13 @@ type MediaSelectionCoordinatorOptions<TInput, TItem> = {
   replace: (items: TItem[]) => void;
   validate: (items: readonly TItem[]) => string | null;
   onCommitted?: () => void;
+  onPendingChange?: (pendingCount: number) => void;
   onError: (error: unknown) => void;
 };
 
 export type MediaSelectionCoordinator<TInput> = {
   enqueue: (input: TInput) => Promise<void>;
+  settle: () => Promise<void>;
   abort: () => void;
 };
 
@@ -31,11 +33,18 @@ export function createMediaSelectionCoordinator<TInput, TItem>(
 ): MediaSelectionCoordinator<TInput> {
   const controllers = new Set<AbortController>();
   let commitTail = Promise.resolve();
+  let pendingCount = 0;
   let stopped = false;
+
+  const changePendingCount = (delta: number) => {
+    pendingCount = Math.max(0, pendingCount + delta);
+    options.onPendingChange?.(pendingCount);
+  };
 
   const enqueue = (input: TInput) => {
     if (stopped) return Promise.resolve();
 
+    changePendingCount(1);
     const controller = new AbortController();
     controllers.add(controller);
     const outcome: Promise<PreparationOutcome<TItem>> = Promise.resolve()
@@ -73,7 +82,7 @@ export function createMediaSelectionCoordinator<TInput, TItem>(
 
       options.replace(next);
       options.onCommitted?.();
-    });
+    }).finally(() => changePendingCount(-1));
 
     commitTail = commit.catch(() => undefined);
     return commit;
@@ -81,6 +90,9 @@ export function createMediaSelectionCoordinator<TInput, TItem>(
 
   return {
     enqueue,
+    settle() {
+      return commitTail;
+    },
     abort() {
       stopped = true;
       for (const controller of controllers) controller.abort();

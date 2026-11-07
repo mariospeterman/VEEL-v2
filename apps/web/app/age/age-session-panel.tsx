@@ -36,7 +36,9 @@ export function AgeSessionPanel({ authState }: AgeSessionPanelProps) {
 
     if (!current.launchUrl && current.resumable && attemptResume) {
       setState("resuming");
-      setMessage("Checking the existing secure age-verification handoff...");
+      setMessage(current.providerReference
+        ? "Checking the existing secure age-verification handoff..."
+        : "Checking whether the provider handoff can be recovered...");
       current = await resumeAgeSession(current.id);
       setSession(current);
     }
@@ -48,9 +50,13 @@ export function AgeSessionPanel({ authState }: AgeSessionPanelProps) {
       return;
     }
 
-    setMessage(current.resumable
-      ? "The secure provider handoff is still being reconciled. Use Resume to check this same session again."
-      : "The provider outcome is still uncertain. We will not open a second session while this attempt is being reconciled.");
+    setMessage(current.launchState === "failed" || current.status === "needs_review"
+      ? "We could not recover the provider handoff identifier. Contact support; WeVid will not start a second session until this attempt is reconciled."
+      : current.resumable && !current.providerReference
+        ? "The provider request may still be completing. Check this handoff again later; WeVid will not open a second session while it may still be active."
+        : current.resumable
+        ? "The secure provider handoff is still being reconciled. Use Resume to check this same session again."
+        : "The provider outcome is still uncertain. We will not open a second session while this attempt is being reconciled.");
   }
 
   async function resumeCurrentSession() {
@@ -97,7 +103,11 @@ export function AgeSessionPanel({ authState }: AgeSessionPanelProps) {
           onClick={() => void resumeCurrentSession()}
           type="button"
         >
-          {state === "resuming" ? "Checking secure handoff" : "Resume age verification"}
+          {state === "resuming"
+            ? "Checking secure handoff"
+            : session.providerReference
+              ? "Resume age verification"
+              : "Check handoff status"}
         </button>
       ) : null}
 

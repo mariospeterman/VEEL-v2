@@ -77,6 +77,7 @@ export function MediaAssetComposer({
   const [submitted, setSubmitted] = useState(false);
   const [restorationReady, setRestorationReady] = useState(false);
   const [hashingVideo, setHashingVideo] = useState(false);
+  const [preparingSelections, setPreparingSelections] = useState(0);
   const uploadKeys = useRef(new Map<string, string>());
   const removalKeys = useRef(new Map<string, string>());
   const previewUrls = useRef(new Set<string>());
@@ -84,6 +85,7 @@ export function MediaAssetComposer({
   const pauseCurrentUpload = useRef<(() => void) | null>(null);
   const activeHash = useRef<AbortController | null>(null);
   const mounted = useRef(true);
+  const acceptedRef = useRef(false);
   const assetsRef = useRef<LocalAsset[]>([]);
   const draftRef = useRef<ContentItem | null>(null);
   const selectionCoordinator = useRef<MediaSelectionCoordinator<File[]> | null>(null);
@@ -100,6 +102,11 @@ export function MediaAssetComposer({
     assetsRef.current = resolved;
     if (mounted.current) setAssets(resolved);
     return resolved;
+  }, []);
+
+  const replaceAccepted = useCallback((next: boolean) => {
+    acceptedRef.current = next;
+    if (mounted.current) setAccepted(next);
   }, []);
 
   useEffect(() => {
@@ -201,10 +208,13 @@ export function MediaAssetComposer({
       onCommitted: () => {
         if (!mounted.current) return;
         setProgress(0);
-        setAccepted(false);
+        replaceAccepted(false);
         setSubmitted(false);
         setError(null);
         setNotice(null);
+      },
+      onPendingChange: (count) => {
+        if (mounted.current) setPreparingSelections(count);
       },
       onError: (caught) => {
         if (!mounted.current) return;
@@ -218,16 +228,28 @@ export function MediaAssetComposer({
 
   async function onUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (assets.length === 0) return setError("Choose at least one photo or video.");
-    if (assets.some((asset) => !asset.altText.trim())) return setError("Add a description for every item.");
-    if (!accepted) return setError("Confirm the rights and safety declaration.");
     setPending("upload");
     setError(null);
     try {
-      let activeDraft = draft;
+      await selectionCoordinator.current?.settle();
+      const selectedAssets = [...assetsRef.current];
+      if (selectedAssets.length === 0) {
+        setError("Choose at least one photo or video.");
+        return;
+      }
+      if (selectedAssets.some((asset) => !asset.altText.trim())) {
+        setError("Add a description for every item.");
+        return;
+      }
+      if (!acceptedRef.current) {
+        setError("Confirm the rights and safety declaration.");
+        return;
+      }
+
+      let activeDraft = draftRef.current;
       if (!activeDraft) {
         activeDraft = await createContentDraft({
-          mediaType: mediaTypeFor(assets),
+          mediaType: mediaTypeFor(selectedAssets),
           distributionMode,
           caption: caption.trim(),
           visibility,
@@ -239,7 +261,7 @@ export function MediaAssetComposer({
         setDraft(activeDraft);
       }
 
-      const nextAssets = [...assets];
+      const nextAssets = [...selectedAssets];
       for (const [index, localAsset] of nextAssets.entries()) {
         if (localAsset.mediaAssetId && localAsset.transferComplete) continue;
         let idempotencyKey = uploadKeys.current.get(localAsset.key);
@@ -280,7 +302,7 @@ export function MediaAssetComposer({
               checksumSha256
             }, idempotencyKey);
             nextAssets[index] = { ...localAsset, mediaAssetId: uploadSession.mediaAssetId, uploadSession };
-            replaceAssets([...nextAssets]);
+            replaceAssets((current) => mergeUploadState(current, nextAssets));
           }
           mediaAssetId = uploadSession.mediaAssetId;
           await uploadVideo(localAsset.file, uploadSession, activeDraft.id, (assetProgress) => {
@@ -303,7 +325,7 @@ export function MediaAssetComposer({
           mediaAssetId,
           transferComplete: true
         };
-        replaceAssets([...nextAssets]);
+        replaceAssets((current) => mergeUploadState(current, nextAssets));
         setProgress(Math.round(((index + 1) / nextAssets.length) * 100));
         refreshed = { ...refreshed, compositionRevision: updated.compositionRevision };
         activeDraft = refreshed;
@@ -451,9 +473,9 @@ export function MediaAssetComposer({
 
         {assets.length > 0 ? <>
           <label className="grid gap-1 text-sm"><span className="font-medium">Caption</span><textarea className="min-h-24 rounded border border-(--line) bg-(--background) px-3 py-2" maxLength={2200} onChange={(event) => setCaption(event.currentTarget.value)} value={caption} /></label>
-          <div className="grid gap-3 sm:grid-cols-2"><Select label="Content rating" onChange={(value) => { setNsfwLabel(value); setAccepted(false); }} options={nsfwLabels} value={nsfwLabel} /><Select label="Who can see it after approval?" onChange={setVisibility} options={visibilityValues} value={visibility} /><Select label="Who is represented?" onChange={(value) => { setRepresentationMode(value); setAccepted(false); }} options={representationModes} value={representationMode} />{canSchedule ? <label className="grid gap-1 text-sm"><span className="text-(--muted)">Publish later (optional)</span><input className="rounded border border-(--line) bg-(--background) px-3 py-2" min={minimumLocalDateTime()} onChange={(event) => setScheduledFor(event.currentTarget.value)} type="datetime-local" value={scheduledFor} /></label> : <a className="self-end py-2 text-sm font-semibold text-(--accent-text)" href="/app/subscriptions">Scheduling is a Studio capability</a>}</div>
-          <label className="flex min-h-12 items-start gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm leading-5"><input checked={accepted} className="mt-0.5" onChange={(event) => setAccepted(event.currentTarget.checked)} type="checkbox" /><span>I have the right to share this media, and every identifiable person is 18+ and consented.</span></label>
-          <div className="flex flex-wrap gap-2"><button className="min-h-12 flex-1 rounded bg-(--foreground) px-4 py-3 font-semibold text-(--background) disabled:opacity-50" disabled={!ageReady || !accepted || pending !== null || allUploaded} type="submit">{pending === "upload" ? hashingVideo ? "Preparing video securely…" : `Uploading ${progress}%…` : allUploaded ? "Media stored privately" : assets.some((asset) => asset.mediaAssetId && !asset.transferComplete) ? "Resume upload" : "Upload media"}</button>{pending === "upload" && (hashingVideo || activeUpload.current) ? <button className="min-h-12 rounded border border-(--line) px-4 py-3 font-semibold" onClick={() => { if (hashingVideo) activeHash.current?.abort(); else void activeUpload.current?.abort().finally(() => pauseCurrentUpload.current?.()); }} type="button">Pause</button> : null}</div>
+          <div className="grid gap-3 sm:grid-cols-2"><Select label="Content rating" onChange={(value) => { setNsfwLabel(value); replaceAccepted(false); }} options={nsfwLabels} value={nsfwLabel} /><Select label="Who can see it after approval?" onChange={setVisibility} options={visibilityValues} value={visibility} /><Select label="Who is represented?" onChange={(value) => { setRepresentationMode(value); replaceAccepted(false); }} options={representationModes} value={representationMode} />{canSchedule ? <label className="grid gap-1 text-sm"><span className="text-(--muted)">Publish later (optional)</span><input className="rounded border border-(--line) bg-(--background) px-3 py-2" min={minimumLocalDateTime()} onChange={(event) => setScheduledFor(event.currentTarget.value)} type="datetime-local" value={scheduledFor} /></label> : <a className="self-end py-2 text-sm font-semibold text-(--accent-text)" href="/app/subscriptions">Scheduling is a Studio capability</a>}</div>
+          <label className="flex min-h-12 items-start gap-3 rounded border border-(--line) bg-(--background) p-3 text-sm leading-5"><input checked={accepted} className="mt-0.5" onChange={(event) => replaceAccepted(event.currentTarget.checked)} type="checkbox" /><span>I have the right to share this media, and every identifiable person is 18+ and consented.</span></label>
+          <div className="flex flex-wrap gap-2"><button className="min-h-12 flex-1 rounded bg-(--foreground) px-4 py-3 font-semibold text-(--background) disabled:opacity-50" disabled={!ageReady || !accepted || preparingSelections > 0 || pending !== null || allUploaded} type="submit">{pending === "upload" ? hashingVideo ? "Preparing video securely…" : `Uploading ${progress}%…` : preparingSelections > 0 ? "Preparing selected media…" : allUploaded ? "Media stored privately" : assets.some((asset) => asset.mediaAssetId && !asset.transferComplete) ? "Resume upload" : "Upload media"}</button>{pending === "upload" && (hashingVideo || activeUpload.current) ? <button className="min-h-12 rounded border border-(--line) px-4 py-3 font-semibold" onClick={() => { if (hashingVideo) activeHash.current?.abort(); else void activeUpload.current?.abort().finally(() => pauseCurrentUpload.current?.()); }} type="button">Pause</button> : null}</div>
         </> : null}
       </form>
 
@@ -483,6 +505,25 @@ function assetsCompatibleWithDraft(assets: LocalAsset[], mediaType: ContentItem[
     return assets.length <= 1 && assets.every((asset) => asset.kind === "video");
   }
   return false;
+}
+
+/**
+ * Apply only transfer-owned fields to items that still exist. A delayed picker
+ * commit can therefore neither be dropped nor have its descriptions replaced
+ * by the upload loop's older snapshot.
+ */
+function mergeUploadState(current: LocalAsset[], updates: LocalAsset[]): LocalAsset[] {
+  const updatesByKey = new Map(updates.map((asset) => [asset.key, asset]));
+  return current.map((asset) => {
+    const update = updatesByKey.get(asset.key);
+    if (!update) return asset;
+    return {
+      ...asset,
+      ...(update.mediaAssetId ? { mediaAssetId: update.mediaAssetId } : {}),
+      ...(update.uploadSession ? { uploadSession: update.uploadSession } : {}),
+      ...(update.transferComplete !== undefined ? { transferComplete: update.transferComplete } : {})
+    };
+  });
 }
 
 class UploadPausedError extends Error {}

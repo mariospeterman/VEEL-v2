@@ -28,11 +28,11 @@ Before implementing or changing provider code, re-check the latest official prov
 - No money-based people ranking, feed ranking, recommendation boost, Mutuals boost, or message priority.
 - Money can buy access to content, events, memberships, and live streams. Money can never buy access to people, visibility, matches, recommendations, or preferential social treatment.
 - The blockchain is the source of payment truth. The entitlement system is the source of access truth. The compliance ledger is the source of reporting truth. The accounting integration is the source of bookkeeping truth. Never create a second competing source of truth for the same responsibility.
-- No provider secrets, private keys, stream keys, signed media URLs, webhook secrets, raw PII, or service-role keys in browser bundles.
+- No provider secrets, private keys, stream keys, webhook secrets, raw PII, service-role keys, or precomputed signed media resources in browser bundles. The browser may receive only short-lived, backend-authorized runtime upload/playback resources whose scope and expiry are rechecked by the canonical access authority; those resources are never configuration, durable cache truth, or provider-management credentials.
 - No custom media infrastructure when Bunny/Livepeer do the provider job.
 - No custom key custody. Embedded wallet provider must be noncustodial/user-controlled.
 - No wallet approval treated as payment proof. Backend settlement verification is required.
-- No full commerce engine in the core architecture. Physical commerce is WeVid-native Product Offers plus lightweight Orders/Fulfillment over the existing payment, wallet, verification, dispute, notification, and audit authorities. Selected Commerce Kit primitives may improve Solana Pay interoperability but never become payment, order, entitlement, wallet, or checkout authority.
+- No full commerce engine in the core architecture. Physical commerce is WeVid-native Product Offers plus lightweight Orders/Fulfillment over the existing payment, wallet, verification, dispute, notification, and audit authorities. The retired Solana Commerce Kit is not an implementation authority or fallback.
 - No raw provider payloads in frontend resources.
 - No stale copy, in-place upgrade, or reference-code import plans.
 - No provider-dependent production path can ship while its ADR state is only `candidate`; it must be `staging-approved` or `launch-approved` for the exact use case.
@@ -45,7 +45,7 @@ Before implementing or changing provider code, re-check the latest official prov
 - DB/Auth/Realtime: Supabase Postgres/Auth/Realtime.
 - Contracts: OpenAPI/schema-first.
 - Payments: Solana Pay, native SOL devnet first, SPL/USDC capable.
-- Commerce: `@solana-commerce/solana-pay` is the only initially selected Commerce Kit package and belongs to Slice 06 behind a narrow adapter; `@solana-commerce/headless` requires a later measured justification. Physical Product Offers, Orders, and Fulfillment remain post-core.
+- Solana Pay interoperability: exact-pinned maintained `@solana/pay` lives only in the narrow `@veel/solana-pay-codec` dependency island. It encodes/decodes transaction-request URLs and never owns payment intents, transaction composition, settlement, wallets, checkout policy, orders, entitlements, or access. Physical Product Offers, Orders, and Fulfillment remain post-core.
 - Wallets: embedded noncustodial wallet provider plus external Solana wallets.
 - Media: Bunny Stream for VOD, Livepeer for live/replay.
 - Package manager: pnpm.

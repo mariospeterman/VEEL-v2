@@ -33,7 +33,7 @@ const validInput = {
     ""
   ].join("\n"),
   rootPackage: {
-    engines: { node: ">=22.23.4 <23" },
+    engines: { node: ">=24.22.2 <25" },
     pnpm: {
       overrides: securityOverrides
     },

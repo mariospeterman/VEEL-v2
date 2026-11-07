@@ -44,7 +44,7 @@ export function feedRankingImplementationChecks(feedRepository) {
   const pageSelection = sourceBetween(
     feedRepository,
     "page_ids as materialized (",
-    "select\n          ci.id,",
+    "            select\n              ci.id,",
     "chronological feed page selection"
   );
   return [["chronological feed page selection", pageSelection.split("\n")]];
@@ -55,10 +55,12 @@ export function feedChronologyViolations(feedRepository) {
   if (!feedRepository.includes("order by content.published_at desc, content.id desc")) {
     violations.push("feed must order by published_at DESC and id DESC");
   }
-  if (!feedRepository.includes("private.eligible_content(viewer.id, null)")) {
-    violations.push("feed must use the canonical eligibility authority on every page");
+  if (!feedRepository.includes("private.eligible_content(")
+    || !feedRepository.includes("candidate_ids.ids")) {
+    violations.push("feed must use the candidate-bounded canonical eligibility authority on every page");
   }
-  if (!feedRepository.includes("${input.mode} <> 'following'")) {
+  if (!feedRepository.includes('input.mode === "following"')
+    || !feedRepository.includes("and (${followingFilter})")) {
     violations.push("Following must remain an explicit no-fallback filter");
   }
   if (!feedRepository.includes("content.media_type not in ('text', 'poll')")) {

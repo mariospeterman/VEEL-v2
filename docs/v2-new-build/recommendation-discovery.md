@@ -55,7 +55,7 @@ Chronological ordering inputs:
 - `id DESC` as the stable tie-break
 
 The first page captures an upper `(published_at, id)` bound. Every continuation cursor carries that
-bound, the last delivered key, the viewer identity, the surface, and the canonical mode. This keeps
+bound, the last delivered or fully scanned candidate key, the viewer identity, the surface, and the canonical mode. This keeps
 the walk stable when newer media is published, preserves timestamp ties, rejects cross-account or
 cross-surface reuse, and has no fixed corpus ceiling. Current eligibility is rechecked on each page,
 so revoked items are skipped without granting stale access.

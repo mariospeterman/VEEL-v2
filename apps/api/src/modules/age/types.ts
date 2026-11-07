@@ -43,7 +43,7 @@ export interface AgeRepository {
     method: "reusable_age" | "age_estimation" | "non_doc" | "doc_scan" | "gov_id_selfie";
     assuranceLevel: string;
     reusable: boolean;
-  }): Promise<void>;
+  }): Promise<boolean>;
   completePendingAgeVerification?(input: {
     sessionId: string;
     providerSession: AgeProviderSession;

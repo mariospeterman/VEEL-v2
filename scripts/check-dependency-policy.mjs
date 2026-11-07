@@ -20,7 +20,7 @@ const expectedUiDevelopmentPeers = {
 };
 
 const expectedRolldownRuntimeVersion = "1.0.3";
-const expectedNodeEngine = ">=22.23.4 <23";
+const expectedNodeEngine = ">=24.22.2 <25";
 const expectedRolldownDarwinBindings = [
   "@rolldown/binding-darwin-arm64",
   "@rolldown/binding-darwin-x64"

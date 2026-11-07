@@ -303,6 +303,47 @@ test("creates one ordered mixed-media carousel without a second format chooser",
   await expect(page.getByRole("button", { name: "Review and submit" })).toBeEnabled();
 });
 
+test("holds upload until delayed video metadata joins the actual composer state", async ({ page }) => {
+  await installControllableVideoMetadata(page);
+  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Create", exact: true }));
+  await page.getByRole("button", { name: /Add photos or videos/i }).click();
+
+  const fileInput = page.locator('input[type="file"]');
+  await fileInput.setInputFiles({
+    name: "race-photo.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64")
+  });
+  await page.getByLabel("Description").fill("Existing photo before delayed metadata");
+  await page.getByLabel(/I have the right to share this media/).check();
+
+  const contentCreatesBeforeDelay = requests.filter((request) =>
+    request.method === "POST" && request.path === "/v1/content"
+  ).length;
+  await fileInput.setInputFiles({
+    name: "delayed-metadata.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("delayed-video")
+  });
+
+  const preparing = page.getByRole("button", { name: "Preparing selected media…" });
+  await expect(preparing).toBeDisabled();
+  expect(requests.filter((request) => request.method === "POST" && request.path === "/v1/content"))
+    .toHaveLength(contentCreatesBeforeDelay);
+
+  await page.evaluate(() => {
+    (window as typeof window & { __releaseWevidVideoMetadata?: () => void })
+      .__releaseWevidVideoMetadata?.();
+  });
+  await expect(page.getByText("Video 2", { exact: true })).toBeVisible();
+  await expect(page.getByLabel(/I have the right to share this media/)).not.toBeChecked();
+  await page.getByLabel("Description").nth(1).fill("Video committed after metadata release");
+  await page.getByLabel(/I have the right to share this media/).check();
+  await page.getByRole("button", { name: "Upload media" }).click();
+
+  await expect(page.getByText("Stored privately", { exact: true })).toHaveCount(2, { timeout: 15_000 });
+});
+
 test("renders legacy text and poll posts as read-only archives", async ({ page }) => {
   await page.goto(`/content/${textContentId}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText("A structured text post with a real consumer renderer.")).toBeVisible();
@@ -430,6 +471,40 @@ async function installDeterministicVideoMetadata(page: Page) {
         queueMicrotask(() => this.dispatchEvent(new Event("loadedmetadata")));
       }
     });
+  });
+}
+
+async function installControllableVideoMetadata(page: Page) {
+  await page.addInitScript(() => {
+    const srcDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+    if (!srcDescriptor?.get || !srcDescriptor.set) return;
+    const getSrc = srcDescriptor.get;
+    const setSrc = srcDescriptor.set;
+    let releaseHeldMetadata: (() => void) | null = null;
+
+    Object.defineProperty(HTMLMediaElement.prototype, "src", {
+      configurable: true,
+      enumerable: srcDescriptor.enumerable,
+      get(this: HTMLMediaElement) {
+        return getSrc.call(this);
+      },
+      set(this: HTMLMediaElement, value: string) {
+        setSrc.call(this, value);
+        Object.defineProperty(this, "duration", { configurable: true, value: 120 });
+        if (!releaseHeldMetadata && value.startsWith("blob:")) {
+          releaseHeldMetadata = () => this.dispatchEvent(new Event("loadedmetadata"));
+          return;
+        }
+        queueMicrotask(() => this.dispatchEvent(new Event("loadedmetadata")));
+      }
+    });
+
+    (window as typeof window & { __releaseWevidVideoMetadata?: () => void })
+      .__releaseWevidVideoMetadata = () => {
+        const release = releaseHeldMetadata;
+        releaseHeldMetadata = null;
+        release?.();
+      };
   });
 }
 

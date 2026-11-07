@@ -21,6 +21,13 @@ export class AgeProviderIntegrationPendingError extends Error {
   }
 }
 
+export class AgeProviderCreateClaimLostError extends Error {
+  constructor() {
+    super("AGE_PROVIDER_CREATE_CLAIM_LOST");
+    this.name = "AgeProviderCreateClaimLostError";
+  }
+}
+
 export function createAgeProviderWaterfall(env: ServerEnv): AgeProviderWaterfall {
   const verificationProviders = createVerificationProviderWaterfall(env);
 
@@ -58,6 +65,7 @@ export function createAgeProviderWaterfall(env: ServerEnv): AgeProviderWaterfall
           rule: "over_18"
         };
       } catch (error) {
+        if (error instanceof AgeProviderCreateClaimLostError) throw error;
         if (error instanceof VerificationProviderHttpError) throw error;
         throw new AgeProviderUnavailableError();
       }

@@ -1083,6 +1083,7 @@ describe("database migrations", () => {
     expect(sql).toContain("create table wallet_transaction_records");
     expect(sql).toContain("payment_intent_id uuid references payment_intents(id)");
     expect(sql).toContain("reference_address text");
+    expect(sql).toContain("check (state in ('submitted', 'confirmed', 'failed'))");
     expect(sql).toContain("alter table wallet_transaction_records enable row level security");
     expect(sql).toContain("wallet_transaction_records_payment_signature_unique");
     expect(sql).toContain("wallet_transaction_records_user_created_at_idx");

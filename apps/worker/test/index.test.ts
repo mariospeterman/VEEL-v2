@@ -1,7 +1,7 @@
 import { createECDH, randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
 import webPush from "web-push";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildWorkerRuntime,
   runAnalyticsProjectionTick,
@@ -236,6 +236,34 @@ describe("runScheduledWorkerTick", () => {
 });
 
 describe("runSubscriptionAuthorizationReconciliationTick", () => {
+  beforeEach(() => {
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("does not claim or verify recurring authorization evidence while subscriptions are disabled", async () => {
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "false");
+    const reconcileDue = vi.fn();
+    const verifyAuthorization = vi.fn();
+
+    await expect(runSubscriptionAuthorizationReconciliationTick({
+      repository: { reconcileDue },
+      verifier: { verifyAuthorization }
+    })).resolves.toEqual({
+      claimed: 0,
+      verified: 0,
+      retrying: 0,
+      terminal: 0,
+      stale: 0
+    });
+
+    expect(reconcileDue).not.toHaveBeenCalled();
+    expect(verifyAuthorization).not.toHaveBeenCalled();
+  });
+
   it("runs the durable authorization evidence boundary with the configured batch limit", async () => {
     const reconcileDue = vi.fn(async () => ({
       claimed: 1,
@@ -982,8 +1010,10 @@ describe("createResendPaymentConfirmationEmailProvider", () => {
     ["1234567890", "SOL", "1.23456789 SOL"],
     ["9007199254740991", "SOL", "9,007,199.254740991 SOL"],
     ["1000000", "USDC", "1 USDC"],
+    ["15000000", "USDC", "15 USDC"],
     ["1234567", "USDC", "1.234567 USDC"],
-    ["9007199254740991", "USDC", "9,007,199,254.740991 USDC"]
+    ["9007199254740991", "USDC", "9,007,199,254.740991 USDC"],
+    ["9007199254740993", "USDC", "9,007,199,254.740993 USDC"]
   ])("renders %s atomic %s exactly in text and HTML", async (amountMinor, currency, expected) => {
     const fetchImpl = vi.fn(async () =>
       new Response(JSON.stringify({ id: "resend-message-amount" }), { status: 200 })
@@ -1092,6 +1122,43 @@ describe("createResendPaymentConfirmationEmailProvider", () => {
 });
 
 describe("runSubscriptionCollectionTick", () => {
+  beforeEach(() => {
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("does not open or mutate recurring collection authorities while subscriptions are disabled", async () => {
+    vi.stubEnv("SUBSCRIPTIONS_ENABLED", "false");
+    const repository = fakeSubscriptionCollectionRepository({
+      dueCollections: [dueCollectionFixture()],
+      expired: 1
+    });
+    const provider = fakeSubscriptionCollectionProvider({
+      state: "confirmed",
+      collectionSignature: "must-not-run"
+    });
+    const expire = vi.spyOn(repository, "expireCancelledDueSubscriptions");
+    const lease = vi.spyOn(repository, "leaseDueCollections");
+    const collect = vi.spyOn(provider, "collect");
+
+    await expect(runSubscriptionCollectionTick({ repository, provider })).resolves.toEqual({
+      expired: 0,
+      leased: 0,
+      confirmed: 0,
+      failed: 0,
+      reconciling: 0,
+      revoked: 0,
+      cancelled: 0
+    });
+
+    expect(expire).not.toHaveBeenCalled();
+    expect(lease).not.toHaveBeenCalled();
+    expect(collect).not.toHaveBeenCalled();
+  });
+
   it("auto-renews due delegated subscriptions after provider-confirmed collection", async () => {
     const repository = fakeSubscriptionCollectionRepository({
       dueCollections: [dueCollectionFixture()],

@@ -2079,7 +2079,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record wallet-submitted signature before confirmed evidence */
+        /** Record wallet-submitted signature and reconcile exact signed bytes before confirmed evidence */
         post: operations["submitPaymentSignature"];
         delete?: never;
         options?: never;
@@ -4891,7 +4891,8 @@ export interface components {
         CreatePerformerConsentRequest: {
             performerHandle?: string;
             externalLabel?: string;
-            allowedUses: components["schemas"]["PerformerAllowedUse"][];
+            /** @description Must include capture, upload, and distribution; additional approved uses may also be requested. */
+            allowedUses: components["schemas"]["PerformerAllowedUse"][] & (unknown & unknown & unknown);
         } & (unknown | unknown);
         PerformerConsentDecision: {
             /** @enum {string} */
@@ -5659,6 +5660,7 @@ export interface components {
         };
         SubmitPaymentSignatureRequest: {
             signature: string;
+            signedTransactionBase64: string;
         };
         AcceptPaymentIntentTermsRequest: {
             termsVersion: string;
@@ -6857,6 +6859,13 @@ export interface components {
             contentExportCleanupState: "not_ready" | "retained_private" | "manual_confirmation_required" | "manual_delete_confirmed" | null;
             /** Format: date-time */
             contentExportArchiveUploadStartedAt: string | null;
+            /** @description Admin-only count of non-winning archive attempts whose private provider objects still require confirmed cleanup. */
+            contentExportCleanupRequiredAttemptCount: number | null;
+            /**
+             * Format: date-time
+             * @description Oldest unresolved archive-attempt cleanup timestamp; remains visible even after a later attempt wins.
+             */
+            contentExportOldestCleanupRequiredAttemptAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */

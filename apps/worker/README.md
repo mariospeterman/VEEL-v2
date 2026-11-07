@@ -2,7 +2,7 @@
 
 Worker process for durable reconciliation, delivery, moderation, publication, provider actions, and retries. Signed provider webhooks enter through the API, not through a second worker ingress.
 
-The process runs all ten registered queues immediately at startup and then every `WORKER_TICK_INTERVAL_MS` (60 seconds by default):
+The process runs all eleven registered queues immediately at startup and then every `WORKER_TICK_INTERVAL_MS` (60 seconds by default):
 
 - `analytics-projections`
 - `subscription-authorization-reconciliation`
@@ -14,6 +14,7 @@ The process runs all ten registered queues immediately at startup and then every
 - `live-safety`
 - `media-moderation`
 - `media-asset-cleanups`
+- `content-exports`
 
 A failed task is isolated from the other queues, overlapping ticks are serialized, and `SIGINT`/`SIGTERM` wait for the active tick before shutdown. `WORKER_BATCH_LIMIT` bounds each queue lease.
 

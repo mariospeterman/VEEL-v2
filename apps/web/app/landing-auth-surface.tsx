@@ -375,15 +375,21 @@ function OnboardingAgeStep() {
     setAgeSession(current);
 
     if (!current.launchUrl && current.resumable && attemptResume) {
-      setMessage("Checking the existing secure age-verification handoff...");
+      setMessage(current.providerReference
+        ? "Checking the existing secure age-verification handoff..."
+        : "Checking whether the provider handoff can be recovered...");
       current = await resumeAgeSession(current.id);
       setAgeSession(current);
     }
 
     if (!current.launchUrl) {
-      setMessage(current.resumable
-        ? "The secure provider handoff is still being reconciled. Resume this same session to check again."
-        : "The provider outcome is still uncertain. We will not open a second session while this attempt is being reconciled.");
+      setMessage(current.launchState === "failed" || current.status === "needs_review"
+        ? "We could not recover the provider handoff identifier. Contact support; WeVid will not start a second session until this attempt is reconciled."
+        : current.resumable && !current.providerReference
+          ? "The provider request may still be completing. Check this handoff again later; WeVid will not open a second session while it may still be active."
+          : current.resumable
+          ? "The secure provider handoff is still being reconciled. Resume this same session to check again."
+          : "The provider outcome is still uncertain. We will not open a second session while this attempt is being reconciled.");
       return;
     }
 
@@ -463,7 +469,11 @@ function OnboardingAgeStep() {
           </button>
           {ageSession && !ageSession.launchUrl && ageSession.resumable ? (
             <button className="landing-button" disabled={startingAction !== null} onClick={() => void resumePendingAgeSession()} type="button">
-              <strong>{startingAction === "age" ? "Checking secure handoff" : "Resume age check"}</strong>
+              <strong>{startingAction === "age"
+                ? "Checking secure handoff"
+                : ageSession.providerReference
+                  ? "Resume age check"
+                  : "Check handoff status"}</strong>
             </button>
           ) : null}
         </div>

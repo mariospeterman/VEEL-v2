@@ -32,7 +32,7 @@ describe("bounded feed window", () => {
     expect(forward.end - forward.start).toBe(maxRenderedFeedItems);
   });
 
-  it("can traverse the full bounded ranking session in either direction", () => {
+  it("can traverse a large loaded chronological feed in either direction", () => {
     const itemCount = 512;
     let current = createFeedWindow(itemCount);
     const covered = new Set<number>();

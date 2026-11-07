@@ -116,6 +116,7 @@ export async function recordContentSafetyDeclaration(
         provider,
         provider_reference,
         method,
+        threshold_age,
         assurance_level,
         result_over_threshold,
         verified_at,
@@ -124,6 +125,7 @@ export async function recordContentSafetyDeclaration(
         'user', ${input.creatorUserId}, 'adult_publisher_eligibility'
       )
       where status = 'valid'
+        and threshold_age >= 18
         and result_over_threshold is true
         and assurance_level in ('high', 'documentary')
         and (expires_at is null or expires_at > now())
@@ -167,6 +169,45 @@ export async function recordContentSafetyDeclaration(
   `;
   const performer = performerRows[0];
   if (!performer) return;
+
+  // Self-only safety still uses the canonical performer authority. Link that
+  // authority to the exact current adult-publisher record so later expiry,
+  // revocation, or supersession invalidates readiness transitively.
+  await transaction`
+    insert into verification_records (
+      subject_type, subject_id, purpose, status, provider, provider_reference,
+      method, jurisdiction, threshold_age, result_over_threshold, assurance_level,
+      verified_at, expires_at, reusable, derived_from_record_id, provider_event_at,
+      metadata
+    )
+    select
+      'performer', ${performer.id}, 'performer_eligibility', 'valid',
+      source.provider, source.provider_reference, source.method, source.jurisdiction,
+      source.threshold_age, source.result_over_threshold, source.assurance_level,
+      source.verified_at, source.expires_at, source.reusable, source.id,
+      source.provider_event_at,
+      jsonb_build_object('source', 'self_performer_evidence_reuse', 'evidence_reuse', true)
+    from private.current_verification_decision(
+      'user', ${input.creatorUserId}, 'adult_publisher_eligibility'
+    ) source
+    where source.status = 'valid'
+      and source.threshold_age >= 18
+      and source.result_over_threshold is true
+      and source.assurance_level in ('high', 'documentary')
+      and source.policy_version is not null
+      and source.terms_accepted_at is not null
+      and (source.expires_at is null or source.expires_at > now())
+      and not exists (
+        select 1
+        from private.current_verification_decision(
+          'performer', ${performer.id}, 'performer_eligibility'
+        ) existing
+        where existing.status = 'valid'
+          and existing.threshold_age >= 18
+          and existing.result_over_threshold is true
+          and (existing.expires_at is null or existing.expires_at > now())
+      )
+  `;
 
   const evidenceHash = createHash("sha256")
     .update(

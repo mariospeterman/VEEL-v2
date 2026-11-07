@@ -29,6 +29,13 @@ const providerPreferences = new Set(["provider_first", "sumsub", "didit", "perso
 const verificationSources = new Set(["create", "earnings", "organization"]);
 const adultPublisherPolicyVersion = "adult-publisher-2026-08-v1";
 
+class VerificationProviderCreateClaimLostError extends Error {
+  constructor() {
+    super("VERIFICATION_PROVIDER_CREATE_CLAIM_LOST");
+    this.name = "VerificationProviderCreateClaimLostError";
+  }
+}
+
 export async function registerVerificationRoutes(
   app: FastifyInstance,
   options: RegisterVerificationRoutesOptions
@@ -150,6 +157,7 @@ export async function registerVerificationRoutes(
     }
 
     let reservedSessionId: string | null = null;
+    let providerRequestStarted = false;
     try {
       const organizationId = typeof body?.organizationId === "string" ? body.organizationId : null;
       if (purpose === "org_kyb") {
@@ -196,6 +204,12 @@ export async function registerVerificationRoutes(
           })
         : null;
       reservedSessionId = reservation?.id ?? null;
+      if (reservation?.requiresManualReview) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "The provider handoff needs support review before another verification session can start"
+        });
+      }
       const providerSession = await options.verificationProviderWaterfall.createSession({
         supabaseUserId: verifiedSession.supabaseUserId,
         purpose,
@@ -209,10 +223,12 @@ export async function registerVerificationRoutes(
         termsAcceptedAt,
         ...(reservation
           ? { onProviderSelected: async (selection) => {
-              await options.verificationRepository.selectPendingSessionProvider!({
+              const claimed = await options.verificationRepository.selectPendingSessionProvider!({
                 sessionId: reservation.id,
                 selection
               });
+              if (claimed === false) throw new VerificationProviderCreateClaimLostError();
+              providerRequestStarted = true;
             } }
           : {})
       });
@@ -255,7 +271,20 @@ export async function registerVerificationRoutes(
         purpose
       });
     } catch (error) {
-      if (reservedSessionId && options.verificationRepository.failPendingSession) {
+      if (error instanceof VerificationProviderCreateClaimLostError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "This verification session provider request is already in progress"
+        });
+      }
+      const definitiveProviderRejection =
+        error instanceof VerificationProviderHttpError &&
+        [400, 401, 403].includes(error.status);
+      if (
+        reservedSessionId &&
+        (!providerRequestStarted || definitiveProviderRejection) &&
+        options.verificationRepository.failPendingSession
+      ) {
         await options.verificationRepository.failPendingSession({
           sessionId: reservedSessionId,
           reason: error instanceof Error ? error.name : "provider_session_failed"

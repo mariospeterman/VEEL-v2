@@ -14,16 +14,18 @@ const exportRow: DataRequestRow = {
   state: "completed",
   privacy_boundary: "sanitized_identity_minimized_no_raw_exports",
   content_export_job_id: "00000000-0000-4000-8000-000000000171",
-  content_export_job_state: "expired",
-  content_export_cleanup_state: "manual_confirmation_required",
+  content_export_job_state: "ready",
+  content_export_cleanup_state: "retained_private",
   content_export_archive_upload_started_at: new Date("2026-06-06T12:05:00.000Z"),
+  content_export_cleanup_required_attempt_count: "2",
+  content_export_oldest_cleanup_required_attempt_at: new Date("2026-06-06T12:06:00.000Z"),
   created_at: new Date("2026-06-06T12:00:00.000Z"),
   updated_at: new Date("2026-06-06T12:30:00.000Z"),
   completed_at: new Date("2026-06-06T12:30:00.000Z")
 };
 
 describe("admin content export operations visibility", () => {
-  it("projects only bounded export lifecycle and cleanup state", async () => {
+  it("keeps older cleanup-required attempts visible after a later archive wins", async () => {
     const queries: string[] = [];
     const sql = ((first: TemplateStringsArray | string, ...values: unknown[]) => {
       if (typeof first === "string") return { fragment: first };
@@ -45,9 +47,11 @@ describe("admin content export operations visibility", () => {
         state: "completed",
         privacyBoundary: "sanitized_identity_minimized_no_raw_exports",
         contentExportJobId: exportRow.content_export_job_id,
-        contentExportJobState: "expired",
-        contentExportCleanupState: "manual_confirmation_required",
+        contentExportJobState: "ready",
+        contentExportCleanupState: "retained_private",
         contentExportArchiveUploadStartedAt: "2026-06-06T12:05:00.000Z",
+        contentExportCleanupRequiredAttemptCount: 2,
+        contentExportOldestCleanupRequiredAttemptAt: "2026-06-06T12:06:00.000Z",
         createdAt: "2026-06-06T12:00:00.000Z",
         updatedAt: "2026-06-06T12:30:00.000Z",
         completedAt: "2026-06-06T12:30:00.000Z"
@@ -56,6 +60,9 @@ describe("admin content export operations visibility", () => {
     expect(queries[0]).toContain("left join content_export_jobs export_job");
     expect(queries[0]).toContain("request.type = 'export'");
     expect(queries[0]).toContain("export_job.archive_upload_started_at");
+    expect(queries[0]).toContain("from content_export_archive_attempts attempt");
+    expect(queries[0]).toContain("attempt.state = 'cleanup_required'");
+    expect(queries[0]).toContain("min(attempt.created_at)");
     expect(queries[0]).not.toMatch(/archive_object_key|archive_sha256|source_object_reference/);
   });
 
@@ -65,7 +72,9 @@ describe("admin content export operations visibility", () => {
       contentExportJobId: null,
       contentExportJobState: null,
       contentExportCleanupState: null,
-      contentExportArchiveUploadStartedAt: null
+      contentExportArchiveUploadStartedAt: null,
+      contentExportCleanupRequiredAttemptCount: null,
+      contentExportOldestCleanupRequiredAttemptAt: null
     });
   });
 

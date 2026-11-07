@@ -65,7 +65,10 @@ changes fingerprint-included source and invalidates the earlier receipt. Unknown
 Capture refuses any dirty tracked or untracked path both before and after command execution. It also
 rebuilds and compares the complete stage-zero snapshot after the command and version probes, before
 writing anything. A test that changes the index, tracked source, or creates a nonignored untracked
-path gets no receipt. The protected local status-document change and unapproved `0130` drafts mean
+path gets no receipt. The protected local status-document change must remain unstaged. The unsafe
+historical `0130` draft filenames are explicitly rejected by the capture tooling, but those drafts
+are not present in the current checkout and are not a current capture obstacle. Any new intended
+migration must be reviewed, staged explicitly, and captured by its actual path; otherwise that
 capture must run in a clean detached worktree of the settled source. Ignored dependency/build
 directories do not affect this check.
 
@@ -75,7 +78,7 @@ example, the worker package has no
 package-local `test` script, so target worker tests through the root Vitest runner:
 
 ```sh
-env PATH=/Users/maki/.nvm/versions/node/v22.23.4/bin:/usr/local/bin:/usr/bin:/bin \
+env PATH=/Users/maki/.nvm/versions/node/v24.22.2/bin:/usr/local/bin:/usr/bin:/bin \
   node scripts/capture-audit-execution.mjs \
   --id worker-payment-email \
   --kind vitest \
@@ -172,7 +175,7 @@ review record, receipt, and audit-input file. Leave the protected status-documen
 unstaged. Generation rejects that path if staged. Then generate:
 
 ```sh
-env PATH=/Users/maki/.nvm/versions/node/v22.23.4/bin:/usr/local/bin:/usr/bin:/bin \
+env PATH=/Users/maki/.nvm/versions/node/v24.22.2/bin:/usr/local/bin:/usr/bin:/bin \
   node scripts/generate-audit-evidence.mjs \
   --audit docs/v2-new-build/audit-evidence/71ceabc/audit-inputs/WeVid_Full_Audit_71ceabc.txt \
   --workspace-report "${TMPDIR:?}/wevid-audit-workspace.json"
@@ -181,7 +184,7 @@ env PATH=/Users/maki/.nvm/versions/node/v22.23.4/bin:/usr/local/bin:/usr/bin:/bi
 Verify without writing and require actual closure:
 
 ```sh
-env PATH=/Users/maki/.nvm/versions/node/v22.23.4/bin:/usr/local/bin:/usr/bin:/bin \
+env PATH=/Users/maki/.nvm/versions/node/v24.22.2/bin:/usr/local/bin:/usr/bin:/bin \
   node scripts/generate-audit-evidence.mjs \
   --audit docs/v2-new-build/audit-evidence/71ceabc/audit-inputs/WeVid_Full_Audit_71ceabc.txt \
   --check

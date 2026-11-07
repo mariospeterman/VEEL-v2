@@ -1182,13 +1182,11 @@ export function createPostgresSubscriptionCollectionRepository(
             with finance as (
               select
                 collection.id as collection_id,
-                collection.amount_minor,
+                collection.amount_minor as accepted_price_minor,
                 collection.amount_atomic,
-                floor(
-                  collection.platform_fee_amount_atomic::numeric
-                    * collection.amount_minor::numeric
-                    / collection.amount_atomic::numeric
-                )::bigint as platform_fee_minor,
+                collection.creator_amount_atomic,
+                collection.platform_fee_amount_atomic,
+                collection.allocation_amount_atomic,
                 collection.currency,
                 subscription.subscriber_user_id,
                 subscription.creator_user_id,
@@ -1225,7 +1223,7 @@ export function createPostgresSubscriptionCollectionRepository(
                 creator_user_id,
                 collection_id,
                 case when scope = 'creator' then 'creator_subscription' else 'platform_subscription' end,
-                amount_minor,
+                amount_atomic,
                 currency
               from finance
               on conflict (subscription_collection_id)
@@ -1242,7 +1240,7 @@ export function createPostgresSubscriptionCollectionRepository(
                 receipt.id,
                 'purchase_total',
                 'Recurring subscription period',
-                finance.amount_minor,
+                finance.amount_atomic,
                 finance.currency
               from finance
               join receipt on true
@@ -1281,7 +1279,7 @@ export function createPostgresSubscriptionCollectionRepository(
                   else 'solana_devnet'
                 end,
                 'outgoing',
-                finance.amount_minor,
+                finance.amount_atomic,
                 finance.currency,
                 'confirmed',
                 'subscription_collection',
@@ -1334,11 +1332,11 @@ export function createPostgresSubscriptionCollectionRepository(
                 finance.subscriber_user_id,
                 receipt.id,
                 finance.collection_id,
-                finance.amount_minor,
-                finance.platform_fee_minor,
+                finance.amount_atomic,
+                finance.platform_fee_amount_atomic,
                 case
                   when finance.scope = 'creator'
-                    then finance.amount_minor - finance.platform_fee_minor
+                    then finance.creator_amount_atomic
                   else null
                 end,
                 null,
@@ -1346,8 +1344,13 @@ export function createPostgresSubscriptionCollectionRepository(
                 'USD',
                 case when finance.scope = 'creator' then 'creator' else 'veel' end,
                 jsonb_build_object(
-                  'confirmationVersion', 'subscription-collection-confirmation-v1',
+                  'confirmationVersion', 'subscription-collection-confirmation-v2',
                   'settlementSignature', ${input.outcome.collectionSignature}::text,
+                  'acceptedPriceMinor', finance.accepted_price_minor,
+                  'amountAtomic', finance.amount_atomic,
+                  'creatorAmountAtomic', finance.creator_amount_atomic,
+                  'platformFeeAmountAtomic', finance.platform_fee_amount_atomic,
+                  'allocationAmountAtomic', finance.allocation_amount_atomic,
                   'assetDecimals', finance.asset_decimals,
                   'termsVersion', finance.terms_version,
                   'withdrawalWaiverVersion', finance.withdrawal_waiver_version,
@@ -1377,7 +1380,7 @@ export function createPostgresSubscriptionCollectionRepository(
                 ${randomUUID()},
                 finance.collection_id,
                 'subscription_collection_confirmed',
-                finance.amount_minor,
+                finance.accepted_price_minor,
                 finance.amount_atomic,
                 finance.asset_decimals,
                 finance.currency,

@@ -103,6 +103,9 @@ export const stagingCapabilities = [
     variable("SUBSCRIPTIONS_COLLECTOR_WALLET", "public", false),
     variable("SUBSCRIPTIONS_COLLECTOR_PRIVATE_KEY", "secret", false)
   ], (env) => env.SUBSCRIPTIONS_ENABLED !== "false"),
+  capability("content_exports", false, [
+    variable("CONTENT_EXPORTS_ENABLED", "public", true)
+  ]),
   capability("enterprise", false, [
     variable("ENTERPRISE_STAGING_SESSION_COOKIE", "secret", false),
     variable("ENTERPRISE_STAGING_ORGANIZATION_ID", "secret", false),
@@ -273,7 +276,8 @@ function validateCapability(name, env) {
   if (name === "email" && mismatch("TRANSACTIONAL_EMAIL_PROVIDER", "resend")) invalid.push("TRANSACTIONAL_EMAIL_PROVIDER=resend");
   if (name === "observability" && mismatch("OTEL_REQUIRED", "true")) invalid.push("OTEL_REQUIRED=true");
   if (name === "observability" && mismatch("OTEL_SDK_DISABLED", "false")) invalid.push("OTEL_SDK_DISABLED=false");
-  if (name === "subscriptions" && present(env.SUBSCRIPTIONS_ENABLED) && !["true", "false"].includes(env.SUBSCRIPTIONS_ENABLED)) invalid.push("SUBSCRIPTIONS_ENABLED=true|false");
+  if (name === "subscriptions" && mismatch("SUBSCRIPTIONS_ENABLED", "false")) invalid.push("SUBSCRIPTIONS_ENABLED=false");
+  if (name === "content_exports" && mismatch("CONTENT_EXPORTS_ENABLED", "false")) invalid.push("CONTENT_EXPORTS_ENABLED=false");
   if (name === "mcp" && present(env.MCP_ENABLED) && !["true", "false"].includes(env.MCP_ENABLED)) invalid.push("MCP_ENABLED=true|false");
   if (name === "mcp" && env.MCP_ENABLED === "true" && !env.MCP_PUBLIC_BASE_URL) invalid.push("MCP_PUBLIC_BASE_URL=https");
   if (name === "legal_release" && present(env.LEGAL_DOCUMENTS_APPROVED) && env.LEGAL_DOCUMENTS_APPROVED !== "true") blocked.push("LEGAL_DOCUMENTS_APPROVED=true");

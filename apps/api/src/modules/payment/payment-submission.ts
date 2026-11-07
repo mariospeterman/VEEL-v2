@@ -2,9 +2,15 @@ import type postgres from "postgres";
 import { withPostgresTransaction } from "../../shared/postgres.js";
 import {
   executeWithMutationCommandReceipt,
-  resolveMutationActorBySupabaseUserId
+  resolveMutationActorBySupabaseUserId,
+  resolveMutationCommandReceipt
 } from "../../shared/mutation-command-receipt.js";
-import type { RecordPaymentSubmissionInput, StoredPaymentIntent } from "./types.js";
+import {
+  paymentIntentStateForSettlement,
+  type FindPaymentSubmissionCommandReceiptInput,
+  type RecordPaymentSubmissionInput,
+  type StoredPaymentIntent
+} from "./types.js";
 import { grantContentUnlockEntitlement, grantLivePassEntitlement } from "./payment-entitlement-settlement.js";
 import { grantEventAccessPassEntitlement } from "./payment-event-access-pass-settlement.js";
 import { deliverPaidMessage } from "./payment-paid-message-settlement.js";
@@ -57,11 +63,38 @@ export async function recordPaymentSubmission(
   });
 }
 
+export async function hasPaymentSubmissionCommandReceipt(
+  sql: postgres.Sql,
+  input: FindPaymentSubmissionCommandReceiptInput
+): Promise<boolean> {
+  return withPostgresTransaction(sql, async (transaction) => {
+    const actorUserId = await resolveMutationActorBySupabaseUserId(
+      transaction,
+      input.supabaseUserId
+    );
+    if (!actorUserId) return false;
+
+    const resolution = await resolveMutationCommandReceipt<{ accepted: true }>(transaction, {
+      actorUserId,
+      action: "payment.submission.submit",
+      targetType: "payment_intent",
+      targetId: input.paymentIntentId,
+      idempotencyKey: input.idempotencyKey,
+      requestVersion: 1,
+      requestBody: { signature: input.signature },
+      responseStatus: 202
+    });
+    return resolution.found;
+  });
+}
+
 async function applyPaymentSubmission(
   transaction: postgres.TransactionSql,
   input: RecordPaymentSubmissionInput
 ): Promise<void> {
-    const nextState = input.settlement.confirmed ? "confirmed" : "submitted";
+    const nextState = paymentIntentStateForSettlement(input.settlement);
+    const terminalFailure = nextState === "failed" || nextState === "expired";
+    const failureReason = terminalFailure ? input.settlement.failureCode ?? null : null;
     const rows = await transaction<{
       payment_intent_id: string;
       user_id: string;
@@ -87,14 +120,10 @@ async function applyPaymentSubmission(
                 else confirmed_at
               end,
               failed_at = case
-                when ${input.settlement.confirmed} then failed_at
-                when ${input.settlement.failureCode ?? null}::text is not null then now()
-                else failed_at
+                when ${terminalFailure} then now()
+                else null
               end,
-              failure_reason = case
-                when ${input.settlement.confirmed} then failure_reason
-                else ${input.settlement.failureCode ?? null}::text
-              end,
+              failure_reason = ${failureReason}::text,
               updated_at = now()
             from users u
             where pi.user_id = u.id
@@ -135,7 +164,11 @@ async function applyPaymentSubmission(
         userId: updatedIntent.user_id,
         paymentIntentId: updatedIntent.payment_intent_id,
         signature: input.signature,
-        state: input.settlement.confirmed ? "confirmed" : "submitted",
+        state: nextState === "confirmed"
+          ? "confirmed"
+          : terminalFailure
+            ? "failed"
+            : "submitted",
         amountMinor: Number(updatedIntent.amount_minor),
         currency: updatedIntent.currency
       });

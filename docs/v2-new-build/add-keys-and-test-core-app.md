@@ -18,7 +18,7 @@ Does not own:
 
 ## 1. Pin The Toolchain
 
-Use Node `22.23.4` and pnpm `10.0.0` from the committed version files.
+Use Node `24.22.2` LTS and pnpm `10.0.0` from the committed version files.
 
 ```sh
 nvm install

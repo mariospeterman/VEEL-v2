@@ -143,6 +143,110 @@ export function createPostgresVerificationRepository(database?: string | Postgre
       const subjectReference = `wevid:${subject.subjectType}:${subject.subjectId}:${input.purpose}:${proposedSessionId}`;
 
       return sql.begin(async (tx) => {
+        const attemptLockKey = `verification-attempt:${subject.subjectType}:${subject.subjectId}:${input.purpose}`;
+        await tx`select pg_advisory_xact_lock(hashtextextended(${attemptLockKey}, 0))`;
+        const sameKey = await tx<Array<{ request_hash: string | null }>>`
+          select request_hash
+          from verification_sessions
+          where subject_type = ${subject.subjectType}
+            and subject_id = ${subject.subjectId}
+            and purpose = ${input.purpose}
+            and request_key = ${input.idempotencyKey}
+          limit 1
+        `;
+        if (sameKey[0]) {
+          if (sameKey[0].request_hash !== input.requestHash) {
+            throw new Error("IDEMPOTENCY_KEY_REUSED");
+          }
+          throw new Error("VERIFICATION_SESSION_ALREADY_RESERVED");
+        }
+        const active = await tx<Array<{
+          session_id: string;
+          provider: string;
+          provider_reference: string | null;
+          subject_reference: string | null;
+          expires_at: Date | null;
+          launch_state: string;
+          status: string;
+        }>>`
+          select session_id, provider, provider_reference, subject_reference,
+            expires_at, launch_state, status
+          from private.current_verification_attempt(
+            ${subject.subjectType}, ${subject.subjectId}, ${input.purpose}
+          )
+        `;
+        if (active[0]) {
+          const activeAttempt = active[0];
+          const reviewReservation = () => ({
+            id: activeAttempt.session_id,
+            subjectReference: activeAttempt.subject_reference ??
+              `wevid:${subject.subjectType}:${subject.subjectId}:${input.purpose}:${activeAttempt.session_id}`,
+            requiresManualReview: true as const
+          });
+          if (
+            activeAttempt.launch_state === "reserved" &&
+            activeAttempt.status === "needs_review" &&
+            activeAttempt.provider !== "internal" &&
+            activeAttempt.provider_reference === null
+          ) {
+            return reviewReservation();
+          }
+          const unresolvedCreateExpired =
+            activeAttempt.launch_state === "reconciling" &&
+            activeAttempt.provider !== "internal" &&
+            activeAttempt.provider_reference === null &&
+            activeAttempt.expires_at !== null;
+          if (!unresolvedCreateExpired) {
+            throw new Error("VERIFICATION_SESSION_ALREADY_RESERVED");
+          }
+          const terminalized = await tx<Array<{ id: string }>>`
+            update verification_sessions
+            set status = 'needs_review', updated_at = now()
+            where id = ${activeAttempt.session_id}
+              and launch_state = 'reserved'
+              and status = 'submitted'
+              and provider_session_id is null
+              and provider_applicant_id is null
+              and provider_inquiry_id is null
+              and provider_transaction_id is null
+              and expires_at <= now()
+            returning id
+          `;
+          if (!terminalized[0]) {
+            throw new Error("VERIFICATION_SESSION_ALREADY_RESERVED");
+          }
+          await tx`
+            update verification_records
+            set status = 'pending',
+                failure_reason_code = 'provider_create_reference_requires_review',
+                metadata = metadata || jsonb_build_object(
+                  'reconciliationReason', 'provider_create_reference_requires_review',
+                  'manualReviewRequiredAt', to_char(
+                    clock_timestamp() at time zone 'UTC',
+                    'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+                  )
+                ),
+                updated_at = now()
+            where metadata ->> 'sessionId' = ${activeAttempt.session_id}
+              and metadata ->> 'source' = 'verification_session_reservation'
+          `;
+          await tx`
+            insert into audit_events (
+              id, actor_user_id, subject_type, subject_id, action, metadata
+            ) values (
+              ${randomUUID()}, null, 'verification_session', ${activeAttempt.session_id},
+              'verification.provider_create_reference_requires_review',
+              ${tx.json({
+                purpose: input.purpose,
+                provider: activeAttempt.provider,
+                subjectType: subject.subjectType,
+                subjectId: subject.subjectId
+              })}
+            )
+          `;
+          return reviewReservation();
+        }
+
         const rows = await tx<Array<{ id: string }>>`
           insert into verification_sessions (
             id, subject_type, subject_id, purpose, provider, provider_external_user_id,
@@ -195,19 +299,42 @@ export function createPostgresVerificationRepository(database?: string | Postgre
       });
     },
     async selectPendingSessionProvider(input) {
-      await sql.begin(async (tx) => {
+      return sql.begin(async (tx) => {
         const updated = await tx<Array<{ id: string }>>`
           update verification_sessions
           set provider = ${input.selection.provider},
               requested_method = ${input.selection.method},
               assurance_level = ${input.selection.assuranceLevel},
               reusable = ${input.selection.reusable},
-              status = 'pending',
+              status = 'submitted',
+              expires_at = coalesce(
+                expires_at,
+                ${verificationProviderCreateUncertaintyExpiresAt(input.selection.provider)}
+              ),
               updated_at = now()
           where id = ${input.sessionId} and launch_state = 'reserved'
+            and provider = 'internal' and status = 'created'
           returning id
         `;
-        if (!updated[0]) throw new Error("VERIFICATION_SESSION_RESERVATION_NOT_FOUND");
+        if (!updated[0]) {
+          const existing = await tx<Array<{
+            launch_state: string;
+            status: string;
+            provider: string;
+          }>>`
+            select launch_state, status, provider
+            from verification_sessions
+            where id = ${input.sessionId}
+            limit 1
+          `;
+          const attempt = existing[0];
+          if (
+            attempt?.launch_state === "reserved" &&
+            attempt.status === "submitted" &&
+            attempt.provider !== "internal"
+          ) return false;
+          throw new Error("VERIFICATION_SESSION_RESERVATION_NOT_FOUND");
+        }
         await tx`
           update verification_records
           set provider = ${input.selection.provider}, method = ${input.selection.method},
@@ -216,6 +343,7 @@ export function createPostgresVerificationRepository(database?: string | Postgre
           where metadata ->> 'sessionId' = ${input.sessionId}
             and metadata ->> 'source' = 'verification_session_reservation'
         `;
+        return true;
       });
     },
     async completePendingSession(input) {
@@ -233,9 +361,12 @@ export function createPostgresVerificationRepository(database?: string | Postgre
               assurance_level = ${providerSession.assuranceLevel},
               reusable = ${providerSession.reusable ?? false},
               expires_at = ${providerSession.expiresAt}, launch_state = 'ready',
-              status = case when status = 'created' then 'pending' else status end,
+              status = case when status in ('created', 'submitted') then 'pending' else status end,
               updated_at = now()
-          where id = ${input.sessionId} and launch_state in ('reserved', 'failed')
+          where id = ${input.sessionId}
+            and launch_state = 'reserved'
+            and status = 'submitted'
+            and provider = ${providerSession.provider}
           returning id
         `;
         if (!rows[0]) throw new Error("VERIFICATION_SESSION_RESERVATION_NOT_FOUND");
@@ -443,7 +574,10 @@ async function applyVerificationWebhookDecision(
         or provider_applicant_id = ${input.providerReference}
         or provider_inquiry_id = ${input.providerReference}
         or provider_transaction_id = ${input.providerReference}
-        or provider_external_user_id = ${input.providerSubjectReference ?? input.providerReference}
+        or (
+          launch_state = 'ready'
+          and provider_external_user_id = ${input.providerSubjectReference ?? input.providerReference}
+        )
       )
     order by
       case when provider_session_id = ${input.providerReference}
@@ -474,7 +608,8 @@ async function applyVerificationWebhookDecision(
       ${session.subject_id},
       ${session.purpose},
       ${decision.status},
-      ${input.occurredAt ?? null}
+      ${input.occurredAt ?? null},
+      ${session.id}
     ) as should_apply
   `;
   if (currentRows[0]?.should_apply !== true) {
@@ -504,19 +639,44 @@ async function applyVerificationWebhookDecision(
     where id = ${session.id}
   `;
 
+  const adultAgeRows = session.purpose === "adult_publisher_eligibility" && decision.status === "valid"
+    ? await tx<Array<{
+        id: string;
+        threshold_age: number;
+      }>>`
+        select id, threshold_age
+        from private.current_verification_decision(
+          'user', ${session.subject_id}, 'age_access'
+        )
+        where status = 'valid'
+          and threshold_age >= 18
+          and result_over_threshold is true
+          and (expires_at is null or expires_at > now())
+        limit 1
+      `
+    : [];
+  const adultAgeSource = adultAgeRows[0] ?? null;
+
   const records = await tx<Array<{ id: string }>>`
     insert into verification_records (
       subject_type, subject_id, purpose, status, provider, provider_reference,
       method, threshold_age, result_over_threshold, assurance_level, verified_at,
       expires_at, reusable, raw_payload_hash, failure_reason_code, policy_version,
-      terms_accepted_at, provider_event_at, metadata
+      terms_accepted_at, provider_event_at, derived_from_record_id, metadata
     )
     values (
       ${session.subject_type}, ${session.subject_id}, ${session.purpose}, ${decision.status},
       ${input.provider}, ${input.providerReference}, ${session.requested_method},
-      case when ${session.purpose} = 'age_access' then 18 else null end,
+      case
+        when ${session.purpose} = 'age_access' then 18
+        when ${session.purpose} = 'adult_publisher_eligibility'
+          then ${adultAgeSource?.threshold_age ?? null}::integer
+        else null
+      end,
       case when ${session.purpose} = 'age_access' and ${decision.status} = 'valid' then true
         when ${session.purpose} = 'age_access' and ${decision.status} in ('invalid', 'blocked') then false
+        when ${session.purpose} = 'adult_publisher_eligibility'
+          and ${adultAgeSource?.id ?? null}::uuid is not null then true
         else null end,
       ${session.assurance_level},
       case when ${decision.status} = 'valid' then coalesce(${input.occurredAt ?? null}, now()) else null end,
@@ -526,12 +686,15 @@ async function applyVerificationWebhookDecision(
       ${decision.failureReasonCode},
       ${session.policy_version}, ${session.terms_accepted_at},
       ${input.occurredAt ?? null},
+      ${adultAgeSource?.id ?? null},
       ${tx.json({
         source: "provider_webhook",
+        sessionId: session.id,
         eventType: input.eventType,
         providerEventId: input.providerEventId,
         providerCorrelationId: input.providerCorrelationId ?? null,
-        providerOccurredAtMissing: !input.occurredAt
+        providerOccurredAtMissing: !input.occurredAt,
+        adultAgeSourceRecordId: adultAgeSource?.id ?? null
       })}
     )
     returning id
@@ -868,4 +1031,17 @@ function toRecord(row: VerificationRecordRow): VerificationRecordResource {
     expiresAt: row.expires_at?.toISOString() ?? null,
     reusable: row.reusable
   };
+}
+
+function verificationProviderCreateUncertaintyExpiresAt(
+  provider: VerificationProviderSession["provider"]
+): Date {
+  const seconds = provider === "yoti"
+    ? 15 * 60
+    : provider === "sumsub"
+      ? 30 * 60
+      : provider === "veriff"
+        ? 7 * 24 * 60 * 60
+        : 24 * 60 * 60;
+  return new Date(Date.now() + seconds * 1000);
 }

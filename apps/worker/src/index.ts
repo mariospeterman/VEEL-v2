@@ -267,6 +267,18 @@ export async function runSubscriptionCollectionTick(input: {
   limit?: number;
 } = {}): Promise<ProcessSubscriptionCollectionsResult> {
   const config = parseServerEnv(process.env);
+  if (!config.SUBSCRIPTIONS_ENABLED) {
+    return {
+      expired: 0,
+      leased: 0,
+      confirmed: 0,
+      failed: 0,
+      reconciling: 0,
+      revoked: 0,
+      cancelled: 0
+    };
+  }
+
   const repository =
     input.repository ?? createPostgresSubscriptionCollectionRepository(config.DATABASE_URL);
   const provider = input.provider ?? (
@@ -309,6 +321,16 @@ export async function runSubscriptionAuthorizationReconciliationTick(input: {
   limit?: number;
 } = {}): Promise<ProcessSubscriptionAuthorizationReconciliationsResult> {
   const config = parseServerEnv(process.env);
+  if (!config.SUBSCRIPTIONS_ENABLED) {
+    return {
+      claimed: 0,
+      verified: 0,
+      retrying: 0,
+      terminal: 0,
+      stale: 0
+    };
+  }
+
   const repository = input.repository ??
     createPostgresSubscriptionAuthorizationReconciliationRepository({
       ...(config.DATABASE_URL ? { databaseUrl: config.DATABASE_URL } : {})

@@ -220,17 +220,37 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
     },
 
     async selectPendingAgeProvider(input) {
-      await sql.begin(async (tx) => {
+      return sql.begin(async (tx) => {
         const rows = await tx<Array<{ id: string }>>`
           update verification_sessions
           set provider = ${input.provider}, requested_method = ${input.method},
               assurance_level = ${input.assuranceLevel}, reusable = ${input.reusable},
-              status = 'submitted', updated_at = now()
+              status = 'submitted',
+              expires_at = coalesce(expires_at, ${providerCreateUncertaintyExpiresAt(input.provider)}),
+              updated_at = now()
           where id = ${input.sessionId} and launch_state = 'reserved'
-            and status in ('created', 'pending', 'submitted')
+            and provider = 'internal' and status = 'created'
           returning id
         `;
-        if (!rows[0]) throw new Error("VERIFICATION_SESSION_RESERVATION_NOT_FOUND");
+        if (!rows[0]) {
+          const existing = await tx<Array<{
+            launch_state: string;
+            status: string;
+            provider: string;
+          }>>`
+            select launch_state, status, provider
+            from verification_sessions
+            where id = ${input.sessionId}
+            limit 1
+          `;
+          const attempt = existing[0];
+          if (
+            attempt?.launch_state === "reserved" &&
+            attempt.status === "submitted" &&
+            attempt.provider !== "internal"
+          ) return false;
+          throw new Error("VERIFICATION_SESSION_RESERVATION_NOT_FOUND");
+        }
         await tx`
           update verification_records
           set provider = ${input.provider}, method = ${input.method},
@@ -241,6 +261,7 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
           where metadata ->> 'sessionId' = ${input.sessionId}
             and metadata ->> 'source' = 'verification_session_reservation'
         `;
+        return true;
       });
     },
 
@@ -261,7 +282,10 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
               expires_at = ${providerSession.expiresAt}, launch_state = 'ready',
               status = case when status in ('created', 'submitted') then 'pending' else status end,
               updated_at = now()
-          where id = ${input.sessionId} and launch_state in ('reserved', 'failed')
+          where id = ${input.sessionId}
+            and launch_state = 'reserved'
+            and status = 'submitted'
+            and provider = ${providerSession.provider}
           returning id
         `;
         if (!rows[0]) throw new Error("VERIFICATION_SESSION_RESERVATION_NOT_FOUND");
@@ -334,12 +358,59 @@ export function createPostgresAgeRepository(database?: string | PostgresSql): Ag
           where metadata ->> 'sessionId' = ${input.sessionId}
             and metadata ->> 'source' = 'verification_session_reservation'
         `;
+        if (
+          attempt.launch_state === "reserved" &&
+          attempt.status === "submitted" &&
+          attempt.provider_reference === null &&
+          attempt.expires_at !== null
+        ) {
+          const terminalized = await tx<Array<{ id: string }>>`
+            update verification_sessions
+            set status = 'needs_review', updated_at = now()
+            where id = ${input.sessionId}
+              and launch_state = 'reserved'
+              and status = 'submitted'
+              and provider_session_id is null
+              and provider_applicant_id is null
+              and provider_inquiry_id is null
+              and provider_transaction_id is null
+              and expires_at <= now()
+            returning id
+          `;
+          if (terminalized[0]) {
+            await tx`
+              update verification_records
+              set status = 'pending',
+                  failure_reason_code = 'provider_create_reference_requires_review',
+                  metadata = metadata || jsonb_build_object(
+                    'reconciliationReason', 'provider_create_reference_requires_review',
+                    'manualReviewRequiredAt', to_char(
+                      clock_timestamp() at time zone 'UTC',
+                      'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+                    )
+                  ),
+                  updated_at = now()
+              where metadata ->> 'sessionId' = ${input.sessionId}
+                and metadata ->> 'source' = 'verification_session_reservation'
+            `;
+            await tx`
+              insert into audit_events (
+                id, actor_user_id, subject_type, subject_id, action, metadata
+              ) values (
+                ${randomUUID()}, ${input.userId}, 'verification_session', ${input.sessionId},
+                'verification.provider_create_reference_requires_review',
+                ${tx.json({ purpose: "age_access", provider: attempt.provider })}
+              )
+            `;
+          }
+        }
         const updated = await findAgeAttemptRows(tx, input);
         return updated[0] ? toAgeAttempt(updated[0]) : null;
       });
     },
 
     async applyProviderReconciliation(input) {
+      if (!input.occurredAt) return false;
       return sql.begin(async (tx) => (await applyAgeWebhookDecision(tx, {
         provider: input.provider as AgeProvider,
         providerEventId: input.providerEventId,
@@ -525,7 +596,10 @@ async function applyAgeWebhookDecision(
       and (
         provider_session_id = ${input.providerReference}
         or provider_applicant_id = ${input.providerReference}
-        or provider_external_user_id = ${input.providerSubjectReference ?? input.providerReference}
+        or (
+          launch_state = 'ready'
+          and provider_external_user_id = ${input.providerSubjectReference ?? input.providerReference}
+        )
       )
     order by
       case when provider_session_id = ${input.providerReference}
@@ -550,7 +624,8 @@ async function applyAgeWebhookDecision(
       ${session.subject_id},
       'age_access',
       ${normalizedStatus},
-      ${input.verifiedAt ?? null}
+      ${input.verifiedAt ?? null},
+      ${session.id}
     ) as should_apply
   `;
   if (currentRows[0]?.should_apply !== true) {
@@ -598,6 +673,7 @@ async function applyAgeWebhookDecision(
       ${session.reusable}, ${input.failureCode ?? null}, ${input.verifiedAt ?? null},
       ${tx.json({
         source,
+        sessionId: session.id,
         providerEventId: input.providerEventId,
         providerOccurredAtMissing: !input.verifiedAt
       })}
@@ -712,9 +788,11 @@ function toAgeAttempt(row: AgeAttemptRow): AgeSessionAttemptResource {
     launchState,
     status: row.status,
     resumable: (launchState === "ready" && Boolean(row.launch_url) && launchIsCurrent) || (
-      launchState === "reconciling" &&
-      Boolean(row.provider_reference) &&
-      ["didit", "yoti"].includes(row.provider)
+      launchState === "reconciling" && (
+        row.provider_reference === null || (
+          launchIsCurrent && ["didit", "yoti"].includes(row.provider)
+        )
+      )
     )
   };
 }
@@ -809,4 +887,15 @@ function ageEvidenceIsReusable(_provider: AgeProvider) {
 
 function ageAssurance(provider: AgeProvider) {
   return provider === "didit" || provider === "yoti" ? "medium" : "documentary";
+}
+
+function providerCreateUncertaintyExpiresAt(provider: AgeProvider): Date {
+  const seconds = provider === "yoti"
+    ? 15 * 60
+    : provider === "sumsub"
+      ? 30 * 60
+      : provider === "veriff"
+        ? 7 * 24 * 60 * 60
+        : 24 * 60 * 60;
+  return new Date(Date.now() + seconds * 1000);
 }

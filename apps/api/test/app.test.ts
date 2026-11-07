@@ -11,11 +11,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
+import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import sharp from "sharp";
 import { buildApi } from "../src/app";
 import { AdminRepositoryStateConflictError } from "../src/modules/admin/admin-repository";
 import { MutationCommandIdempotencyConflictError } from "../src/shared/mutation-command-receipt";
+import { PaymentSubmissionWriteConflictError } from "../src/modules/payment/payment-submission";
 import type { AdminRepository } from "../src/modules/admin/types";
 import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
@@ -10288,7 +10290,9 @@ describe("buildApi", () => {
       contentExportJobId: "00000000-0000-4000-8000-000000000171",
       contentExportJobState: "ready",
       contentExportCleanupState: "retained_private",
-      contentExportArchiveUploadStartedAt: "2026-06-06T12:05:00.000Z"
+      contentExportArchiveUploadStartedAt: "2026-06-06T12:05:00.000Z",
+      contentExportCleanupRequiredAttemptCount: 2,
+      contentExportOldestCleanupRequiredAttemptAt: "2026-06-06T12:06:00.000Z"
     });
     expect(featureFlags.statusCode).toBe(200);
     expect(featureFlags.json().items[0]).toMatchObject({
@@ -11388,6 +11392,7 @@ describe("buildApi", () => {
 
   it("records a payment submission and confirms only verified settlement", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture();
     const submissions: RecordPaymentSubmissionInput[] = [];
     const settlementInputs: PaymentSettlementInput[] = [];
     const paymentRepository: PaymentRepository = {
@@ -11396,7 +11401,7 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findIntent() {
-        return storedPaymentIntent;
+        return signed.intent;
       },
       async recordTransactionRequest() {
         throw new Error("not implemented");
@@ -11432,18 +11437,19 @@ describe("buildApi", () => {
         "idempotency-key": "payment-submission-1"
       },
       payload: {
-        signature: validSolanaSignature
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
       }
     });
 
     expect(response.statusCode).toBe(202);
     expect(settlementInputs).toEqual([
       {
-        signature: validSolanaSignature,
+        signature: signed.signature,
         referenceAddress: storedPaymentIntent.referenceAddress,
         memo: `veel:${storedPaymentIntent.id}`,
         settlementKind: "creator_split",
-        buyerWallet: null,
+        buyerWallet: signed.intent.buyerWallet,
         creatorWallet,
         enterpriseWallet: null,
         platformFeeWallet,
@@ -11465,7 +11471,7 @@ describe("buildApi", () => {
         supabaseUserId: "00000000-0000-4000-8000-000000000001",
         paymentIntentId: storedPaymentIntent.id,
         idempotencyKey: "payment-submission-1",
-        signature: validSolanaSignature,
+        signature: signed.signature,
         settlement: {
           confirmed: false
         },
@@ -11477,13 +11483,13 @@ describe("buildApi", () => {
       {
         supabaseUserId: "00000000-0000-4000-8000-000000000001",
         paymentIntentId: storedPaymentIntent.id,
-        signature: validSolanaSignature,
+        signature: signed.signature,
         settlement: {
           confirmed: true
         },
         writeGuard: {
           state: "submitted",
-          submittedSignature: validSolanaSignature
+          submittedSignature: signed.signature
         }
       }
     ]);
@@ -11494,6 +11500,7 @@ describe("buildApi", () => {
 
   it("retains an accepted payment signature when immediate RPC verification is unavailable", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture();
     const submissions: RecordPaymentSubmissionInput[] = [];
     const paymentRepository: PaymentRepository = {
       ...checkoutPaymentRepositoryMethods,
@@ -11501,7 +11508,7 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findIntent() {
-        return storedPaymentIntent;
+        return signed.intent;
       },
       async recordTransactionRequest() {
         throw new Error("not implemented");
@@ -11531,7 +11538,10 @@ describe("buildApi", () => {
         authorization: "Bearer valid-token",
         "idempotency-key": "payment-submission-rpc-timeout"
       },
-      payload: { signature: validSolanaSignature }
+      payload: {
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      }
     });
 
     expect(response.statusCode).toBe(202);
@@ -11539,10 +11549,448 @@ describe("buildApi", () => {
       supabaseUserId: "00000000-0000-4000-8000-000000000001",
       paymentIntentId: storedPaymentIntent.id,
       idempotencyKey: "payment-submission-rpc-timeout",
-      signature: validSolanaSignature,
+      signature: signed.signature,
       settlement: { confirmed: false },
       writeGuard: { state: "pending", submittedSignature: null }
     }]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects omitted or invalid exact signed transaction bytes before any durable acceptance", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture();
+    const otherPayer = signedPaymentSubmissionFixture();
+    const tamperedBytes = Buffer.from(signed.signedTransactionBase64, "base64");
+    tamperedBytes[1] = (tamperedBytes[1] ?? 0) ^ 1;
+    const recordSubmission = vi.fn(async () => undefined);
+    const verifyTransfer = vi.fn(async () => ({ confirmed: false }));
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return signed.intent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      recordSubmission
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: { verifyTransfer }
+    });
+    await app.ready();
+
+    const invalidPayloads = [
+      { signature: signed.signature },
+      {
+        signature: signed.signature,
+        signedTransactionBase64: `${signed.signedTransactionBase64}\n`
+      },
+      {
+        signature: otherPayer.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      },
+      {
+        signature: otherPayer.signature,
+        signedTransactionBase64: otherPayer.signedTransactionBase64
+      },
+      {
+        signature: bs58.encode(tamperedBytes.subarray(1, 65)),
+        signedTransactionBase64: tamperedBytes.toString("base64")
+      }
+    ];
+
+    for (const [index, payload] of invalidPayloads.entries()) {
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": `payment-invalid-signed-bytes-${index}`
+        },
+        payload
+      });
+      expect(response.statusCode).toBe(400);
+    }
+
+    expect(recordSubmission).not.toHaveBeenCalled();
+    expect(verifyTransfer).not.toHaveBeenCalled();
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it.each(["confirmed", "failed"] as const)(
+    "replays an exact accepted payment submission after the intent becomes %s",
+    async (state) => {
+      vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+      const signed = signedPaymentSubmissionFixture();
+      const changed = signedPaymentSubmissionFixture({}, signed.payer);
+      const recordSubmission = vi.fn(async () => {
+        throw new Error("a terminal replay must not write or reverify settlement");
+      });
+      const verifyTransfer = vi.fn(async () => {
+        throw new Error("a terminal replay must not write or reverify settlement");
+      });
+      const hasSubmissionCommandReceipt = vi.fn(async (input: {
+        idempotencyKey: string;
+        signature: string;
+      }) => {
+        if (input.idempotencyKey !== "payment-terminal-replay") return false;
+        if (input.signature !== signed.signature) {
+          throw new MutationCommandIdempotencyConflictError();
+        }
+        return true;
+      });
+      const paymentRepository: PaymentRepository = {
+        ...checkoutPaymentRepositoryMethods,
+        async createOrReuseIntent() {
+          throw new Error("not implemented");
+        },
+        async findIntent() {
+          return { ...signed.intent, state };
+        },
+        async recordTransactionRequest() {
+          throw new Error("not implemented");
+        },
+        hasSubmissionCommandReceipt,
+        recordSubmission
+      };
+      const app = await buildApi({
+        authVerifier: fakeAuthVerifier,
+        sessionRepository: appReadySessionRepository,
+        ageRepository: verifiedAgeRepository,
+        walletRepository: walletRepositoryWithWallet,
+        paymentRepository,
+        settlementVerifier: { verifyTransfer }
+      });
+      await app.ready();
+
+      const exactReplay = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": "payment-terminal-replay"
+        },
+        payload: {
+          signature: signed.signature,
+          signedTransactionBase64: signed.signedTransactionBase64
+        }
+      });
+      expect(exactReplay.statusCode).toBe(202);
+
+      const changedKey = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": "payment-terminal-other-command"
+        },
+        payload: {
+          signature: signed.signature,
+          signedTransactionBase64: signed.signedTransactionBase64
+        }
+      });
+      expect(changedKey.statusCode).toBe(409);
+
+      const changedBody = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": "payment-terminal-replay"
+        },
+        payload: {
+          signature: changed.signature,
+          signedTransactionBase64: changed.signedTransactionBase64
+        }
+      });
+      expect(changedBody.statusCode).toBe(409);
+      expect(changedBody.json()).toMatchObject({
+        code: "conflict",
+        message: expect.stringContaining("Idempotency key")
+      });
+      expect(recordSubmission).not.toHaveBeenCalled();
+      expect(verifyTransfer).not.toHaveBeenCalled();
+
+      await app.close();
+      vi.unstubAllEnvs();
+    }
+  );
+
+  it.each([
+    "not_found",
+    "block_time_missing",
+    "transient",
+    "transaction_failed",
+    "transfer_mismatch"
+  ] as const)("passes normalized %s settlement evidence to the atomic writer", async (failureCode) => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture();
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return signed.intent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: {
+        async verifyTransfer() {
+          return { confirmed: false, failureCode };
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": `payment-settlement-${failureCode}`
+      },
+      payload: {
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submissions).toHaveLength(2);
+    expect(submissions[1]).toMatchObject({
+      signature: signed.signature,
+      settlement: { confirmed: false, failureCode },
+      writeGuard: {
+        state: "submitted",
+        submittedSignature: signed.signature
+      }
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("terminalizes an accepted unbroadcast submission only after backend transaction-expiry proof", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture({
+      state: "submitted",
+      expiresAt: new Date("2020-01-01T00:00:00.000Z")
+    });
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const expiredIntent = signed.intent;
+    const verifyTransactionExpiry = vi.fn(async () => ({ state: "expired" as const }));
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return expiredIntent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: {
+        async verifyTransfer() {
+          return { confirmed: false, failureCode: "not_found" };
+        },
+        verifyTransactionExpiry
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${expiredIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-expired-unbroadcast"
+      },
+      payload: {
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(verifyTransactionExpiry).toHaveBeenCalledWith({
+      signature: signed.signature,
+      signedTransactionBase64: signed.signedTransactionBase64,
+      buyerWallet: signed.intent.buyerWallet
+    }, { signal: expect.any(AbortSignal) });
+    expect(submissions).toHaveLength(2);
+    expect(submissions[1]).toMatchObject({
+      signature: signed.signature,
+      settlement: {
+        confirmed: false,
+        failureCode: "signed_transaction_expired"
+      },
+      writeGuard: {
+        state: "submitted",
+        submittedSignature: signed.signature
+      }
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps an expired intent submitted while its exact transaction can still land", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture({
+      state: "submitted",
+      expiresAt: new Date("2020-01-01T00:00:00.000Z")
+    });
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return signed.intent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: {
+        async verifyTransfer() {
+          return { confirmed: false, failureCode: "not_found" };
+        },
+        async verifyTransactionExpiry() {
+          return { state: "active" };
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-expiry-still-active"
+      },
+      payload: {
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submissions[1]?.settlement).toEqual({
+      confirmed: false,
+      failureCode: "not_found"
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts concurrent same-signature requests when one reconciliation writer loses the race", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture();
+    let acceptanceWrites = 0;
+    let reconciliationWrites = 0;
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return signed.intent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        if (input.idempotencyKey) {
+          acceptanceWrites += 1;
+          return;
+        }
+        reconciliationWrites += 1;
+        if (reconciliationWrites === 2) {
+          throw new PaymentSubmissionWriteConflictError();
+        }
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: {
+        async verifyTransfer() {
+          return { confirmed: false, failureCode: "not_found" };
+        }
+      }
+    });
+    await app.ready();
+
+    const request = () => app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-concurrent-same-signature"
+      },
+      payload: {
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      }
+    });
+    const [first, second] = await Promise.all([request(), request()]);
+
+    expect(first.statusCode).toBe(202);
+    expect(second.statusCode).toBe(202);
+    expect(acceptanceWrites).toBe(2);
+    expect(reconciliationWrites).toBe(2);
 
     await app.close();
     vi.unstubAllEnvs();
@@ -13159,7 +13607,48 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("keeps export intake disabled without blocking deletion requests", async () => {
+    vi.stubEnv("CONTENT_EXPORTS_ENABLED", "false");
+    const requestTypes: string[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      engagementRepository: fakeEngagementRepository({
+        async onCreateDataRequest(input) {
+          requestTypes.push(input.body.type);
+        }
+      })
+    });
+    await app.ready();
+
+    const exportResponse = await app.inject({
+      method: "POST",
+      url: "/v1/privacy/data-requests",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "privacy-export-disabled" },
+      payload: { type: "export" }
+    });
+    const deleteResponse = await app.inject({
+      method: "POST",
+      url: "/v1/privacy/data-requests",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "privacy-delete-enabled" },
+      payload: { type: "delete" }
+    });
+
+    expect(exportResponse.statusCode).toBe(503);
+    expect(exportResponse.json()).toEqual({
+      code: "service_unavailable",
+      message: "Content export is temporarily unavailable"
+    });
+    expect(deleteResponse.statusCode).toBe(201);
+    expect(requestTypes).toEqual(["delete"]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("records content engagement, safety reports, and blocks through server-owned routes", async () => {
+    vi.stubEnv("CONTENT_EXPORTS_ENABLED", "true");
     const calls: Array<{ kind: string; input: unknown }> = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -13307,6 +13796,7 @@ describe("buildApi", () => {
     ]);
 
     await app.close();
+    vi.unstubAllEnvs();
   });
 
   it("reads and mutates the canonical follow graph and records feed impressions", async () => {
@@ -14024,6 +14514,32 @@ const storedPaymentIntent: StoredPaymentIntent = {
   durableConfirmationRequired: true,
   refundValueBasis: "manual_resolution"
 };
+
+function signedPaymentSubmissionFixture(
+  overrides: Partial<StoredPaymentIntent> = {},
+  payer = Keypair.generate()
+) {
+  const transaction = new Transaction({
+    feePayer: payer.publicKey,
+    recentBlockhash: Keypair.generate().publicKey.toBase58()
+  }).add(SystemProgram.transfer({
+    fromPubkey: payer.publicKey,
+    toPubkey: Keypair.generate().publicKey,
+    lamports: 1
+  }));
+  transaction.sign(payer);
+
+  return {
+    intent: {
+      ...storedPaymentIntent,
+      buyerWallet: payer.publicKey.toBase58(),
+      ...overrides
+    } satisfies StoredPaymentIntent,
+    payer,
+    signature: bs58.encode(transaction.signature!),
+    signedTransactionBase64: transaction.serialize().toString("base64")
+  };
+}
 
 function liveRoomFixture(
   overrides: Partial<
@@ -15465,6 +15981,8 @@ const fakeAdminRepository: AdminRepository = {
           contentExportJobState: "ready",
           contentExportCleanupState: "retained_private",
           contentExportArchiveUploadStartedAt: "2026-06-06T12:05:00.000Z",
+          contentExportCleanupRequiredAttemptCount: 2,
+          contentExportOldestCleanupRequiredAttemptAt: "2026-06-06T12:06:00.000Z",
           createdAt: "2026-06-06T12:00:00.000Z",
           updatedAt: null,
           completedAt: null
@@ -15484,6 +16002,8 @@ const fakeAdminRepository: AdminRepository = {
       contentExportJobState: null,
       contentExportCleanupState: null,
       contentExportArchiveUploadStartedAt: null,
+      contentExportCleanupRequiredAttemptCount: null,
+      contentExportOldestCleanupRequiredAttemptAt: null,
       createdAt: "2026-06-06T12:00:00.000Z",
       updatedAt: "2026-06-06T12:30:00.000Z",
       completedAt:

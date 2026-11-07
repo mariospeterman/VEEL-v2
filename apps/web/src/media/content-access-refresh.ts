@@ -5,6 +5,38 @@ export const PLAYBACK_RESOURCE_RENEWAL_LEAD_MS = 10_000;
 
 type TimerHandle = ReturnType<typeof setTimeout>;
 
+export type ContentAccessRefreshToken = Readonly<{
+  sourceKey: string;
+  requestKey: string;
+  generation: number;
+}>;
+
+/**
+ * Component-local generation fence for signed-resource renewal. Advancing the
+ * source invalidates both successful and denied responses from the prior
+ * resource before they can mutate the new render.
+ */
+export function createContentAccessRefreshGeneration(initialSourceKey: string) {
+  let sourceKey = initialSourceKey;
+  let generation = 0;
+
+  return {
+    advance(nextSourceKey: string): number {
+      if (nextSourceKey !== sourceKey) {
+        sourceKey = nextSourceKey;
+        generation += 1;
+      }
+      return generation;
+    },
+    capture(requestKey: string): ContentAccessRefreshToken {
+      return { sourceKey, requestKey, generation };
+    },
+    isCurrent(token: ContentAccessRefreshToken): boolean {
+      return token.sourceKey === sourceKey && token.generation === generation;
+    }
+  };
+}
+
 export function createContentAccessRetryScheduler(input: {
   setTimer?: (callback: () => void, delayMs: number) => TimerHandle;
   clearTimer?: (timer: TimerHandle) => void;

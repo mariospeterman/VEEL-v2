@@ -44,58 +44,46 @@ describe("subscription collection safety", () => {
 
   it("marks expiry terminal only after decoding the official recurring-delegation account", async () => {
     const fixture = await collectionFixture();
-    const encoded = getRecurringDelegationEncoder().encode({
-      header: {
-        discriminator: AccountDiscriminator.RecurringDelegation,
-        version: 1,
-        bump: 255,
-        delegator: address(fixture.collection.subscriberWallet),
-        delegatee: address(fixture.collection.collectorAddress),
-        payer: address(fixture.collection.subscriberWallet),
-        initId: 1n
-      },
-      subscriptionAuthority: address(fixture.collection.authorityAddress),
-      mint: address(fixture.collection.tokenMint),
-      currentPeriodStartTs: 1n,
-      periodLengthS: BigInt(fixture.collection.periodSeconds),
-      expiryTs: 1n,
-      amountPerPeriod: fixture.collection.amountAtomic,
-      amountPulledInPeriod: 0n
-    });
-    const authority = getSubscriptionAuthorityEncoder().encode({
-      discriminator: AccountDiscriminator.SubscriptionAuthority,
-      user: address(fixture.collection.subscriberWallet),
-      tokenMint: address(fixture.collection.tokenMint),
-      payer: address(fixture.collection.subscriberWallet),
-      bump: 255,
-      initId: 1n
-    });
-    const token = getTokenEncoder().encode({
-      mint: address(fixture.collection.tokenMint),
-      owner: address(fixture.collection.subscriberWallet),
-      amount: fixture.collection.amountAtomic,
-      delegate: address(fixture.collection.authorityAddress),
-      state: AccountState.Initialized,
-      isNative: null,
-      delegatedAmount: fixture.collection.amountAtomic,
-      closeAuthority: null
-    });
-    const accountInfo = (data: Uint8Array, owner: PublicKey) => ({
-      data: Buffer.from(data),
-      executable: false,
-      lamports: 1,
-      owner,
-      rentEpoch: 0
-    });
+    const [delegation, authority, token] = encodedCollectionAccounts(fixture.collection, 1n);
     vi.spyOn(Connection.prototype, "getAccountInfo")
-      .mockResolvedValueOnce(accountInfo(encoded, new PublicKey(programId)))
-      .mockResolvedValueOnce(accountInfo(authority, new PublicKey(programId)))
-      .mockResolvedValueOnce(accountInfo(token, new PublicKey(TOKEN_PROGRAM_ADDRESS)));
+      .mockResolvedValueOnce(delegation)
+      .mockResolvedValueOnce(authority)
+      .mockResolvedValueOnce(token);
 
     await expect(fixture.provider.collect(fixture.collection)).resolves.toEqual({
       state: "revoked",
       failureCode: "subscription_delegation_expired"
     });
+  });
+
+  it("keeps a platform-scoped USDC collection fully atomic with no creator share", async () => {
+    const fixture = await collectionFixture();
+    const platformCollection: DueSubscriptionCollection = {
+      ...fixture.collection,
+      planId: "platform_plus_monthly",
+      amountMinor: 1_001n,
+      amountAtomic: 10_010_000n,
+      creatorAmountAtomic: 0n,
+      platformAmountAtomic: 10_010_000n,
+      scope: "platform",
+      creatorUserId: null,
+      creatorReceiverWallet: null
+    };
+    const [delegation, authority, token] = encodedCollectionAccounts(
+      platformCollection,
+      4_102_444_800n
+    );
+    vi.spyOn(Connection.prototype, "getAccountInfo")
+      .mockResolvedValueOnce(delegation)
+      .mockResolvedValueOnce(authority)
+      .mockResolvedValueOnce(token);
+
+    await expect(fixture.provider.collect(platformCollection)).resolves.toMatchObject({
+      state: "failed",
+      failureCode: "subscription_collection_provider_not_configured"
+    });
+    expect(platformCollection.creatorAmountAtomic + platformCollection.platformAmountAtomic)
+      .toBe(platformCollection.amountAtomic);
   });
 
   it("does not report confirmation when the durable outcome fence rejects an unpersisted signature", async () => {
@@ -406,6 +394,177 @@ describe("subscription collection safety", () => {
     expect(subscriptionUpdate).toContain("next_collection_at");
   });
 
+  it("leases and persists exact atomic splits beyond Number.MAX_SAFE_INTEGER", async () => {
+    const fixture = await collectionFixture();
+    const amountAtomic = 9_007_199_254_750_000n;
+    const creatorAmountAtomic = 7_656_119_366_537_500n;
+    const platformAmountAtomic = 1_351_079_888_212_500n;
+    expect(creatorAmountAtomic + platformAmountAtomic).toBe(amountAtomic);
+
+    const { queryCalls, sql } = postgresFixture((query) => {
+      if (query.includes("acceptance.amount_atomic") && query.includes("pending_collection")) {
+        return [{
+          subscription_id: fixture.collection.subscriptionId,
+          subscriber_user_id: fixture.collection.subscriberUserId,
+          subscriber_wallet: fixture.collection.subscriberWallet,
+          plan_id: fixture.collection.planId,
+          amount_minor: "900719925475",
+          amount_atomic: amountAtomic.toString(),
+          creator_amount_atomic: creatorAmountAtomic.toString(),
+          platform_fee_amount_atomic: platformAmountAtomic.toString(),
+          allocation_amount_atomic: "0",
+          currency: fixture.collection.currency,
+          period_days: 30,
+          period_seconds: fixture.collection.periodSeconds,
+          period_starts_at: fixture.collection.periodStartsAt,
+          period_ends_at: fixture.collection.periodEndsAt,
+          authority_address: fixture.collection.authorityAddress,
+          delegation_address: fixture.collection.delegationAddress,
+          subscriber_token_account: fixture.collection.subscriberTokenAccount,
+          collector_address: fixture.collection.collectorAddress,
+          token_mint: fixture.collection.tokenMint,
+          token_program: fixture.collection.tokenProgram,
+          provider: fixture.collection.provider,
+          program_id: fixture.collection.programId,
+          delegation_nonce: fixture.collection.delegationNonce,
+          asset_decimals: fixture.collection.assetDecimals,
+          scope: fixture.collection.scope,
+          creator_user_id: fixture.collection.creatorUserId,
+          creator_receiver_wallet: fixture.collection.creatorReceiverWallet,
+          platform_receiver_wallet: fixture.collection.platformReceiverWallet,
+          terms_version: fixture.collection.termsVersion,
+          withdrawal_waiver_version: fixture.collection.withdrawalWaiverVersion,
+          accepted_at: fixture.collection.acceptedAt,
+          solana_network: fixture.collection.solanaNetwork,
+          recipient_kyc_required: false,
+          recipient_kyc_policy_mode: "disabled",
+          recipient_kyc_policy_version: "test",
+          recipient_kyc_decision_reason: "test"
+        }];
+      }
+      if (
+        query.includes("update subscription_collections collection") &&
+        query.includes("collection.broadcast_last_valid_block_height")
+      ) {
+        return [{
+          id: fixture.collection.collectionId,
+          state: "processing",
+          attempt_count: 1,
+          idempotency_key: fixture.collection.providerIdempotencyKey,
+          broadcast_signature: null,
+          broadcast_transaction_base64: null,
+          broadcast_blockhash: null,
+          broadcast_last_valid_block_height: null
+        }];
+      }
+      return [];
+    });
+    const repository = createPostgresSubscriptionCollectionRepository({ sql });
+
+    const leased = await repository.leaseDueCollections({
+      now: new Date("2026-11-05T12:00:00.000Z"),
+      limit: 1,
+      leaseDurationMs: 300_000,
+      maxAttempts: 8
+    });
+
+    expect(leased).toHaveLength(1);
+    expect(leased[0]).toMatchObject({
+      amountAtomic,
+      creatorAmountAtomic,
+      platformAmountAtomic,
+      allocationAmountAtomic: 0n
+    });
+    const collectionInsert = queryCalls.find(({ query }) =>
+      query.includes("insert into subscription_collections")
+    );
+    expect(collectionInsert?.values).toEqual(expect.arrayContaining([
+      amountAtomic.toString(),
+      creatorAmountAtomic.toString(),
+      platformAmountAtomic.toString(),
+      "0"
+    ]));
+    expect(collectionInsert?.values.some((value) => typeof value === "number" && !Number.isSafeInteger(value)))
+      .toBe(false);
+  });
+
+  it("propagates a non-cent creator renewal through every recurring finance boundary", async () => {
+    const fixture = await collectionFixture();
+    const collection: DueSubscriptionCollection = {
+      ...fixture.collection,
+      amountMinor: 1_001n,
+      amountAtomic: 10_010_000n,
+      creatorAmountAtomic: 8_508_500n,
+      platformAmountAtomic: 1_501_500n
+    };
+
+    const proof = await exerciseConfirmedFinanceWriter(collection, "creator-renewal-signature");
+
+    expect(proof.applied).toBe(true);
+    expect(proof.leased).toMatchObject({
+      amountMinor: 1_001n,
+      amountAtomic: 10_010_000n,
+      creatorAmountAtomic: 8_508_500n,
+      platformAmountAtomic: 1_501_500n,
+      scope: "creator"
+    });
+    expect(proof.persistedAmounts).toEqual({
+      acceptedPriceMinor: 1_001n,
+      amountAtomic: 10_010_000n,
+      creatorAmountAtomic: 8_508_500n,
+      platformFeeAmountAtomic: 1_501_500n,
+      allocationAmountAtomic: 0n
+    });
+    expectRecurringFinanceWriter(proof, {
+      acceptedPriceMinor: 1_001n,
+      amountAtomic: 10_010_000n,
+      creatorAmountAtomic: 8_508_500n,
+      platformFeeAmountAtomic: 1_501_500n,
+      scope: "creator"
+    });
+  });
+
+  it("persists a platform renewal with the full atomic amount and no creator share", async () => {
+    const fixture = await collectionFixture();
+    const collection: DueSubscriptionCollection = {
+      ...fixture.collection,
+      planId: "platform_plus_monthly",
+      amountMinor: 1_001n,
+      amountAtomic: 10_010_000n,
+      creatorAmountAtomic: 0n,
+      platformAmountAtomic: 10_010_000n,
+      scope: "platform",
+      creatorUserId: null,
+      creatorReceiverWallet: null
+    };
+
+    const proof = await exerciseConfirmedFinanceWriter(collection, "platform-renewal-signature");
+
+    expect(proof.applied).toBe(true);
+    expect(proof.leased).toMatchObject({
+      amountMinor: 1_001n,
+      amountAtomic: 10_010_000n,
+      creatorAmountAtomic: 0n,
+      platformAmountAtomic: 10_010_000n,
+      scope: "platform",
+      creatorUserId: null
+    });
+    expect(proof.persistedAmounts).toEqual({
+      acceptedPriceMinor: 1_001n,
+      amountAtomic: 10_010_000n,
+      creatorAmountAtomic: 0n,
+      platformFeeAmountAtomic: 10_010_000n,
+      allocationAmountAtomic: 0n
+    });
+    expectRecurringFinanceWriter(proof, {
+      acceptedPriceMinor: 1_001n,
+      amountAtomic: 10_010_000n,
+      creatorAmountAtomic: 0n,
+      platformFeeAmountAtomic: 10_010_000n,
+      scope: "platform"
+    });
+  });
+
   it("records a late confirmed debit without reactivating cancelled or revoked access", async () => {
     const period = {
       period_starts_at: new Date("2026-11-05T12:00:00.000Z"),
@@ -434,16 +593,48 @@ describe("subscription collection safety", () => {
     expect(subscriptionUpdate).toContain("else null");
     expect(queries.find((query) => query.includes("jsonb_build_object")))
       .toContain("'settlementSignature', ?::text");
+    const financeProjection = queries.find((query) => query.includes("with finance as"));
+    expect(financeProjection).toContain("collection.amount_minor as accepted_price_minor");
+    expect(financeProjection).toContain("collection.amount_atomic");
+    expect(financeProjection).toContain("collection.creator_amount_atomic");
+    expect(financeProjection).toContain("collection.platform_fee_amount_atomic");
+    expect(financeProjection).toContain("collection.allocation_amount_atomic");
+    const normalizedFinanceProjection = financeProjection?.replace(/\s+/gu, " ");
+    expect(normalizedFinanceProjection).toContain(
+      "case when scope = 'creator' then 'creator_subscription' else 'platform_subscription' end, amount_atomic, currency"
+    );
+    expect(normalizedFinanceProjection).toContain(
+      "'purchase_total', 'Recurring subscription period', finance.amount_atomic, finance.currency"
+    );
+    expect(normalizedFinanceProjection).toContain(
+      "'outgoing', finance.amount_atomic, finance.currency"
+    );
+    expect(normalizedFinanceProjection).toContain(
+      "finance.collection_id, finance.amount_atomic, finance.platform_fee_amount_atomic, case when finance.scope = 'creator' then finance.creator_amount_atomic else null end"
+    );
+    expect(normalizedFinanceProjection).toContain(
+      "finance.collection_id, 'subscription_collection_confirmed', finance.accepted_price_minor, finance.amount_atomic"
+    );
+    expect(financeProjection).toContain("'confirmationVersion', 'subscription-collection-confirmation-v2'");
+    expect(normalizedFinanceProjection).not.toContain("'purchase_total', 'Recurring subscription period', finance.accepted_price_minor");
+    expect(normalizedFinanceProjection).not.toContain("'outgoing', finance.accepted_price_minor");
+    expect(normalizedFinanceProjection).not.toContain("round(finance.platform_fee_amount_atomic::numeric / 10000)");
   });
 });
 
 function postgresFixture(
   rowsForQuery: (query: string) => unknown[]
-): { queries: string[]; sql: postgres.Sql } {
+): {
+  queries: string[];
+  queryCalls: Array<{ query: string; values: unknown[] }>;
+  sql: postgres.Sql;
+} {
   const queries: string[] = [];
-  const transaction = vi.fn((strings: TemplateStringsArray) => {
+  const queryCalls: Array<{ query: string; values: unknown[] }> = [];
+  const transaction = vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => {
     const query = strings.join("?");
     queries.push(query);
+    queryCalls.push({ query, values });
     return Promise.resolve(rowsForQuery(query));
   }) as unknown as postgres.TransactionSql;
   (transaction as unknown as { json(value: unknown): unknown }).json = (value) => value;
@@ -451,7 +642,192 @@ function postgresFixture(
   (sql as unknown as {
     begin<T>(work: (tx: postgres.TransactionSql) => Promise<T>): Promise<T>;
   }).begin = (work) => work(transaction);
-  return { queries, sql };
+  return { queries, queryCalls, sql };
+}
+
+async function exerciseConfirmedFinanceWriter(
+  collection: DueSubscriptionCollection,
+  collectionSignature: string
+) {
+  const { queryCalls, sql } = postgresFixture((query) => {
+    if (query.includes("acceptance.amount_atomic") && query.includes("pending_collection")) {
+      return [dueSubscriptionRow(collection)];
+    }
+    if (
+      query.includes("update subscription_collections collection") &&
+      query.includes("collection.broadcast_last_valid_block_height")
+    ) {
+      return [{
+        id: collection.collectionId,
+        state: "processing",
+        attempt_count: collection.attemptCount,
+        idempotency_key: collection.providerIdempotencyKey,
+        broadcast_signature: null,
+        broadcast_transaction_base64: null,
+        broadcast_blockhash: null,
+        broadcast_last_valid_block_height: null
+      }];
+    }
+    if (
+      query.includes("update subscription_collections") &&
+      query.includes("state = 'confirmed'") &&
+      query.includes("returning period_starts_at, period_ends_at")
+    ) {
+      return [{
+        period_starts_at: collection.periodStartsAt,
+        period_ends_at: collection.periodEndsAt
+      }];
+    }
+    return [];
+  });
+  const repository = createPostgresSubscriptionCollectionRepository({ sql });
+  const leased = await repository.leaseDueCollections({
+    now: new Date("2026-11-05T12:00:00.000Z"),
+    limit: 1,
+    leaseDurationMs: 300_000,
+    maxAttempts: 8
+  });
+  const leasedCollection = leased[0];
+  if (!leasedCollection) throw new Error("Expected the recurring collection to be leased");
+
+  const applied = await repository.recordCollectionOutcome({
+    collectionId: leasedCollection.collectionId,
+    subscriptionId: leasedCollection.subscriptionId,
+    leaseToken: leasedCollection.leaseToken,
+    maxAttempts: 8,
+    outcome: { state: "confirmed", collectionSignature }
+  });
+  const collectionInsert = queryCalls.find(({ query }) =>
+    query.includes("insert into subscription_collections")
+  );
+  const financeWrite = queryCalls.find(({ query }) => query.includes("with finance as"));
+  if (!collectionInsert || !financeWrite) {
+    throw new Error("Expected collection persistence and recurring finance writer queries");
+  }
+
+  return {
+    applied,
+    leased: leasedCollection,
+    collectionSignature,
+    financeWrite,
+    persistedAmounts: {
+      acceptedPriceMinor: BigInt(String(collectionInsert.values[4])),
+      amountAtomic: BigInt(String(collectionInsert.values[5])),
+      creatorAmountAtomic: BigInt(String(collectionInsert.values[6])),
+      platformFeeAmountAtomic: BigInt(String(collectionInsert.values[7])),
+      allocationAmountAtomic: BigInt(String(collectionInsert.values[8]))
+    }
+  };
+}
+
+function dueSubscriptionRow(collection: DueSubscriptionCollection) {
+  return {
+    subscription_id: collection.subscriptionId,
+    subscriber_user_id: collection.subscriberUserId,
+    subscriber_wallet: collection.subscriberWallet,
+    plan_id: collection.planId,
+    amount_minor: collection.amountMinor.toString(),
+    amount_atomic: collection.amountAtomic.toString(),
+    creator_amount_atomic: collection.creatorAmountAtomic.toString(),
+    platform_fee_amount_atomic: collection.platformAmountAtomic.toString(),
+    allocation_amount_atomic: collection.allocationAmountAtomic.toString(),
+    currency: collection.currency,
+    period_days: 30,
+    period_seconds: collection.periodSeconds,
+    period_starts_at: collection.periodStartsAt,
+    period_ends_at: collection.periodEndsAt,
+    authority_address: collection.authorityAddress,
+    delegation_address: collection.delegationAddress,
+    subscriber_token_account: collection.subscriberTokenAccount,
+    collector_address: collection.collectorAddress,
+    token_mint: collection.tokenMint,
+    token_program: collection.tokenProgram,
+    provider: collection.provider,
+    program_id: collection.programId,
+    delegation_nonce: collection.delegationNonce,
+    asset_decimals: collection.assetDecimals,
+    scope: collection.scope,
+    creator_user_id: collection.creatorUserId,
+    creator_receiver_wallet: collection.creatorReceiverWallet,
+    platform_receiver_wallet: collection.platformReceiverWallet,
+    terms_version: collection.termsVersion,
+    withdrawal_waiver_version: collection.withdrawalWaiverVersion,
+    accepted_at: collection.acceptedAt,
+    solana_network: collection.solanaNetwork,
+    recipient_kyc_required: collection.recipientKycRequired,
+    recipient_kyc_policy_mode: collection.recipientKycPolicyMode,
+    recipient_kyc_policy_version: collection.recipientKycPolicyVersion,
+    recipient_kyc_decision_reason: collection.recipientKycDecisionReason
+  };
+}
+
+function expectRecurringFinanceWriter(
+  proof: Awaited<ReturnType<typeof exerciseConfirmedFinanceWriter>>,
+  expected: {
+    acceptedPriceMinor: bigint;
+    amountAtomic: bigint;
+    creatorAmountAtomic: bigint;
+    platformFeeAmountAtomic: bigint;
+    scope: "creator" | "platform";
+  }
+) {
+  const normalized = proof.financeWrite.query.replace(/\s+/gu, " ");
+  expect(proof.financeWrite.values.slice(0, 3)).toEqual([
+    proof.leased.collectionId,
+    proof.leased.subscriptionId,
+    proof.collectionSignature
+  ]);
+  expect(normalized).toContain(
+    "collection.amount_minor as accepted_price_minor, collection.amount_atomic, collection.creator_amount_atomic, collection.platform_fee_amount_atomic"
+  );
+  expect(normalized).toContain(
+    "case when scope = 'creator' then 'creator_subscription' else 'platform_subscription' end, amount_atomic, currency"
+  );
+  expect(normalized).toContain(
+    "'purchase_total', 'Recurring subscription period', finance.amount_atomic, finance.currency"
+  );
+  expect(normalized).toContain("'outgoing', finance.amount_atomic, finance.currency");
+  expect(normalized).toContain(
+    "finance.collection_id, finance.amount_atomic, finance.platform_fee_amount_atomic, case when finance.scope = 'creator' then finance.creator_amount_atomic else null end"
+  );
+  expect(normalized).toContain(
+    "case when finance.scope = 'creator' then 'user_to_creator_split' else 'user_to_platform' end"
+  );
+  expect(normalized).toContain(
+    "case when finance.scope = 'creator' then 'creator' else 'veel' end"
+  );
+  expect(normalized).toContain(
+    "'acceptedPriceMinor', finance.accepted_price_minor, 'amountAtomic', finance.amount_atomic, 'creatorAmountAtomic', finance.creator_amount_atomic, 'platformFeeAmountAtomic', finance.platform_fee_amount_atomic"
+  );
+  expect(normalized).toContain(
+    "finance.collection_id, 'subscription_collection_confirmed', finance.accepted_price_minor, finance.amount_atomic"
+  );
+  expect(normalized).not.toContain(
+    "'purchase_total', 'Recurring subscription period', finance.accepted_price_minor"
+  );
+  expect(normalized).not.toContain("'outgoing', finance.accepted_price_minor");
+  expect(normalized).not.toContain("round(finance.platform_fee_amount_atomic::numeric / 10000)");
+  expect({
+    receiptGrossAtomic: proof.persistedAmounts.amountAtomic,
+    receiptLineAtomic: proof.persistedAmounts.amountAtomic,
+    walletAtomic: proof.persistedAmounts.amountAtomic,
+    ledgerGrossAtomic: proof.persistedAmounts.amountAtomic,
+    ledgerPlatformFeeAtomic: proof.persistedAmounts.platformFeeAmountAtomic,
+    ledgerCreatorNetAtomic: expected.scope === "creator"
+      ? proof.persistedAmounts.creatorAmountAtomic
+      : null,
+    outboxPriceMinor: proof.persistedAmounts.acceptedPriceMinor,
+    outboxAmountAtomic: proof.persistedAmounts.amountAtomic
+  }).toEqual({
+    receiptGrossAtomic: expected.amountAtomic,
+    receiptLineAtomic: expected.amountAtomic,
+    walletAtomic: expected.amountAtomic,
+    ledgerGrossAtomic: expected.amountAtomic,
+    ledgerPlatformFeeAtomic: expected.platformFeeAmountAtomic,
+    ledgerCreatorNetAtomic: expected.scope === "creator" ? expected.creatorAmountAtomic : null,
+    outboxPriceMinor: expected.acceptedPriceMinor,
+    outboxAmountAtomic: expected.amountAtomic
+  });
 }
 
 async function collectionFixture() {
@@ -483,10 +859,10 @@ async function collectionFixture() {
     subscriberUserId: "00000000-0000-4000-8000-000000000104",
     subscriberWallet: subscriber,
     planId: "creator_test_monthly",
-    amountMinor: 1_000n,
-    amountAtomic: 10_000_000n,
-    creatorAmountAtomic: 9_000_000n,
-    platformAmountAtomic: 1_000_000n,
+    amountMinor: 1_500n,
+    amountAtomic: 15_000_000n,
+    creatorAmountAtomic: 12_750_000n,
+    platformAmountAtomic: 2_250_000n,
     allocationAmountAtomic: 0n,
     currency: "USDC",
     periodStartsAt: new Date("2026-11-05T12:00:00.000Z"),
@@ -529,4 +905,59 @@ async function collectionFixture() {
       platformWallet: platformReceiverWallet
     })
   };
+}
+
+function encodedCollectionAccounts(
+  collection: DueSubscriptionCollection,
+  expiryTs: bigint
+) {
+  const delegation = getRecurringDelegationEncoder().encode({
+    header: {
+      discriminator: AccountDiscriminator.RecurringDelegation,
+      version: 1,
+      bump: 255,
+      delegator: address(collection.subscriberWallet),
+      delegatee: address(collection.collectorAddress),
+      payer: address(collection.subscriberWallet),
+      initId: 1n
+    },
+    subscriptionAuthority: address(collection.authorityAddress),
+    mint: address(collection.tokenMint),
+    currentPeriodStartTs: 1n,
+    periodLengthS: BigInt(collection.periodSeconds),
+    expiryTs,
+    amountPerPeriod: collection.amountAtomic,
+    amountPulledInPeriod: 0n
+  });
+  const authority = getSubscriptionAuthorityEncoder().encode({
+    discriminator: AccountDiscriminator.SubscriptionAuthority,
+    user: address(collection.subscriberWallet),
+    tokenMint: address(collection.tokenMint),
+    payer: address(collection.subscriberWallet),
+    bump: 255,
+    initId: 1n
+  });
+  const token = getTokenEncoder().encode({
+    mint: address(collection.tokenMint),
+    owner: address(collection.subscriberWallet),
+    amount: collection.amountAtomic,
+    delegate: address(collection.authorityAddress),
+    state: AccountState.Initialized,
+    isNative: null,
+    delegatedAmount: collection.amountAtomic,
+    closeAuthority: null
+  });
+  const accountInfo = (data: Uint8Array, owner: PublicKey) => ({
+    data: Buffer.from(data),
+    executable: false,
+    lamports: 1,
+    owner,
+    rentEpoch: 0
+  });
+
+  return [
+    accountInfo(delegation, new PublicKey(collection.programId)),
+    accountInfo(authority, new PublicKey(collection.programId)),
+    accountInfo(token, new PublicKey(TOKEN_PROGRAM_ADDRESS))
+  ] as const;
 }

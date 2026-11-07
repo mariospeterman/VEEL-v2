@@ -10,8 +10,8 @@ alter table subscription_plans
   add column price_minor bigint generated always as (
     case
       -- Legacy platform seeds stored USDC atomic units in amount_minor. Preserve
-      -- that historical field verbatim and expose a distinct canonical minor-unit
-      -- value for future consent, receipts, and presentation.
+      -- that historical field verbatim and expose a distinct canonical cents
+      -- value for consent, presentation, and explicitly cents-denominated metadata.
       when id in ('platform_plus_monthly', 'platform_ultra_monthly', 'platform_studio_monthly')
         and currency = 'USDC'
         and amount_minor = amount_atomic
@@ -28,7 +28,7 @@ comment on column subscription_plans.amount_minor is
   'Legacy mixed-unit field retained for historical fidelity. New recurring consent and presentation use price_minor.';
 
 comment on column subscription_plans.price_minor is
-  'Canonical two-decimal price minor units; exact legacy platform seed atomics are projected without rewriting history.';
+  'Canonical two-decimal cents metadata for recurring consent and presentation; shared crypto receipt, wallet, and compliance-ledger records use atomic units.';
 
 create table subscription_billing_acceptances (
   subscription_id uuid primary key references subscriptions(id),

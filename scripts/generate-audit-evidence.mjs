@@ -717,17 +717,12 @@ unresolved(["CONTENT-17"], {
 });
 
 unresolved(["CONTENT-18"], {
-  summary: "Feed ranking now creates bounded 30-minute, at-most-512-candidate ranking sessions, carries a versioned stable cursor, uses the canonical eligible_content authority again at delivery, and excludes money signals; local PostgreSQL proof remains smaller than production scale.",
-  affectedPaths: ["apps/api/src/modules/content/content-feed-cursor.ts", "apps/api/src/modules/content/content-feed-repository.ts", "packages/database/migrations/0129_bounded_feed_ranking_sessions.sql", "scripts/check-ranking-policy.mjs"],
+  summary: "The chronological feed now reads indexed keyset candidates in bounded 128-to-512-row batches, reauthorizes only those candidate IDs through the canonical eligible_content authority in the same repeatable-read transaction, advances denied batches without an arbitrary corpus ceiling, and excludes money signals; representative 100k+ native PostgreSQL measurements remain outstanding.",
+  affectedPaths: ["apps/api/src/modules/content/content-feed-cursor.ts", "apps/api/src/modules/content/content-feed-repository.ts", "packages/database/migrations/0140_verification_policy_acl_age_attempt.sql", "scripts/check-ranking-policy.mjs"],
   executions: [
-    unverifiedHistoricalExecution("executed focused CONTENT-18 unit/migration selection (113/113)", ["packages/database/test/migrations.test.ts", "apps/api/test/content-feed-cursor.test.ts", "apps/api/test/content-feed-query-policy.test.ts", "apps/api/test/app.test.ts"]),
-    unverifiedHistoricalExecution("executed focused ranking-policy Vitest selection (6/6)", ["scripts/check-ranking-policy.test.mjs"]),
-    unverifiedHistoricalExecution("pnpm ranking:policy", ["scripts/check-ranking-policy.test.mjs"]),
-    unverifiedHistoricalExecution("executed focused bounded-session application selection (1/1)", ["apps/api/test/app.test.ts"]),
-    unverifiedHistoricalExecution("executed real-PostgreSQL ranking-session selection (1/1; 2.59s test, 7.85s total)", ["apps/api/test/content-feed-ranking-session.integration.test.ts"], "disposable migrated PostgreSQL"),
-    unverifiedHistoricalExecution("executed EXPLAIN fixture: candidate Limit 512 over 520 fixtures in 1.249ms; eligible_content 549 rows loops=1; full aggregate 67.051ms; rollback confirmed", ["apps/api/test/content-feed-ranking-session.integration.test.ts"], "disposable migrated PostgreSQL")
+    unverifiedHistoricalExecution("executed focused chronological cursor/query-policy selection (15/15)", ["apps/api/test/content-feed-cursor.test.ts", "apps/api/test/content-feed-query-policy.test.ts"], "local Node.js 22.23.4")
   ],
-  residualWork: ["Run staging EXPLAIN/load proof at 100k+ eligible rows and monitor ranking-session creation/expiry/churn before claiming production-scale behavior.", "Obtain authorized final evidence review for disposition promotion; retain the existing release gates."]
+  residualWork: ["Run native and staging EXPLAIN ANALYZE/load proof at 100k+ chronological candidates with realistic authorization graphs before claiming production-scale behavior.", "Obtain authorized final evidence review for disposition promotion; retain the existing release gates."]
 });
 
 unresolved(["PAY-12"], {

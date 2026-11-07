@@ -98,6 +98,34 @@ describe("media selection coordinator", () => {
     expect(current).toEqual([]);
     expect(onError).not.toHaveBeenCalled();
   });
+
+  it("exposes pending preparation and settles only after the ordered commit", async () => {
+    let current = ["existing"];
+    const pending = deferred<PreparedMediaSelection<string>>();
+    const pendingCounts: number[] = [];
+    const coordinator = createMediaSelectionCoordinator<void, string>({
+      prepare: () => pending.promise,
+      readCurrent: () => current,
+      replace: (items) => { current = items; },
+      validate: () => null,
+      onPendingChange: (count) => pendingCounts.push(count),
+      onError: vi.fn()
+    });
+
+    const commit = coordinator.enqueue();
+    let settled = false;
+    const settlement = coordinator.settle().then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(pendingCounts).toEqual([1]);
+
+    pending.resolve(prepared("delayed-video"));
+    await Promise.all([commit, settlement]);
+
+    expect(current).toEqual(["existing", "delayed-video"]);
+    expect(pendingCounts).toEqual([1, 0]);
+    expect(settled).toBe(true);
+  });
 });
 
 function prepared<T>(item: T): PreparedMediaSelection<T> {

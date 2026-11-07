@@ -10,6 +10,7 @@ import {
   normalizeAgeWebhook
 } from "./age-webhook-adapter.js";
 import {
+  AgeProviderCreateClaimLostError,
   AgeProviderHttpError,
   AgeProviderIntegrationPendingError,
   AgeProviderUnavailableError
@@ -196,10 +197,11 @@ export async function registerAgeRoutes(
         webhookBaseUrl: `${app.config.API_URL}/v1/webhooks/age`,
         ...(reservation
           ? { onProviderSelected: async (selection) => {
-              await options.ageRepository.selectPendingAgeProvider!({
+              const claimed = await options.ageRepository.selectPendingAgeProvider!({
                 sessionId: reservation.id,
                 ...selection
               });
+              if (claimed === false) throw new AgeProviderCreateClaimLostError();
               providerRequestStarted = true;
             } }
           : {})
@@ -257,6 +259,14 @@ export async function registerAgeRoutes(
             resumable: false
           });
     } catch (error) {
+      if (error instanceof AgeProviderCreateClaimLostError && reservedSessionId) {
+        const attempt = await options.ageRepository.findAgeVerificationAttempt?.({
+          userId: verifiedSession.userId,
+          sessionId: reservedSessionId
+        }).catch(() => null);
+        if (attempt) return reply.code(202).send(attempt);
+        throw error;
+      }
       const definitiveProviderRejection =
         error instanceof AgeProviderHttpError &&
         definitiveProviderCreateRejections.has(error.status);
@@ -406,7 +416,10 @@ export async function registerAgeRoutes(
         throw error;
       }
 
-      return reply.code(attempt.launchState === "reconciling" || attempt.launchState === "reserved" ? 202 : 200).send(attempt);
+      const reconciliationPending =
+        attempt.status !== "needs_review" &&
+        (attempt.launchState === "reconciling" || attempt.launchState === "reserved");
+      return reply.code(reconciliationPending ? 202 : 200).send(attempt);
     }
   );
 

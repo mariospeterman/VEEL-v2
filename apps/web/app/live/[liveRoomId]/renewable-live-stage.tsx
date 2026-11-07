@@ -5,6 +5,7 @@ import type { LiveRoom } from "@/api-client";
 import { ApiMutationError, getLiveRoomForMutation } from "@/api-mutations";
 import {
   coalesceContentAccessRefresh,
+  createContentAccessRefreshGeneration,
   createContentAccessRetryScheduler,
   isAuthoritativeContentAccessDenial,
   playbackAccessSourceKey
@@ -14,8 +15,11 @@ import { ProviderPlayback } from "../../provider-playback";
 export function RenewableLiveStage({ room }: { room: LiveRoom }) {
   const initialKey = playbackAccessSourceKey(`live:${room.id}`, room.playback);
   const [renewed, setRenewed] = useState<{ key: string; playback: LiveRoom["playback"] } | null>(null);
-  const [unavailable, setUnavailable] = useState(false);
+  const [unavailable, setUnavailable] = useState<{ key: string } | null>(null);
   const latestKey = useRef(initialKey);
+  const refreshGeneration = useRef<ReturnType<typeof createContentAccessRefreshGeneration> | null>(null);
+  refreshGeneration.current ??= createContentAccessRefreshGeneration(initialKey);
+  refreshGeneration.current.advance(initialKey);
   const refreshRef = useRef<() => Promise<void>>(async () => undefined);
   const retryScheduler = useRef<ReturnType<typeof createContentAccessRetryScheduler> | null>(null);
   retryScheduler.current ??= createContentAccessRetryScheduler();
@@ -24,18 +28,20 @@ export function RenewableLiveStage({ room }: { room: LiveRoom }) {
   useEffect(() => {
     latestKey.current = initialKey;
     setRenewed(null);
-    setUnavailable(false);
+    setUnavailable(null);
     retryScheduler.current?.reset();
     return () => retryScheduler.current?.reset();
   }, [initialKey]);
 
   const refresh = useCallback(async () => {
+    const requestKey = latestKey.current;
+    const request = refreshGeneration.current!.capture(requestKey);
     try {
-      const requestKey = latestKey.current;
       const next = await coalesceContentAccessRefresh(
         requestKey,
         () => getLiveRoomForMutation(room.id)
       );
+      if (!refreshGeneration.current!.isCurrent(request) || latestKey.current !== requestKey) return;
       const nextKey = playbackAccessSourceKey(`live:${room.id}`, next.playback);
       if (nextKey === requestKey) {
         retryScheduler.current?.schedule(() => { void refreshRef.current(); });
@@ -44,12 +50,13 @@ export function RenewableLiveStage({ room }: { room: LiveRoom }) {
       latestKey.current = nextKey;
       retryScheduler.current?.reset();
       setRenewed({ key: initialKey, playback: next.playback });
-      setUnavailable(false);
+      setUnavailable(null);
     } catch (error) {
+      if (!refreshGeneration.current!.isCurrent(request) || latestKey.current !== requestKey) return;
       const status = error instanceof ApiMutationError ? error.status : undefined;
       if (isAuthoritativeContentAccessDenial(status)) {
         retryScheduler.current?.reset();
-        setUnavailable(true);
+        setUnavailable({ key: initialKey });
         return;
       }
       retryScheduler.current?.schedule(() => { void refreshRef.current(); });
@@ -57,7 +64,7 @@ export function RenewableLiveStage({ room }: { room: LiveRoom }) {
   }, [initialKey, room.id]);
   refreshRef.current = refresh;
 
-  if (unavailable) {
+  if (unavailable?.key === initialKey) {
     return (
       <div className="provider-placeholder">
         <div>
