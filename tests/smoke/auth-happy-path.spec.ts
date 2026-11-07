@@ -326,15 +326,26 @@ test("holds upload until delayed video metadata joins the actual composer state"
     buffer: Buffer.from("delayed-video")
   });
 
+  await expect.poll(() => page.evaluate(() => {
+    const control = (window as typeof window & {
+      __wevidVideoMetadataControl?: { readonly heldCount: number };
+    }).__wevidVideoMetadataControl;
+    return control?.heldCount ?? -1;
+  })).toBe(1);
+
   const preparing = page.getByRole("button", { name: "Preparing selected media…" });
   await expect(preparing).toBeDisabled();
   expect(requests.filter((request) => request.method === "POST" && request.path === "/v1/content"))
     .toHaveLength(contentCreatesBeforeDelay);
 
-  await page.evaluate(() => {
-    (window as typeof window & { __releaseWevidVideoMetadata?: () => void })
-      .__releaseWevidVideoMetadata?.();
+  const releasedMediaCount = await page.evaluate(() => {
+    const control = (window as typeof window & {
+      __wevidVideoMetadataControl?: { release: () => number };
+    }).__wevidVideoMetadataControl;
+    if (!control) throw new Error("Video metadata controller was not installed");
+    return control.release();
   });
+  expect(releasedMediaCount).toBe(1);
   await expect(page.getByText("Video 2", { exact: true })).toBeVisible();
   await expect(page.getByLabel(/I have the right to share this media/)).not.toBeChecked();
   await page.getByLabel("Description").nth(1).fill("Video committed after metadata release");
@@ -490,9 +501,12 @@ async function installControllableVideoMetadata(page: Page) {
         return getSrc.call(this);
       },
       set(this: HTMLMediaElement, value: string) {
-        setSrc.call(this, value);
+        if (!value.startsWith("blob:")) {
+          setSrc.call(this, value);
+          return;
+        }
         Object.defineProperty(this, "duration", { configurable: true, value: 120 });
-        if (!metadataReleased && value.startsWith("blob:")) {
+        if (!metadataReleased) {
           heldMedia.add(this);
           return;
         }
@@ -500,14 +514,24 @@ async function installControllableVideoMetadata(page: Page) {
       }
     });
 
-    (window as typeof window & { __releaseWevidVideoMetadata?: () => void })
-      .__releaseWevidVideoMetadata = () => {
+    (window as typeof window & {
+      __wevidVideoMetadataControl?: { readonly heldCount: number; release: () => number };
+    }).__wevidVideoMetadataControl = {
+      get heldCount() {
+        return heldMedia.size;
+      },
+      release() {
+        if (metadataReleased) throw new Error("Video metadata was already released");
+        const releasedMediaCount = heldMedia.size;
+        if (releasedMediaCount === 0) throw new Error("No video metadata probe is waiting");
         metadataReleased = true;
         for (const media of heldMedia) {
           queueMicrotask(() => media.dispatchEvent(new Event("loadedmetadata")));
         }
         heldMedia.clear();
-      };
+        return releasedMediaCount;
+      }
+    };
   });
 }
 
