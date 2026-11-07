@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
+import { resolveActiveStaffAccess } from "../admin/admin-staff-access.js";
 import { AnalyticsIdempotencyConflictError, AnalyticsRepositoryConfigurationError } from "./analytics-errors.js";
 import { analyticsProjectionKey, getMetricDefinition } from "./metric-registry.js";
 import type {
@@ -31,6 +32,7 @@ export function createPostgresAnalyticsRepository(database?: string | PostgresSq
       queryMetric: fail,
       getWatermark: fail,
       recordSuppression: fail,
+      recordPlatformQueryAccess: fail,
       getProjectionHealth: fail,
       enqueueProjectionJob: fail
     };
@@ -67,13 +69,8 @@ export function createPostgresAnalyticsRepository(database?: string | PostgresSq
       }
 
       if (scope.type === "platform") {
-        const rows = await sql<{ allowed: boolean }[]>`
-          select exists (
-            select 1 from staff_memberships
-            where user_id = ${actorUserId}::uuid and state = 'active'
-          ) as allowed
-        `;
-        return rows[0]?.allowed ? scope : null;
+        const staff = await resolveActiveStaffAccess(sql, { userId: actorUserId });
+        return staff?.permissions.includes("admin.analytics.read") ? scope : null;
       }
 
       const rows = await sql<{ allowed: boolean }[]>`
@@ -149,6 +146,25 @@ export function createPostgresAnalyticsRepository(database?: string | PostgresSq
         on conflict (bucket_date, metric_key, scope_type) do update
         set suppression_count = analytics_privacy_suppression_daily.suppression_count + 1,
             updated_at = now()
+      `;
+    },
+
+    async recordPlatformQueryAccess(input) {
+      await sql`
+        insert into audit_events (
+          id, actor_user_id, subject_type, subject_id, action, metadata
+        ) values (
+          gen_random_uuid(), ${input.actorUserId}::uuid,
+          'analytics_platform_query', ${input.actorUserId}::uuid,
+          'analytics.platform_query',
+          ${sql.json({
+            purposeCode: input.purposeCode,
+            metricKeys: input.metricKeys,
+            window: input.window,
+            comparisonWindow: input.comparisonWindow,
+            dimensions: input.dimensions
+          } as unknown as postgres.JSONValue)}
+        )
       `;
     },
 

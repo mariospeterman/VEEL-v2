@@ -1,11 +1,15 @@
 import type postgres from "postgres";
 
-export function liveRoomSelectSql(sql: postgres.Sql, options: { includeHostSecrets?: boolean } = {}) {
+export function liveRoomSelectSql(
+  sql: postgres.Sql | postgres.TransactionSql,
+  options: { includeHostSecrets?: boolean } = {}
+) {
   return sql`
     select
       lr.id,
       lr.title,
       lr.state,
+      lr.created_at,
       lr.access_rule,
       lr.creator_user_id,
       p.handle as creator_handle,

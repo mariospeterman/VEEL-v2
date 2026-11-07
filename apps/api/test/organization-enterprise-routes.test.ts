@@ -25,7 +25,11 @@ describe("Enterprise organization routes", () => {
       async inviteMember(input) {
         const normalized = { handle: "team_member", role: "member" };
         expect(input).toMatchObject({ organizationId, ...normalized, idempotencyKey: "team-invite-key-1" });
-        expect(input.requestHash).toBe(createHash("sha256").update(JSON.stringify(normalized)).digest("hex"));
+        expect(input.requestHash).toBe(
+          createHash("sha256")
+            .update(JSON.stringify({ organizationId, ...normalized }))
+            .digest("hex")
+        );
         return member;
       }
     }));

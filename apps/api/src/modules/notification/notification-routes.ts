@@ -1,4 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import {
+  validateWebPushSubscription,
+  WebPushSubscriptionValidationError,
+  type WebPushDnsResolver
+} from "@veel/config";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
 import { requireIdempotencyKey as requireSharedIdempotencyKey } from "../../shared/idempotency.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
@@ -17,6 +22,7 @@ import type {
 interface RegisterNotificationRoutesOptions {
   authVerifier: ApplicationSessionVerifier;
   notificationRepository: NotificationRepository;
+  webPushDnsResolver?: WebPushDnsResolver | undefined;
   vapidPublicKey?: string | undefined;
 }
 
@@ -140,13 +146,43 @@ export async function registerNotificationRoutes(
       return reply.code(400).send(validationResponse("Valid web push endpoint and keys are required"));
     }
 
+    let subscription: Awaited<ReturnType<typeof validateWebPushSubscription>>;
+    try {
+      subscription = await validateWebPushSubscription(
+        {
+          endpoint: body.endpoint,
+          p256dh: body.p256dh,
+          auth: body.auth
+        },
+        options.webPushDnsResolver
+          ? { resolver: options.webPushDnsResolver }
+          : {}
+      );
+    } catch (error) {
+      if (error instanceof WebPushSubscriptionValidationError) {
+        return reply
+          .code(400)
+          .send(validationResponse("Valid web push endpoint and keys are required"));
+      }
+      throw error;
+    }
+
+    const normalizedBody: RegisterNotificationDeviceRequest = {
+      provider: body.provider as RegisterNotificationDeviceRequest["provider"],
+      platform: body.platform as RegisterNotificationDeviceRequest["platform"],
+      endpoint: subscription.endpoint,
+      p256dh: subscription.p256dh,
+      auth: subscription.auth,
+      ...(body.userAgent !== undefined ? { userAgent: body.userAgent } : {})
+    };
+
     return repositoryReply(
       request,
       reply,
       async () =>
         options.notificationRepository.registerDevice({
           supabaseUserId: access.supabaseUserId,
-          body: body as RegisterNotificationDeviceRequest,
+          body: normalizedBody,
           idempotencyKey: request.headers["idempotency-key"] as string
         }),
       201

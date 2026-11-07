@@ -1,5 +1,6 @@
 import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
-import { ContentPublishConflictError } from "./content-errors.js";
+import { executeWithMutationCommandReceipt } from "../../shared/mutation-command-receipt.js";
+import { ContentFormatRetiredError, ContentPublishConflictError } from "./content-errors.js";
 import { toContentItem } from "./content-repository-mappers.js";
 import type { ContentRow } from "./content-repository-rows.js";
 import type { ContentRepository } from "./types.js";
@@ -10,8 +11,12 @@ export function createContentPublishRepositoryMethods(
   return {
     async publishOwnedContent(input) {
       const result = await withPostgresTransaction(sql, async (transaction) => {
-        const lockedRows = await transaction<{ id: string }[]>`
-          select ci.id
+        const lockedRows = await transaction<{
+          id: string;
+          actor_user_id: string;
+          media_type: ContentRow["media_type"];
+        }[]>`
+          select ci.id, u.id as actor_user_id, ci.media_type
           from content_items ci
           join users u on u.id = ci.creator_user_id
           where ci.id = ${input.contentId}
@@ -20,8 +25,28 @@ export function createContentPublishRepositoryMethods(
           for update
         `;
 
-        if (!lockedRows[0]) {
+        const locked = lockedRows[0];
+        if (!locked) {
           return null;
+        }
+
+        return executeWithMutationCommandReceipt(transaction, {
+          actorUserId: locked.actor_user_id,
+          action: "content.publish",
+          targetType: "content",
+          targetId: input.contentId,
+          idempotencyKey: input.idempotencyKey,
+          requestVersion: 1,
+          requestBody: {
+            contentId: input.contentId,
+            scheduledFor: input.scheduledFor ?? null,
+            scheduledForProvided: Boolean(input.scheduledForProvided),
+            requestHash: input.requestHash
+          },
+          responseStatus: 200
+        }, async () => {
+        if (locked.media_type === "text" || locked.media_type === "poll") {
+          throw new ContentFormatRetiredError();
         }
 
         const rows = await transaction<
@@ -132,7 +157,7 @@ export function createContentPublishRepositoryMethods(
               updated_content.id,
               'content_publish_submitted',
               jsonb_build_object(
-                'idempotencyKey', ${input.idempotencyKey},
+                'idempotencyKey', ${input.idempotencyKey}::text,
                 'publishState', updated_content.publish_state,
                 'moderationState', updated_content.moderation_state
               )
@@ -191,6 +216,7 @@ export function createContentPublishRepositoryMethods(
         }
 
         throw new ContentPublishConflictError("provider_not_ready");
+        });
       });
 
       return result;

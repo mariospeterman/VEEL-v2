@@ -8,6 +8,7 @@ import type {
 } from "./types.js";
 
 const livepeerRtmpIngestBaseUrl = "rtmp://rtmp.livepeer.com/live";
+export const livepeerPlaybackJwtSeconds = 5 * 60;
 
 export class LiveProviderError extends Error {}
 
@@ -195,12 +196,19 @@ export function createLivepeerProviderAdapter(
       }
 
       try {
+        const expiration = input.expiresAt
+          ? Math.min(
+              livepeerPlaybackJwtSeconds,
+              Math.floor((input.expiresAt.getTime() - Date.now()) / 1_000)
+            )
+          : livepeerPlaybackJwtSeconds;
+        if (expiration < 1) return null;
         return await signAccessJwt({
           privateKey: env.LIVEPEER_ACCESS_CONTROL_PRIVATE_KEY,
           publicKey: env.LIVEPEER_ACCESS_CONTROL_PUBLIC_KEY,
           issuer: env.API_URL,
           playbackId: input.playbackId,
-          expiration: 5 * 60,
+          expiration,
           custom: { userId: input.appUserId }
         });
       } catch {

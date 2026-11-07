@@ -24,21 +24,37 @@ export function createMutualsInterestRepositoryMethods(
         target_profile as (
           select mp.user_id
           from mutual_profiles mp
+          join users target_user on target_user.id = mp.user_id and target_user.state = 'active'
+          join profiles target_public_profile
+            on target_public_profile.user_id = target_user.id
+           and target_public_profile.visibility = 'public'
           where mp.user_id = ${input.body.targetUserId}
             and mp.enabled = true
             and mp.safety_state = 'clear'
             and mp.user_id <> (select id from actor)
+            and exists (
+              select 1
+              from private.current_verification_decision(
+                'user', mp.user_id, 'age_access'
+              ) target_age
+              where target_age.status = 'valid'
+                and target_age.result_over_threshold is true
+                and (target_age.expires_at is null or target_age.expires_at > now())
+            )
+            and not exists (
+              select 1 from blocks b
+              where (b.blocker_user_id = (select id from actor) and b.blocked_user_id = mp.user_id)
+                 or (b.blocker_user_id = mp.user_id and b.blocked_user_id = (select id from actor))
+            )
           limit 1
         ),
         target_content as (
           select ci.id
           from content_items ci
           join target_profile tp on tp.user_id = ci.creator_user_id
+          join private.eligible_content((select id from actor), null) eligible
+            on eligible.content_item_id = ci.id
           where ci.id = ${input.body.contentId}
-            and ci.state = 'ready'
-            and ci.publish_state = 'published'
-            and ci.moderation_state = 'approved'
-            and ci.visibility = 'public'
           limit 1
         ),
         existing_swipe as (

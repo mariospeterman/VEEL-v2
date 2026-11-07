@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: events, Event Access Passes, Solana payment, QR/check-in, admin ops
-Last updated: 2026-08-15
+Last updated: 2026-11-05
 Source of truth: yes for v2 Event Access
 
 Owns:
 - Event Access decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, immutable database migrations, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, legal advice, or hidden source-of-truth rules
@@ -72,7 +72,7 @@ Avoid launch-facing language:
 - Paid Event Access uses noncustodial Solana-compatible payment intents.
 - Backend creates access entitlement, QR, receipt, and compliance ledger entry only after verified payment or approval.
 - Launch does not need a separate Solana ticketing provider. Use backend Event Access Pass entitlements plus Solana settlement.
-- Slice 06 uses the exact-pinned narrow `@solana-commerce/solana-pay` codec and shared WeVid checkout presentation for standards-compliant wallet/SVG-QR handoff only. Commerce Kit never owns pass pricing, reservation/capacity, settlement confirmation, entitlement, pass QR/check-in, refund, or access state.
+- Slice 06 uses exact-pinned `@solana/pay` `1.0.26` inside the narrow isolated codec plus Node `qrcode` `1.5.4` and the shared WeVid checkout presentation for standards-compliant wallet/SVG-QR handoff only. The codec never owns pass pricing, reservation/capacity, settlement confirmation, entitlement, pass QR/check-in, refund, or access state.
 - Future NFT/token passes, collectible passes, transferable passes, or third-party ticketing providers are separate ADRs, not the launch default.
 
 Noncustodial boundary:
@@ -86,18 +86,22 @@ Noncustodial boundary:
 ## Routes
 
 ```text
-/event-access                  planned secondary surface
-/event-access/:id              planned
-/event-access/:id/passes       planned access sheet/page
-/passes                        canonical My Passes
-/passes/:id                    planned pass detail / QR
-/event-access/:id              canonical Event Access sheet
-/admin/events                  planned admin ops
-/admin/event-access            planned admin access ops
+/event-access/:id              implemented canonical Event Access detail/sheet
+/passes                        implemented canonical My Passes and QR surface
+/passes/:id                    deferred; no current route owner
+/event-access                  deferred; no current route owner
+/event-access/:id/passes       deferred; no current route owner
+/admin/events                  deferred page; admin projections remain under the consolidated admin shell
+/admin/event-access            deferred page; no independent admin authority
 
+/v1/events                     canonical create API path
+/v1/events/{eventId}           canonical read/update API path
 /v1/events/{eventId}/access-passes/intents canonical API path
+/v1/events/{eventId}/access-passes/requests canonical request API path
 /v1/access-passes/:id/check-in canonical API path
 ```
+
+`route-map.md` and `packages/contracts/openapi.yaml` own the inventory above. A deferred page or operation is not implied by a conceptual flow later in this document.
 
 ## Backend Ownership
 
@@ -147,25 +151,22 @@ events
   ├─ event_type: digital_live_stream | physical
   ├─ location_type: digital_live_stream | physical
   ├─ location_label, location_lat, location_lng, place_provider_ref
-  ├─ capacity
-  ├─ access_price
-  ├─ currency
   ├─ access_rule: public_sale | private_apply
   └─ state: draft | published | sold_out | cancelled | completed
 
 event_access_pass_types
   ├─ event_id
   ├─ label
-  ├─ price
+  ├─ price_minor, currency
   ├─ capacity
-  └─ sale_window
+  ├─ per_user_limit
+  └─ sale_starts_at, sale_ends_at
 
 event_access_passes
   ├─ event_id
   ├─ pass_type_id
   ├─ holder_user_id
   ├─ payment_intent_id
-  ├─ receipt_id
   ├─ qr_token_hash
   └─ state: active | checked_in | revoked | expired
 
@@ -185,7 +186,7 @@ event_access_passes
 event_access_requests
 ```
 
-The `0049_event_access_mutuals_canonical_names` migration renames the pre-launch ticket tables and `ticket_type_id` columns to the canonical Event Access Pass vocabulary. Historical migrations and rollback files may still contain `ticket` names for audit and reversibility only.
+The pass type is the inventory and price authority; `events` does not duplicate capacity, access price, or currency. The `0049_event_access_mutuals_canonical_names` migration renames the pre-launch ticket tables and `ticket_type_id` columns to the canonical Event Access Pass vocabulary. Historical migrations and rollback files may still contain `ticket` names for audit and reversibility only.
 
 ## Paid Event Access Flow
 
@@ -239,12 +240,8 @@ Candidates for a later ADR include Crossmint/NFT APIs or a dedicated Solana tick
 
 ## Production Details
 
-Launch Event Access must support:
+Current implemented foundations support backend-owned price/inventory reservations, payment settlement, pass issuance, and idempotent check-in. The following remaining launch requirements stay deferred until their contract, route, migration, tests, and operations evidence exist:
 
-- pass types with label, price, currency, capacity, and sale window
-- all-in price display before wallet confirmation
-- inventory reservation with short expiry during payment intent
-- per-user pass limits
 - cancellation and refund policy shown before purchase
 - request-to-join approval/rejection state for private events
 - QR token rotation or reissue after support/admin action

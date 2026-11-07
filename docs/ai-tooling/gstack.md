@@ -3,7 +3,7 @@
 Status: accepted
 Scope: AI-assisted review, planning, QA, security critique, and release critique
 
-GStack is installed locally for Codex at `~/.codex/skills` from `~/.gstack/repos/gstack`.
+GStack is optional local advisory tooling. When available, discover it through the active agent skill catalog; no particular home-directory install or source path is a repository requirement.
 
 Use GStack only as an advisory tool for:
 

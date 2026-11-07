@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: engagement, social graph, activity
-Last updated: 2026-08-11
+Last updated: 2026-11-04
 Source of truth: yes
 
 Owns:
 - engagement strategy decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -27,7 +27,7 @@ This document defines how Veel v2 handles social engagement without turning fron
 - Engagement actions are real backend records, not local-only counters.
 - Frontend may optimistically update visible counts, but must reconcile from backend.
 - Every action has a clear owner, state, idempotency rule, and abuse/rate-limit rule.
-- Retrying an engagement command with the same idempotency key replays the original result and creates at most one audit event; reusing that key with changed input returns `409 Conflict`.
+- Retrying an engagement command with the same idempotency key never reapplies its mutation and returns the current canonical state; reusing that key for a different target or changed input returns `409 Conflict`.
 - Monetised engagement is separate from lightweight engagement.
 - Internal sharing and external referral sharing are different products.
 - Product metrics must not optimize only for addictive time-on-feed. Track creator earnings, successful purchases, healthy replies, completed tickets/events, safety reports resolved, and user satisfaction alongside watch time.
@@ -55,18 +55,18 @@ Rules:
 | Like | `content_reactions` | Yes | Optional count projection | None | Toggle idempotent per user/content. |
 | Save | `content_saves` | Yes | No | None | Private user library. |
 | Comment | `comments` | After server write | Yes | None by default | Moderation and block graph apply. |
-| Share in Veel | `share_events`, optional message row | After server write | Yes for recipient | No referral by default | Internal DM share does not create commission. |
-| External referral share | `referral_tokens`, `share_events` | After server token/link creation | Optional | Can create attribution and commission | External links can earn commission from platform share after eligible paid settlement. |
-| Admin partner referral | `partner_referral_campaigns`, `referrals` | After admin-created campaign | No | Yes if configured | Used for ambassadors, creator acquisition, or event promotion. |
-| Repost/Mirror | `content_reposts` | Yes | Optional | None unless product changes | Product-facing name should stay consistent. |
-| Follow | `profile_follows` | Yes | Optional | Feed ranking, creator audience | Creator-isolated follow/unfollow. |
-| Block | `user_blocks` | No fake optimistic if destructive | Immediate local hide then reconcile | Safety | Blocks search/messages/feed visibility. |
+| Share in Veel | `share_records`, optional message row | After server write | Yes for recipient | No referral by default | Internal DM share does not create commission. |
+| External referral share | `referral_tokens`, `share_records` | After server token/link creation | Optional | Can create attribution and commission | External links can earn commission from platform share after eligible paid settlement. |
+| Partner referral | `referral_tokens`, `referral_attributions`, `referral_commissions` | After backend-created token | No | Only for implemented eligible products | Advanced campaign precedence/caps are planned, not implied by these tables. |
+| Repost/Mirror | Planned; no launch table or route | No | No | None | Do not render an enabled control until a canonical contract exists. |
+| Follow | `user_follows` | Yes | Optional | Feed relationship signal | Creator-isolated follow/unfollow; never a money signal. |
+| Block | `blocks` | No fake optimistic if destructive | Immediate local hide then reconcile | Safety | Blocks search/messages/feed visibility. |
 | Report | `reports` | Server success state | Admin queue | Safety | Requires audit and moderation queue. |
-| Tip/Support | `payment_intents`, `settlements`, `activity` | Submitted only | User payment event | Financial | Confirmed backend settlement for balances. |
+| Support | `payment_intents`, `payment_settlement_attempts`, backend-derived Activity projection | Submitted only | User payment event | Financial | Confirmed settlement is a records-only direct-payment fact; no balance is created. |
 | Unlock | `payment_intents`, `entitlements` | Pending only | User payment/access event | Access | Backend-confirmed entitlement only. |
 | Media offer / structured request | `payment_intents`, `creator_media_offers`, `structured_creator_requests`, `entitlements` | Pending only | Offer/request state after confirm | Financial/access or delivery workspace | Exact entitlement or accepted delivery workspace activates after confirmed settlement; no paid chat message. |
-| Live pass | `payment_intents`, `live_access_grants` | Pending only | Room access update | Access | Pass controls playback/chat. |
-| Event interest | `event_interests` | Yes | Optional | None | Purchase still explicit. |
+| Paid live event access | `payment_intents`, `live_passes` | Pending only | Room access update | Access | The internal `live_pass` compatibility type represents event access, not a timed-duration product. |
+| Event interest | Planned; no launch table or route | No | No | None | Purchase remains explicit through Event Access. |
 | Event Access Pass purchase | `payment_intents`, `event_access_passes` | Pending only | Event Access event | Access | Backend QR/receipt after confirm. |
 | Mutuals interested/not interested | `mutual_interests` | Yes | Mutual only after backend state | Mutual | Only inside explicit Mutuals mode. |
 
@@ -74,15 +74,15 @@ Rules:
 
 ```mermaid
 erDiagram
-  users ||--o{ profile_follows : follows
-  users ||--o{ user_blocks : blocks
+  users ||--o{ user_follows : follows
+  users ||--o{ blocks : blocks
   users ||--o{ reports : files
   users ||--o{ content_reactions : likes
   users ||--o{ content_saves : saves
   users ||--o{ comments : writes
-  users ||--o{ share_events : shares
+  users ||--o{ share_records : shares
   users ||--o{ referral_tokens : creates
-  users ||--o{ viewer_activity : owns
+  users ||--o{ notifications : receives
 ```
 
 ## Follow Strategy
@@ -193,10 +193,11 @@ Allowed ranking signals:
 - creator freshness
 - media completion
 - likes/comments/saves
-- paid access conversion
 - blocks/reports negative signals
 - age/access/legal constraints
 - content availability
+
+Payment, purchase, unlock, subscription, revenue, wallet, referral commission, and other financial signals are private commerce analytics only. They never weight public people or content ranking. Entitlement state may gate whether a viewer can access an item, but it is not a relevance or visibility score.
 
 Do not rank from:
 

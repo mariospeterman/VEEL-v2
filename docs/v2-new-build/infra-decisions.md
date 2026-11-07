@@ -9,7 +9,7 @@ Owns:
 - infra decisions decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -26,9 +26,9 @@ This document freezes the default infrastructure choices for the greenfield repo
 
 | Area | Launch default | Scale option | Reason |
 | --- | --- | --- | --- |
-| Queue/workers | `pg-boss` on Postgres | BullMQ + Redis when throughput requires it | Keeps launch infra smaller while still giving retries, schedules, and job state. |
+| Queue/workers | Existing domain-owned Postgres lease tables | Queue-library consolidation after a measured ADR | Current runtime already owns retries, schedules, leases, and dead-letter state in domain tables; do not add a parallel queue. |
 | Search | Postgres full-text search + trigram indexes | Typesense/Meilisearch later | Hashtags, creators, locations, and captions can launch without a second search cluster. |
-| Product analytics | PostHog Cloud or self-hosted PostHog | Warehouse/ClickHouse pipeline later | Fast event analytics, funnels, and retention dashboards without custom BI. |
+| Product analytics | Versioned typed Postgres facts/projections | Approved external product analytics or warehouse only as a non-authoritative sink | `product/analytics-core.md` owns formulas, privacy, freshness, and retention. An external tool must not become a second metric authority. |
 | Error monitoring | Sentry | Keep Sentry | Fast frontend/API/worker error triage. |
 | Tracing | OpenTelemetry | Managed collector/vendor | Needed for provider calls, payment confirmation latency, media jobs, and webhook lag. |
 | Logs | Structured redacted JSON logs | Centralized log vendor | Never log secrets, raw PII, signed media URLs, raw provider payloads, or wallet private data. |
@@ -42,7 +42,7 @@ This document freezes the default infrastructure choices for the greenfield repo
 - Backend is the business-truth layer for money, access, age, Mutuals, Event Access Passes, subscriptions, referrals, reports, and moderation.
 - Realtime is for delivery and freshness, not entitlement authority.
 - Feature flags cannot bypass payment validation, age requirements, provider signatures, admin audit logging, or content safety policy.
-- Paid promotion cannot silently rank content higher in For You. Any paid distribution product must be explicit, labeled, opt-out aware, and reviewed by a separate ADR.
+- Payment, purchase, earnings, membership, balance, and promotion state cannot influence people, feed, discovery, Mutuals, message, or recommendation rank. Access eligibility may use entitlements independently of ranking.
 - Provider webhooks must be idempotent, signed, rate-limited, replay-resistant, audited, and observable.
 
 ## CI/CD Gates
@@ -111,7 +111,7 @@ Current private-data production status:
 
 ## Queue Strategy
 
-Use `pg-boss` first for:
+Current domain-owned Postgres queues cover:
 
 - Solana evidence reconciliation
 - payment expiry
@@ -123,7 +123,7 @@ Use `pg-boss` first for:
 - admin export jobs
 - AI tool-call follow-up jobs
 
-Move selected queues to BullMQ/Redis only when one of these thresholds is reached:
+Consolidate selected queues behind another library only when one of these thresholds is reached and an ADR includes migration/removal of the replaced authority:
 
 - queue lag exceeds payment/access SLA under normal traffic
 - job throughput needs Redis-backed fanout
@@ -132,7 +132,7 @@ Move selected queues to BullMQ/Redis only when one of these thresholds is reache
 
 ## Analytics Strategy
 
-PostHog tracks product events only:
+Analytics Core stores versioned typed facts and deterministic Postgres projections. An approved external analytics sink may receive only privacy-minimized product events such as:
 
 - signup funnel
 - wallet path chosen

@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: profile, badges, verification status, activity, creator/user rankings
-Last updated: 2026-06-03
+Last updated: 2026-11-04
 Source of truth: yes for profile/activity/gamification rules
 
 Owns:
 - profile activity ranking decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -20,7 +20,7 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-Profiles should show identity, trust, creator status, and user progress without turning Veel into a manipulative leaderboard. Ranking and badges should reward useful platform behavior: verified safety, creator quality, completed purchases, events, replies, and low report rates.
+Profiles should show identity, trust, creator status, and user progress without turning Veel into a manipulative leaderboard. Ranking and badges may reward useful non-financial platform behavior such as verified safety, creator quality, completed events, replies, and low report rates. Payment, purchase, subscription, revenue, wallet, and other financial facts remain private account or analytics data and never increase a person's or content item's rank.
 
 ## Profile Must Show
 
@@ -58,7 +58,7 @@ Current implementation state:
 - `/profile` reads `GET /v1/profiles/me/creator-dashboard` through the typed web API helper and does not render local earnings/readiness fixtures. The dashboard displays backend-derived readiness score and `creator_records_only_no_balances_payout_queue_or_social_priority` as a policy boundary.
 - `/profile` also reads `GET /v1/profiles/me/creator-onboarding` so incomplete creators get a backend-owned Become Creator checklist before the dashboard is available. Onboarding readiness score is derived from required backend checklist steps, not frontend heuristics.
 - `/profile/[handle]` reads `GET /v1/profiles/{handle}` through the typed web API helper and does not render local public profile/media fixtures.
-- Profile screens attach the current Supabase access token when present and render fail-closed unavailable/not-found states when the API, auth, or profile projection cannot return a safe resource.
+- Profile screens call the same-origin web boundary with the opaque backend application-session cookie. Supabase recovery tokens are settings-only recovery credentials, and Realtime JWTs are transport-scoped credentials; neither is ordinary profile API authority. Screens render fail-closed unavailable/not-found states when the application session, API, or profile projection cannot return a safe resource.
 
 ## Badge Types
 
@@ -78,9 +78,7 @@ creator badges
 
 community badges
   early member
-  supporter
   event attendee
-  subscriber
 
 safety badges
   none by default
@@ -138,7 +136,6 @@ Recommended launch rankings:
 - rising creators
 - top live hosts
 - event hosts
-- most supported creators
 - creator response quality
 - safe/high-quality creators
 
@@ -153,13 +150,14 @@ Avoid:
 Ranking inputs:
 
 - follow growth
-- repeat support/unlocks
 - content freshness
 - low report/block rate
 - creator response rate
 - completed events/live sessions
-- subscriber retention
 - user satisfaction/safety metrics
+- creator diversity and bounded exploration
+
+Access eligibility may independently check an entitlement before returning protected content. Entitlement presence, purchase value, conversion, revenue, subscription state, wallet state, and any other money-related fact are excluded from ranking weights and public people leaderboards. Private financial analytics may report commerce outcomes to authorized account owners and staff, but those projections are not ranking inputs.
 
 ## Gamification Rules
 
@@ -190,4 +188,5 @@ Admin can tune ranking weights, but every change should be versioned and auditab
 - badges are backend-derived
 - badge grant/revoke writes audit event
 - rankings exclude blocked/reported unsafe creators
+- ranking policy rejects financial inputs in scoring code and active ranking guidance
 - activity records link to backend payment/entitlement/Event Access Pass/referral state

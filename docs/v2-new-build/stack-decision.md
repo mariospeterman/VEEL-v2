@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: platform stack
-Last updated: 2026-08-15
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
 - stack decision decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -27,9 +27,9 @@ Web:        Next.js PWA, TypeScript, Tailwind v4, TanStack Query, Zustand
 API:        Fastify TypeScript
 DB/Auth:    Supabase Postgres/RLS + optional Supabase Auth recovery linking
 Realtime:   Supabase Realtime, selectively
-Workers:    TypeScript worker runtime with pg-boss launch default; BullMQ/Redis only when measured scale requires it
+Workers:    TypeScript worker runtime with domain-owned Postgres lease tables; BullMQ/Redis only when measured scale requires it
 Contracts:  OpenAPI generated from schemas
-Payments:   Solana JS + Solana Pay; selected Commerce Kit Solana Pay codec in Slice 06; Solana Subscriptions/Allowances after staging approval
+Payments:   Solana JS + exact-pinned @solana/pay 1.0.26 codec island; Solana Subscriptions/Allowances after staging approval
 Wallets:    Privy embedded Solana wallet + intentional Solana Wallet Standard adapters
 Media:      Bunny Stream VOD, Livepeer live/replay
 PM:         pnpm workspaces
@@ -39,6 +39,14 @@ Deploy:     Docker first; serverless/edge only for proven slices
 
 Wallet onboarding presents one provider grid. Installed Solana Wallet Standard adapters that advertise `solana:signMessage` are direct cards, transaction-only or otherwise incompatible adapters remain in the adapter chooser fallback, and configured Privy is a peer card whose official surface owns its email/social/passkey choices. Both authentication paths sign the same WeVid backend challenge and converge on one application-session authority. Supabase remains Settings-only recovery. The embedded wallet mode must be noncustodial/user-controlled and must not create a WeVid-controlled balance. No second embedded-wallet runtime is part of the launch architecture.
 
+The retired Solana Commerce Kit package is not part of the stack. `@veel/solana-pay-codec` is the
+only Solana Pay dependency island: it exact-pins `@solana/pay` `1.0.26` with its compatible Solana
+Kit 6 dependency family and exact-pins server-side `qrcode` `1.5.4` for accessible SVG generation.
+No package type crosses the codec boundary. The API and worker keep their existing Solana Kit 7
+dependency family; they must not be downgraded or deduplicated across this peer-incompatible island.
+This replacement changes URL/QR interoperability only and does not change checkout, wallet,
+transaction composition, verification, settlement, entitlement, or order authority.
+
 ## Official Documentation Checked
 
 - Fastify validation and serialization: `https://fastify.dev/docs/latest/Reference/Validation-and-Serialization/`
@@ -46,7 +54,8 @@ Wallet onboarding presents one provider grid. Installed Solana Wallet Standard a
 - Hono runtimes and Cloudflare Workers guide: `https://hono.dev/docs/`, `https://developers.cloudflare.com/workers/framework-guides/web-apps/more-web-frameworks/hono/`
 - Supabase architecture, RLS, Realtime authorization: `https://supabase.com/docs/architecture`, `https://supabase.com/docs/guides/database/postgres/row-level-security`, `https://supabase.com/docs/guides/realtime/authorization`
 - Solana Pay specification and transaction requests: `https://docs.solanapay.com/`, `https://solana.com/docs/tools/solana-pay/quickstart/transaction-requests`
-- Solana Commerce Kit package selection and source: `https://solana.com/docs/tools/commerce-kit`, `https://github.com/solana-foundation/commerce-kit/tree/main/packages/solana-pay`
+- Solana Pay implementation source: `https://github.com/solana-foundation/pay`
+- Retired Commerce Kit notice: `https://solana.com/docs/tools/commerce-kit/quickstart/payment-button`
 - Solana Subscriptions and Allowances: `https://solana.com/docs/payments/subscriptions/overview`, `https://solana.com/docs/payments/subscriptions/fixed-delegation`, `https://solana.com/docs/payments/subscriptions/recurring-delegation`, `https://solana.com/docs/payments/subscriptions/subscription-plan`
 - Embedded wallet launch provider: `https://docs.privy.io/`
 - Wallet funding/onramp paths to evaluate only for funding user-controlled wallets: `https://docs.cdp.coinbase.com/onramp/docs/welcome`
@@ -150,16 +159,17 @@ Use Dockerized Fastify first because Veel needs:
 
 Use edge/serverless later only for isolated stateless endpoints. A full serverless conversion is not a launch requirement.
 
-## Node 22 / pnpm 10 Decision
+## Node 24 / pnpm 10 Decision
 
-Decision: **pin CI and the launch build to Node.js 22.16.0 and pnpm 10.0.0.**
+Decision: **pin CI and the launch build to Node.js 24.22.2 LTS and pnpm 10.0.0.**
 
-Why Node 22 instead of the newest current runtime:
+Why Node 24 instead of the newest current runtime:
 
 - Node.js production guidance favors Active LTS or Maintenance LTS lines for production systems.
-- Provider SDK compatibility matters more than runtime novelty for payments, wallets, media, realtime, workers, and observability.
-- Node 22 gives a stable LTS baseline while still supporting modern TypeScript, Web Crypto, fetch, and current framework tooling.
-- Newer Node majors can be evaluated after provider SDKs, Docker images, OpenTelemetry, Playwright, and CI are proven green.
+- The installed `@solana-program/token@0.15.0` manifest requires Node `>=24.0.0`; keeping Node 22 would leave the API and worker outside the SDK's published support contract.
+- Node 24 is the smallest current LTS major that satisfies that contract; `24.22.2` is its current security-patched release. This avoids changing the reviewed Solana Kit 7/token 0.15 dependency family. The official [Node release archive](https://nodejs.org/en/blog/release) and [Solana token releases](https://github.com/solana-program/token/releases) are the primary metadata references.
+- Provider SDK compatibility matters more than runtime novelty for payments, wallets, media, realtime, workers, and observability. A newer major can be evaluated only after Docker, OpenTelemetry, Playwright, and CI are proven on it.
+- Runtime promotion still requires the exact API, worker, token-account decoder, transaction-builder, subscription-verifier, tests, and production build to execute under the pinned Node 24.22.2 image; a version-file change alone is not acceptance evidence.
 
 Why pnpm 10:
 

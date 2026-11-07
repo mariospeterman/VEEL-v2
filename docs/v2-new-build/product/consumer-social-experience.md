@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Convergence 06
-Last updated: 2026-08-24
+Last updated: 2026-11-05
 Source of truth: product behavior for consumer social and PWA surfaces
 
 ## Product Promise
@@ -17,7 +17,9 @@ the onboarding explanation before account or embedded-wallet creation. Login nev
 
 ## Feed And Bits
 
-- Home is a compact mixed social feed with For you and Following modes plus age-safe content controls.
+- Home is a compact mixed photo/video feed with Latest and Following modes plus age-safe content
+  controls. Both modes use reverse `(published_at, id)` order; Following only narrows creators and
+  never falls back to Latest.
 - Bits is an immersive, snap-scrolling, one-active-item experience with playback, captions, progress,
   creator context, and keyboard/reduced-motion support.
 - The action order is always Like, Comment, Save, Share, followed by at most one contextual Support or
@@ -26,8 +28,9 @@ the onboarding explanation before account or embedded-wallet creation. Login nev
 
 ## Social Actions
 
-- Likes, saves, follows, poll votes, comments, replies, comment likes, mentions, shares, hides, reports,
-  blocks, and mutes are server-authorized and rate-limited.
+- Likes, saves, follows, comments, replies, comment likes, mentions, shares, hides, reports, blocks,
+  and mutes are server-authorized and rate-limited. New poll votes are retired; an authorized
+  historical poll may show frozen results without an interactive control.
 - Replies are one level deep and must target a visible comment on the same content.
 - Mentions resolve active profile handles on the backend and exclude either-direction blocked or viewer-muted accounts.
 - Internal shares use the canonical consent-safe message authority and its shared-content reference.
@@ -36,9 +39,12 @@ the onboarding explanation before account or embedded-wallet creation. Login nev
 
 ## Search And Discovery
 
-`/app/search` groups creators, content, hashtags, live rooms, and events from the existing deterministic
-discover authority. Empty search provides age-safe suggestions; recent queries stay bounded on the
-device and never become recommendation truth. Money is not a ranking input.
+`/app/search` groups creators, content, hashtags, live rooms, and events from the canonical discover
+authority. Empty search provides age-safe suggestions; recent queries stay bounded on the device
+and never become feed-ordering truth. Each result group advances with its own opaque,
+scope-bound cursor. Content and live cards reuse the same viewer-relative access, safety, allowance,
+and signed-delivery projections as their canonical detail surfaces. No commercial or engagement fact
+changes chronological feed ordering.
 
 ## Privacy And Account Control
 

@@ -7,7 +7,7 @@ import { ApiMutationError } from "./api-mutation-types";
 
 const browserE2eAuthEnabled = () => readPublicWebEnv().NEXT_PUBLIC_ENABLE_E2E_AUTH;
 
-export async function authenticatedGet<T>(path: string): Promise<T> {
+export async function authenticatedGet<T>(path: string, signal?: AbortSignal): Promise<T> {
   const { token } = await browserSessionToken();
   const env = readPublicWebEnv();
   const headers = new Headers({ accept: "application/json" });
@@ -18,7 +18,8 @@ export async function authenticatedGet<T>(path: string): Promise<T> {
   const response = await mutationFetch(browserApiUrl(path, env.NEXT_PUBLIC_API_BASE_URL), {
     cache: "no-store",
     credentials: "include",
-    headers
+    headers,
+    ...(signal ? { signal } : {})
   });
 
   if (!response.ok) {
@@ -33,9 +34,10 @@ export async function authenticatedMutation<T>(
   method: "DELETE" | "PATCH" | "POST" | "PUT",
   body: unknown,
   idempotencyKey?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  additionalHeaders?: HeadersInit
 ): Promise<T> {
-  const response = await sendAuthenticatedMutation(path, method, body, idempotencyKey, signal);
+  const response = await sendAuthenticatedMutation(path, method, body, idempotencyKey, signal, additionalHeaders);
 
   if (!response.ok) {
     throw new ApiMutationError(await errorMessage(response), response.status);
@@ -48,13 +50,18 @@ export async function authenticatedEmptyMutation(
   path: string,
   method: "DELETE" | "PATCH" | "POST" | "PUT",
   body: unknown,
-  idempotencyKey?: string
+  idempotencyKey?: string,
+  signal?: AbortSignal
 ): Promise<void> {
-  const response = await sendAuthenticatedMutation(path, method, body, idempotencyKey);
+  const response = await sendAuthenticatedMutation(path, method, body, idempotencyKey, signal);
 
   if (!response.ok) {
     throw new ApiMutationError(await errorMessage(response), response.status);
   }
+
+  // fetch resolves once response headers arrive. Consume the body under the caller's AbortSignal so
+  // a server that stalls after acknowledging headers cannot hold a recovery attempt open forever.
+  await response.arrayBuffer();
 }
 
 export async function authenticatedBinaryMutation<T>(
@@ -135,7 +142,11 @@ export async function anonymousEmptyMutation(
   }
 }
 
-export async function publicCapabilityMutation<T>(url: string, body: unknown): Promise<T> {
+export async function publicCapabilityMutation<T>(
+  url: string,
+  body: unknown,
+  signal?: AbortSignal
+): Promise<T> {
   const capabilityUrl = new URL(url);
   const safeLocalhost =
     capabilityUrl.hostname === "localhost" || capabilityUrl.hostname === "127.0.0.1";
@@ -151,7 +162,8 @@ export async function publicCapabilityMutation<T>(url: string, body: unknown): P
       accept: "application/json",
       "content-type": "application/json"
     },
-    method: "POST"
+    method: "POST",
+    ...(signal ? { signal } : {})
   });
 
   if (!response.ok) {
@@ -166,7 +178,8 @@ async function sendAuthenticatedMutation(
   method: "DELETE" | "PATCH" | "POST" | "PUT",
   body: unknown,
   idempotencyKey?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  additionalHeaders?: HeadersInit
 ): Promise<Response> {
   const { token } = await browserSessionToken();
   const env = readPublicWebEnv();
@@ -178,6 +191,11 @@ async function sendAuthenticatedMutation(
 
   if (token) {
     headers.set("authorization", `Bearer ${token}`);
+  }
+  for (const [name, value] of new Headers(additionalHeaders)) {
+    if (name.toLowerCase() !== "authorization" && name.toLowerCase() !== "idempotency-key") {
+      headers.set(name, value);
+    }
   }
 
   return mutationFetch(browserApiUrl(path, env.NEXT_PUBLIC_API_BASE_URL), {

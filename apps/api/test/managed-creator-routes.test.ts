@@ -72,6 +72,11 @@ describe("managed creator routes", () => {
         };
         expect(input.permissions).toEqual(normalized.permissions);
         expect(input.termsHash).toBe(createHash("sha256").update(JSON.stringify(normalized)).digest("hex"));
+        expect(input.requestHash).toBe(
+          createHash("sha256")
+            .update(JSON.stringify({ relationshipId: relationship.id, ...normalized }))
+            .digest("hex")
+        );
         expect(input.idempotencyKey).toBe("agreement-v2");
         return relationship;
       }

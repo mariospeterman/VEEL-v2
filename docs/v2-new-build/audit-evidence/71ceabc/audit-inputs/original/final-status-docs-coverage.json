@@ -1,0 +1,77 @@
+{
+  "snapshot": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "auditor": "ownership_research",
+  "source_modified": false,
+  "files": [
+    {
+      "path": "docs/v2-new-build/current-implementation-status.md",
+      "bytes": 70413,
+      "characters": 70399,
+      "lines": 479,
+      "sha256": "7aed48a1c3d4655f51c288f9e0df854205784d4a69def39b91e9699545fff796",
+      "read_status": "full_read",
+      "method": "Sequential contiguous character slices printed in bounded tool output without truncation; partial lines continued exactly in next slice.",
+      "character_intervals_read": [
+        [
+          0,
+          8500
+        ],
+        [
+          8500,
+          17000
+        ],
+        [
+          17000,
+          25500
+        ],
+        [
+          25500,
+          34000
+        ],
+        [
+          34000,
+          42500
+        ],
+        [
+          42500,
+          51000
+        ],
+        [
+          51000,
+          59500
+        ],
+        [
+          59500,
+          68000
+        ],
+        [
+          68000,
+          70399
+        ]
+      ]
+    },
+    {
+      "path": "docs/v2-new-build/operator/staging-acceptance.json",
+      "bytes": 22686,
+      "characters": 22686,
+      "lines": 347,
+      "sha256": "9cbe33aa8c62ec0b47550e71fe82dd09a5e73f62cc9ed9fe8b1db4e64b50c3a1",
+      "read_status": "full_read",
+      "method": "Sequential contiguous character slices printed in bounded tool output without truncation; partial lines continued exactly in next slice.",
+      "character_intervals_read": [
+        [
+          0,
+          8500
+        ],
+        [
+          8500,
+          17000
+        ],
+        [
+          17000,
+          22686
+        ]
+      ]
+    }
+  ]
+}

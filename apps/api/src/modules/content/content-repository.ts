@@ -24,6 +24,7 @@ export {
   ContentDraftIdempotencyConflictError,
   ContentDraftPollCloseError,
   ContentDraftQuotaExceededError,
+  ContentFormatRetiredError,
   ContentEventDraftConflictError,
   ContentCompositionConflictError,
   ContentAssetRetirementConflictError,
@@ -96,6 +97,9 @@ function createUnavailableContentRepository(): PostgresContentRepository {
       throw new ContentRepositoryConfigurationError();
     },
     async findOwnedContentForUpload() {
+      throw new ContentRepositoryConfigurationError();
+    },
+    async findOwnedContentForPublication() {
       throw new ContentRepositoryConfigurationError();
     },
     async findMediaAssetByProviderAsset() {

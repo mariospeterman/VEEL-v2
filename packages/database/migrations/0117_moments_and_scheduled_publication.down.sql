@@ -1,3 +1,15 @@
+-- A code rollback can keep this additive schema. A schema rollback must never
+-- erase Moment expiry and silently turn time-limited media into permanent posts.
+do $$
+begin
+  if exists (select 1 from content_items where distribution_mode = 'moment') then
+    raise exception using
+      errcode = 'object_not_in_prerequisite_state',
+      message = '0117 rollback requires retained Moment content and expiry evidence to be migrated first';
+  end if;
+end;
+$$;
+
 drop trigger if exists content_items_sync_publication_job on content_items;
 drop function if exists private.sync_content_publication_job();
 drop table if exists content_publication_jobs;

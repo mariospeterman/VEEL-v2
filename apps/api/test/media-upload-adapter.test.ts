@@ -1,8 +1,35 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
 
 describe("Bunny private image storage adapter", () => {
+  it("caps a signed embed to the backend-owned allowance lease", () => {
+    const now = new Date("2026-11-05T12:00:00.000Z");
+    const leaseExpiresAt = new Date("2026-11-05T12:00:37.000Z");
+    const adapter = createBunnyStreamUploadAdapter({
+      BUNNY_STREAM_LIBRARY_ID: "12345",
+      BUNNY_STREAM_EMBED_TOKEN_KEY: "embed-signing-key",
+      BUNNY_STREAM_PLAYBACK_TOKEN_TTL_SECONDS: 86_400
+    });
+
+    const resource = adapter.createPlaybackResource?.({
+      providerAssetId: "video-guid",
+      now,
+      expiresAt: leaseExpiresAt
+    });
+
+    expect(resource?.url).toMatch(/^https:\/\/player\.mediadelivery\.net\/embed\/12345\/video-guid\?/);
+    expect(resource?.expiresAt).toBe(leaseExpiresAt.toISOString());
+    expect(new URL(resource!.url!).searchParams.get("expires")).toBe(
+      String(Math.floor(leaseExpiresAt.getTime() / 1_000))
+    );
+    expect(() => adapter.createPlaybackResource?.({
+      providerAssetId: "video-guid",
+      now,
+      expiresAt: now
+    })).toThrow("MEDIA_UPLOAD_PROVIDER_ERROR");
+  });
+
   it("limits MCP TUS handoffs to Bunny's one-hour minimum without exposing the API key", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-23T10:00:00.000Z"));
@@ -29,9 +56,83 @@ describe("Bunny private image storage adapter", () => {
       LibraryId: "12345",
       VideoId: "video-guid"
     });
-    expect(session.headers.AuthorizationSignature).toMatch(/^[a-f0-9]{64}$/);
+    expect(session.headers.AuthorizationSignature).toBe(
+      createHash("sha256")
+        .update(`12345stream-library-key${session.headers.AuthorizationExpire}video-guid`)
+        .digest("hex")
+    );
     expect(Object.values(session.headers)).not.toContain("stream-library-key");
     vi.useRealTimers();
+  });
+
+  it("re-signs the same durable VideoId without creating a second provider object", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-04T10:00:00.000Z"));
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ guid: "durable-video-guid" }),
+      { status: 201, headers: { "content-type": "application/json" } }
+    ));
+    const adapter = createBunnyStreamUploadAdapter({
+      BUNNY_STREAM_API_KEY: "stream-library-key",
+      BUNNY_STREAM_LIBRARY_ID: "12345"
+    }, fetchMock as typeof fetch);
+
+    const created = await adapter.createProviderAsset?.({ title: "durable upload" });
+    const first = await adapter.createUploadSessionForProviderAsset?.({
+      providerAssetId: created!.providerAssetId
+    });
+    vi.setSystemTime(new Date("2026-11-04T11:00:00.000Z"));
+    const renewed = await adapter.createUploadSessionForProviderAsset?.({
+      providerAssetId: created!.providerAssetId
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(first?.headers.VideoId).toBe("durable-video-guid");
+    expect(renewed?.headers.VideoId).toBe("durable-video-guid");
+    expect(renewed?.headers.AuthorizationExpire).not.toBe(first?.headers.AuthorizationExpire);
+    expect(renewed?.headers.AuthorizationSignature).not.toBe(first?.headers.AuthorizationSignature);
+    vi.useRealTimers();
+  });
+
+  it("issues expiring HMAC capabilities for the original image and signed width variants", () => {
+    const now = new Date("2026-11-04T12:00:00.000Z");
+    const adapter = createBunnyStreamUploadAdapter({
+      BUNNY_STORAGE_IMAGE_UPLOAD_ENABLED: true,
+      BUNNY_STORAGE_ACCESS_KEY: "storage-zone-password",
+      BUNNY_STORAGE_ZONE_NAME: "private-zone",
+      BUNNY_STORAGE_API_ENDPOINT: "https://storage.bunnycdn.com",
+      BUNNY_STORAGE_PULL_ZONE_URL: "https://private-media.example.test",
+      BUNNY_STORAGE_PULL_ZONE_TOKEN_KEY: "pull-zone-token",
+      BUNNY_STORAGE_DELIVERY_TOKEN_TTL_SECONDS: 300
+    });
+    const resource = adapter.createImageDeliveryResource?.({
+      providerAssetId: "images/content-id/asset-id.webp",
+      now
+    });
+
+    expect(resource?.expiresAt).toBe("2026-11-04T12:05:00.000Z");
+    expect(resource?.variants.map((variant) => variant.widthPixels)).toEqual([480, 960, 1440]);
+    const original = new URL(resource!.url);
+    const expires = original.searchParams.get("expires")!;
+    const expectedToken = `HS256-${createHmac("sha256", "pull-zone-token")
+      .update(`${original.pathname}${expires}`)
+      .digest("base64url")}`;
+    expect(original.searchParams.get("token")).toBe(expectedToken);
+    expect(resource?.url).not.toContain("pull-zone-token");
+
+    for (const variant of resource!.variants) {
+      const url = new URL(variant.url);
+      const signingData = `width=${variant.widthPixels}`;
+      const token = `HS256-${createHmac("sha256", "pull-zone-token")
+        .update(`${url.pathname}${expires}${signingData}`)
+        .digest("base64url")}`;
+      expect(url.searchParams.get("token")).toBe(token);
+      expect(url.searchParams.get("width")).toBe(String(variant.widthPixels));
+    }
+    expect(() => adapter.createImageDeliveryResource?.({
+      providerAssetId: "https://attacker.example/private.webp",
+      now
+    })).toThrow("MEDIA_UPLOAD_PROVIDER_NOT_CONFIGURED");
   });
 
   it("uses an opaque path, raw bytes, the zone key, and Bunny checksum verification", async () => {

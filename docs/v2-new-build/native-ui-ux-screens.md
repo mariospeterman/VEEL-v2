@@ -2,14 +2,16 @@
 
 Status: accepted
 Scope: desktop/mobile PWA UX
-Last updated: 2026-06-12
-Source of truth: yes
+Last updated: 2026-11-04
+Source of truth: yes, only for interaction and responsive-layout intent
 
 Owns:
-- native ui ux screens decisions for its named domain
+- interaction intent, responsive layout goals, and accessible gesture alternatives
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- `frontend-architecture.md` for current route/component/provider/state ownership
+- `route-map.md` for canonical URLs
+- source paths, tests, and release evidence for implementation status
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules

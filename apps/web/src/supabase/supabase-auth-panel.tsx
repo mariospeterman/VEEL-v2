@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { safeMutationMessage } from "@/api-errors";
 import { ProviderLogo } from "@/brand/provider-logo";
+import { safeSameOriginPath } from "@/navigation/safe-same-origin-path";
 import { recoveryIdentityMayBeCreated } from "@/wallet/auth-purpose-policy";
 import { createSupabaseBrowserClient } from "./client";
 import { getSupabaseAuthConfig, type SupabaseAuthProvider } from "./supabase-auth-config";
@@ -153,6 +154,6 @@ export function SupabaseAuthPanel({ mode = "link", next = "/app/home" }: Supabas
 }
 
 function supabaseRedirectTo(next: string) {
-  const safeNext = next.startsWith("/") && !next.startsWith("//") ? next : "/app/home";
+  const safeNext = safeSameOriginPath(next, "/app/home");
   return `${window.location.origin}/auth/confirm?next=${encodeURIComponent(safeNext)}`;
 }

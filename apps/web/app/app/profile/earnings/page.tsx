@@ -106,9 +106,13 @@ export default async function EarningsSetupPage() {
               <Fact label="Recipient wallet" value={dashboard.data.readiness.recipientWalletState} />
               {dashboard.data.products.map((product) => (
                 <Fact
-                  key={`${product.productType}-${product.currency}`}
-                  label={`${product.productType} · ${product.currency}`}
-                  value={`${product.confirmedPaymentCount} confirmed · ${product.enabled ? "enabled" : "disabled"}`}
+                  key={product.productType}
+                  label={product.productType}
+                  value={`${product.confirmedPaymentCount} confirmed${
+                    product.assets.length > 0
+                      ? ` · ${product.assets.map((asset) => asset.currency).join(" + ")}`
+                      : ""
+                  } · ${product.enabled ? "enabled" : "disabled"}`}
                 />
               ))}
             </div>

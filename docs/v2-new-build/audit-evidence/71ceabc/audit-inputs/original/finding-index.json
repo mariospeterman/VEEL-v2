@@ -1,0 +1,1115 @@
+[
+  {
+    "id": "ROOT-01",
+    "title": "ROOT-01 \u2014 P1 release blocker \u2014 Pinned runtimes precede current official security fixes",
+    "source": "root-audit.md",
+    "group": "Integration, configuration, runtime security and authority",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "ROOT-02",
+    "title": "ROOT-02 \u2014 P3 cleanup / narrowed hypothesis \u2014 Redundant identity compatibility lookup",
+    "source": "root-audit.md",
+    "group": "Integration, configuration, runtime security and authority",
+    "disposition": "withdrawn generalized defect; compatibility cleanup only"
+  },
+  {
+    "id": "ROOT-03",
+    "title": "ROOT-03 \u2014 P2 \u2014 Legacy creator dashboard adds unlike currencies and labels everything SOL",
+    "source": "root-audit.md",
+    "group": "Integration, configuration, runtime security and authority",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "ROOT-04",
+    "title": "ROOT-04 \u2014 P2/P3 \u2014 Public profile has a duplicate incomplete offer presenter and unfiltered latest-plan selection",
+    "source": "root-audit.md",
+    "group": "Integration, configuration, runtime security and authority",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "ROOT-05",
+    "title": "ROOT-05 \u2014 P1/P2 operator blocker \u2014 Canonical staging migration path cannot apply pending migrations",
+    "source": "root-audit.md",
+    "group": "Integration, configuration, runtime security and authority",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "ROOT-06",
+    "title": "ROOT-06 \u2014 P2 \u2014 Staging journey results are static labels rather than executed evidence",
+    "source": "root-audit.md",
+    "group": "Integration, configuration, runtime security and authority",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "ROOT-07",
+    "title": "ROOT-07 \u2014 P2 \u2014 Chain/provider configuration permits contradictory independent truths",
+    "source": "root-audit.md",
+    "group": "Integration, configuration, runtime security and authority",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "ROOT-08",
+    "title": "ROOT-08 \u2014 P2 product gap \u2014 Legacy AI endpoints report static canned results as executed work",
+    "source": "root-audit.md",
+    "group": "Integration, configuration, runtime security and authority",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "ROOT-09",
+    "title": "ROOT-09 \u2014 P2 validation gap \u2014 CI omits the dedicated real auth lifecycle suite",
+    "source": "root-audit.md",
+    "group": "Integration, configuration, runtime security and authority",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-01",
+    "title": "AUTH-01 \u2014 P1 \u2014 Generic age approval omits normalized age facts and onboarding activation, while session projects ready",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-02",
+    "title": "AUTH-02 \u2014 P1 \u2014 Verification validity is incorrectly tied to provider launch-session TTL",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-03",
+    "title": "AUTH-03 \u2014 P1 \u2014 Sumsub stores the external user ID as an applicant ID, then matches webhook applicant IDs against it",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-04",
+    "title": "AUTH-04 \u2014 P1 \u2014 Persona creation requires a one-time link that the request never asks Persona to create",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-05",
+    "title": "AUTH-05 \u2014 P1 \u2014 Verification updates use delivery order rather than authoritative provider event order",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-06",
+    "title": "AUTH-06 \u2014 P1/P2 \u2014 Fast or out-of-order webhooks can be permanently lost before session persistence",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-07",
+    "title": "AUTH-07 \u2014 P1 \u2014 Recovery exchange manufactures recent authentication from reusable bearer-token validation",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-08",
+    "title": "AUTH-08 \u2014 P1 \u2014 MCP OAuth authorization codes can be redeemed concurrently more than once",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-09",
+    "title": "AUTH-09 \u2014 P1/P2 \u2014 Public avatar storage bypasses the existing image safety boundary",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-10",
+    "title": "AUTH-10 \u2014 P1/P2 \u2014 Many admin and profile mutations check an Idempotency-Key but never enforce it",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-11",
+    "title": "AUTH-11 \u2014 P1/P2 \u2014 Admin pagination silently skips rows; priority-sort cursors are also incomplete",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-12",
+    "title": "AUTH-12 \u2014 P2 \u2014 Admin overview always reports zero open reports",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-13",
+    "title": "AUTH-13 \u2014 P2 \u2014 Feature-flag listing truncates configuration and is reused for exact policy decisions",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-14",
+    "title": "AUTH-14 \u2014 P2 \u2014 MCP connection quota is process-local and never evicts expired buckets",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-15",
+    "title": "AUTH-15 \u2014 P2 hardening, reproduced \u2014 Didit freshness checks trust an unsigned header instead of binding freshness to signed content",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-16",
+    "title": "AUTH-16 \u2014 P2 \u2014 Generic verification session creation is not atomic",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-17",
+    "title": "AUTH-17 \u2014 P2 \u2014 Concurrent replay of a consumed wallet proof returns an unhandled 500",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-18",
+    "title": "AUTH-18 \u2014 P1/P2, PostgreSQL parser reproduction \u2014 Admin live-room listing has ambiguous SQL columns",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-19",
+    "title": "AUTH-19 \u2014 P2 \u2014 Admin identity checks use a legacy table instead of canonical verification records",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-20",
+    "title": "AUTH-20 \u2014 P1/P2 \u2014 Concurrent admin organization-owner removals can leave no owner",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-21",
+    "title": "AUTH-21 \u2014 P2 \u2014 Current MCP connections/tool calls are absent from the admin AI/MCP audit projection",
+    "source": "auth-audit.md",
+    "group": "Authentication, verification, admin and MCP",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-01",
+    "title": "CONTENT-01 \u2014 P1: ready media cannot enter publication review",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-02",
+    "title": "CONTENT-02 \u2014 P1: video upload initialization ignores durable idempotency",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-03",
+    "title": "CONTENT-03 \u2014 P1: Bunny receipt can commit without replayable event",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-04",
+    "title": "CONTENT-04 \u2014 P1: reaction toggles reapply delayed replayed commands",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-05",
+    "title": "CONTENT-05 \u2014 P1: discovery bypasses canonical media access/projection/signing",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-06",
+    "title": "CONTENT-06 \u2014 P1: mixed-search pagination sends timestamp cursor to UUID query",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-07",
+    "title": "CONTENT-07 \u2014 P1/P2: widespread pagination skips lookahead rows; timestamp ties lack ID cursor",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-08",
+    "title": "CONTENT-08 \u2014 P1: DML CTE projections read stale base snapshots",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-09",
+    "title": "CONTENT-09 \u2014 P1: Mutuals feed selects nonexistent schema column",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-10",
+    "title": "CONTENT-10 \u2014 P1: privacy/visibility policy diverges across surfaces",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-11",
+    "title": "CONTENT-11 \u2014 P2 conditional cleanup: dormant subscriber-only projection branch",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-12",
+    "title": "CONTENT-12 \u2014 P1: requester can change creator terms while accepting them",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-13",
+    "title": "CONTENT-13 \u2014 P1: member can post to paid live chat without Event Access",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-14",
+    "title": "CONTENT-14 \u2014 P2: normal history and creator live history are permanently truncated",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-15",
+    "title": "CONTENT-15 \u2014 P1/P2: historical management agreement authorizes future analytics",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-16",
+    "title": "CONTENT-16 \u2014 P2: organization owner can activate invitation without invitee consent",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-17",
+    "title": "CONTENT-17 \u2014 P2: idempotency scopes omit target identity across org/management/performer actions",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-18",
+    "title": "CONTENT-18 \u2014 P2: feed performs full eligible-corpus hash+sort twice each page and resets on any reaction",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-19",
+    "title": "CONTENT-19 \u2014 P1: real private image uploads have no delivery URL path",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTENT-20",
+    "title": "CONTENT-20 \u2014 P1 \u2014 Approved external performer verification never records the over-18 fact required for release",
+    "source": "content-audit.md",
+    "group": "Content, discovery, social, live, messages and organizations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-01",
+    "title": "PAY-01 \u2014 P1 \u2014 One transfer can satisfy two split legs, accepting an underpayment",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-02",
+    "title": "PAY-02 \u2014 P1 \u2014 First subscription collection uses a changing period/idempotency key",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-03",
+    "title": "PAY-03 \u2014 P1 \u2014 Every subscription uses nonce0 and collides with the same user's other memberships",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-04",
+    "title": "PAY-04 \u2014 P1 \u2014 In-flight first collection can reactivate a cancelled subscription and charge after cancellation",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-05",
+    "title": "PAY-05 \u2014 P1 \u2014 Transient transaction expiry is misclassified as delegation revocation",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-06",
+    "title": "PAY-06 \u2014 P1 \u2014 Solana webhook receipt and replay event are not inserted atomically",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-07",
+    "title": "PAY-07 \u2014 P1 \u2014 Email failures never re-enter the retry queue",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-08",
+    "title": "PAY-08 \u2014 P1/P2 \u2014 Earliest wallet-only/no-email users can starve the email queue",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-09",
+    "title": "PAY-09 \u2014 P2 \u2014 Receipts email prints atomic units as whole SOL/USDC",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-10",
+    "title": "PAY-10 \u2014 P1 before enabling recurring \u2014 Confirmed subscription collections omit durable financial artifacts",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-11",
+    "title": "PAY-11 \u2014 P1/P2 before enabling recurring \u2014 Editing creator offer disables existing billing and overwrites the referenced price",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-12",
+    "title": "PAY-12 \u2014 P2 \u2014 Referral activity pagination loses rows and is unstable across commissions",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-13",
+    "title": "PAY-13 \u2014 P2 \u2014 Submission idempotency headers are required but not implemented",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-14",
+    "title": "PAY-14 \u2014 P2 \u2014 Subscription/provider failure detail is always discarded on reads",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-15",
+    "title": "PAY-15 \u2014 P2 scalability \u2014 Subscription plan and subscription listing are unbounded",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-16",
+    "title": "PAY-16 \u2014 P2 scope gap \u2014 General content unlock remains SOL-only despite reusable one-time USDC path",
+    "source": "payments-audit.md",
+    "group": "Payments, subscriptions, receipts and referrals",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-01",
+    "title": "WA-01 \u2014 P1 \u2014 Arbitrary push endpoints become worker-side HTTPS requests (joint with content reviewer)",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-02",
+    "title": "WA-02 \u2014 P1 \u2014 Reassigning a browser subscription leaks pending old-account notifications",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-03",
+    "title": "WA-03 \u2014 P1/P2 \u2014 Old unread notifications permanently starve new push delivery",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-04",
+    "title": "WA-04 \u2014 P2 \u2014 Queued push ignores later preference revocation",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-05",
+    "title": "WA-05 \u2014 P1 \u2014 Analytics cohort suppression discloses the suppressed count in sampleSize",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-06",
+    "title": "WA-06 \u2014 P1 \u2014 Platform metric query checks staff membership but bypasses analytics RBAC",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-07",
+    "title": "WA-07 \u2014 P2 \u2014 Multiple media assets multiply credited watch time and completion counts",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-08",
+    "title": "WA-08 \u2014 P2 \u2014 Viewer replays count different content as a replay",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-09",
+    "title": "WA-09 \u2014 P2 \u2014 Minute scheduler enqueues analytics only once per hour",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-10",
+    "title": "WA-10 \u2014 P2 \u2014 Telemetry retention timestamps are never enforced",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-11",
+    "title": "WA-11 \u2014 P2 \u2014 Reconciliation can call offsetting metric errors 'matched'",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "WA-12",
+    "title": "WA-12 \u2014 P2 \u2014 Analytics lease recovery ignores maximum attempts after crashes",
+    "source": "worker-analytics-audit.md",
+    "group": "Workers, notifications and analytics",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-01",
+    "title": "FE-01 \u2014 P1: Offline private messages survive logout and can send as another account",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-02",
+    "title": "FE-02 \u2014 P2: Online transient failure silently deletes queued messages",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-03",
+    "title": "FE-03 \u2014 P2: Mobile Messages Back cannot reach the inbox",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-04",
+    "title": "FE-04 \u2014 P2: Conversation changes retain draft, attachment and reply state",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-05",
+    "title": "FE-05 \u2014 P2: Read receipts stop after the first successful mark-read",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-06",
+    "title": "FE-06 \u2014 P2 security: Authentication confirmation allows an external redirect",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-07",
+    "title": "FE-07 \u2014 P2: Moving between Moments carries state from a different content item",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-08",
+    "title": "FE-08 \u2014 P2 accessibility/data-entry: Moment arrow shortcuts intercept text editing",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-09",
+    "title": "FE-09 \u2014 P2: Media draft restoration cannot restore the uploaded composition",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-10",
+    "title": "FE-10 \u2014 P2 configuration: Embedded mainnet RPC silently resolves to devnet",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-11",
+    "title": "FE-11 \u2014 P2 feature gap: A freshly loaded checkout cannot directly use the login wallet",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-12",
+    "title": "FE-12 \u2014 P2: Realtime notification invalidation has no consumer",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-13",
+    "title": "FE-13 \u2014 P2: Search is unavailable from the mobile app shell",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-14",
+    "title": "FE-14 \u2014 P2: Profile shows only the first page of posts and misleading counts/tabs",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-15",
+    "title": "FE-15 \u2014 P2 scalability: Feed grows an unbounded component/DOM tree",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-16",
+    "title": "FE-16 \u2014 P2 accessibility: Theme tokens create very low contrast in app controls",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-17",
+    "title": "FE-17 \u2014 P2 privacy: Recent searches persist across different accounts",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-18",
+    "title": "FE-18 \u2014 P2 operational gap: Generic admin pages truncate operational data and omit critical actions",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-19",
+    "title": "FE-19 \u2014 P2 static concern: Admin content has no apparent vertical scroll owner",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-20",
+    "title": "FE-20 \u2014 P1 monetary presentation: Subscription cents and atomic amounts are formatted inconsistently",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-21",
+    "title": "FE-21 \u2014 P2: Profile Follow button reverts after a successful mutation",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-22",
+    "title": "FE-22 \u2014 P2 missing workflows: Profile Edit and Mutuals privacy controls are read-only destinations",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-23",
+    "title": "FE-23 \u2014 P2 docs conflict: Multiple accepted frontend authorities prescribe incompatible implementations",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-24",
+    "title": "FE-24 \u2014 P2: Creator-profile membership Connect wallet has no provider context",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "FE-25",
+    "title": "FE-25 \u2014 P1 core conversion: Confirmed payment leaves locked content/live projections unchanged",
+    "source": "frontend-audit.md",
+    "group": "Responsive frontend, client privacy and product workflows",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DB-01",
+    "title": "DB-01 \u2014 P1 \u2014 Direct Supabase RLS bypasses permission-level staff RBAC",
+    "source": "database-audit.md",
+    "group": "Database, RLS, schema and populated migrations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DB-02",
+    "title": "DB-02 \u2014 P2 \u2014 Authenticated Supabase subjects can enumerate private content and private account counters",
+    "source": "database-audit.md",
+    "group": "Database, RLS, schema and populated migrations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DB-03",
+    "title": "DB-03 \u2014 P2 \u2014 OpenAPI3.1 uses OpenAPI3.0 nullability semantics",
+    "source": "database-audit.md",
+    "group": "Database, RLS, schema and populated migrations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DB-04",
+    "title": "DB-04 \u2014 P2 \u2014 Schema blueprint conflicts with effective migrated database",
+    "source": "database-audit.md",
+    "group": "Database, RLS, schema and populated migrations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DB-05",
+    "title": "DB-05 \u2014 P2 \u2014 Migration0039 rollback is syntactically invalid PostgreSQL",
+    "source": "database-audit.md",
+    "group": "Database, RLS, schema and populated migrations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DB-06",
+    "title": "DB-06 \u2014 P2 \u2014 Populated upgrades fail before replacing obsolete CHECK constraints",
+    "source": "database-audit.md",
+    "group": "Database, RLS, schema and populated migrations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DB-07",
+    "title": "DB-07 \u2014 P1 conditional on retained Supabase grants \u2014 Direct comments/content/media bypass current eligibility",
+    "source": "database-audit.md",
+    "group": "Database, RLS, schema and populated migrations",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "RES-01",
+    "title": "RES-01 \u2014 P1/P2 \u2014 Global error handling exposes internal exception messages to clients",
+    "source": "residual-audit.md",
+    "group": "Cross-cutting API errors, refunds and lifecycle",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "RES-02",
+    "title": "RES-02 \u2014 P2 \u2014 Refund endpoint lacks runtime contract validation and turns malformed input into500",
+    "source": "residual-audit.md",
+    "group": "Cross-cutting API errors, refunds and lifecycle",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "RES-03",
+    "title": "RES-03 \u2014 P2 \u2014 API process does not run its close hooks during ordinary termination",
+    "source": "residual-audit.md",
+    "group": "Cross-cutting API errors, refunds and lifecycle",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "RES-04",
+    "title": "RES-04 \u2014 P2 \u2014 Activity and refund pagination have the same lookahead-row omission",
+    "source": "residual-audit.md",
+    "group": "Cross-cutting API errors, refunds and lifecycle",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "RES-05",
+    "title": "RES-05 \u2014 P2 \u2014 Concurrent same-key refund requests can fail rather than replay",
+    "source": "residual-audit.md",
+    "group": "Cross-cutting API errors, refunds and lifecycle",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTRACT-01",
+    "title": "CONTRACT-01 \u2014 P2 \u2014 The age-webhook contract rejects its known provider payloads and documents authentication that the runtime does not use",
+    "source": "contracts-audit.md",
+    "group": "Canonical OpenAPI contract",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTRACT-02",
+    "title": "CONTRACT-02 \u2014 P3 \u2014 Response playback credential is marked request-only",
+    "source": "contracts-audit.md",
+    "group": "Canonical OpenAPI contract",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "CONTRACT-03",
+    "title": "CONTRACT-03 \u2014 P3 \u2014 Admin payment state enum omits reachable cancellation",
+    "source": "contracts-audit.md",
+    "group": "Canonical OpenAPI contract",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "ROLLBACK-01",
+    "title": "ROLLBACK-01 \u2014 Expired Moments become permanently eligible again after 0117 downgrade",
+    "source": "rollback-audit.md",
+    "group": "Rollback privacy and recovery",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "SUP-01",
+    "title": "SUP-01 \u2014 Enterprise staging proof claims provider evidence without checking it",
+    "source": "supplemental-audit.md",
+    "group": "Enterprise proof integrity and supplemental review",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "INT-01",
+    "title": "INT-01 \u2014 P2 \u2014 Didit integration fixture cannot run on the current migrated schema, and its normal integration gates omit it",
+    "source": "integration-tests-audit.md",
+    "group": "Full real-database integration-test source review",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "INT-02",
+    "title": "INT-02 \u2014 P2 \u2014 Didit bypasses the database-target safety guard used by every other integration suite",
+    "source": "integration-tests-audit.md",
+    "group": "Full real-database integration-test source review",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "INT-03",
+    "title": "INT-03 \u2014 P2 \u2014 The long journey's fixed users and broad cleanup make independent runs interfere",
+    "source": "integration-tests-audit.md",
+    "group": "Full real-database integration-test source review",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "TEST-01",
+    "title": "TEST-01 \u2014 Explicit null live-provider fields silently become populated fixture defaults (P2, test fidelity)",
+    "source": "app-test-audit.md",
+    "group": "Full shared API test source review",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "MIGTEST-GAP-01",
+    "title": "MIGTEST-GAP-01 \u2014 Paired rollback files are not verified as runnable SQL",
+    "source": "migration-test-audit.md",
+    "group": "Full migration-test source review",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "MIGTEST-GAP-02",
+    "title": "MIGTEST-GAP-02 \u2014 Security and correctness names are accepted without testing their behavior",
+    "source": "migration-test-audit.md",
+    "group": "Full migration-test source review",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "MIGTEST-GAP-03",
+    "title": "MIGTEST-GAP-03 \u2014 32 forward migrations have no explicit content test in this file",
+    "source": "migration-test-audit.md",
+    "group": "Full migration-test source review",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "MIGTEST-GAP-04",
+    "title": "MIGTEST-GAP-04 \u2014 Final-schema/API query compatibility is outside this test oracle",
+    "source": "migration-test-audit.md",
+    "group": "Full migration-test source review",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-01",
+    "title": "D-01 \u2014 P2 \u2014 Four architecture blueprints and many source-of-truth headers disagree",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-02",
+    "title": "D-02 \u2014 P1/P2 \u2014 Old Supabase session authority can reintroduce a second auth system",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-03",
+    "title": "D-03 \u2014 P2 \u2014 Onboarding requirements and UI entry instructions conflict within active docs",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-04",
+    "title": "D-04 \u2014 P1/P2 \u2014 Old KYC prose collapses independent capability decisions",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-05",
+    "title": "D-05 \u2014 P2 \u2014 Runtime configuration and key setup instructions are inconsistent",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-06",
+    "title": "D-06 \u2014 P2 \u2014 Image processing readiness is confused with release eligibility",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-07",
+    "title": "D-07 \u2014 P2 \u2014 Ranking documentation permits inputs explicitly forbidden elsewhere",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-08",
+    "title": "D-08 \u2014 P2 \u2014 Conceptual schema is incorrectly presented as current database authority",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-09",
+    "title": "D-09 \u2014 P2 \u2014 Route table security columns and implemented wording drift",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-10",
+    "title": "D-10 \u2014 P2/current compatibility \u2014 MCP current-official-doc claim is false",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-11",
+    "title": "D-11 \u2014 P2 \u2014 Provenance reference constraints are not proof of ownership or C2PA validation",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-12",
+    "title": "D-12 \u2014 P2 \u2014 Broad AI feature wish lists obscure the actual safe tool set",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "D-13",
+    "title": "D-13 \u2014 P2 \u2014 Final status and acceptance files contain conflicting current-state assertions",
+    "source": "docs-audit.md",
+    "group": "Architecture, provider, ownership and operational documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-01",
+    "title": "DM-01 P1 policy conflict \u2014 money-based ranking reintroduced in active docs",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-02",
+    "title": "DM-02 P2 \u2014 obsolete ordinary authentication instruction",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-03",
+    "title": "DM-03 P2 \u2014 active physical table names conflict",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-04",
+    "title": "DM-04 P2 \u2014 retired timed live product persists",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-05",
+    "title": "DM-05 P2 \u2014 profile membership message privileges ambiguous",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-06",
+    "title": "DM-06 P2 \u2014 dated audit claims compete with implemented baseline",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-07",
+    "title": "DM-07 P2 policy conflict \u2014 blanket StudioKYC",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-08",
+    "title": "DM-08 P1 release gap \u2014 subscription consent/financial artifacts are required in docs but absent from code",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-09",
+    "title": "DM-09 P1 release gap \u2014 tax/fiat/seller determination requirements exceed implemented settlement",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-10",
+    "title": "DM-10 P2 \u2014 Event Access route and model contradict themselves",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-11",
+    "title": "DM-11 P2 \u2014 advertised referral types/precedence not represented by current code",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-12",
+    "title": "DM-12 P2 \u2014 manual renewal recovery is described as supported but has no current application path",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-13",
+    "title": "DM-13 P2 \u2014 one-timeasset support lacks perproductmatrix",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-14",
+    "title": "DM-14 P2 \u2014 refundnetreferral language overstates current exact basis",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "DM-15",
+    "title": "DM-15 P2 \u2014 status/evidence phrasing should match the failing cases, not just happy-path coverage",
+    "source": "docs-money-audit.md",
+    "group": "Money, commerce, referral and compliance documentation",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-22",
+    "title": "AUTH-22 \u2014 P1/P2 \u2014 Sumsub correlation IDs collapse distinct verification events",
+    "source": "verification-additions-audit.md",
+    "group": "Independent verification additions and affected paths",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "AUTH-23",
+    "title": "AUTH-23 \u2014 P1 for enabled Sumsub fallback \u2014 Generated launch URL never starts verification",
+    "source": "verification-additions-audit.md",
+    "group": "Independent verification additions and affected paths",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  },
+  {
+    "id": "PAY-17",
+    "title": "PAY-17 \u2014 P2 before enabling recurring \u2014 Refreshing an authorization transaction invalidates an earlier valid signed setup",
+    "source": "verification-additions-audit.md",
+    "group": "Independent verification additions and affected paths",
+    "disposition": "open observation; preserve report severity, conditions and proof limits"
+  }
+]

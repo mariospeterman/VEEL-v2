@@ -9,7 +9,7 @@ Owns:
 - safety admin ai decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -109,9 +109,9 @@ AI/MCP is permissioned and audited.
 
 The practical launch scope is defined in `ai-mcp-use-cases.md`. AI should start as a lightweight MCP connection layer for creator productivity, user self-service, and admin operations summaries/drafts. External AI clients bring their own LLMs by default. Do not build a generic chatbot, autonomous admin agent, or unrestricted MCP gateway.
 
-The launch implementation is an audited tool gateway, not a direct LLM-to-provider or LLM-to-admin bridge. AI/MCP sessions are scoped, short-lived, and backed by a server-side allowlist. Tool calls store redacted input/output summaries only.
+The launch implementation is an audited MCP tool gateway, not a direct LLM-to-provider or LLM-to-admin bridge. The historical `/v1/ai/sessions` and `/v1/ai/sessions/{id}/tool-calls` routes are explicitly disabled because their outputs were static placeholders rather than executed domain work; they return `503`, while `/v1/ai/capabilities` reports no startable legacy tools. Existing AI session/tool-call rows remain available only as historical audit data. Scoped MCP tools must read or draft through canonical domain repositories and store redacted audit summaries.
 
-Allowed user tools:
+Candidate connected-assistant user tools (only when implemented through MCP and staged):
 
 - app help
 - draft caption
@@ -119,13 +119,13 @@ Allowed user tools:
 - summarize own activity
 - find own purchases/saved items
 
-Allowed creator tools:
+Candidate connected-assistant creator tools:
 
 - draft content metadata
 - summarize own creator analytics
 - suggest live schedule
 
-Admin-only tools:
+Candidate connected-assistant admin tools:
 
 - provider diagnostics
 - payment lookup

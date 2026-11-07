@@ -53,7 +53,11 @@ export interface LiveProviderAdapter {
   createRoom(input: CreateLiveProviderRoomInput): Promise<CreatedLiveProviderRoom>;
   getRoomStatus(input: GetLiveProviderRoomStatusInput): Promise<LiveProviderRoomStatus>;
   getRoomHealth?(input: { providerStreamId: string; observedAt: Date }): Promise<LiveProviderRoomHealth>;
-  createPlaybackJwt(input: { playbackId: string; appUserId: string }): Promise<string | null>;
+  createPlaybackJwt(input: {
+    playbackId: string;
+    appUserId: string;
+    expiresAt?: Date;
+  }): Promise<string | null>;
   setRoomSuspended(input: { providerStreamId: string; suspended: boolean }): Promise<void>;
   terminateRoom(input: { providerStreamId: string }): Promise<void>;
 }
@@ -196,7 +200,11 @@ export interface LiveRepository {
   findRoom(input: FindLiveRoomInput): Promise<StoredLiveRoom | null>;
   findOwnedRoom(input: FindOwnedLiveRoomInput): Promise<StoredLiveRoom | null>;
   findOwnedRoomByIdempotency(input: FindOwnedLiveRoomByIdempotencyInput): Promise<StoredLiveRoom | null>;
-  listOwnedRooms(input: { supabaseUserId: string }): Promise<{ items: StoredLiveRoom[]; nextCursor: null }>;
+  listOwnedRooms(input: {
+    supabaseUserId: string;
+    cursor?: string;
+    limit: number;
+  }): Promise<{ items: StoredLiveRoom[]; nextCursor: string | null }>;
   revealHostConnection(input: {
     supabaseUserId: string;
     roomId: string;

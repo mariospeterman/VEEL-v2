@@ -12,6 +12,13 @@ export class ProfileHandleConflictError extends Error {
   }
 }
 
+export class ProfileIdempotencyConflictError extends Error {
+  constructor() {
+    super("PROFILE_IDEMPOTENCY_CONFLICT");
+    this.name = "ProfileIdempotencyConflictError";
+  }
+}
+
 export class CreatorOnboardingIdempotencyConflictError extends Error {
   constructor() {
     super("CREATOR_ONBOARDING_IDEMPOTENCY_CONFLICT");

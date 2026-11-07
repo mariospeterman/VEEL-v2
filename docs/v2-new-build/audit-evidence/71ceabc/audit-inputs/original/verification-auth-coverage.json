@@ -1,0 +1,175 @@
+{
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "reviewer": "verify_auth",
+  "scope": "bounded independent second review; not replacement for original 94-file manifest",
+  "files": [
+    {
+      "path": "apps/api/src/modules/verification/verification-provider-adapters.ts",
+      "bytes": 18364,
+      "sha256": "fedaf8b0cc891958fb301c8ea9d06bb7692acc757a5c348a6f108092d79409e7",
+      "method": "full text semantic second review",
+      "lines": 524
+    },
+    {
+      "path": "apps/api/src/modules/verification/verification-repository.ts",
+      "bytes": 19527,
+      "sha256": "d83b970637082f4c71ea470e35a2e296a5e41e5d0681a943e3a5f303874c5f15",
+      "method": "full text semantic second review",
+      "lines": 605
+    },
+    {
+      "path": "apps/api/src/modules/verification/verification-routes.ts",
+      "bytes": 11194,
+      "sha256": "65e9413a7540833f9f95a8e71b89eb1c664e7c5e61a6af591ec0d5533349e366",
+      "method": "full text semantic second review",
+      "lines": 300
+    },
+    {
+      "path": "apps/api/src/modules/verification/verification-webhook-adapter.ts",
+      "bytes": 13065,
+      "sha256": "46fd441611ee675934e2640b24bc70d7f0bc02f2d3ee11b63299c5443424340f",
+      "method": "full text semantic second review",
+      "lines": 314
+    },
+    {
+      "path": "apps/api/src/modules/verification/didit-webhook.ts",
+      "bytes": 1765,
+      "sha256": "b36a50fc88a7d73c6a95f039345c72131f6a43a62d2db164dd8d5be50dcb4c10",
+      "method": "full text semantic second review",
+      "lines": 49
+    },
+    {
+      "path": "apps/api/src/modules/age/age-provider-waterfall.ts",
+      "bytes": 1568,
+      "sha256": "a8e80dc8a074447376638479f18be6de9c7ab1e73d91c28cb67e9cacd12c395b",
+      "method": "full text semantic second review",
+      "lines": 48
+    },
+    {
+      "path": "apps/api/src/modules/age/age-routes.ts",
+      "bytes": 8387,
+      "sha256": "d9f731327f43c80a9e7c443b260cb9e5c5b72fec01b998b12606ee558f3ff175",
+      "method": "full text semantic second review",
+      "lines": 246
+    },
+    {
+      "path": "apps/api/src/modules/age/age-repository.ts",
+      "bytes": 11286,
+      "sha256": "7c328bd8c827f50075752b7c23c68047d4e80a57cc53ccb0a3f049346e471a86",
+      "method": "full text semantic second review",
+      "lines": 383
+    },
+    {
+      "path": "apps/api/src/modules/age/age-webhook-adapter.ts",
+      "bytes": 7983,
+      "sha256": "d2336309efef0e0985bf04be6aaee17bf75f83177025037e5496242fa8ec3c16",
+      "method": "full text semantic second review",
+      "lines": 278
+    },
+    {
+      "path": "apps/api/src/modules/auth/wallet-auth-repository.ts",
+      "bytes": 24551,
+      "sha256": "ca98022dab05a0a8314ca5e7bc101558ac409fe8e8a6b6ea4495835f5ba8abc6",
+      "method": "full text semantic second review",
+      "lines": 782
+    },
+    {
+      "path": "apps/api/src/modules/auth/wallet-auth-routes.ts",
+      "bytes": 15163,
+      "sha256": "7edd0c396400e03b8ce0e3095f54b89334dfcaac5adfe088109250649178f6ed",
+      "method": "full text semantic second review",
+      "lines": 410
+    },
+    {
+      "path": "apps/api/src/modules/auth/http-auth.ts",
+      "bytes": 1980,
+      "sha256": "e285bd79661a63c03b73e22baf0b1914c9991c8c0d5a6906b4cc61d47cf99c33",
+      "method": "full text semantic second review",
+      "lines": 74
+    },
+    {
+      "path": "apps/api/src/modules/session/session-routes.ts",
+      "bytes": 4378,
+      "sha256": "0c9e65247ba50016520f2c7563de2b38ff935fca5c6ddea22c8839dd13831dd9",
+      "method": "full text semantic second review",
+      "lines": 136
+    },
+    {
+      "path": "apps/api/src/modules/session/supabase-auth.ts",
+      "bytes": 1841,
+      "sha256": "c69e36fb4dca54f16f698eb66239de7c0182ab4106af634d6d49a94a2fdecee2",
+      "method": "full text semantic second review",
+      "lines": 68
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-route-auth.ts",
+      "bytes": 4917,
+      "sha256": "e5c7b27bc0c85eae367793e111712e7aa45fe962a1121d42b8209261044a96ab",
+      "method": "full text semantic second review",
+      "lines": 168
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-permissions.ts",
+      "bytes": 4597,
+      "sha256": "6271f949e85f98ad4cae850783dee755cb50c46094157d90b5e7b2169ea8e022",
+      "method": "full text semantic second review",
+      "lines": 125
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-mapper-utils.ts",
+      "bytes": 1689,
+      "sha256": "a5319dbb5624d375f56905703be4a8752dc200ab53140bda1ea649ee41527aad",
+      "method": "full text semantic second review",
+      "lines": 60
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-feature-flag.ts",
+      "bytes": 3025,
+      "sha256": "0531aee850f8fd5e1dcd8c26ea30965f542c7e021fbfdd4fd8fc836a7f1510d2",
+      "method": "full text semantic second review",
+      "lines": 99
+    },
+    {
+      "path": "apps/api/src/modules/admin/admin-repository-event-ops.ts",
+      "bytes": 9545,
+      "sha256": "6b8d266aa812d893c57319ff56e7812539b4af39a97d401aa9c94d705d2ce189",
+      "method": "full text semantic second review",
+      "lines": 296
+    },
+    {
+      "path": "apps/web/app/age/age-session-panel.tsx",
+      "bytes": 2550,
+      "sha256": "b45ada846347c2f32d9e9a4ad46f173fd9b0588fc50d0fefd75f73709e630a13",
+      "method": "full text semantic second review",
+      "lines": 78
+    },
+    {
+      "path": "apps/web/app/age/page.tsx",
+      "bytes": 1953,
+      "sha256": "a8824b683e9314ef2a9849e8c9da6a43e65fd94e7ebe0ded7c723f90c49ebde2",
+      "method": "full text semantic second review",
+      "lines": 49
+    },
+    {
+      "path": "apps/web/app/age/callback/route.ts",
+      "bytes": 761,
+      "sha256": "fc8c71e7e542c95e490d0b22c7c5b43f8db276d4ebfd5245f2c3b68394a277e8",
+      "method": "full text semantic second review",
+      "lines": 17
+    },
+    {
+      "path": "apps/web/app/app/create/adult-publisher-gate.tsx",
+      "bytes": 2637,
+      "sha256": "c4302442db0184d8452208885241648550c4b71e6c87752b2fd53b49445bb1f5",
+      "method": "full text semantic second review",
+      "lines": 67
+    },
+    {
+      "path": "apps/web/package.json",
+      "bytes": 1535,
+      "sha256": "ec72e75a0ec8ee16fa49946539557ae74fab0367398284eb5e10bdb300969085",
+      "method": "full text semantic second review",
+      "lines": 49
+    }
+  ]
+}

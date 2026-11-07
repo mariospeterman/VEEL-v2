@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { ApiMutationError, createContentUnlockIntent } from "@/api-mutations";
 import { PaymentHandoffPanel } from "@/payment-handoff-panel";
 
@@ -9,6 +10,7 @@ interface ContentUnlockPanelProps {
 }
 
 export function ContentUnlockPanel({ contentId, accessState }: ContentUnlockPanelProps) {
+  const router = useRouter();
   const needsUnlock = accessState === "locked" || accessState === "teaser";
 
   return (
@@ -30,8 +32,10 @@ export function ContentUnlockPanel({ contentId, accessState }: ContentUnlockPane
             }}
             ctaLabel="Unlock content"
             idleCopy="Review the exact price and terms, then approve in your wallet. Access appears after the payment is confirmed."
+            onConfirmed={() => router.refresh()}
             pendingLabel="Preparing unlock"
             readyCopy="Your confirmed access will appear here automatically."
+            recoveryScope={`content_unlock:${contentId}`}
           />
         ) : (
           <p className="text-sm leading-6 text-(--muted)">{accessState === "pass_required" ? "This post is included with its related Event Access Pass." : "You already have access to the full post."}</p>

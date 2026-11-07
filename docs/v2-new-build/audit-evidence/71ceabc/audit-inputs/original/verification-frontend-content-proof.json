@@ -1,0 +1,16 @@
+{
+  "sourceSha": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "carouselLookup": {
+    "engine": "actual compiled repository method on reduced PGlite schema; state transition supplied by fixture, not full sync route",
+    "processingFound": true,
+    "readyFound": false
+  },
+  "offlineLogicalIdentity": {
+    "engine": "actual source helper functions TypeScript-transpiled in VM; UI state transition traced statically, no browser",
+    "newIdenticalCompositions": 2,
+    "generatedKeys": 1,
+    "persistedQueueEntries": 1,
+    "firstKey": "operation-1",
+    "secondKey": "operation-1"
+  }
+}

@@ -1,0 +1,5 @@
+
+> veel-shoot-own-shine@0.0.0 frontend:affordances /workspace/scratch/0635fbdaf32f/wevid-audit
+> node scripts/check-frontend-affordances.mjs
+
+Frontend affordance ownership check passed (113 TSX files).

@@ -1,24 +1,39 @@
-import { createHash, createHmac } from "node:crypto";
+import {
+  constants,
+  createECDH,
+  createHash,
+  createHmac,
+  generateKeyPairSync,
+  sign
+} from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
+import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import nacl from "tweetnacl";
 import sharp from "sharp";
 import { buildApi } from "../src/app";
 import { AdminRepositoryStateConflictError } from "../src/modules/admin/admin-repository";
+import { MutationCommandIdempotencyConflictError } from "../src/shared/mutation-command-receipt";
+import { PaymentSubmissionWriteConflictError } from "../src/modules/payment/payment-submission";
 import type { AdminRepository } from "../src/modules/admin/types";
 import type { ActivityRepository } from "../src/modules/activity/types";
 import { createBunnyStreamUploadAdapter } from "../src/modules/content/media-upload-adapter";
-import { StaleFeedCursorError } from "../src/modules/content/content-feed-cursor";
 import {
-  ContentDraftPollCloseError,
+  decodeFeedCursor,
+  StaleFeedCursorError
+} from "../src/modules/content/content-feed-cursor";
+import {
   ContentDraftQuotaExceededError,
+  ContentFormatRetiredError,
   ContentImageUploadConflictError
 } from "../src/modules/content/content-repository";
 import type {
   ContentItem,
   ContentRepository,
   CompleteImageAssetUploadInput,
-  CreateMediaAssetInput,
   MediaUploadProviderAdapter,
   ReserveImageAssetUploadInput
 } from "../src/modules/content/types";
@@ -30,11 +45,13 @@ import type {
 import type { AiRepository, AiSession, AiToolCall } from "../src/modules/ai/types";
 import {
   WalletAuthAccountNotFoundError,
+  WalletAuthChallengeInvalidError,
   WalletRecoveryCredentialRequiredError,
   WalletRecoveryLinkConflictError,
   type WalletAuthRepository
 } from "../src/modules/auth/wallet-auth-repository";
 import type { ProfileRepository } from "../src/modules/profile/types";
+import { ProfileIdempotencyConflictError } from "../src/modules/profile/profile-errors";
 import type { ReferralRepository } from "../src/modules/referral/types";
 import type { RefundRepository } from "../src/modules/refund/types";
 import type {
@@ -445,6 +462,10 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       authenticated: true,
+      clientSessionScope: createHash("sha256")
+        .update("wevid-client-session-scope:v1\0", "utf8")
+        .update("00000000-0000-4000-8000-000000000099", "utf8")
+        .digest("base64url"),
       appAccessState: {
         allowed: true,
         reason: "ready"
@@ -770,6 +791,60 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("maps a concurrent wallet-proof loser to the documented invalid-proof response", async () => {
+    const keyPair = nacl.sign.keyPair();
+    const address = bs58.encode(keyPair.publicKey);
+    const message = "single-use-wallet-auth-message";
+    const signature = Buffer.from(
+      nacl.sign.detached(new TextEncoder().encode(message), keyPair.secretKey)
+    ).toString("base64");
+    const app = await buildApi({
+      walletAuthRepository: fakeWalletAuthRepository({
+        async findChallenge() {
+          return {
+            id: "00000000-0000-4000-8000-000000000703",
+            chain: "solana_devnet",
+            provider: "phantom",
+            purpose: "login",
+            address,
+            message,
+            expiresAt: new Date(Date.now() + 60_000),
+            consumedAt: null
+          };
+        },
+        async createSessionFromChallenge() {
+          throw new WalletAuthChallengeInvalidError();
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/wallet/sessions",
+      payload: {
+        address,
+        chain: "solana_devnet",
+        provider: "phantom",
+        purpose: "login",
+        proof: {
+          challengeId: "00000000-0000-4000-8000-000000000703",
+          message,
+          signature,
+          signatureEncoding: "base64"
+        }
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      code: "validation_failed",
+      message: "Wallet auth challenge is invalid"
+    });
+    expect(response.headers["set-cookie"]).toBeUndefined();
+    await app.close();
+  });
+
   it("creates a short-lived recovery link intent from a recent application session", async () => {
     const intents: unknown[] = [];
     const app = await buildApi({
@@ -864,14 +939,23 @@ describe("buildApi", () => {
   });
 
   it("rejects recovery exchange when the provider identity belongs to another account", async () => {
+    const exchangeCalls: Array<Parameters<WalletAuthRepository["exchangeRecoveryIdentity"]>[0]> = [];
+    const authenticatedAt = new Date("2026-06-06T12:00:00.000Z");
     const app = await buildApi({
       recoveryIdentityVerifier: {
         async verifyToken() {
-          return { provider: "supabase", providerSubject: "00000000-0000-4000-8000-000000000002", email: "maki@example.test" };
+          return {
+            provider: "supabase",
+            providerSubject: "00000000-0000-4000-8000-000000000002",
+            providerSessionId: "00000000-0000-4000-8000-000000000003",
+            authenticatedAt,
+            email: "maki@example.test"
+          };
         }
       },
       walletAuthRepository: fakeWalletAuthRepository({
-        async exchangeRecoveryIdentity() {
+        async exchangeRecoveryIdentity(input) {
+          exchangeCalls.push(input);
           throw new WalletRecoveryLinkConflictError();
         }
       })
@@ -892,6 +976,11 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
       code: "conflict"
+    });
+    expect(exchangeCalls[0]).toMatchObject({
+      providerSubject: "00000000-0000-4000-8000-000000000002",
+      providerSessionId: "00000000-0000-4000-8000-000000000003",
+      providerAuthenticatedAt: authenticatedAt
     });
 
     await app.close();
@@ -1049,6 +1138,10 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       authenticated: true,
+      clientSessionScope: createHash("sha256")
+        .update("wevid-client-session-scope:v1\0", "utf8")
+        .update("00000000-0000-4000-8000-000000000099", "utf8")
+        .digest("base64url"),
       appAccessState: {
         allowed: false,
         reason: "identity_required"
@@ -1128,8 +1221,12 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       id: "age-session-provider-ref-1",
       provider: "yoti",
+      providerReference: "age-session-provider-ref-1",
       launchUrl: "https://age.example.test/session/age-session-provider-ref-1",
-      expiresAt: "2026-06-03T22:15:00.000Z"
+      expiresAt: "2026-06-03T22:15:00.000Z",
+      launchState: "ready",
+      status: "pending",
+      resumable: false
     });
     expect(createdPendingVerifications).toEqual([
       {
@@ -1146,7 +1243,7 @@ describe("buildApi", () => {
   });
 
   it("starts a configured Yoti age session through the real provider adapter", async () => {
-    vi.stubEnv("AGE_VERIFICATION_DRIVER", "yoti_digital_id");
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "yoti");
     vi.stubEnv("YOTI_SDK_ID", "yoti-sdk-id");
     vi.stubEnv("YOTI_API_TOKEN", "yoti-api-token");
     vi.stubEnv("YOTI_API_BASE_URL", "https://age.yoti.example/api/v1");
@@ -1209,13 +1306,17 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       id: "yoti-session-1",
       provider: "yoti",
+      providerReference: "yoti-session-1",
       launchUrl: "https://age.yoti.example?sessionId=yoti-session-1&sdkId=yoti-sdk-id",
-      expiresAt: "2026-06-03T22:15:00.000Z"
+      expiresAt: "2026-06-03T22:15:00.000Z",
+      launchState: "ready",
+      status: "pending",
+      resumable: false
     });
     expect(fetchCalls[0]?.url).toBe("https://age.yoti.example/api/v1/sessions");
     expect(fetchCalls[0]?.init?.method).toBe("POST");
     expect(JSON.parse(String(fetchCalls[0]?.init?.body))).toMatchObject({
-      reference_id: "age-yoti-test-1",
+      reference_id: "user:00000000-0000-4000-8000-000000000001",
       notification_url: "http://localhost:4000/v1/webhooks/age/yoti"
     });
     expect(createdPendingVerifications).toMatchObject([
@@ -1233,6 +1334,7 @@ describe("buildApi", () => {
   });
 
   it("starts a configured Didit age session through the real provider adapter", async () => {
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "didit");
     vi.stubEnv("DIDIT_API_KEY", "didit-api-key");
     vi.stubEnv("DIDIT_AGE_WORKFLOW_ID", "didit-age-workflow");
     vi.stubEnv("DIDIT_API_BASE_URL", "https://verification.didit.example");
@@ -1300,8 +1402,12 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       id: "didit-age-session-1",
       provider: "didit",
+      providerReference: "didit-age-session-1",
       launchUrl: "https://verification.didit.example/session/didit-age-session-1",
-      expiresAt: "2026-06-04T22:00:00.000Z"
+      expiresAt: "2026-06-04T22:00:00.000Z",
+      launchState: "ready",
+      status: "pending",
+      resumable: false
     });
     expect(fetchCalls[0]?.url).toBe("https://verification.didit.example/v3/session/");
     expect(fetchCalls[0]?.init?.method).toBe("POST");
@@ -1332,9 +1438,56 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("creates a Sumsub hosted WebSDK link instead of exposing an SDK token on the callback URL", async () => {
+    vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "sumsub");
+    vi.stubEnv("SUMSUB_APP_TOKEN", "sumsub-app-token");
+    vi.stubEnv("SUMSUB_SECRET_KEY", "sumsub-secret");
+    vi.stubEnv("SUMSUB_LEVEL_NAME", "sumsub-age-level");
+    vi.stubEnv("SUMSUB_API_BASE_URL", "https://api.sumsub.example");
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => new Response(JSON.stringify({
+      url: "https://in.sumsub.example/websdk/p/launch-1"
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({ async onFind() { return null; } }),
+      ageRepository: pendingAgeSessionRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/age/sessions",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "age-sumsub-1" },
+      payload: { providerPreference: "sumsub" }
+    });
+
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(201);
+    expect(response.json().launchUrl).toBe("https://in.sumsub.example/websdk/p/launch-1");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      "https://api.sumsub.example/resources/sdkIntegrations/levels/-/websdkLink"
+    );
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      levelName: "sumsub-age-level",
+      userId: "user:00000000-0000-4000-8000-000000000001",
+      ttlInSecs: 1800,
+      redirect: {
+        successUrl: "http://localhost:3000/age/callback",
+        rejectUrl: "http://localhost:3000/age/callback"
+      }
+    });
+    expect(response.json().launchUrl).not.toContain("token=");
+
+    await app.close();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
   it("creates Persona and Veriff sessions through the real provider waterfall when explicitly selected", async () => {
     vi.setSystemTime(new Date("2026-06-03T22:00:00.000Z"));
-    const personaFetch = vi.fn(async () =>
+    const personaFetch = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) =>
       new Response(
         JSON.stringify({
           data: {
@@ -1383,6 +1536,13 @@ describe("buildApi", () => {
       id: "persona-inquiry-1",
       provider: "persona",
       launchUrl: "https://withpersona.example/i/persona-inquiry-1"
+    });
+    expect(personaFetch).toHaveBeenCalledTimes(2);
+    expect(String(personaFetch.mock.calls[1]?.[0])).toBe(
+      "https://withpersona.example/api/v1/inquiries/persona-inquiry-1/generate-one-time-link"
+    );
+    expect(personaFetch.mock.calls[0]?.[1]?.headers).toMatchObject({
+      "persona-version": "2026-09-29"
     });
     await personaApp.close();
     vi.unstubAllEnvs();
@@ -1486,7 +1646,7 @@ describe("buildApi", () => {
     expect(recordedEvents).toMatchObject([
       {
         provider: "sumsub",
-        providerEventId: "sumsub-event",
+        providerEventId: sumsubEventId(rawPayload),
         eventType: "applicantReviewed",
         state: "verified"
       }
@@ -1494,7 +1654,7 @@ describe("buildApi", () => {
     expect(appliedEvents).toMatchObject([
       {
         provider: "sumsub",
-        providerEventId: "sumsub-event",
+        providerEventId: sumsubEventId(rawPayload),
         providerReference: "sumsub-applicant",
         state: "verified"
       }
@@ -1630,6 +1790,154 @@ describe("buildApi", () => {
 
     await app.close();
     vi.unstubAllEnvs();
+  });
+
+  it.each([undefined, "HMAC_SHA999_HEX"])(
+    "rejects Sumsub age webhooks when the declared digest algorithm is %s",
+    async (digestAlgorithm) => {
+      vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
+      const app = await buildApi({
+        authVerifier: fakeAuthVerifier,
+        ageRepository: requiredAgeRepository
+      });
+      await app.ready();
+      const rawPayload = JSON.stringify({
+        type: "applicantReviewed",
+        applicantId: "sumsub-applicant",
+        correlationId: "sumsub-event"
+      });
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        "x-payload-digest": sumsubDigest(rawPayload)
+      };
+      if (digestAlgorithm) headers["x-payload-digest-alg"] = digestAlgorithm;
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/webhooks/age/sumsub",
+        headers,
+        payload: rawPayload
+      });
+
+      expect(response.statusCode).toBe(401);
+
+      await app.close();
+      vi.unstubAllEnvs();
+    }
+  );
+
+  it("acknowledges Yoti only after authenticated result retrieval and ignores notification sequence/state", async () => {
+    const keyDirectory = mkdtempSync(join(tmpdir(), "wevid-yoti-webhook-"));
+    const publicKeyPath = join(keyDirectory, "notification-public.pem");
+    const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    writeFileSync(
+      publicKeyPath,
+      publicKey.export({ type: "spki", format: "pem" })
+    );
+    vi.stubEnv("YOTI_NOTIFICATION_KEY_PATH", publicKeyPath);
+    vi.stubEnv("AGE_VERIFICATION_DRIVER", "yoti");
+    vi.stubEnv("YOTI_SDK_ID", "yoti-sdk-id");
+    vi.stubEnv("YOTI_API_TOKEN", "yoti-api-token");
+    vi.stubEnv("YOTI_API_BASE_URL", "https://age.yoti.example/api/v1");
+    vi.stubEnv("YOTI_LAUNCH_BASE_URL", "https://age.yoti.example");
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      id: "test-session-key",
+      status: "COMPLETE",
+      result: "PASS",
+      method: "AGE_ESTIMATION",
+      reference_id: "age-yoti-test-1",
+      updated_at: "2026-11-06T12:00:00.123456Z",
+      expires_at: "2026-11-06T12:15:00.123456Z"
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const appliedEvents: unknown[] = [];
+    const ageRepository: AgeRepository = {
+      ...requiredAgeRepository,
+      async applyProviderWebhook() {
+        throw new Error("Yoti notification state must not be applied directly");
+      },
+      async applyProviderReconciliation(input) {
+        appliedEvents.push(input);
+        return true;
+      }
+    };
+    const app = await buildApi({ authVerifier: fakeAuthVerifier, ageRepository });
+
+    try {
+      await app.ready();
+      const signedPayload = {
+        method: "AGE_ESTIMATION",
+        age: 22,
+        session_key: "test-session-key",
+        reference_id: "age-yoti-test-1",
+        id: "2480375e-ddc0-4832-9b82-b1d14af5cf75",
+        timestamp: 1_793_792_000,
+        state: "FAIL"
+      };
+      const signature = sign(
+        "sha256",
+        Buffer.from(JSON.stringify(signedPayload).replace(/\s/g, "")),
+        {
+          key: privateKey,
+          padding: constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: constants.RSA_PSS_SALTLEN_DIGEST
+        }
+      ).toString("base64");
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/webhooks/age/yoti",
+        headers: { "content-type": "application/json" },
+        payload: JSON.stringify({ ...signedPayload, sequence_number: 999, signature })
+      });
+
+      expect(response.statusCode, JSON.stringify(response.json())).toBe(200);
+      expect(response.json()).toEqual({
+        provider: "yoti",
+        received: 1,
+        processed: 1
+      });
+      expect(appliedEvents).toMatchObject([
+        {
+          provider: "yoti",
+          providerEventId: "test-session-key:authenticated:COMPLETE:2026-11-06T12:00:00.123456Z",
+          providerReference: "test-session-key",
+          status: "valid"
+        }
+      ]);
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://age.yoti.example/api/v1/sessions/test-session-key/result",
+        expect.objectContaining({
+          method: "GET",
+          headers: expect.objectContaining({
+            authorization: "Bearer yoti-api-token",
+            "yoti-sdk-id": "yoti-sdk-id"
+          })
+        })
+      );
+    } finally {
+      await app.close();
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
+      rmSync(keyDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("does not expose an open-ended age provider webhook route", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      ageRepository: requiredAgeRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/webhooks/age/persona",
+      payload: {}
+    });
+
+    expect(response.statusCode).toBe(404);
+    await app.close();
   });
 
   it("fails closed when no age provider is configured", async () => {
@@ -1888,7 +2196,7 @@ describe("buildApi", () => {
           providerReference: expect.stringContaining("mock-verification:creator_kyc"),
           method: "gov_id_selfie",
           assuranceLevel: "documentary",
-          reusable: true
+          reusable: false
         }
       }
     ]);
@@ -2159,10 +2467,17 @@ describe("buildApi", () => {
           "reference-id": "org:00000000-0000-4000-8000-000000000090",
           note: "WeVid organization KYB"
         }
-      },
-      meta: {
-        "redirect-uri": "http://localhost:3000/app/profile?verification=organization"
       }
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
+      "https://withpersona.example/api/v1/inquiries/persona-org-inquiry-1/generate-one-time-link"
+    );
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      meta: { "redirect-uri": "http://localhost:3000/app/profile?verification=organization" }
+    });
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
+      "persona-version": "2026-09-29"
     });
     expect(createdSessions).toMatchObject([
       {
@@ -2229,18 +2544,82 @@ describe("buildApi", () => {
     expect(recordedEvents).toMatchObject([
       {
         provider: "sumsub",
-        providerEventId: "sumsub-event",
+        providerEventId: sumsubEventId(rawPayload),
         eventType: "applicantReviewed"
       }
     ]);
     expect(appliedEvents).toMatchObject([
       {
         provider: "sumsub",
-        providerEventId: "sumsub-event",
+        providerEventId: sumsubEventId(rawPayload),
         providerReference: "sumsub-applicant",
         status: "valid"
       }
     ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps distinct Sumsub decisions that share a correlation id", async () => {
+    vi.stubEnv("SUMSUB_WEBHOOK_SECRET", "sumsub-test-secret");
+    const appliedEvents: Parameters<VerificationRepository["applyProviderWebhook"]>[0][] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      verificationRepository: {
+        ...verificationRepositoryStub(),
+        async applyProviderWebhook(input) {
+          appliedEvents.push(input);
+          return "applied";
+        }
+      }
+    });
+    await app.ready();
+    const payloads = [
+      {
+        type: "applicantReviewed",
+        applicantId: "sumsub-applicant",
+        externalUserId: "wevid:user:00000000-0000-4000-8000-000000000001:creator_kyc",
+        correlationId: "shared-correlation",
+        reviewResult: { reviewAnswer: "GREEN" },
+        createdAt: "2026-06-06 01:00:00+0000"
+      },
+      {
+        type: "applicantReviewed",
+        applicantId: "sumsub-applicant",
+        externalUserId: "wevid:user:00000000-0000-4000-8000-000000000001:creator_kyc",
+        correlationId: "shared-correlation",
+        reviewResult: { reviewAnswer: "RED" },
+        createdAt: "2026-06-06 01:01:00+0000"
+      }
+    ];
+
+    for (const payload of payloads) {
+      const rawPayload = JSON.stringify(payload);
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/webhooks/verification/sumsub",
+        headers: {
+          "content-type": "application/json",
+          "x-payload-digest": sumsubDigest(rawPayload),
+          "x-payload-digest-alg": "HMAC_SHA256_HEX"
+        },
+        payload: rawPayload
+      });
+
+      expect(response.statusCode, JSON.stringify(response.json())).toBe(202);
+    }
+
+    expect(appliedEvents).toHaveLength(2);
+    expect(appliedEvents.map((event) => event.providerEventId)).toEqual(
+      payloads.map((payload) => sumsubEventId(JSON.stringify(payload)))
+    );
+    expect(new Set(appliedEvents.map((event) => event.providerEventId)).size).toBe(2);
+    expect(appliedEvents.map((event) => event.providerCorrelationId)).toEqual([
+      "shared-correlation",
+      "shared-correlation"
+    ]);
+    expect(appliedEvents.map((event) => event.status)).toEqual(["valid", "blocked"]);
 
     await app.close();
     vi.unstubAllEnvs();
@@ -2410,7 +2789,6 @@ describe("buildApi", () => {
       payload: {
         handle: "maki",
         displayName: "Maki",
-        avatarUrl: "https://media.example.test/avatar.jpg",
         links: [{ label: "Website", url: "https://veel.example.test/maki" }],
         bio: "Building Veel v2"
       }
@@ -2422,9 +2800,35 @@ describe("buildApi", () => {
       id: "00000000-0000-4000-8000-000000000010",
       handle: "maki",
       displayName: "Maki",
-      avatarUrl: "https://media.example.test/avatar.jpg",
+      avatarUrl: null,
       badges: []
     });
+
+    await app.close();
+  });
+
+  it("rejects profile avatar URL mutation outside the private avatar authority", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      profileRepository: fakeProfileRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/profiles/me",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "profile-avatar-bypass"
+      },
+      payload: {
+        handle: "maki",
+        avatarUrl: "https://tracking.example.test/avatar.jpg"
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: "validation_failed" });
 
     await app.close();
   });
@@ -2499,6 +2903,36 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("fails closed instead of publishing unsanitized profile avatars", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/profiles/me/avatar",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "profile-avatar-private-boundary-1"
+      },
+      payload: {
+        contentType: "image/png",
+        dataBase64: Buffer.from("claimed-not-decoded-image-bytes").toString("base64"),
+        fileName: "avatar.png"
+      }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({
+      code: "service_unavailable",
+      message: "Profile pictures are temporarily unavailable; continue without one"
+    });
+    expect(response.body).not.toContain("avatarUrl");
+
+    await app.close();
+  });
+
   it("rejects profile updates without an idempotency key", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -2526,6 +2960,45 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
       code: "validation_failed"
+    });
+
+    await app.close();
+  });
+
+  it("returns conflict when a profile idempotency key is reused with changed input", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return null;
+        }
+      }),
+      profileRepository: {
+        ...fakeProfileRepository,
+        async upsertMyProfile() {
+          throw new ProfileIdempotencyConflictError();
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/profiles/me",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "profile-reused-key"
+      },
+      payload: {
+        handle: "maki",
+        displayName: "Changed input"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      code: "conflict",
+      message: "Idempotency key was already used for a different profile update"
     });
 
     await app.close();
@@ -2657,9 +3130,12 @@ describe("buildApi", () => {
         blockedReasons: ["earnings_recipient_wallet_required"]
       },
       earnings: {
-        creatorEarningsMinor: 85000000,
-        platformFeesMinor: 15000000,
-        referralCommissionsMinor: 5000000
+        assets: [{
+          currency: "SOL",
+          creatorEarningsAtomic: "85000000",
+          platformFeesAtomic: "15000000",
+          referralCommissionsAtomic: "5000000"
+        }]
       }
     });
 
@@ -3145,7 +3621,7 @@ describe("buildApi", () => {
       async listHomeFeed(input) {
         expect(input).toEqual({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
-          mode: "recommended",
+          mode: "latest",
           surface: "home",
           limit: 20
         });
@@ -3153,9 +3629,9 @@ describe("buildApi", () => {
         return {
           items: [homeFeedItem],
           nextCursor: null,
-          mode: "recommended",
+          mode: "latest",
           surface: "home",
-          rankingVersion: "deterministic_v1",
+          rankingVersion: "chronological_v1",
           generatedAt: "2026-06-05T12:00:00.000Z"
         };
       }
@@ -3190,11 +3666,11 @@ describe("buildApi", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      items: [homeFeedItem],
+      items: [{ ...homeFeedItem, posterUrl: null }],
       nextCursor: null,
-      mode: "recommended",
+      mode: "latest",
       surface: "home",
-      rankingVersion: "deterministic_v1",
+      rankingVersion: "chronological_v1",
       generatedAt: "2026-06-05T12:00:00.000Z"
     });
 
@@ -3205,7 +3681,7 @@ describe("buildApi", () => {
     const storedPlaybackUrl =
       "https://vz-example.b-cdn.net/11111111-1111-4111-8111-111111111111/playlist.m3u8";
     const signedPlaybackUrl =
-      "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900";
+      "https://player.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900";
     const feedItem: ContentItem = {
       ...homeFeedItem,
       creator: {
@@ -3230,9 +3706,9 @@ describe("buildApi", () => {
         return {
           items: [feedItem],
           nextCursor: null,
-          mode: "recommended",
+          mode: "latest",
           surface: "home",
-          rankingVersion: "deterministic_v1",
+          rankingVersion: "chronological_v1",
           generatedAt: "2026-06-05T12:00:00.000Z"
         };
       }
@@ -3281,7 +3757,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("requires a first-page refresh when mutable feed ranking inputs changed", async () => {
+  it("requires a first-page refresh for a retired ranked-feed cursor", async () => {
     const contentRepository: ContentRepository = {
       async createDraft() { throw new Error("not implemented"); },
       async createMediaAsset() { throw new Error("not implemented"); },
@@ -3319,7 +3795,53 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({
       code: "feed_cursor_stale",
-      message: "Feed ranking changed; restart from the first page"
+      message: "This cursor belongs to the retired ranked feed; restart from the first page"
+    });
+    await app.close();
+  });
+
+  it("maps a JSON-null feed cursor to the documented client error", async () => {
+    const contentRepository: ContentRepository = {
+      async createDraft() { throw new Error("not implemented"); },
+      async createMediaAsset() { throw new Error("not implemented"); },
+      async findContentDetail() { throw new Error("not implemented"); },
+      async findContentUnlockOffer() { throw new Error("not implemented"); },
+      async findOwnedContentForUpload() { throw new Error("not implemented"); },
+      async listHomeFeed(input) {
+        decodeFeedCursor(input.cursor ?? "", "test-feed-scope");
+        throw new Error("unreachable");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      walletRepository: walletRepositoryWithWallet,
+      contentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/content/feed?cursor=${Buffer.from("null").toString("base64url")}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      code: "validation_failed",
+      message: "Invalid feed cursor"
     });
     await app.close();
   });
@@ -3393,7 +3915,7 @@ describe("buildApi", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual(lockedContent);
+    expect(response.json()).toEqual({ ...lockedContent, posterUrl: null });
     expect(response.json().playback.url).toBeNull();
 
     await app.close();
@@ -3442,7 +3964,7 @@ describe("buildApi", () => {
 
         return {
           state: "full",
-          url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
+          url: "https://player.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
           provider: "bunny",
           resourceType: "embed",
           expiresAt: "2026-02-02T10:15:00.000Z"
@@ -3481,7 +4003,7 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().playback).toEqual({
       state: "full",
-      url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
+      url: "https://player.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
       provider: "bunny",
       resourceType: "embed",
       expiresAt: "2026-02-02T10:15:00.000Z"
@@ -3496,7 +4018,7 @@ describe("buildApi", () => {
     const storedUrl = (providerAssetId: string) =>
       `https://vz-example.b-cdn.net/${providerAssetId}/playlist.m3u8`;
     const signedUrl = (providerAssetId: string) =>
-      `https://iframe.mediadelivery.net/embed/123/${providerAssetId}?token=signed`;
+      `https://player.mediadelivery.net/embed/123/${providerAssetId}?token=signed`;
     const carousel: ContentItem = {
       ...homeFeedItem,
       mediaType: "carousel",
@@ -3584,7 +4106,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("attaches public-media accounting and blocks signed playback when allowance is exhausted", async () => {
+  it("requires an idempotent server lease before signed public playback and does not debit on repeated reads", async () => {
     const publicVod: ContentItem = {
       ...homeFeedItem,
       creator: {
@@ -3606,15 +4128,20 @@ describe("buildApi", () => {
       async createUploadSession() {
         throw new Error("not implemented");
       },
-      createPlaybackResource() {
+      createPlaybackResource(input) {
+        const issuedAt = input.now ?? new Date();
+        const expiresAt = input.expiresAt ?? new Date(issuedAt.getTime() + 900_000);
         return {
           state: "full",
-          url: "https://iframe.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
+          url: "https://player.mediadelivery.net/embed/123/11111111-1111-4111-8111-111111111111?token=signed&expires=1770000900",
           provider: "bunny",
-          resourceType: "embed"
+          resourceType: "embed",
+          expiresAt: expiresAt.toISOString()
         };
       }
     };
+    let leaseExpiresAt: string | null = null;
+    const sessionStarts: unknown[] = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -3624,11 +4151,50 @@ describe("buildApi", () => {
       mediaUploadProvider,
       subscriptionRepository: fakeSubscriptionRepository({
         async onGetPlatformPlaybackDecision() {
-          return { countsTowardAllowance: true, limitReached: false };
+          return {
+            countsTowardAllowance: true,
+            limitReached: false,
+            leaseRequired: true,
+            leaseExpiresAt
+          };
+        },
+        async onCreatePlatformPlaybackSession(input) {
+          sessionStarts.push(input);
+          leaseExpiresAt = new Date(Date.now() + 900_000).toISOString();
+          return platformPlaybackSessionFixture();
         }
       })
     });
     await app.ready();
+
+    const beforeLease = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(beforeLease.statusCode).toBe(200);
+    expect(beforeLease.json().playback).toMatchObject({
+      state: "blocked",
+      url: null,
+      usage: {
+        policy: "public_media_allowance",
+        targetType: "content",
+        targetId: publicVod.id,
+        heartbeatIntervalSeconds: 15,
+        leaseExpiresAt: null
+      }
+    });
+
+    const start = await app.inject({
+      method: "POST",
+      url: "/v1/platform-usage/playback-sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "public-vod-lease-1"
+      },
+      payload: { targetType: "content", targetId: publicVod.id }
+    });
+    expect(start.statusCode).toBe(201);
 
     const accounted = await app.inject({
       method: "GET",
@@ -3636,12 +4202,33 @@ describe("buildApi", () => {
       headers: { authorization: "Bearer valid-token" }
     });
     expect(accounted.statusCode).toBe(200);
-    expect(accounted.json().playback.usage).toEqual({
+    expect(accounted.json().playback).toMatchObject({
+      state: "full",
+      url: expect.stringContaining("token=signed"),
+      usage: {
       policy: "public_media_allowance",
       targetType: "content",
       targetId: publicVod.id,
-      heartbeatIntervalSeconds: 15
+        heartbeatIntervalSeconds: 15,
+        leaseExpiresAt
+      }
     });
+
+    const repeatedRead = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(repeatedRead.json().playback.state).toBe("full");
+    expect(sessionStarts).toHaveLength(1);
+
+    leaseExpiresAt = null;
+    const afterExpiry = await app.inject({
+      method: "GET",
+      url: "/v1/content/00000000-0000-4000-8000-000000000040",
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(afterExpiry.json().playback).toMatchObject({ state: "blocked", url: null });
 
     await app.close();
 
@@ -3654,7 +4241,12 @@ describe("buildApi", () => {
       mediaUploadProvider,
       subscriptionRepository: fakeSubscriptionRepository({
         async onGetPlatformPlaybackDecision() {
-          return { countsTowardAllowance: true, limitReached: true };
+          return {
+            countsTowardAllowance: true,
+            limitReached: true,
+            leaseRequired: true,
+            leaseExpiresAt: null
+          };
         }
       })
     });
@@ -3917,7 +4509,6 @@ describe("buildApi", () => {
         expect(input).toEqual({
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           query: "studio",
-          cursor: undefined,
           limit: 12
         });
 
@@ -3927,7 +4518,13 @@ describe("buildApi", () => {
           hashtags: [{ slug: "studio", displayName: "#studio", state: "active" }],
           events: [eventFixture()],
           liveRooms: [liveRoomFixture({ state: "live", hasPass: false })],
-          nextCursor: null
+          nextCursors: {
+            content: null,
+            creators: null,
+            hashtags: null,
+            events: null,
+            liveRooms: null
+          }
         };
       },
       async listHashtags() {
@@ -3975,12 +4572,185 @@ describe("buildApi", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
-      content: [homeFeedItem],
+      content: [{
+        id: homeFeedItem.id,
+        posterUrl: null,
+        playback: { state: "not_ready", url: null, provider: "none" }
+      }],
       creators: [homeFeedItem.creator],
       hashtags: [{ slug: "studio", displayName: "#studio", state: "active" }],
       events: [eventFixture()],
       liveRooms: [{ title: "Live room", accessState: "event_access_required" }],
-      nextCursor: null
+      nextCursors: {
+        content: null,
+        creators: null,
+        hashtags: null,
+        events: null,
+        liveRooms: null
+      }
+    });
+
+    await app.close();
+  });
+
+  it("uses canonical signed delivery and fails closed for restricted Discover media", async () => {
+    const rawBunnyUrl = "https://player.mediadelivery.net/embed/library/00000000-0000-4000-8000-000000000201";
+    const rawLiveUrl = "https://livepeercdn.studio/hls/provider-playback-discover/index.m3u8";
+    const createPlaybackResource = vi.fn(() => ({
+      state: "full" as const,
+      url: "https://player.mediadelivery.net/embed/library/00000000-0000-4000-8000-000000000201?token=signed",
+      provider: "bunny" as const,
+      resourceType: "embed" as const,
+      expiresAt: "2026-11-04T13:00:00.000Z"
+    }));
+    const createPlaybackJwt = vi.fn(async () => "signed-live-jwt");
+    const unrestrictedContent: ContentItem = {
+      ...homeFeedItem,
+      id: "00000000-0000-4000-8000-000000000201",
+      creator: { ...homeFeedItem.creator, id: "00000000-0000-4000-8000-000000000011" },
+      mediaType: "vod",
+      posterUrl: null,
+      playback: { state: "full", url: rawBunnyUrl, provider: "bunny" }
+    };
+    const lockedSubscriberContent: ContentItem = {
+      ...unrestrictedContent,
+      id: "00000000-0000-4000-8000-000000000202",
+      posterUrl: "https://private.example.test/locked-poster.jpg",
+      accessState: "locked"
+    };
+    const exhaustedContent: ContentItem = {
+      ...unrestrictedContent,
+      id: "00000000-0000-4000-8000-000000000203"
+    };
+    const approvedLive = liveRoomFixture({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa21",
+      state: "live",
+      safetyState: "monitoring",
+      accessMode: "public",
+      accessState: "allowed",
+      hasPass: true,
+      playbackUrl: rawLiveUrl,
+      providerPlaybackId: "provider-playback-discover"
+    });
+    const rejectedLive = liveRoomFixture({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa22",
+      state: "live",
+      safetyState: "rejected",
+      accessMode: "public",
+      accessState: "allowed",
+      hasPass: true,
+      playbackUrl: "https://livepeercdn.studio/hls/rejected/index.m3u8",
+      providerPlaybackId: "rejected-playback"
+    });
+    const discoverRepository: DiscoverRepository = {
+      async search() {
+        return {
+          content: [unrestrictedContent, lockedSubscriberContent, exhaustedContent],
+          creators: [],
+          hashtags: [],
+          events: [],
+          liveRooms: [approvedLive, rejectedLive],
+          nextCursors: {
+            content: null,
+            creators: null,
+            hashtags: null,
+            events: null,
+            liveRooms: null
+          }
+        };
+      },
+      async listHashtags() { throw new Error("not implemented"); },
+      async getHashtag() { throw new Error("not implemented"); },
+      async listCreators() { throw new Error("not implemented"); },
+      async listEvents() { throw new Error("not implemented"); },
+      async listLive() { throw new Error("not implemented"); }
+    };
+    const mediaUploadProvider: MediaUploadProviderAdapter = {
+      provider: "bunny",
+      isConfigured: () => true,
+      async createUploadSession() { throw new Error("not implemented"); },
+      createPlaybackResource
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      discoverRepository,
+      mediaUploadProvider,
+      liveProvider: {
+        isConfigured: () => true,
+        async createRoom() { throw new Error("not implemented"); },
+        async getRoomStatus() { throw new Error("not implemented"); },
+        createPlaybackJwt,
+        async setRoomSuspended() {},
+        async terminateRoom() {}
+      },
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformPlaybackDecision(input) {
+          return input.targetId === exhaustedContent.id
+            ? {
+                countsTowardAllowance: true,
+                limitReached: true,
+                leaseRequired: true,
+                leaseExpiresAt: null
+              }
+            : {
+                countsTowardAllowance: false,
+                limitReached: false,
+                leaseRequired: false,
+                leaseExpiresAt: null
+              };
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/discover/search?q=studio",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.content).toMatchObject([
+      { id: unrestrictedContent.id, playback: { state: "full", url: expect.stringContaining("token=signed") } },
+      { id: lockedSubscriberContent.id, posterUrl: null, playback: { state: "blocked", url: null } },
+      { id: exhaustedContent.id, playback: { state: "blocked", url: null, blockReason: "allowance_exhausted" } }
+    ]);
+    expect(body.liveRooms).toMatchObject([
+      { id: approvedLive.id, playback: { state: "full", url: rawLiveUrl, jwt: "signed-live-jwt" } },
+      { id: rejectedLive.id, playback: { state: "blocked", url: null } }
+    ]);
+    expect(body.content[0]?.playback.url).not.toBe(rawBunnyUrl);
+    expect(JSON.stringify(body)).not.toContain("private.example.test/locked-poster.jpg");
+    expect(JSON.stringify(body)).not.toContain("/hls/rejected/");
+    expect(createPlaybackResource).toHaveBeenCalledTimes(1);
+    expect(createPlaybackJwt).toHaveBeenCalledTimes(1);
+
+    await app.close();
+  });
+
+  it("rejects the legacy mixed Discover cursor before repository queries", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/discover/search?q=studio&cursor=2026-11-04T12%3A30%3A00.000Z",
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      code: "validation_failed",
+      message: "Search requires a cursor for each result group"
     });
 
     await app.close();
@@ -4178,7 +4948,7 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("validates universal text and poll draft inputs before repository mutation", async () => {
+  it("validates legacy text and poll payload structure before repository mutation", async () => {
     let createCalls = 0;
     const contentRepository: ContentRepository = {
       async createDraft() {
@@ -4272,10 +5042,12 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("casts an authenticated poll vote through the backend authority", async () => {
+  it("rejects an authenticated poll vote through the retired backend authority", async () => {
     const optionId = "00000000-0000-4000-8000-000000000021";
     const contentId = "00000000-0000-4000-8000-000000000020";
-    let receivedInput: unknown;
+    const voteOnPoll = vi.fn(async () => {
+      throw new ContentFormatRetiredError();
+    });
     const contentRepository: ContentRepository = {
       async createDraft() { throw new Error("not implemented"); },
       async createMediaAsset() { throw new Error("not implemented"); },
@@ -4283,20 +5055,7 @@ describe("buildApi", () => {
       async findContentUnlockOffer() { throw new Error("not implemented"); },
       async findOwnedContentForUpload() { throw new Error("not implemented"); },
       async listHomeFeed() { throw new Error("not implemented"); },
-      async voteOnPoll(input) {
-        receivedInput = input;
-        return {
-          question: "Choose one",
-          options: [
-            { id: optionId, position: 0, text: "Photo", voteCount: 1 },
-            { id: "00000000-0000-4000-8000-000000000022", position: 1, text: "Video", voteCount: 0 }
-          ],
-          state: "open",
-          totalVoteCount: 1,
-          closesAt: null,
-          viewerOptionId: optionId
-        };
-      }
+      voteOnPoll
     };
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -4317,14 +5076,103 @@ describe("buildApi", () => {
       payload: { optionId }
     });
 
-    expect(response.statusCode, JSON.stringify(response.json())).toBe(200);
-    expect(response.json()).toMatchObject({ totalVoteCount: 1, viewerOptionId: optionId });
-    expect(receivedInput).toMatchObject({
+    expect(response.statusCode, JSON.stringify(response.json())).toBe(410);
+    expect(response.json()).toEqual({
+      code: "content_format_retired",
+      message: "Text and poll content formats are retired"
+    });
+    expect(voteOnPoll).toHaveBeenCalledWith(expect.objectContaining({
       appUserId: "00000000-0000-4000-8000-000000000010",
       contentId,
       optionId,
       idempotencyKey: "poll-vote-0001"
+    }));
+    await app.close();
+  });
+
+  it("maps retired text and poll write authorities to a deterministic gone response", async () => {
+    const retired = async () => {
+      throw new ContentFormatRetiredError();
+    };
+    const contentRepository: ContentRepository = {
+      ...contentRepositoryWithDetail(homeFeedItem),
+      createDraft: retired,
+      updateOwnedContent: retired,
+      async findOwnedContentForPublication() {
+        return {
+          id: contentId,
+          mediaType: "text",
+          caption: "Historical text",
+          nsfwLabel: "none"
+        };
+      },
+      publishOwnedContent: retired,
+      voteOnPoll: retired
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: sessionRepositoryWithProfile({
+        async onFind() {
+          return {
+            id: "00000000-0000-4000-8000-000000000010",
+            state: "active",
+            handle: "maki",
+            displayName: "Maki",
+            avatarUrl: null
+          };
+        }
+      }),
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      verificationRepository: creatorVerifiedVerificationRepository(),
+      contentRepository
     });
+    await app.ready();
+
+    const contentId = "00000000-0000-4000-8000-000000000020";
+    const optionId = "00000000-0000-4000-8000-000000000021";
+    const requests = [
+      app.inject({
+        method: "POST",
+        url: "/v1/content",
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "retired-create" },
+        payload: {
+          mediaType: "text",
+          bodyText: "A retired text post",
+          visibility: "private",
+          nsfwLabel: "none",
+          representationMode: "no_real_person",
+          contentSafetyPolicyAccepted: true
+        }
+      }),
+      app.inject({
+        method: "PATCH",
+        url: `/v1/content/${contentId}`,
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "retired-update" },
+        payload: { caption: "No new edits" }
+      }),
+      app.inject({
+        method: "POST",
+        url: `/v1/content/${contentId}/publish`,
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "retired-publish" },
+        payload: { confirmation: "submit_for_review" }
+      }),
+      app.inject({
+        method: "POST",
+        url: `/v1/content/${contentId}/poll-votes`,
+        headers: { authorization: "Bearer valid-token", "idempotency-key": "retired-vote" },
+        payload: { optionId }
+      })
+    ];
+
+    for (const response of await Promise.all(requests)) {
+      expect(response.statusCode, response.body).toBe(410);
+      expect(response.json()).toEqual({
+        code: "content_format_retired",
+        message: "Text and poll content formats are retired"
+      });
+    }
+
     await app.close();
   });
 
@@ -4395,77 +5243,6 @@ describe("buildApi", () => {
     expect(response.json()).toMatchObject({
       code: "rate_limited",
       message: "Daily content draft quota has been reached"
-    });
-
-    await app.close();
-  });
-
-  it("maps a poll close-time race from the repository to validation failure", async () => {
-    const contentRepository: ContentRepository = {
-      async createDraft() {
-        throw new ContentDraftPollCloseError();
-      },
-      async createMediaAsset() {
-        throw new Error("not implemented");
-      },
-      async findContentDetail() {
-        throw new Error("not implemented");
-      },
-      async findContentUnlockOffer() {
-        throw new Error("not implemented");
-      },
-      async findOwnedContentForUpload() {
-        throw new Error("not implemented");
-      },
-      async listHomeFeed() {
-        throw new Error("not implemented");
-      }
-    };
-    const app = await buildApi({
-      authVerifier: fakeAuthVerifier,
-      sessionRepository: sessionRepositoryWithProfile({
-        async onFind() {
-          return {
-            id: "00000000-0000-4000-8000-000000000010",
-            state: "active",
-            handle: "maki",
-            displayName: "Maki",
-            avatarUrl: null
-          };
-        }
-      }),
-      ageRepository: verifiedAgeRepository,
-      walletRepository: walletRepositoryWithWallet,
-      verificationRepository: creatorVerifiedVerificationRepository(),
-      contentRepository
-    });
-    await app.ready();
-
-    const response = await app.inject({
-      method: "POST",
-      url: "/v1/content",
-      headers: {
-        authorization: "Bearer valid-token",
-        "idempotency-key": "poll-close-race-1"
-      },
-      payload: {
-        mediaType: "poll",
-        visibility: "private",
-        nsfwLabel: "none",
-        representationMode: "no_real_person",
-        contentSafetyPolicyAccepted: true,
-        poll: {
-          question: "Still open?",
-          options: ["Yes", "No"],
-          closesAt: new Date(Date.now() + 60_000).toISOString()
-        }
-      }
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({
-      code: "validation_failed",
-      message: "poll closesAt must be a future ISO date-time or null"
     });
 
     await app.close();
@@ -4581,7 +5358,7 @@ describe("buildApi", () => {
           bodyTextProvided: false,
           expectedCompositionRevision: undefined,
           assetOrder: undefined,
-          requestHash: undefined,
+          requestHash: expect.stringMatching(/^[0-9a-f]{64}$/),
           visibility: "followers",
           distributionMode: undefined,
           scheduledFor: undefined,
@@ -4655,13 +5432,10 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("autosaves text drafts with an optimistic composition revision", async () => {
-    const updateOwnedContent = vi.fn(async () => ({
-      ...homeFeedItem,
-      mediaType: "text" as const,
-      bodyText: "Revised text",
-      compositionRevision: 2
-    }));
+  it("rejects text-draft autosave through the retired backend authority", async () => {
+    const updateOwnedContent = vi.fn(async () => {
+      throw new ContentFormatRetiredError();
+    });
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: sessionRepositoryWithProfile({ async onFind() {
@@ -4681,8 +5455,11 @@ describe("buildApi", () => {
       payload: { bodyText: " Revised text ", expectedCompositionRevision: 1 }
     });
 
-    expect(response.statusCode, response.body).toBe(200);
-    expect(response.json()).toMatchObject({ bodyText: "Revised text", compositionRevision: 2 });
+    expect(response.statusCode, response.body).toBe(410);
+    expect(response.json()).toEqual({
+      code: "content_format_retired",
+      message: "Text and poll content formats are retired"
+    });
     expect(updateOwnedContent).toHaveBeenCalledWith(expect.objectContaining({
       bodyText: "Revised text",
       bodyTextProvided: true,
@@ -4975,7 +5752,7 @@ describe("buildApi", () => {
           bodyTextProvided: false,
           expectedCompositionRevision: undefined,
           assetOrder: undefined,
-          requestHash: undefined,
+          requestHash: expect.stringMatching(/^[0-9a-f]{64}$/),
           visibility: undefined,
           distributionMode: undefined,
           scheduledFor: undefined,
@@ -5049,13 +5826,16 @@ describe("buildApi", () => {
       async findContentUnlockOffer() {
         throw new Error("not implemented");
       },
-      async findOwnedContentForUpload() {
+      async findOwnedContentForPublication() {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
           caption: "studio cut",
           nsfwLabel: "none"
         };
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
       },
       async listHomeFeed() {
         throw new Error("not implemented");
@@ -5065,6 +5845,7 @@ describe("buildApi", () => {
           supabaseUserId: "00000000-0000-4000-8000-000000000001",
           contentId: "00000000-0000-4000-8000-000000000040",
           idempotencyKey: "content-publish-1",
+          requestHash: expect.stringMatching(/^[0-9a-f]{64}$/),
           scheduledFor: "2099-08-25T12:00:00.000Z",
           scheduledForProvided: true
         });
@@ -5121,7 +5902,7 @@ describe("buildApi", () => {
     const publishOwnedContent = vi.fn();
     const contentRepository: ContentRepository = {
       ...contentRepositoryWithDetail(homeFeedItem),
-      async findOwnedContentForUpload() {
+      async findOwnedContentForPublication() {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
@@ -5184,13 +5965,16 @@ describe("buildApi", () => {
       async findContentUnlockOffer() {
         throw new Error("not implemented");
       },
-      async findOwnedContentForUpload() {
+      async findOwnedContentForPublication() {
         return {
           id: "00000000-0000-4000-8000-000000000040",
           mediaType: "vod",
           caption: "studio cut",
           nsfwLabel: "none"
         };
+      },
+      async findOwnedContentForUpload() {
+        throw new Error("not implemented");
       },
       async listHomeFeed() {
         throw new Error("not implemented");
@@ -5242,15 +6026,51 @@ describe("buildApi", () => {
   });
 
   it("uploads an adult draft before adult-publisher verification", async () => {
-    const createdAssets: CreateMediaAssetInput[] = [];
+    const uploadOperations: string[] = [];
+    let operationHash: string | null = null;
+    let operationCompleted = false;
     const contentRepository: ContentRepository = {
       async createDraft() {
         throw new Error("not implemented");
       },
-      async createMediaAsset(input) {
-        createdAssets.push(input);
-        return { id: "00000000-0000-4000-8000-000000000041" };
+      async createMediaAsset() { throw new Error("legacy video attach must not be used"); },
+      async reserveVideoAssetUpload(input) {
+        expect(input).toMatchObject({
+          contentId: "00000000-0000-4000-8000-000000000040",
+          idempotencyKey: "media-upload-1",
+          mimeType: "video/mp4",
+          dailyMediaUploadQuota: 30
+        });
+        if (operationHash && operationHash !== input.requestHash) {
+          throw new ContentImageUploadConflictError("idempotency_conflict");
+        }
+        operationHash = input.requestHash;
+        uploadOperations.push(operationCompleted ? "replayed" : "reserved");
+        return {
+          mediaAssetId: "00000000-0000-4000-8000-000000000041",
+          ...(operationCompleted
+            ? { state: "completed" as const, providerAssetId: "bunny-video-guid" }
+            : { state: "create_provider_asset" as const })
+        };
       },
+      async recordVideoUploadProviderAsset(input) {
+        expect(input.providerAssetId).toBe("bunny-video-guid");
+        uploadOperations.push("provider-recorded");
+        return {
+          mediaAssetId: "00000000-0000-4000-8000-000000000041",
+          providerAssetId: input.providerAssetId
+        };
+      },
+      async completeVideoAssetUpload() {
+        uploadOperations.push("attached");
+        operationCompleted = true;
+        return {
+          mediaAssetId: "00000000-0000-4000-8000-000000000041",
+          providerAssetId: "bunny-video-guid"
+        };
+      },
+      async beginVideoUploadCompensation() { throw new Error("compensation not expected"); },
+      async completeVideoUploadCompensation() { throw new Error("compensation not expected"); },
       async findContentDetail() {
         throw new Error("not implemented");
       },
@@ -5280,12 +6100,16 @@ describe("buildApi", () => {
         return true;
       },
       async createUploadSession(input) {
-        expect(input).toEqual({
-          contentId: "00000000-0000-4000-8000-000000000040",
-          title: "studio cut",
-          mimeType: "video/mp4"
-        });
-
+        throw new Error(`legacy upload session must not be used: ${input.contentId}`);
+      },
+      async createProviderAsset(input) {
+        expect(input.title).toBe("wevid-upload:00000000-0000-4000-8000-000000000041");
+        uploadOperations.push("provider-created");
+        return { provider: "bunny", providerAssetId: "bunny-video-guid" };
+      },
+      async createUploadSessionForProviderAsset(input) {
+        expect(input.providerAssetId).toBe("bunny-video-guid");
+        uploadOperations.push("signed");
         return {
           provider: "bunny",
           providerAssetId: "bunny-video-guid",
@@ -5331,7 +6155,9 @@ describe("buildApi", () => {
       payload: {
         contentId: "00000000-0000-4000-8000-000000000040",
         fileName: "studio.mp4",
-        mimeType: "video/mp4"
+        mimeType: "video/mp4",
+        fileSizeBytes: 123,
+        checksumSha256: "a".repeat(64)
       }
     });
 
@@ -5348,16 +6174,50 @@ describe("buildApi", () => {
       },
       expiresAt: "2026-06-04T23:00:00.000Z"
     });
-    expect(createdAssets).toEqual([
-      {
-        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+    const replay = await app.inject({
+      method: "POST",
+      url: "/v1/media/uploads",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-upload-1"
+      },
+      payload: {
         contentId: "00000000-0000-4000-8000-000000000040",
-        provider: "bunny",
-        providerAssetId: "bunny-video-guid",
-        providerState: "created",
-        quotaWindowStart: expect.any(Date),
-        dailyMediaUploadQuota: 30
+        fileName: "studio.mp4",
+        mimeType: "video/mp4",
+        fileSizeBytes: 123,
+        checksumSha256: "a".repeat(64)
       }
+    });
+    expect(replay.statusCode).toBe(201);
+    expect(replay.json().headers.VideoId).toBe("bunny-video-guid");
+
+    const changedFile = await app.inject({
+      method: "POST",
+      url: "/v1/media/uploads",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "media-upload-1"
+      },
+      payload: {
+        contentId: "00000000-0000-4000-8000-000000000040",
+        fileName: "studio.mp4",
+        mimeType: "video/mp4",
+        fileSizeBytes: 123,
+        checksumSha256: "b".repeat(64)
+      }
+    });
+    expect(changedFile.statusCode).toBe(409);
+
+    expect(uploadOperations).toEqual([
+      "reserved",
+      "provider-created",
+      "provider-recorded",
+      "attached",
+      "signed",
+      "replayed",
+      "attached",
+      "signed"
     ]);
 
     await app.close();
@@ -5432,7 +6292,9 @@ describe("buildApi", () => {
       payload: {
         contentId: "00000000-0000-4000-8000-000000000040",
         fileName: "studio.mp4",
-        mimeType: "video/mp4"
+        mimeType: "video/mp4",
+        fileSizeBytes: 123,
+        checksumSha256: "a".repeat(64)
       }
     });
 
@@ -5732,6 +6594,15 @@ describe("buildApi", () => {
       async createMediaAsset() {
         throw new Error("provider should not create an asset when quota is reached");
       },
+      async reserveVideoAssetUpload(input) {
+        expect(input.dailyMediaUploadQuota).toBe(30);
+        expect(input.quotaWindowStart).toBeInstanceOf(Date);
+        throw new ContentImageUploadConflictError("quota_exceeded");
+      },
+      async recordVideoUploadProviderAsset() { throw new Error("provider must not be recorded"); },
+      async completeVideoAssetUpload() { throw new Error("provider must not be attached"); },
+      async beginVideoUploadCompensation() { throw new Error("compensation must not start"); },
+      async completeVideoUploadCompensation() { throw new Error("compensation must not finish"); },
       async countMediaAssetsCreatedSince(input) {
         expect(input.supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
         expect(input.since).toBeInstanceOf(Date);
@@ -5758,11 +6629,17 @@ describe("buildApi", () => {
     const mediaUploadProvider: MediaUploadProviderAdapter = {
       provider: "bunny",
       isConfigured() {
-        providerCalled = true;
         return true;
       },
       async createUploadSession() {
         providerCalled = true;
+        throw new Error("Bunny should not be called when quota is reached");
+      },
+      async createProviderAsset() {
+        providerCalled = true;
+        throw new Error("Bunny should not be called when quota is reached");
+      },
+      async createUploadSessionForProviderAsset() {
         throw new Error("Bunny should not be called when quota is reached");
       }
     };
@@ -5797,7 +6674,9 @@ describe("buildApi", () => {
       payload: {
         contentId: "00000000-0000-4000-8000-000000000040",
         fileName: "studio.mp4",
-        mimeType: "video/mp4"
+        mimeType: "video/mp4",
+        fileSizeBytes: 123,
+        checksumSha256: "a".repeat(64)
       }
     });
 
@@ -5820,6 +6699,15 @@ describe("buildApi", () => {
       async createMediaAsset() {
         throw new Error("provider should not create an asset when policy quota is reached");
       },
+      async reserveVideoAssetUpload(input) {
+        expect(input.dailyMediaUploadQuota).toBe(1);
+        expect(input.quotaWindowStart).toBeInstanceOf(Date);
+        throw new ContentImageUploadConflictError("quota_exceeded");
+      },
+      async recordVideoUploadProviderAsset() { throw new Error("provider must not be recorded"); },
+      async completeVideoAssetUpload() { throw new Error("provider must not be attached"); },
+      async beginVideoUploadCompensation() { throw new Error("compensation must not start"); },
+      async completeVideoUploadCompensation() { throw new Error("compensation must not finish"); },
       async countMediaAssetsCreatedSince(input) {
         expect(input.supabaseUserId).toBe("00000000-0000-4000-8000-000000000001");
         expect(input.since).toBeInstanceOf(Date);
@@ -5853,11 +6741,17 @@ describe("buildApi", () => {
     const mediaUploadProvider: MediaUploadProviderAdapter = {
       provider: "bunny",
       isConfigured() {
-        providerCalled = true;
         return true;
       },
       async createUploadSession() {
         providerCalled = true;
+        throw new Error("Bunny should not be called when policy quota is reached");
+      },
+      async createProviderAsset() {
+        providerCalled = true;
+        throw new Error("Bunny should not be called when policy quota is reached");
+      },
+      async createUploadSessionForProviderAsset() {
         throw new Error("Bunny should not be called when policy quota is reached");
       }
     };
@@ -5892,7 +6786,9 @@ describe("buildApi", () => {
       payload: {
         contentId: "00000000-0000-4000-8000-000000000040",
         fileName: "studio.mp4",
-        mimeType: "video/mp4"
+        mimeType: "video/mp4",
+        fileSizeBytes: 123,
+        checksumSha256: "a".repeat(64)
       }
     });
 
@@ -5909,22 +6805,40 @@ describe("buildApi", () => {
   it("enforces the authoritative upload quota after provider allocation and compensates the orphan", async () => {
     const deletedProviderAssets: string[] = [];
     const scheduledProviderAssets: string[] = [];
+    const completedCompensations: string[] = [];
     let deleteFails = false;
     let providerSequence = 0;
     const contentRepository: ContentRepository = {
       async createDraft() {
         throw new Error("not implemented");
       },
-      async createMediaAsset(input) {
-        expect(input).toMatchObject({
-          supabaseUserId: "00000000-0000-4000-8000-000000000001",
-          dailyMediaUploadQuota: 30,
-          quotaWindowStart: expect.any(Date)
-        });
+      async createMediaAsset() { throw new Error("legacy video attach must not be used"); },
+      async reserveVideoAssetUpload() {
+        return {
+          mediaAssetId: `00000000-0000-4000-8000-${String(providerSequence + 1).padStart(12, "0")}`,
+          state: "create_provider_asset"
+        };
+      },
+      async recordVideoUploadProviderAsset(input) {
+        return {
+          mediaAssetId: `00000000-0000-4000-8000-${String(providerSequence).padStart(12, "0")}`,
+          providerAssetId: input.providerAssetId
+        };
+      },
+      async completeVideoAssetUpload() {
         throw new ContentImageUploadConflictError("quota_exceeded");
       },
-      async scheduleUnattachedMediaProviderCleanup(input) {
-        scheduledProviderAssets.push(input.providerAssetId);
+      async beginVideoUploadCompensation(input) {
+        const providerAssetId = `quota-race-video-${providerSequence}`;
+        scheduledProviderAssets.push(providerAssetId);
+        expect(input.failureCode).toBe("provider_attach_failed");
+        return {
+          mediaAssetId: `00000000-0000-4000-8000-${String(providerSequence).padStart(12, "0")}`,
+          providerAssetId
+        };
+      },
+      async completeVideoUploadCompensation(input) {
+        completedCompensations.push(input.idempotencyKey);
       },
       async countMediaAssetsCreatedSince() {
         return 29;
@@ -5952,16 +6866,12 @@ describe("buildApi", () => {
       isConfigured() {
         return true;
       },
-      async createUploadSession() {
+      async createUploadSession() { throw new Error("legacy upload session must not be used"); },
+      async createProviderAsset() {
         providerSequence += 1;
-        return {
-          provider: "bunny",
-          providerAssetId: `quota-race-video-${providerSequence}`,
-          uploadUrl: "https://video.bunnycdn.com/tusupload",
-          headers: {},
-          expiresAt: new Date("2026-06-04T23:00:00.000Z")
-        };
+        return { provider: "bunny", providerAssetId: `quota-race-video-${providerSequence}` };
       },
+      async createUploadSessionForProviderAsset() { throw new Error("attach must fail first"); },
       async deleteProviderAsset(input) {
         if (deleteFails) throw new Error("provider delete unavailable");
         deletedProviderAssets.push(input.providerAssetId);
@@ -5998,14 +6908,17 @@ describe("buildApi", () => {
       payload: {
         contentId: "00000000-0000-4000-8000-000000000040",
         fileName: "studio.mp4",
-        mimeType: "video/mp4"
+        mimeType: "video/mp4",
+        fileSizeBytes: 123,
+        checksumSha256: "a".repeat(64)
       }
     });
 
     expect(response.statusCode).toBe(429);
     expect(response.json()).toMatchObject({ code: "rate_limited" });
     expect(deletedProviderAssets).toEqual(["quota-race-video-1"]);
-    expect(scheduledProviderAssets).toEqual([]);
+    expect(scheduledProviderAssets).toEqual(["quota-race-video-1"]);
+    expect(completedCompensations).toEqual(["media-upload-quota-race"]);
 
     deleteFails = true;
     const cleanupRetry = await app.inject({
@@ -6018,11 +6931,14 @@ describe("buildApi", () => {
       payload: {
         contentId: "00000000-0000-4000-8000-000000000040",
         fileName: "studio.mp4",
-        mimeType: "video/mp4"
+        mimeType: "video/mp4",
+        fileSizeBytes: 123,
+        checksumSha256: "a".repeat(64)
       }
     });
     expect(cleanupRetry.statusCode).toBe(429);
-    expect(scheduledProviderAssets).toEqual(["quota-race-video-2"]);
+    expect(scheduledProviderAssets).toEqual(["quota-race-video-1", "quota-race-video-2"]);
+    expect(completedCompensations).toEqual(["media-upload-quota-race"]);
     await app.close();
   });
 
@@ -6081,7 +6997,9 @@ describe("buildApi", () => {
       payload: {
         contentId: "00000000-0000-4000-8000-000000000040",
         fileName: "studio.mp4",
-        mimeType: "video/mp4"
+        mimeType: "video/mp4",
+        fileSizeBytes: 123,
+        checksumSha256: "a".repeat(64)
       }
     });
 
@@ -6587,13 +7505,6 @@ describe("buildApi", () => {
         COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
         COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
         AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
-        AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: true,
-        AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: true,
-        AGE_VERIFICATION_REUSABLE_PROVIDERS: "didit_reusable,yoti_digital_id,eudi_wallet,scytales",
-        AGE_VERIFICATION_FALLBACK_PROVIDERS: "didit_age_estimation,persona_document",
-        AGE_VERIFICATION_FALLBACK_ORDER: "reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document",
-        AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
-        AGE_VERIFICATION_REVERIFY_DAYS: 365,
         SUMSUB_API_BASE_URL: "https://api.sumsub.com",
         DIDIT_API_BASE_URL: "https://verification.didit.me",
         YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
@@ -6701,13 +7612,6 @@ describe("buildApi", () => {
       COINBASE_CDP_API_BASE_URL: "https://api.cdp.coinbase.com",
       COINBASE_ONRAMP_DESTINATION_NETWORK: "solana",
       AGE_VERIFICATION_ALLOW_MOCK_PROVIDER: false,
-      AGE_VERIFICATION_PROVIDER_SELECTION_ENABLED: true,
-      AGE_VERIFICATION_PREFER_REUSABLE_CREDENTIALS: true,
-      AGE_VERIFICATION_REUSABLE_PROVIDERS: "didit_reusable,yoti_digital_id,eudi_wallet,scytales",
-      AGE_VERIFICATION_FALLBACK_PROVIDERS: "didit_age_estimation,persona_document",
-      AGE_VERIFICATION_FALLBACK_ORDER: "reusable_credential,age_estimation,free_document,portable_credential,database_non_doc,document",
-      AGE_VERIFICATION_REVERIFY_MODE: "risk_or_expiry",
-      AGE_VERIFICATION_REVERIFY_DAYS: 365,
       SUMSUB_API_BASE_URL: "https://api.sumsub.com",
       DIDIT_API_BASE_URL: "https://verification.didit.me",
       YOTI_API_BASE_URL: "https://age.yoti.com/api/v1",
@@ -6751,7 +7655,7 @@ describe("buildApi", () => {
 
     expect(playback).toEqual({
       state: "full",
-      url: `https://iframe.mediadelivery.net/embed/759/${providerAssetId}?token=${token}&expires=${expires}`,
+      url: `https://player.mediadelivery.net/embed/759/${providerAssetId}?token=${token}&expires=${expires}`,
       provider: "bunny",
       resourceType: "embed",
       expiresAt: "2026-06-04T00:15:00.000Z"
@@ -6920,11 +7824,15 @@ describe("buildApi", () => {
         return {
           items: [
             {
-              id: "referral-activity-test-id",
-              kind: "referral",
-              title: "Referral share",
+              id: "00000000-0000-4000-8000-000000000091",
+              activityType: "share",
+              token: "referral-token",
+              targetType: "profile",
+              targetId: "00000000-0000-4000-8000-000000000092",
+              eligibility: "external_share",
               state: "active",
-              createdAt: "2026-06-04T20:00:00.000Z"
+              createdAt: "2026-06-04T20:00:00.000Z",
+              commissionAmountMinor: null
             }
           ],
           nextCursor: null
@@ -6952,11 +7860,15 @@ describe("buildApi", () => {
     expect(response.json()).toEqual({
       items: [
         {
-          id: "referral-activity-test-id",
-          kind: "referral",
-          title: "Referral share",
+          id: "00000000-0000-4000-8000-000000000091",
+          activityType: "share",
+          token: "referral-token",
+          targetType: "profile",
+          targetId: "00000000-0000-4000-8000-000000000092",
+          eligibility: "external_share",
           state: "active",
-          createdAt: "2026-06-04T20:00:00.000Z"
+          createdAt: "2026-06-04T20:00:00.000Z",
+          commissionAmountMinor: null
         }
       ],
       nextCursor: null
@@ -7073,6 +7985,9 @@ describe("buildApi", () => {
   });
 
   it("serves notification projections, preferences, and push devices without raw push secrets", async () => {
+    const endpoint = "https://fcm.googleapis.com/fcm/send/browser-token";
+    const p256dh = createECDH("prime256v1").generateKeys().toString("base64url");
+    const pushAuth = Buffer.alloc(16, 7).toString("base64url");
     const calls: Array<{ kind: string; input: unknown }> = [];
     const notificationRepository = fakeNotificationRepository({
       onListNotifications(input) {
@@ -7116,7 +8031,8 @@ describe("buildApi", () => {
     });
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
-      notificationRepository
+      notificationRepository,
+      webPushDnsResolver: async () => [{ address: "8.8.8.8", family: 4 }]
     });
     await app.ready();
 
@@ -7153,9 +8069,9 @@ describe("buildApi", () => {
       payload: {
         provider: "web_push",
         platform: "desktop",
-        endpoint: "https://push.example.test/token",
-        p256dh: "browser-public-key",
-        auth: "browser-auth-secret",
+        endpoint,
+        p256dh,
+        auth: pushAuth,
         userAgent: "Veel smoke"
       }
     });
@@ -7200,8 +8116,8 @@ describe("buildApi", () => {
       liveEnabled: false
     });
     expect(deviceResponse.statusCode).toBe(201);
-    expect(JSON.stringify(deviceResponse.json())).not.toContain("https://push.example.test/token");
-    expect(JSON.stringify(deviceResponse.json())).not.toContain("browser-auth-secret");
+    expect(JSON.stringify(deviceResponse.json())).not.toContain(endpoint);
+    expect(JSON.stringify(deviceResponse.json())).not.toContain(pushAuth);
     expect(deviceResponse.json()).toMatchObject({
       provider: "web_push",
       platform: "desktop",
@@ -7240,9 +8156,9 @@ describe("buildApi", () => {
           body: {
             provider: "web_push",
             platform: "desktop",
-            endpoint: "https://push.example.test/token",
-            p256dh: "browser-public-key",
-            auth: "browser-auth-secret",
+            endpoint,
+            p256dh,
+            auth: pushAuth,
             userAgent: "Veel smoke"
           },
           idempotencyKey: "dev"
@@ -7265,6 +8181,67 @@ describe("buildApi", () => {
         }
       }
     ]);
+
+    await app.close();
+  });
+
+  it("rejects unsupported, private-address, and malformed web push subscriptions", async () => {
+    const p256dh = createECDH("prime256v1").generateKeys().toString("base64url");
+    const pushAuth = Buffer.alloc(16, 9).toString("base64url");
+    const registerDevice = vi.fn(() => notificationDeviceFixture());
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      notificationRepository: fakeNotificationRepository({
+        onRegisterDevice: registerDevice
+      }),
+      webPushDnsResolver: async () => [
+        { address: "8.8.8.8", family: 4 },
+        { address: "169.254.169.254", family: 4 }
+      ]
+    });
+    await app.ready();
+
+    const payloads = [
+      {
+        provider: "web_push",
+        platform: "desktop",
+        endpoint: "https://attacker.example/push/token",
+        p256dh,
+        auth: pushAuth
+      },
+      {
+        provider: "web_push",
+        platform: "desktop",
+        endpoint: "https://fcm.googleapis.com/fcm/send/browser-token",
+        p256dh,
+        auth: pushAuth
+      },
+      {
+        provider: "web_push",
+        platform: "desktop",
+        endpoint: "https://fcm.googleapis.com/fcm/send/browser-token",
+        p256dh: Buffer.alloc(65, 4).toString("base64url"),
+        auth: pushAuth
+      }
+    ];
+
+    for (const [index, payload] of payloads.entries()) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/notifications/devices",
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": `rejected-device-${index}`
+        },
+        payload
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        code: "validation_failed",
+        message: "Valid web push endpoint and keys are required"
+      });
+    }
+    expect(registerDevice).not.toHaveBeenCalled();
 
     await app.close();
   });
@@ -7946,13 +8923,12 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("creates scoped AI sessions and executes safe user tools", async () => {
-    const aiRepository = fakeAiRepository();
+  it("keeps legacy canned AI sessions and tool calls explicitly disabled", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
       ageRepository: verifiedAgeRepository,
-      aiRepository
+      aiRepository: fakeAiRepository()
     });
     await app.ready();
 
@@ -7965,13 +8941,12 @@ describe("buildApi", () => {
       },
       payload: {
         scope: "user_self_service",
-        requestedTools: ["explain_app_state", "provider_health_summary"]
+        requestedTools: ["explain_app_state"]
       }
     });
-    const session = sessionResponse.json() as AiSession;
     const toolResponse = await app.inject({
       method: "POST",
-      url: `/v1/ai/sessions/${session.id}/tool-calls`,
+      url: "/v1/ai/sessions/00000000-0000-4000-8000-000000000123/tool-calls",
       headers: {
         authorization: "Bearer valid-token",
         "idempotency-key": "ai-tool-1"
@@ -7982,19 +8957,10 @@ describe("buildApi", () => {
       }
     });
 
-    expect(sessionResponse.statusCode).toBe(201);
-    expect(session).toMatchObject({
-      scope: "user_self_service",
-      state: "active",
-      allowedTools: ["explain_app_state"]
-    });
-    expect(toolResponse.statusCode).toBe(201);
-    expect(toolResponse.json()).toMatchObject({
-      toolName: "explain_app_state",
-      state: "executed",
-      confirmationState: "not_required",
-      outputSummary: "App state explanation prepared"
-    });
+    expect(sessionResponse.statusCode).toBe(503);
+    expect(toolResponse.statusCode).toBe(503);
+    expect(sessionResponse.json()).toMatchObject({ code: "provider_unavailable" });
+    expect(toolResponse.json()).toMatchObject({ code: "provider_unavailable" });
 
     await app.close();
   });
@@ -8022,21 +8988,21 @@ describe("buildApi", () => {
       items: [
         {
           scope: "user_self_service",
-          canStartSession: true,
-          allowedTools: ["explain_app_state", "summarize_own_activity", "find_own_purchases"],
+          canStartSession: false,
+          allowedTools: [],
           confirmationRequiredTools: []
         },
         {
           scope: "creator_helper",
-          canStartSession: true,
-          allowedTools: expect.arrayContaining(["draft_caption", "prepare_event_copy"]),
+          canStartSession: false,
+          allowedTools: [],
           confirmationRequiredTools: []
         },
         {
           scope: "admin_ops",
-          canStartSession: true,
-          allowedTools: expect.arrayContaining(["prepare_refund_decision"]),
-          confirmationRequiredTools: expect.arrayContaining(["prepare_refund_decision"])
+          canStartSession: false,
+          allowedTools: [],
+          confirmationRequiredTools: []
         }
       ]
     });
@@ -8044,14 +9010,13 @@ describe("buildApi", () => {
     await app.close();
   });
 
-  it("prepares confirmation-required admin AI tools without mutating admin state", async () => {
-    const aiRepository = fakeAiRepository();
+  it("does not prepare canned admin decisions through the retired AI route", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
       ageRepository: verifiedAgeRepository,
       adminRepository: fakeAdminRepository,
-      aiRepository
+      aiRepository: fakeAiRepository()
     });
     await app.ready();
 
@@ -8067,36 +9032,13 @@ describe("buildApi", () => {
         requestedTools: ["prepare_refund_decision"]
       }
     });
-    const session = sessionResponse.json() as AiSession;
-    const toolResponse = await app.inject({
-      method: "POST",
-      url: `/v1/ai/sessions/${session.id}/tool-calls`,
-      headers: {
-        authorization: "Bearer valid-token",
-        "idempotency-key": "ai-admin-tool-1"
-      },
-      payload: {
-        toolName: "prepare_refund_decision",
-        input: { resourceType: "payment", resourceId: "00000000-0000-4000-8000-000000000050" }
-      }
-    });
-
-    expect(sessionResponse.statusCode).toBe(201);
-    expect(toolResponse.statusCode).toBe(201);
-    expect(toolResponse.json()).toMatchObject({
-      toolName: "prepare_refund_decision",
-      state: "prepared",
-      confirmationState: "required",
-      affectedResource: {
-        type: "payment",
-        id: "00000000-0000-4000-8000-000000000050"
-      }
-    });
+    expect(sessionResponse.statusCode).toBe(503);
+    expect(sessionResponse.json()).toMatchObject({ code: "provider_unavailable" });
 
     await app.close();
   });
 
-  it("rejects admin AI sessions for non-staff users", async () => {
+  it("keeps retired admin AI sessions unavailable to non-staff users", async () => {
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
       sessionRepository: appReadySessionRepository,
@@ -8177,6 +9119,9 @@ describe("buildApi", () => {
         async updateDataRequest() {
           throw new Error("not implemented");
         },
+        async getFeatureFlag() {
+          throw new Error("not implemented");
+        },
         async listFeatureFlags() {
           throw new Error("not implemented");
         },
@@ -8237,7 +9182,8 @@ describe("buildApi", () => {
       }
     });
 
-    expect(response.statusCode).toBe(403);
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ code: "provider_unavailable" });
 
     await app.close();
   });
@@ -8321,6 +9267,9 @@ describe("buildApi", () => {
           throw new Error("not implemented");
         },
         async updateDataRequest() {
+          throw new Error("not implemented");
+        },
+        async getFeatureFlag() {
           throw new Error("not implemented");
         },
         async listFeatureFlags() {
@@ -8467,6 +9416,9 @@ describe("buildApi", () => {
         async updateDataRequest() {
           throw new Error("not implemented");
         },
+        async getFeatureFlag() {
+          throw new Error("not implemented");
+        },
         async listFeatureFlags() {
           throw new Error("not implemented");
         },
@@ -8532,19 +9484,14 @@ describe("buildApi", () => {
       authVerifier: fakeAuthVerifier,
       adminRepository: {
         ...fakeAdminRepository,
-        async listFeatureFlags() {
+        async getFeatureFlag(featureFlagKey) {
           return {
-            items: [
-              {
-                key: "compliance.carf_exports",
-                value: { enabled: true },
-                category: "compliance",
-                policyBoundary: "software_policy_only_no_payment_access_or_social_priority",
-                state: "active",
-                updatedAt: "2026-06-06T12:00:00.000Z"
-              }
-            ],
-            nextCursor: null
+            key: featureFlagKey,
+            value: { enabled: true },
+            category: "compliance",
+            policyBoundary: "software_policy_only_no_payment_access_or_social_priority",
+            state: "active",
+            updatedAt: "2026-06-06T12:00:00.000Z"
           };
         }
       }
@@ -8929,6 +9876,42 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("returns conflict when an admin mutation key is reused for another target or body", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async updateSupportPolicy() {
+          throw new MutationCommandIdempotencyConflictError();
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/support/policies/00000000-0000-4000-8000-000000000151",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "admin-reused-key"
+      },
+      payload: {
+        supportState: "priority",
+        slaTier: "priority",
+        state: "active",
+        reason: "Changed body"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      code: "conflict",
+      message: "Idempotency key was already used for a different admin mutation"
+    });
+
+    await app.close();
+  });
+
   it("creates and lists refund dispute requests without custody or payout obligations", async () => {
     const createCalls: Array<Parameters<RefundRepository["createRequest"]>[0]> = [];
     const app = await buildApi({
@@ -9017,6 +10000,168 @@ describe("buildApi", () => {
     });
 
     await app.close();
+  });
+
+  it("rejects malformed refund bodies and oversized opaque cursors before repository access", async () => {
+    const createCalls: Array<Parameters<RefundRepository["createRequest"]>[0]> = [];
+    const listCalls: Array<Parameters<RefundRepository["listRequests"]>[0]> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      refundRepository: fakeRefundRepository({
+        async onCreateRequest(input) {
+          createCalls.push(input);
+        },
+        async onListRequests(input) {
+          listCalls.push(input);
+          return { items: [], nextCursor: null };
+        }
+      })
+    });
+    await app.ready();
+
+    const headers = {
+      authorization: "Bearer valid-token",
+      "idempotency-key": "test-test-test-test"
+    };
+    const validBody = {
+      paymentIntentId: "00000000-0000-4000-8000-000000000050",
+      kind: "refund_request",
+      requestedAction: "review_only",
+      reason: "Access needs a support review"
+    };
+    const malformedBodies = [
+      { ...validBody, reason: 42 },
+      { ...validBody, paymentIntentId: "not-a-uuid" },
+      { ...validBody, kind: "automatic_refund" },
+      { ...validBody, requestedAction: "platform_payout" },
+      { ...validBody, reason: "too short" },
+      { ...validBody, reason: "x".repeat(1001) },
+      { kind: "refund_request", requestedAction: "review_only", reason: "Missing the payment intent" }
+    ];
+
+    for (const payload of malformedBodies) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/refunds/requests",
+        headers,
+        payload
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        code: "validation_failed",
+        message: "Request does not match the API contract"
+      });
+    }
+
+    const badCursor = await app.inject({
+      method: "GET",
+      url: `/v1/refunds/requests?cursor=${"x".repeat(513)}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(badCursor.statusCode).toBe(400);
+    expect(createCalls).toHaveLength(0);
+    expect(listCalls).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it("uses the canonical refund schema and strips unknown body fields before hashing or persistence", async () => {
+    const createCalls: Array<Parameters<RefundRepository["createRequest"]>[0]> = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      refundRepository: fakeRefundRepository({
+        onCreateRequest(input) {
+          createCalls.push(input);
+        }
+      })
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/refunds/requests",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "refund-schema-strip-1"
+      },
+      payload: {
+        paymentIntentId: "00000000-0000-4000-8000-000000000050",
+        kind: "refund_request",
+        requestedAction: "review_only",
+        reason: "Access needs a support review",
+        providerSecret: "must-not-reach-the-repository"
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(createCalls).toHaveLength(1);
+    expect(createCalls[0]?.body).toEqual({
+      paymentIntentId: "00000000-0000-4000-8000-000000000050",
+      kind: "refund_request",
+      requestedAction: "review_only",
+      reason: "Access needs a support review"
+    });
+    expect(JSON.stringify(createCalls[0])).not.toContain("must-not-reach-the-repository");
+
+    await app.close();
+  });
+
+  it("returns stable sanitized 500 resources for raw and status-bearing exceptions", async () => {
+    vi.stubEnv("LOG_LEVEL", "silent");
+    const statusError = Object.assign(new Error("AUDIT_PRIVATE_DIAGNOSTIC_STATUS"), { statusCode: 503 });
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      refundRepository: fakeRefundRepository({
+        async onListRequests() {
+          throw statusError;
+        },
+        async onCreateRequest() {
+          throw new Error("AUDIT_PRIVATE_DIAGNOSTIC_RAW");
+        }
+      })
+    });
+    await app.ready();
+
+    const responses = await Promise.all([
+      app.inject({
+        method: "GET",
+        url: "/v1/refunds/requests",
+        headers: { authorization: "Bearer valid-token" }
+      }),
+      app.inject({
+        method: "POST",
+        url: "/v1/refunds/requests",
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": "refund-error-boundary-1"
+        },
+        payload: {
+          paymentIntentId: "00000000-0000-4000-8000-000000000050",
+          kind: "refund_request",
+          requestedAction: "review_only",
+          reason: "Access needs a support review"
+        }
+      })
+    ]);
+
+    for (const response of responses) {
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toMatchObject({
+        code: "internal_server_error",
+        message: "An unexpected server error occurred",
+        requestId: expect.any(String)
+      });
+      expect(response.body).not.toMatch(/AUDIT_PRIVATE|stack|providerSecret/i);
+    }
+
+    await app.close();
+    vi.unstubAllEnvs();
   });
 
   it("returns and updates sanitized admin refund dispute projections", async () => {
@@ -9141,7 +10286,13 @@ describe("buildApi", () => {
     expect(dataRequests.statusCode).toBe(200);
     expect(dataRequests.json().items[0]).toMatchObject({
       type: "export",
-      privacyBoundary: "sanitized_identity_minimized_no_raw_exports"
+      privacyBoundary: "sanitized_identity_minimized_no_raw_exports",
+      contentExportJobId: "00000000-0000-4000-8000-000000000171",
+      contentExportJobState: "ready",
+      contentExportCleanupState: "retained_private",
+      contentExportArchiveUploadStartedAt: "2026-06-06T12:05:00.000Z",
+      contentExportCleanupRequiredAttemptCount: 2,
+      contentExportOldestCleanupRequiredAttemptAt: "2026-06-06T12:06:00.000Z"
     });
     expect(featureFlags.statusCode).toBe(200);
     expect(featureFlags.json().items[0]).toMatchObject({
@@ -9184,7 +10335,7 @@ describe("buildApi", () => {
       },
       payload: {
         state: "processing",
-        reason: "Identity verified; export job can be prepared"
+        reason: "Identity verified; deletion request can be prepared"
       }
     });
     const featureFlag = await app.inject({
@@ -9218,6 +10369,42 @@ describe("buildApi", () => {
     expect(featureFlagCalls[0]).toMatchObject({
       idempotencyKey: "feature-flag-1",
       featureFlagKey: "compliance.carf_exports"
+    });
+
+    await app.close();
+  });
+
+  it("returns a controlled conflict for generic admin export lifecycle mutation", async () => {
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      adminRepository: {
+        ...fakeAdminRepository,
+        async updateDataRequest() {
+          throw new AdminRepositoryStateConflictError(
+            "Content export lifecycle is managed by the content export job"
+          );
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/v1/admin/data-requests/00000000-0000-4000-8000-000000000170",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "reject-content-export"
+      },
+      payload: {
+        state: "rejected",
+        reason: "Compliance review rejected the content export"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      code: "conflict",
+      message: "Content export lifecycle is managed by the content export job"
     });
 
     await app.close();
@@ -9688,6 +10875,9 @@ describe("buildApi", () => {
     );
     expect(identityChecks.statusCode).toBe(200);
     expect(identityChecks.json().items[0]).toMatchObject({
+      subjectType: "user",
+      subjectId: "00000000-0000-4000-8000-000000000011",
+      purpose: "creator_kyc",
       verificationType: "kyc",
       state: "pending",
       hasLegalNameHash: true,
@@ -9698,6 +10888,8 @@ describe("buildApi", () => {
     );
     expect(aiSessions.statusCode).toBe(200);
     expect(aiSessions.json().items[0]).toMatchObject({
+      transport: "assistant",
+      connectionId: null,
       scope: "admin_ops",
       state: "active",
       allowedToolCount: 2
@@ -9705,7 +10897,10 @@ describe("buildApi", () => {
     expect(JSON.stringify(aiSessions.json())).not.toMatch(/idempotencyKey|allowedTools|inputRedacted|outputRedacted|secret/i);
     expect(aiToolCalls.statusCode).toBe(200);
     expect(aiToolCalls.json().items[0]).toMatchObject({
+      transport: "assistant",
+      connectionId: null,
       toolName: "provider_health_summary",
+      toolVersion: null,
       state: "executed",
       redactionBoundary: "summaries_only_no_tool_payloads_or_secrets"
     });
@@ -10153,8 +11348,51 @@ describe("buildApi", () => {
     vi.unstubAllEnvs();
   });
 
+  it("does not mint another wallet capability after a payment signature is submitted", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return { ...storedPaymentIntent, state: "submitted" };
+      },
+      async recordTransactionRequest() {
+        throw new Error("must not create a second transaction after signature acceptance");
+      },
+      async recordSubmission() {
+        throw new Error("not implemented");
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/transaction-request`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      code: "conflict",
+      message: expect.stringContaining("resume verification")
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("records a payment submission and confirms only verified settlement", async () => {
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture();
     const submissions: RecordPaymentSubmissionInput[] = [];
     const settlementInputs: PaymentSettlementInput[] = [];
     const paymentRepository: PaymentRepository = {
@@ -10163,7 +11401,7 @@ describe("buildApi", () => {
         throw new Error("not implemented");
       },
       async findIntent() {
-        return storedPaymentIntent;
+        return signed.intent;
       },
       async recordTransactionRequest() {
         throw new Error("not implemented");
@@ -10199,18 +11437,19 @@ describe("buildApi", () => {
         "idempotency-key": "payment-submission-1"
       },
       payload: {
-        signature: validSolanaSignature
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
       }
     });
 
     expect(response.statusCode).toBe(202);
     expect(settlementInputs).toEqual([
       {
-        signature: validSolanaSignature,
+        signature: signed.signature,
         referenceAddress: storedPaymentIntent.referenceAddress,
         memo: `veel:${storedPaymentIntent.id}`,
         settlementKind: "creator_split",
-        buyerWallet: null,
+        buyerWallet: signed.intent.buyerWallet,
         creatorWallet,
         enterpriseWallet: null,
         platformFeeWallet,
@@ -10231,12 +11470,527 @@ describe("buildApi", () => {
       {
         supabaseUserId: "00000000-0000-4000-8000-000000000001",
         paymentIntentId: storedPaymentIntent.id,
-        signature: validSolanaSignature,
+        idempotencyKey: "payment-submission-1",
+        signature: signed.signature,
+        settlement: {
+          confirmed: false
+        },
+        writeGuard: {
+          state: "pending",
+          submittedSignature: null
+        }
+      },
+      {
+        supabaseUserId: "00000000-0000-4000-8000-000000000001",
+        paymentIntentId: storedPaymentIntent.id,
+        signature: signed.signature,
         settlement: {
           confirmed: true
+        },
+        writeGuard: {
+          state: "submitted",
+          submittedSignature: signed.signature
         }
       }
     ]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("retains an accepted payment signature when immediate RPC verification is unavailable", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture();
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return signed.intent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: {
+        async verifyTransfer() {
+          throw new Error("RPC timeout after acceptance");
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-submission-rpc-timeout"
+      },
+      payload: {
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submissions).toEqual([{
+      supabaseUserId: "00000000-0000-4000-8000-000000000001",
+      paymentIntentId: storedPaymentIntent.id,
+      idempotencyKey: "payment-submission-rpc-timeout",
+      signature: signed.signature,
+      settlement: { confirmed: false },
+      writeGuard: { state: "pending", submittedSignature: null }
+    }]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("rejects omitted or invalid exact signed transaction bytes before any durable acceptance", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture();
+    const otherPayer = signedPaymentSubmissionFixture();
+    const tamperedBytes = Buffer.from(signed.signedTransactionBase64, "base64");
+    tamperedBytes[1] = (tamperedBytes[1] ?? 0) ^ 1;
+    const recordSubmission = vi.fn(async () => undefined);
+    const verifyTransfer = vi.fn(async () => ({ confirmed: false }));
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return signed.intent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      recordSubmission
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: { verifyTransfer }
+    });
+    await app.ready();
+
+    const invalidPayloads = [
+      { signature: signed.signature },
+      {
+        signature: signed.signature,
+        signedTransactionBase64: `${signed.signedTransactionBase64}\n`
+      },
+      {
+        signature: otherPayer.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      },
+      {
+        signature: otherPayer.signature,
+        signedTransactionBase64: otherPayer.signedTransactionBase64
+      },
+      {
+        signature: bs58.encode(tamperedBytes.subarray(1, 65)),
+        signedTransactionBase64: tamperedBytes.toString("base64")
+      }
+    ];
+
+    for (const [index, payload] of invalidPayloads.entries()) {
+      const response = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": `payment-invalid-signed-bytes-${index}`
+        },
+        payload
+      });
+      expect(response.statusCode).toBe(400);
+    }
+
+    expect(recordSubmission).not.toHaveBeenCalled();
+    expect(verifyTransfer).not.toHaveBeenCalled();
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it.each(["confirmed", "failed"] as const)(
+    "replays an exact accepted payment submission after the intent becomes %s",
+    async (state) => {
+      vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+      const signed = signedPaymentSubmissionFixture();
+      const changed = signedPaymentSubmissionFixture({}, signed.payer);
+      const recordSubmission = vi.fn(async () => {
+        throw new Error("a terminal replay must not write or reverify settlement");
+      });
+      const verifyTransfer = vi.fn(async () => {
+        throw new Error("a terminal replay must not write or reverify settlement");
+      });
+      const hasSubmissionCommandReceipt = vi.fn(async (input: {
+        idempotencyKey: string;
+        signature: string;
+      }) => {
+        if (input.idempotencyKey !== "payment-terminal-replay") return false;
+        if (input.signature !== signed.signature) {
+          throw new MutationCommandIdempotencyConflictError();
+        }
+        return true;
+      });
+      const paymentRepository: PaymentRepository = {
+        ...checkoutPaymentRepositoryMethods,
+        async createOrReuseIntent() {
+          throw new Error("not implemented");
+        },
+        async findIntent() {
+          return { ...signed.intent, state };
+        },
+        async recordTransactionRequest() {
+          throw new Error("not implemented");
+        },
+        hasSubmissionCommandReceipt,
+        recordSubmission
+      };
+      const app = await buildApi({
+        authVerifier: fakeAuthVerifier,
+        sessionRepository: appReadySessionRepository,
+        ageRepository: verifiedAgeRepository,
+        walletRepository: walletRepositoryWithWallet,
+        paymentRepository,
+        settlementVerifier: { verifyTransfer }
+      });
+      await app.ready();
+
+      const exactReplay = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": "payment-terminal-replay"
+        },
+        payload: {
+          signature: signed.signature,
+          signedTransactionBase64: signed.signedTransactionBase64
+        }
+      });
+      expect(exactReplay.statusCode).toBe(202);
+
+      const changedKey = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": "payment-terminal-other-command"
+        },
+        payload: {
+          signature: signed.signature,
+          signedTransactionBase64: signed.signedTransactionBase64
+        }
+      });
+      expect(changedKey.statusCode).toBe(409);
+
+      const changedBody = await app.inject({
+        method: "POST",
+        url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+        headers: {
+          authorization: "Bearer valid-token",
+          "idempotency-key": "payment-terminal-replay"
+        },
+        payload: {
+          signature: changed.signature,
+          signedTransactionBase64: changed.signedTransactionBase64
+        }
+      });
+      expect(changedBody.statusCode).toBe(409);
+      expect(changedBody.json()).toMatchObject({
+        code: "conflict",
+        message: expect.stringContaining("Idempotency key")
+      });
+      expect(recordSubmission).not.toHaveBeenCalled();
+      expect(verifyTransfer).not.toHaveBeenCalled();
+
+      await app.close();
+      vi.unstubAllEnvs();
+    }
+  );
+
+  it.each([
+    "not_found",
+    "block_time_missing",
+    "transient",
+    "transaction_failed",
+    "transfer_mismatch"
+  ] as const)("passes normalized %s settlement evidence to the atomic writer", async (failureCode) => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture();
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return signed.intent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: {
+        async verifyTransfer() {
+          return { confirmed: false, failureCode };
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": `payment-settlement-${failureCode}`
+      },
+      payload: {
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submissions).toHaveLength(2);
+    expect(submissions[1]).toMatchObject({
+      signature: signed.signature,
+      settlement: { confirmed: false, failureCode },
+      writeGuard: {
+        state: "submitted",
+        submittedSignature: signed.signature
+      }
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("terminalizes an accepted unbroadcast submission only after backend transaction-expiry proof", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture({
+      state: "submitted",
+      expiresAt: new Date("2020-01-01T00:00:00.000Z")
+    });
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const expiredIntent = signed.intent;
+    const verifyTransactionExpiry = vi.fn(async () => ({ state: "expired" as const }));
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return expiredIntent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: {
+        async verifyTransfer() {
+          return { confirmed: false, failureCode: "not_found" };
+        },
+        verifyTransactionExpiry
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${expiredIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-expired-unbroadcast"
+      },
+      payload: {
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(verifyTransactionExpiry).toHaveBeenCalledWith({
+      signature: signed.signature,
+      signedTransactionBase64: signed.signedTransactionBase64,
+      buyerWallet: signed.intent.buyerWallet
+    }, { signal: expect.any(AbortSignal) });
+    expect(submissions).toHaveLength(2);
+    expect(submissions[1]).toMatchObject({
+      signature: signed.signature,
+      settlement: {
+        confirmed: false,
+        failureCode: "signed_transaction_expired"
+      },
+      writeGuard: {
+        state: "submitted",
+        submittedSignature: signed.signature
+      }
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps an expired intent submitted while its exact transaction can still land", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture({
+      state: "submitted",
+      expiresAt: new Date("2020-01-01T00:00:00.000Z")
+    });
+    const submissions: RecordPaymentSubmissionInput[] = [];
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return signed.intent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        submissions.push(input);
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: {
+        async verifyTransfer() {
+          return { confirmed: false, failureCode: "not_found" };
+        },
+        async verifyTransactionExpiry() {
+          return { state: "active" };
+        }
+      }
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-expiry-still-active"
+      },
+      payload: {
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      }
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submissions[1]?.settlement).toEqual({
+      confirmed: false,
+      failureCode: "not_found"
+    });
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
+  it("accepts concurrent same-signature requests when one reconciliation writer loses the race", async () => {
+    vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    const signed = signedPaymentSubmissionFixture();
+    let acceptanceWrites = 0;
+    let reconciliationWrites = 0;
+    const paymentRepository: PaymentRepository = {
+      ...checkoutPaymentRepositoryMethods,
+      async createOrReuseIntent() {
+        throw new Error("not implemented");
+      },
+      async findIntent() {
+        return signed.intent;
+      },
+      async recordTransactionRequest() {
+        throw new Error("not implemented");
+      },
+      async recordSubmission(input) {
+        if (input.idempotencyKey) {
+          acceptanceWrites += 1;
+          return;
+        }
+        reconciliationWrites += 1;
+        if (reconciliationWrites === 2) {
+          throw new PaymentSubmissionWriteConflictError();
+        }
+      }
+    };
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      paymentRepository,
+      settlementVerifier: {
+        async verifyTransfer() {
+          return { confirmed: false, failureCode: "not_found" };
+        }
+      }
+    });
+    await app.ready();
+
+    const request = () => app.inject({
+      method: "POST",
+      url: `/v1/payments/intents/${storedPaymentIntent.id}/submissions`,
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "payment-concurrent-same-signature"
+      },
+      payload: {
+        signature: signed.signature,
+        signedTransactionBase64: signed.signedTransactionBase64
+      }
+    });
+    const [first, second] = await Promise.all([request(), request()]);
+
+    expect(first.statusCode).toBe(202);
+    expect(second.statusCode).toBe(202);
+    expect(acceptanceWrites).toBe(2);
+    expect(reconciliationWrites).toBe(2);
 
     await app.close();
     vi.unstubAllEnvs();
@@ -10314,7 +12068,8 @@ describe("buildApi", () => {
               toUserAccount: treasuryWallet,
               amount: storedPaymentIntent.amountMinor
             }
-          ]
+          ],
+          nextCursor: null
         }
       ]
     });
@@ -11033,11 +12788,13 @@ describe("buildApi", () => {
     });
     await app.ready();
 
+    const playbackRequestStartedAt = Date.now();
     const response = await app.inject({
       method: "GET",
       url: "/v1/live/rooms/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa15",
       headers: { authorization: "Bearer valid-token" }
     });
+    const playbackRequestFinishedAt = Date.now();
 
     expect(response.statusCode).toBe(200);
     expect(response.json().playback).toEqual({
@@ -11045,7 +12802,133 @@ describe("buildApi", () => {
       url: "https://livepeercdn.studio/hls/livepeer-playback-15/index.m3u8",
       provider: "livepeer",
       resourceType: "hls",
-      jwt: "livepeer.jwt.token"
+      jwt: "livepeer.jwt.token",
+      expiresAt: expect.any(String)
+    });
+    const playbackExpiresAt = Date.parse(response.json().playback.expiresAt);
+    expect(playbackExpiresAt).toBeGreaterThanOrEqual(playbackRequestStartedAt + 5 * 60_000);
+    expect(playbackExpiresAt).toBeLessThanOrEqual(playbackRequestFinishedAt + 5 * 60_000);
+
+    await app.close();
+  });
+
+  it("requires a server-reserved lease before signing public Livepeer playback", async () => {
+    const roomId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa18";
+    let leaseExpiresAt: string | null = null;
+    const sessionStarts: unknown[] = [];
+    const createPlaybackJwt = vi.fn(async () => "livepeer.jwt.token");
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      liveRepository: fakeLiveRepository({
+        async onFindRoom() {
+          return liveRoomFixture({
+            id: roomId,
+            state: "live",
+            creator: {
+              ...homeFeedItem.creator,
+              id: "00000000-0000-4000-8000-000000000011"
+            },
+            accessMode: "public",
+            accessState: "allowed",
+            hasPass: true,
+            providerPlaybackId: "livepeer-playback-18",
+            playbackUrl: "https://livepeercdn.studio/hls/livepeer-playback-18/index.m3u8"
+          });
+        }
+      }),
+      liveProvider: {
+        ...noopLiveProviderControls,
+        isConfigured: () => true,
+        async createRoom() { throw new Error("not implemented"); },
+        async getRoomStatus() { throw new Error("not implemented"); },
+        createPlaybackJwt
+      },
+      subscriptionRepository: fakeSubscriptionRepository({
+        async onGetPlatformPlaybackDecision() {
+          return {
+            countsTowardAllowance: true,
+            limitReached: false,
+            leaseRequired: true,
+            leaseExpiresAt
+          };
+        },
+        async onCreatePlatformPlaybackSession(input) {
+          sessionStarts.push(input);
+          leaseExpiresAt = new Date(Date.now() + 900_000).toISOString();
+          return platformPlaybackSessionFixture({ leaseExpiresAt });
+        }
+      })
+    });
+    await app.ready();
+
+    const beforeLease = await app.inject({
+      method: "GET",
+      url: `/v1/live/rooms/${roomId}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(beforeLease.statusCode).toBe(200);
+    expect(beforeLease.json().playback).toMatchObject({
+      state: "blocked",
+      url: null,
+      blockReason: "playback_lease_required",
+      usage: {
+        targetType: "live_room",
+        targetId: roomId,
+        leaseExpiresAt: null
+      }
+    });
+    expect(createPlaybackJwt).not.toHaveBeenCalled();
+
+    const start = await app.inject({
+      method: "POST",
+      url: "/v1/platform-usage/playback-sessions",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "public-live-lease-1"
+      },
+      payload: { targetType: "live_room", targetId: roomId }
+    });
+    expect(start.statusCode).toBe(201);
+
+    const accounted = await app.inject({
+      method: "GET",
+      url: `/v1/live/rooms/${roomId}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(accounted.statusCode).toBe(200);
+    expect(accounted.json().playback).toMatchObject({
+      state: "full",
+      jwt: "livepeer.jwt.token",
+      usage: { leaseExpiresAt }
+    });
+    expect(Date.parse(accounted.json().playback.expiresAt)).toBeLessThanOrEqual(
+      Date.parse(leaseExpiresAt!)
+    );
+    expect(createPlaybackJwt).toHaveBeenCalledWith({
+      playbackId: "livepeer-playback-18",
+      appUserId: "00000000-0000-4000-8000-000000000010",
+      expiresAt: new Date(leaseExpiresAt!)
+    });
+
+    await app.inject({
+      method: "GET",
+      url: `/v1/live/rooms/${roomId}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(sessionStarts).toHaveLength(1);
+
+    leaseExpiresAt = null;
+    const afterExpiry = await app.inject({
+      method: "GET",
+      url: `/v1/live/rooms/${roomId}`,
+      headers: { authorization: "Bearer valid-token" }
+    });
+    expect(afterExpiry.json().playback).toMatchObject({
+      state: "blocked",
+      blockReason: "playback_lease_required"
     });
 
     await app.close();
@@ -11370,7 +13253,8 @@ describe("buildApi", () => {
       url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab11/messages",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "message-create-1"
+        "idempotency-key": "message-create-1",
+        "x-wevid-expected-actor-id": "00000000-0000-4000-8000-000000000001"
       },
       payload: {
         body: "Hello from Veel",
@@ -11418,7 +13302,8 @@ describe("buildApi", () => {
       url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab11/messages",
       headers: {
         authorization: "Bearer valid-token",
-        "idempotency-key": "message-conflict-1"
+        "idempotency-key": "message-conflict-1",
+        "x-wevid-expected-actor-id": "00000000-0000-4000-8000-000000000001"
       },
       payload: { body: "Changed message" }
     });
@@ -11426,6 +13311,43 @@ describe("buildApi", () => {
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ code: "conflict" });
 
+    await app.close();
+  });
+
+  it("refuses a stale message tab when the authenticated actor changed", async () => {
+    const createMessage = vi.fn();
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      walletRepository: walletRepositoryWithWallet,
+      messageRepository: fakeMessageRepository({ onCreateMessage: createMessage })
+    });
+    await app.ready();
+
+    const missing = await app.inject({
+      method: "POST",
+      url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab11/messages",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "message-owner-missing"
+      },
+      payload: { body: "Must not send" }
+    });
+    const mismatched = await app.inject({
+      method: "POST",
+      url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab11/messages",
+      headers: {
+        authorization: "Bearer valid-token",
+        "idempotency-key": "message-owner-mismatch",
+        "x-wevid-expected-actor-id": "00000000-0000-4000-8000-000000000099"
+      },
+      payload: { body: "Must not send" }
+    });
+
+    expect(missing.statusCode).toBe(400);
+    expect(mismatched.statusCode).toBe(409);
+    expect(createMessage).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -11540,11 +13462,27 @@ describe("buildApi", () => {
     const beforeAcceptance = await app.inject({ method: "POST", url: paymentUrl, headers: { authorization: "Bearer valid-token", "idempotency-key": "creator-request-payment-before" }, payload: {} });
     expect(beforeAcceptance.statusCode).toBe(409);
 
+    const mutableAcceptance = await app.inject({
+      method: "PATCH",
+      url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab12/creator-requests/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "creator-request-accept-mutable" },
+      payload: { action: "accept", expectedTermsRevision: 1, agreedAmountMinor: 1 }
+    });
+    expect(mutableAcceptance.statusCode).toBe(400);
+
+    const unversionedAcceptance = await app.inject({
+      method: "PATCH",
+      url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab12/creator-requests/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "creator-request-accept-unversioned" },
+      payload: { action: "accept" }
+    });
+    expect(unversionedAcceptance.statusCode).toBe(400);
+
     const acceptedResponse = await app.inject({
       method: "PATCH",
       url: "/v1/messages/conversations/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaab12/creator-requests/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaac03",
       headers: { authorization: "Bearer valid-token", "idempotency-key": "creator-request-accept" },
-      payload: { action: "accept", agreedAmountMinor: 10_000_000 }
+      payload: { action: "accept", expectedTermsRevision: 1 }
     });
     expect(acceptedResponse.statusCode).toBe(200);
 
@@ -11627,7 +13565,7 @@ describe("buildApi", () => {
 
     expect(readResponse.statusCode).toBe(200);
     expect(readResponse.json()).toMatchObject({
-      defaultMode: "recommended",
+      defaultMode: "latest",
       nsfwPreference: "both"
     });
     expect(preferencesResponse.statusCode).toBe(200);
@@ -11669,7 +13607,48 @@ describe("buildApi", () => {
     await app.close();
   });
 
+  it("keeps export intake disabled without blocking deletion requests", async () => {
+    vi.stubEnv("CONTENT_EXPORTS_ENABLED", "false");
+    const requestTypes: string[] = [];
+    const app = await buildApi({
+      authVerifier: fakeAuthVerifier,
+      sessionRepository: appReadySessionRepository,
+      ageRepository: verifiedAgeRepository,
+      engagementRepository: fakeEngagementRepository({
+        async onCreateDataRequest(input) {
+          requestTypes.push(input.body.type);
+        }
+      })
+    });
+    await app.ready();
+
+    const exportResponse = await app.inject({
+      method: "POST",
+      url: "/v1/privacy/data-requests",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "privacy-export-disabled" },
+      payload: { type: "export" }
+    });
+    const deleteResponse = await app.inject({
+      method: "POST",
+      url: "/v1/privacy/data-requests",
+      headers: { authorization: "Bearer valid-token", "idempotency-key": "privacy-delete-enabled" },
+      payload: { type: "delete" }
+    });
+
+    expect(exportResponse.statusCode).toBe(503);
+    expect(exportResponse.json()).toEqual({
+      code: "service_unavailable",
+      message: "Content export is temporarily unavailable"
+    });
+    expect(deleteResponse.statusCode).toBe(201);
+    expect(requestTypes).toEqual(["delete"]);
+
+    await app.close();
+    vi.unstubAllEnvs();
+  });
+
   it("records content engagement, safety reports, and blocks through server-owned routes", async () => {
+    vi.stubEnv("CONTENT_EXPORTS_ENABLED", "true");
     const calls: Array<{ kind: string; input: unknown }> = [];
     const app = await buildApi({
       authVerifier: fakeAuthVerifier,
@@ -11792,7 +13771,7 @@ describe("buildApi", () => {
     expect(malformedCommentCursorResponse.statusCode).toBe(400);
     expect(malformedCommentCursorResponse.json()).toEqual({
       code: "validation_failed",
-      message: "cursor must be an ISO timestamp"
+      message: "Request could not be processed"
     });
     expect(shareResponse.statusCode).toBe(201);
     expect(reportResponse.statusCode).toBe(201);
@@ -11817,6 +13796,7 @@ describe("buildApi", () => {
     ]);
 
     await app.close();
+    vi.unstubAllEnvs();
   });
 
   it("reads and mutates the canonical follow graph and records feed impressions", async () => {
@@ -12046,7 +14026,8 @@ describe("buildApi", () => {
           calls.push({ kind: "plans", input });
 
           return {
-            items: [subscriptionPlanFixture()]
+            items: [subscriptionPlanFixture()],
+            nextCursor: null
           };
         },
         async onListSubscriptions(input) {
@@ -12059,7 +14040,8 @@ describe("buildApi", () => {
                 currentPeriodEndsAt: "2026-07-04T00:00:00.000Z",
                 nextCollectionAt: "2026-07-04T00:00:00.000Z"
               })
-            ]
+            ],
+            nextCursor: null
           };
         },
         async onCreateAuthorizationIntent(input) {
@@ -12100,7 +14082,10 @@ describe("buildApi", () => {
       url: "/v1/subscriptions/intents",
       headers: { authorization: "Bearer valid-token", "idempotency-key": "sub-intent-1" },
       payload: {
-        planId: "platform_plus_monthly"
+        planId: "platform_plus_monthly",
+        termsVersion: "subscription-recurring-terms-v1",
+        withdrawalWaiverVersion: "subscription-initial-access-waiver-v1",
+        immediateAccessAcknowledged: true
       }
     });
     const submitResponse = await app.inject({
@@ -12151,10 +14136,10 @@ describe("buildApi", () => {
       renewalMode: "delegated_solana_subscription"
     });
     expect(calls).toMatchObject([
-      { kind: "plans", input: { supabaseUserId: "00000000-0000-4000-8000-000000000001" } },
+      { kind: "plans", input: { supabaseUserId: "00000000-0000-4000-8000-000000000001", limit: 20 } },
       {
         kind: "subscriptions",
-        input: { supabaseUserId: "00000000-0000-4000-8000-000000000001" }
+        input: { supabaseUserId: "00000000-0000-4000-8000-000000000001", limit: 20, view: "active" }
       },
       { kind: "intent", input: { idempotencyKey: "sub-intent-1", body: { planId: "platform_plus_monthly" } } },
       {
@@ -12381,6 +14366,10 @@ function sumsubDigest(payload: string): string {
   return createHmac("sha256", "sumsub-test-secret").update(payload).digest("hex");
 }
 
+function sumsubEventId(payload: string): string {
+  return `sumsub:${createHash("sha256").update(payload).digest("hex")}`;
+}
+
 function diditV2Signature(payload: unknown): string {
   return createHmac("sha256", "didit-webhook-secret").update(testCanonicalJson(payload)).digest("hex");
 }
@@ -12526,6 +14515,32 @@ const storedPaymentIntent: StoredPaymentIntent = {
   refundValueBasis: "manual_resolution"
 };
 
+function signedPaymentSubmissionFixture(
+  overrides: Partial<StoredPaymentIntent> = {},
+  payer = Keypair.generate()
+) {
+  const transaction = new Transaction({
+    feePayer: payer.publicKey,
+    recentBlockhash: Keypair.generate().publicKey.toBase58()
+  }).add(SystemProgram.transfer({
+    fromPubkey: payer.publicKey,
+    toPubkey: Keypair.generate().publicKey,
+    lamports: 1
+  }));
+  transaction.sign(payer);
+
+  return {
+    intent: {
+      ...storedPaymentIntent,
+      buyerWallet: payer.publicKey.toBase58(),
+      ...overrides
+    } satisfies StoredPaymentIntent,
+    payer,
+    signature: bs58.encode(transaction.signature!),
+    signedTransactionBase64: transaction.serialize().toString("base64")
+  };
+}
+
 function liveRoomFixture(
   overrides: Partial<
     StoredLiveRoom & {
@@ -12571,10 +14586,15 @@ function liveRoomFixture(
       accessState: state === "live" ? (hasPass ? "allowed" : "members_only") : "closed"
     },
     replayContentId: overrides.replayContentId ?? null,
-    providerStreamId: overrides.providerStreamId ?? "livepeer-stream",
-    providerPlaybackId: overrides.providerPlaybackId ?? "livepeer-playback",
-    hostIngestUrl: overrides.hostIngestUrl ?? "rtmp://rtmp.livepeer.com/live/test",
-    hostStreamKey: overrides.hostStreamKey ?? "test",
+    providerStreamId:
+      overrides.providerStreamId === undefined ? "livepeer-stream" : overrides.providerStreamId,
+    providerPlaybackId:
+      overrides.providerPlaybackId === undefined ? "livepeer-playback" : overrides.providerPlaybackId,
+    hostIngestUrl:
+      overrides.hostIngestUrl === undefined
+        ? "rtmp://rtmp.livepeer.com/live/test"
+        : overrides.hostIngestUrl,
+    hostStreamKey: overrides.hostStreamKey === undefined ? "test" : overrides.hostStreamKey,
     ...(overrides.requestHash ? { requestHash: overrides.requestHash } : {})
   };
 }
@@ -12706,6 +14726,7 @@ function subscriptionPlanFixture(overrides: Partial<SubscriptionPlan> = {}): Sub
     benefits: overrides.benefits ?? [],
     amountMinor: overrides.amountMinor ?? 15000000,
     currency: overrides.currency ?? "USDC",
+    assetDecimals: overrides.assetDecimals ?? 6,
     periodDays: overrides.periodDays ?? 30,
     billingMode: overrides.billingMode ?? "delegated_solana_subscription",
     providerState: overrides.providerState ?? "staging_required",
@@ -12781,7 +14802,9 @@ function fakeSubscriptionRepository(
     async getPlatformPlaybackDecision(input) {
       return overrides.onGetPlatformPlaybackDecision?.(input) ?? {
         countsTowardAllowance: false,
-        limitReached: false
+        limitReached: false,
+        leaseRequired: false,
+        leaseExpiresAt: null
       };
     },
     async createPlatformPlaybackSession(input) {
@@ -12791,10 +14814,10 @@ function fakeSubscriptionRepository(
       return overrides.onRecordPlatformPlaybackHeartbeat?.(input) ?? platformPlaybackSessionFixture();
     },
     async listPlans(input) {
-      return overrides.onListPlans?.(input) ?? { items: [subscriptionPlanFixture()] };
+      return overrides.onListPlans?.(input) ?? { items: [subscriptionPlanFixture()], nextCursor: null };
     },
     async listSubscriptions(input): Promise<SubscriptionPage> {
-      return overrides.onListSubscriptions?.(input) ?? { items: [subscriptionFixture()] };
+      return overrides.onListSubscriptions?.(input) ?? { items: [subscriptionFixture()], nextCursor: null };
     },
     async getCreatorOffer() {
       return null;
@@ -12812,6 +14835,8 @@ function fakeSubscriptionRepository(
       return {
         authorizationIntentId: input.authorizationIntentId,
         setupReference: "00000000-0000-4000-8000-000000000072",
+        submittedSignature: null,
+        submittedAt: null,
         delegationProgramId: input.delegationProgramId,
         collectorAddress: null,
         subscriberWallet: "11111111111111111111111111111111",
@@ -12821,7 +14846,7 @@ function fakeSubscriptionRepository(
         tokenMint: "USDC_MINT_CONFIG_REQUIRED",
         tokenProgram: "spl_token",
         amountMinor: 15000000,
-        amountAtomic: 15000000,
+        amountAtomic: "15000000",
         periodDays: 30,
         periodSeconds: 2592000,
         delegationNonce: 0,
@@ -12879,6 +14904,8 @@ function platformPlaybackSessionFixture(
     state: overrides.state ?? "active",
     heartbeatIntervalSeconds: overrides.heartbeatIntervalSeconds ?? 15,
     consumedSeconds: overrides.consumedSeconds ?? 0,
+    reservedSeconds: overrides.reservedSeconds ?? 900,
+    leaseExpiresAt: overrides.leaseExpiresAt ?? "2026-08-01T00:15:00.000Z",
     usage: overrides.usage ?? platformAccessFixture().usage
   };
 }
@@ -13001,14 +15028,16 @@ function fakeMessageRepository(
                 createdAt: "2026-06-04T23:45:00.000Z"
               }
             }
-          ]
+          ],
+          nextCursor: null
         }
       );
     },
     async listMessages(input) {
       return (
         (await overrides.onListMessages?.(input)) ?? {
-          items: [messageFixture({ conversationId: input.conversationId })]
+          items: [messageFixture({ conversationId: input.conversationId })],
+          nextCursor: null
         }
       );
     },
@@ -13069,7 +15098,11 @@ function fakeMessageRepository(
       });
     },
     async listCommercialInteractions(input) {
-      return overrides.onListCommercialInteractions?.(input) ?? { mediaOffers: [], creatorRequests: [] };
+      return overrides.onListCommercialInteractions?.(input) ?? {
+        mediaOffers: [],
+        creatorRequests: [],
+        nextCursor: null
+      };
     },
     async createCreatorMediaOffer(input) {
       return overrides.onCreateCreatorMediaOffer?.(input) ?? mediaOfferFixture(input.conversationId, input.body.contentItemId);
@@ -13179,6 +15212,7 @@ function creatorRequestFixture(conversationId: string, creatorUserId = "aaaaaaaa
     expectedDeliveryDays: 14,
     clarificationRule: "One written clarification before acceptance.",
     cancellationRule: "Cancellation before payment.",
+    termsRevision: 1,
     state: "proposed" as const,
     paymentIntentId: null,
     expiresAt: "2026-09-01T00:00:00.000Z",
@@ -13239,7 +15273,7 @@ function fakeEngagementRepository(
     async getFeedPreferences(input) {
       await overrides.onGetFeedPreferences?.(input);
       return {
-        defaultMode: "recommended",
+        defaultMode: "latest",
         nsfwPreference: "both",
         hiddenCreatorIds: [],
         hiddenTopics: []
@@ -13248,7 +15282,7 @@ function fakeEngagementRepository(
     async updateFeedPreferences(input) {
       await overrides.onUpdateFeedPreferences?.(input);
       return {
-        defaultMode: input.body.defaultMode ?? "recommended",
+        defaultMode: input.body.defaultMode ?? "latest",
         nsfwPreference: input.body.nsfwPreference ?? "both",
         hiddenCreatorIds: [],
         hiddenTopics: []
@@ -13260,7 +15294,7 @@ function fakeEngagementRepository(
     async hideCreator(input) {
       await overrides.onHideCreator?.(input);
       return {
-        defaultMode: "recommended",
+        defaultMode: "latest",
         nsfwPreference: "both",
         hiddenCreatorIds: [input.creatorUserId],
         hiddenTopics: []
@@ -13269,7 +15303,7 @@ function fakeEngagementRepository(
     async hideTopic(input) {
       await overrides.onHideTopic?.(input);
       return {
-        defaultMode: "recommended",
+        defaultMode: "latest",
         nsfwPreference: "both",
         hiddenCreatorIds: [],
         hiddenTopics: [input.topic]
@@ -13943,6 +15977,12 @@ const fakeAdminRepository: AdminRepository = {
           type: "export",
           state: "requested",
           privacyBoundary: "sanitized_identity_minimized_no_raw_exports",
+          contentExportJobId: "00000000-0000-4000-8000-000000000171",
+          contentExportJobState: "ready",
+          contentExportCleanupState: "retained_private",
+          contentExportArchiveUploadStartedAt: "2026-06-06T12:05:00.000Z",
+          contentExportCleanupRequiredAttemptCount: 2,
+          contentExportOldestCleanupRequiredAttemptAt: "2026-06-06T12:06:00.000Z",
           createdAt: "2026-06-06T12:00:00.000Z",
           updatedAt: null,
           completedAt: null
@@ -13955,9 +15995,15 @@ const fakeAdminRepository: AdminRepository = {
     return {
       id: input.dataRequestId,
       requesterUserId: "00000000-0000-4000-8000-000000000011",
-      type: "export",
+      type: "delete",
       state: input.body.state,
       privacyBoundary: "sanitized_identity_minimized_no_raw_exports",
+      contentExportJobId: null,
+      contentExportJobState: null,
+      contentExportCleanupState: null,
+      contentExportArchiveUploadStartedAt: null,
+      contentExportCleanupRequiredAttemptCount: null,
+      contentExportOldestCleanupRequiredAttemptAt: null,
       createdAt: "2026-06-06T12:00:00.000Z",
       updatedAt: "2026-06-06T12:30:00.000Z",
       completedAt:
@@ -14098,6 +16144,9 @@ const fakeAdminRepository: AdminRepository = {
         {
           id: "00000000-0000-4000-8000-0000000000f1",
           userId: "00000000-0000-4000-8000-000000000011",
+          subjectType: "user",
+          subjectId: "00000000-0000-4000-8000-000000000011",
+          purpose: "creator_kyc",
           provider: "sumsub",
           providerReference: "sumsub-kyc-ref-1",
           verificationType: "kyc",
@@ -14123,9 +16172,16 @@ const fakeAdminRepository: AdminRepository = {
         {
           id: "00000000-0000-4000-8000-0000000000f2",
           actorUserId: "00000000-0000-4000-8000-000000000001",
+          transport: "assistant",
+          connectionId: null,
           scope: "admin_ops",
           state: "active",
           allowedToolCount: 2,
+          clientName: null,
+          clientType: null,
+          authMode: null,
+          grantedScopes: [],
+          lastUsedAt: null,
           createdAt: "2026-06-06T14:00:00.000Z",
           expiresAt: "2026-06-06T15:00:00.000Z"
         }
@@ -14139,11 +16195,16 @@ const fakeAdminRepository: AdminRepository = {
         {
           id: "00000000-0000-4000-8000-0000000000f3",
           sessionId: "00000000-0000-4000-8000-0000000000f2",
+          connectionId: null,
           actorUserId: "00000000-0000-4000-8000-000000000001",
+          transport: "assistant",
           scope: "admin_ops",
           toolName: "provider_health_summary",
+          toolVersion: null,
           state: "executed",
           confirmationState: "not_required",
+          riskLevel: null,
+          requiredScopes: [],
           subjectType: "provider",
           subjectId: null,
           inputSummary: "Summarize provider state",
@@ -14420,6 +16481,17 @@ const fakeAdminRepository: AdminRepository = {
         }
       ],
       nextCursor: null
+    };
+  },
+  async getFeatureFlag(featureFlagKey) {
+    if (featureFlagKey !== "compliance.carf_exports") return null;
+    return {
+      key: featureFlagKey,
+      value: { enabled: false },
+      category: "compliance",
+      policyBoundary: "software_policy_only_no_payment_access_or_social_priority",
+      state: "paused",
+      updatedAt: "2026-06-06T12:00:00.000Z"
     };
   },
   async updateFeatureFlag(input) {
@@ -14852,7 +16924,6 @@ const fakeProfileRepository: ProfileRepository = {
     expect(input).toMatchObject({
       handle: "maki",
       displayName: "Maki",
-      avatarUrl: "https://media.example.test/avatar.jpg",
       links: [{ label: "Website", url: "https://veel.example.test/maki" }],
       bio: "Building Veel v2"
     });
@@ -14861,7 +16932,7 @@ const fakeProfileRepository: ProfileRepository = {
       id: "00000000-0000-4000-8000-000000000010",
       handle: input.handle,
       displayName: input.displayName ?? input.handle,
-      avatarUrl: input.avatarUrl ?? null,
+      avatarUrl: null,
       badges: []
     };
   },
@@ -14924,10 +16995,13 @@ const fakeProfileRepository: ProfileRepository = {
         blockedReasons: ["earnings_recipient_wallet_required"]
       },
       earnings: {
-        currency: "SOL",
-        creatorEarningsMinor: 85000000,
-        platformFeesMinor: 15000000,
-        referralCommissionsMinor: 5000000,
+        assets: [{
+          currency: "SOL",
+          creatorEarningsAtomic: "85000000",
+          platformFeesAtomic: "15000000",
+          referralCommissionsAtomic: "5000000",
+          confirmedPaymentCount: 3
+        }],
         confirmedPaymentCount: 3
       },
       products: [
@@ -14935,8 +17009,11 @@ const fakeProfileRepository: ProfileRepository = {
           productType: "tip",
           enabled: true,
           confirmedPaymentCount: 2,
-          amountMinor: 70000000,
-          currency: "SOL"
+          assets: [{
+            amountAtomic: "70000000",
+            currency: "SOL",
+            confirmedPaymentCount: 2
+          }]
         }
       ],
       recentActivity: []

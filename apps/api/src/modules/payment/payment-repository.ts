@@ -22,7 +22,10 @@ export {
   PaymentRepositoryConfigurationError
 } from "./payment-repository-errors.js";
 import { PaymentIntentRow, toStoredPaymentIntent } from "./payment-intent-mapper.js";
-import { recordPaymentSubmission } from "./payment-submission.js";
+import {
+  hasPaymentSubmissionCommandReceipt,
+  recordPaymentSubmission
+} from "./payment-submission.js";
 import { calculateSettlementSplit } from "./payment-amounts.js";
 
 interface SettlementAuthorityRow {
@@ -71,6 +74,9 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
         throw new PaymentRepositoryConfigurationError();
       },
       async recordCheckoutPayer() {
+        throw new PaymentRepositoryConfigurationError();
+      },
+      async hasSubmissionCommandReceipt() {
         throw new PaymentRepositoryConfigurationError();
       },
       async recordSubmission() {
@@ -480,7 +486,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
         from payment_intents pi
         where pi.checkout_token_hash = ${input.checkoutTokenHash}
           and pi.expires_at > now()
-          and pi.state in ('pending', 'transaction_requested', 'submitted')
+          and pi.state in ('pending', 'transaction_requested')
         limit 1
       `;
 
@@ -604,7 +610,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
       const rows = await sql<{ expires_at: Date }[]>`
         update payment_intents pi
         set
-          state = case when state = 'pending' then 'transaction_requested' else state end,
+          state = case when pi.state = 'pending' then 'transaction_requested' else pi.state end,
           transaction_request_url = ${input.storedTransactionRequestUrl},
           checkout_token_hash = ${input.checkoutTokenHash},
           transaction_requested_at = now(),
@@ -613,7 +619,7 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
         where pi.user_id = u.id
           and u.supabase_user_id = ${input.supabaseUserId}
           and pi.id = ${input.paymentIntentId}
-          and pi.state in ('pending', 'transaction_requested', 'submitted')
+          and pi.state in ('pending', 'transaction_requested')
         returning pi.expires_at
       `;
 
@@ -634,12 +640,15 @@ export function createPostgresPaymentRepository(database?: string | PostgresSql)
           updated_at = now()
         where pi.checkout_token_hash = ${input.checkoutTokenHash}
           and pi.expires_at > now()
-          and pi.state in ('pending', 'transaction_requested', 'submitted')
+          and pi.state in ('pending', 'transaction_requested')
           and (pi.buyer_wallet is null or pi.buyer_wallet = ${input.buyerWallet})
         returning pi.*
       `;
 
       return rows[0] ? toStoredPaymentIntent(rows[0]) : null;
+    },
+    async hasSubmissionCommandReceipt(input) {
+      return hasPaymentSubmissionCommandReceipt(sql, input);
     },
     async recordSubmission(input) {
       await recordPaymentSubmission(sql, input);

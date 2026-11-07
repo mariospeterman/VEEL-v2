@@ -33,6 +33,13 @@ export class SubscriptionIdempotencyConflictError extends Error {
   }
 }
 
+export class SubscriptionCollectionInFlightError extends Error {
+  constructor() {
+    super("SUBSCRIPTION_COLLECTION_IN_FLIGHT");
+    this.name = "SubscriptionCollectionInFlightError";
+  }
+}
+
 export class SubscriptionPolicyError extends Error {
   constructor(message: string) {
     super(message);

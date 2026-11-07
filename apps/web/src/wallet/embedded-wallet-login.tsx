@@ -1,52 +1,96 @@
 "use client";
 
-import { usePrivy, useLogin } from "@privy-io/react-auth";
+import {
+  useLoginWithEmail,
+  useLoginWithOAuth,
+  useLoginWithPasskey,
+  usePrivy,
+  useSignupWithPasskey
+} from "@privy-io/react-auth";
 import {
   useCreateWallet,
   useSignMessage as usePrivySolanaSignMessage,
   useWallets as usePrivySolanaWallets
 } from "@privy-io/react-auth/solana";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiMutationError, getCurrentSession } from "@/api-mutations";
 import { safeMutationMessage } from "@/api-errors";
 import { ProviderLogo } from "@/brand/provider-logo";
-import { createBackendWalletSession } from "./backend-wallet-auth";
-import type { WalletAuthPurpose } from "./backend-wallet-auth";
 import { recordOnboardingEvent } from "@/analytics/onboarding-analytics";
+import { walletSessionDestination } from "@/supabase/access-redirect";
+import { createBackendWalletSession, type WalletAuthPurpose } from "./backend-wallet-auth";
+import {
+  clearEmbeddedAuthResume,
+  embeddedAuthMethods,
+  rememberEmbeddedAuthResume,
+  type EmbeddedAuthMethod
+} from "./embedded-auth-method";
+import { handleWalletAccountNotFound } from "./wallet-account-not-found";
 
-export function EmbeddedWalletLoginButton({
-  label,
+export function EmbeddedWalletLoginMethods({
+  initialMethod,
   onAccountNotFound,
   onLinked,
   purpose,
-  autoStart = false,
   secondary = false
 }: {
-  label: string;
+  initialMethod: EmbeddedAuthMethod;
   purpose: WalletAuthPurpose;
   onAccountNotFound?: (() => void) | undefined;
   onLinked?: ((address: string) => void) | undefined;
-  autoStart?: boolean;
   secondary?: boolean;
 }) {
   const { authenticated, ready } = usePrivy();
-  const [flowRequested, setFlowRequested] = useState(false);
-  const flowRunning = useRef(false);
-  const { login } = useLogin({
-    onError: () => {
-      setFlowRequested(false);
-      setState("error");
-      setMessage("Sign-in was not completed. Try again when you are ready.");
-    }
-  });
   const { createWallet } = useCreateWallet();
   const { ready: walletsReady, wallets } = usePrivySolanaWallets();
   const { signMessage } = usePrivySolanaSignMessage();
-  const [state, setState] = useState<"idle" | "working" | "account_not_found" | "error">("idle");
-  const [message, setMessage] = useState<string | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<EmbeddedAuthMethod>(initialMethod);
+  const [email, setEmail] = useState("");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailCodeSent, setEmailCodeSent] = useState(false);
+  const [flowRequested, setFlowRequested] = useState(false);
   const [walletProvisioned, setWalletProvisioned] = useState(false);
-  const autoStartInitialized = useRef(false);
-  const autoStartInvoked = useRef(false);
+  const [state, setState] = useState<"idle" | "working" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const initialMethodStarted = useRef(false);
+  const flowRunning = useRef(false);
+
+  const accountNotFound = useCallback(() => {
+    clearEmbeddedAuthResume();
+    setFlowRequested(false);
+    setState("working");
+    setMessage("No WeVid account was found. Moving you to secure onboarding…");
+    handleWalletAccountNotFound(onAccountNotFound);
+  }, [onAccountNotFound]);
+
+  const handlePrivyComplete = useCallback(() => {
+    clearEmbeddedAuthResume();
+    setState("working");
+    setMessage("Verifying your noncustodial wallet…");
+    setFlowRequested(true);
+  }, []);
+
+  const handlePrivyError = useCallback((error: unknown) => {
+    clearEmbeddedAuthResume();
+    if (purpose === "login" && error === "user_does_not_exist") {
+      accountNotFound();
+      return;
+    }
+    setFlowRequested(false);
+    setState("error");
+    setMessage(error === "exited_auth_flow" || error === "oauth_user_denied"
+      ? "Sign-in was not completed. Choose a method when you are ready."
+      : "Secure sign-in could not be completed. Check the provider configuration and try again.");
+  }, [accountNotFound, purpose]);
+
+  const privyCallbacks = {
+    onComplete: handlePrivyComplete,
+    onError: handlePrivyError
+  };
+  const { loginWithCode, sendCode } = useLoginWithEmail(privyCallbacks);
+  const { initOAuth } = useLoginWithOAuth(privyCallbacks);
+  const { loginWithPasskey } = useLoginWithPasskey(privyCallbacks);
+  const { signupWithPasskey } = useSignupWithPasskey(privyCallbacks);
 
   useEffect(() => {
     if (!flowRequested || !authenticated || !ready || !walletsReady || flowRunning.current) return;
@@ -58,17 +102,14 @@ export function EmbeddedWalletLoginButton({
 
         if (!wallet) {
           if (purpose === "login") {
-            recordOnboardingEvent("account_not_found");
-            setFlowRequested(false);
-            setState("account_not_found");
-            setMessage("No existing WeVid wallet was found for this account. Start onboarding to create one.");
+            accountNotFound();
             return;
           }
 
           if (!walletProvisioned) {
             await createWallet();
             setWalletProvisioned(true);
-            setMessage("Preparing your wallet…");
+            setMessage("Preparing your noncustodial wallet…");
           }
           return;
         }
@@ -82,23 +123,19 @@ export function EmbeddedWalletLoginButton({
               message: new TextEncoder().encode(challenge),
               wallet
             });
-
             return result.signature;
           }
         });
-        await getCurrentSession();
+        const appSession = await getCurrentSession();
 
+        clearEmbeddedAuthResume();
         setFlowRequested(false);
         onLinked?.(wallet.address);
-        if (!onLinked) {
-          window.location.reload();
-        }
+        if (!onLinked) redirectAfterEmbeddedWalletSession(appSession);
       } catch (error) {
         setFlowRequested(false);
         if (error instanceof ApiMutationError && error.status === 404 && purpose === "login") {
-          recordOnboardingEvent("account_not_found");
-          setState("account_not_found");
-          setMessage("No WeVid account was found for this sign-in. Start onboarding to continue.");
+          accountNotFound();
           return;
         }
         setState("error");
@@ -107,100 +144,149 @@ export function EmbeddedWalletLoginButton({
         flowRunning.current = false;
       }
     })();
-  }, [authenticated, createWallet, flowRequested, onLinked, purpose, ready, signMessage, walletProvisioned, wallets, walletsReady]);
+  }, [accountNotFound, authenticated, createWallet, flowRequested, onLinked, purpose, ready, signMessage, walletProvisioned, wallets, walletsReady]);
 
-  const start = useCallback(() => {
-    recordOnboardingEvent("auth_method_selected", `embedded-${purpose}`);
-    setState("working");
+  const startMethod = useCallback(async (method: EmbeddedAuthMethod) => {
+    recordOnboardingEvent("auth_method_selected", `embedded-${method}-${purpose}`);
+    setSelectedMethod(method);
     setMessage(null);
     setWalletProvisioned(false);
 
-    if (!ready || !walletsReady) {
+    if (!ready) {
       setState("error");
-      setMessage(safeMutationMessage(new ApiMutationError("Account sign-in is still loading."), "Account sign-in"));
+      setMessage("Secure sign-in is still loading. Try again in a moment.");
       return;
     }
 
-    setFlowRequested(true);
-    if (!authenticated) {
-      login();
+    if (authenticated) {
+      setState("working");
+      setMessage("Verifying your noncustodial wallet…");
+      setFlowRequested(true);
+      return;
     }
-  }, [authenticated, login, ready, walletsReady]);
 
-  useEffect(() => {
-    if (!autoStart || autoStartInitialized.current) return;
-    autoStartInitialized.current = true;
+    if (method === "email") {
+      setState("idle");
+      return;
+    }
+
     setState("working");
-    setMessage("Loading secure sign-in…");
-  }, [autoStart]);
+    try {
+      if (method === "passkey") {
+        setFlowRequested(true);
+        if (purpose === "login") await loginWithPasskey();
+        else await signupWithPasskey();
+        return;
+      }
+
+      rememberEmbeddedAuthResume(method, purpose);
+      setFlowRequested(true);
+      await initOAuth({ provider: method, disableSignup: purpose === "login" });
+    } catch (error) {
+      handlePrivyError(privyErrorCode(error));
+    }
+  }, [authenticated, handlePrivyError, initOAuth, loginWithPasskey, purpose, ready, signupWithPasskey]);
 
   useEffect(() => {
-    if (!autoStart || autoStartInvoked.current || !ready || !walletsReady) return;
-    autoStartInvoked.current = true;
-    start();
-  }, [autoStart, ready, start, walletsReady]);
+    if (initialMethodStarted.current || !ready) return;
+    initialMethodStarted.current = true;
+    void startMethod(initialMethod);
+  }, [initialMethod, ready, startMethod]);
 
-  useEffect(() => {
-    if (!autoStart || (ready && walletsReady)) return;
-
-    const timeout = window.setTimeout(() => {
+  async function requestEmailCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !normalizedEmail.includes("@")) {
       setState("error");
-      setMessage("Secure sign-in did not become ready. Check that this site origin and login methods are enabled in Privy, then try again.");
-    }, 12_000);
+      setMessage("Enter a valid email address.");
+      return;
+    }
 
-    return () => window.clearTimeout(timeout);
-  }, [autoStart, ready, walletsReady]);
+    setState("working");
+    setMessage(null);
+    try {
+      await sendCode({ email: normalizedEmail, disableSignup: purpose === "login" });
+      setEmailCodeSent(true);
+      setState("idle");
+      setMessage("Enter the one-time code sent to your email.");
+    } catch (error) {
+      handlePrivyError(privyErrorCode(error));
+    }
+  }
+
+  async function verifyEmailCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!emailCode.trim()) {
+      setState("error");
+      setMessage("Enter the code from your email.");
+      return;
+    }
+
+    setState("working");
+    setMessage("Verifying your code…");
+    setFlowRequested(true);
+    try {
+      await loginWithCode({ code: emailCode.trim() });
+    } catch (error) {
+      handlePrivyError(privyErrorCode(error, "invalid_credentials"));
+    }
+  }
+
+  const busy = state === "working";
 
   return (
     <>
-      <EmbeddedButtonFrame
-      disabled={state === "working"}
-      label={label}
-      logo="privy"
-      message={message}
-      onClick={start}
-      secondary={secondary}
-      status={state === "working" ? "Opening" : purpose === "login" ? "Email · social · passkey" : "Secure embedded wallet"}
-      tone={state === "error" ? "error" : "muted"}
-      />
-      {state === "account_not_found" && onAccountNotFound ? (
-        <button className="landing-inline-link" onClick={onAccountNotFound} type="button">
-          Start onboarding
-        </button>
+      {embeddedAuthMethods.map((method) => (
+        <div className="auth-provider-button-stack" key={method.method}>
+          <button
+            aria-label={`${purpose === "login" ? "Continue" : "Set up"} with ${method.label}`}
+            className={`auth-provider-button${secondary ? " auth-provider-button-secondary" : ""}${selectedMethod === method.method ? " auth-provider-button-active" : ""}`}
+            disabled={busy}
+            onClick={() => void startMethod(method.method)}
+            type="button"
+          >
+            <ProviderLogo label={method.label} name={method.logo} />
+            <span>
+              <strong>{method.label}</strong>
+              <small>{busy && selectedMethod === method.method ? "Working" : method.status}</small>
+            </span>
+          </button>
+        </div>
+      ))}
+      {selectedMethod === "email" && !authenticated ? (
+        emailCodeSent ? (
+          <form className="auth-embedded-email" onSubmit={(event) => void verifyEmailCode(event)}>
+            <label>
+              One-time code
+              <input autoComplete="one-time-code" inputMode="numeric" onChange={(event) => setEmailCode(event.target.value)} value={emailCode} />
+            </label>
+            <button disabled={busy} type="submit">Verify and continue</button>
+          </form>
+        ) : (
+          <form className="auth-embedded-email" onSubmit={(event) => void requestEmailCode(event)}>
+            <label>
+              Email
+              <input autoComplete="email" inputMode="email" onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" type="email" value={email} />
+            </label>
+            <button disabled={busy} type="submit">Send code</button>
+          </form>
+        )
       ) : null}
+      {message ? <p className={`auth-provider-note auth-provider-note-${state === "error" ? "error" : "muted"}`}>{message}</p> : null}
     </>
   );
 }
 
-function EmbeddedButtonFrame({
-  disabled,
-  label,
-  logo,
-  message,
-  onClick,
-  secondary,
-  status,
-  tone
-}: {
-  disabled: boolean;
-  label: string;
-  logo: "privy";
-  message: string | null;
-  onClick: () => void;
-  secondary: boolean;
-  status: string;
-  tone: "error" | "muted";
-}) {
-  return (
-    <div className="auth-provider-button-stack">
-      <button className={`auth-provider-button${secondary ? " auth-provider-button-secondary" : ""}`} disabled={disabled} onClick={onClick} type="button">
-        <ProviderLogo label={label} name={logo} />
-        <span>
-          <strong>{label}</strong>
-          <small>{status}</small>
-        </span>
-      </button>
-      {message ? <p className={`auth-provider-note auth-provider-note-${tone}`}>{message}</p> : null}
-    </div>
-  );
+function redirectAfterEmbeddedWalletSession(session: Awaited<ReturnType<typeof getCurrentSession>>) {
+  window.location.assign(walletSessionDestination("/app/home", session.appAccessState));
+}
+
+function privyErrorCode(error: unknown, fallback = "unknown_auth_error") {
+  if (typeof error === "string") return error;
+  if (!error || typeof error !== "object") return fallback;
+
+  const candidate = error as { code?: unknown; privyErrorCode?: unknown };
+  if (typeof candidate.privyErrorCode === "string") return candidate.privyErrorCode;
+  if (typeof candidate.code === "string") return candidate.code;
+  return fallback;
 }

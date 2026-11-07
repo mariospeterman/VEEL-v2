@@ -4,16 +4,15 @@ import type {
   NotificationPage,
   NotificationPreferences
 } from "./types.js";
+import { keysetPage } from "../../shared/keyset-pagination.js";
 import type { DeviceRow, NotificationRow, PreferenceRow } from "./notification-repository-rows.js";
 
-export function toNotificationPage(rows: NotificationRow[], limit: number): NotificationPage {
-  const pageRows = rows.slice(0, limit);
-  const extraRow = rows[limit];
-
-  return {
-    items: pageRows.map(toNotification),
-    nextCursor: extraRow ? extraRow.created_at.toISOString() : null
-  };
+export function toNotificationPage(
+  rows: NotificationRow[],
+  limit: number,
+  encodeCursor: (row: NotificationRow) => string
+): NotificationPage {
+  return keysetPage(rows, limit, toNotification, encodeCursor);
 }
 
 export function toNotification(row: NotificationRow): Notification {

@@ -1,0 +1,1272 @@
+{
+  "policy": [
+    {
+      "schemaname": "public",
+      "tablename": "age_verifications",
+      "policyname": "age_verifications_legacy_archive_deny_all",
+      "qual": "false"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "ai_sessions",
+      "policyname": "ai_sessions_select_self_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "ai_tool_calls",
+      "policyname": "ai_tool_calls_select_self_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "app_sessions",
+      "policyname": "app_sessions_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "audit_events",
+      "policyname": "audit_events_select_actor_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "blocks",
+      "policyname": "blocks_select_blocker_or_staff",
+      "qual": "((blocker_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "buyer_location_evidence",
+      "policyname": "buyer_location_evidence_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "carf_report_lines",
+      "policyname": "carf_report_lines_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "carf_reports",
+      "policyname": "carf_reports_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "comment_mentions",
+      "policyname": "comment_mentions_select_participant_or_staff",
+      "qual": "((mentioned_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member) OR (EXISTS ( SELECT 1\n   FROM comments c\n  WHERE ((c.id = comment_mentions.comment_id) AND (c.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "comment_reactions",
+      "policyname": "comment_reactions_select_self_author_creator_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member) OR (EXISTS ( SELECT 1\n   FROM (comments c\n     JOIN content_items ci ON ((ci.id = c.content_item_id)))\n  WHERE ((c.id = comment_reactions.comment_id) AND ((c.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (ci.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "comments",
+      "policyname": "comments_select_visible_author_creator_or_staff",
+      "qual": "((moderation_state = 'visible'::text) OR (user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member) OR (EXISTS ( SELECT 1\n   FROM content_items ci\n  WHERE ((ci.id = comments.content_item_id) AND (ci.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "compliance_exports",
+      "policyname": "compliance_exports_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "compliance_ledger_entries",
+      "policyname": "compliance_ledger_entries_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "compliance_review_queue",
+      "policyname": "compliance_review_queue_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "content_access_rules",
+      "policyname": "content_access_rules_select_visible_creator_or_staff",
+      "qual": "(EXISTS ( SELECT 1\n   FROM content_items ci\n  WHERE ((ci.id = content_access_rules.content_item_id) AND (((ci.state = 'ready'::content_state) AND (ci.publish_state = 'published'::text) AND (ci.visibility = 'public'::text) AND (ci.moderation_state = 'approved'::text)) OR (ci.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "content_engagement_counters",
+      "policyname": "content_engagement_counters_select_authenticated",
+      "qual": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "content_hashtags",
+      "policyname": "content_hashtags_select_visible_content_or_staff",
+      "qual": "(private.is_staff_member() OR (EXISTS ( SELECT 1\n   FROM (content_items ci\n     JOIN hashtags h ON ((h.id = content_hashtags.hashtag_id)))\n  WHERE ((ci.id = content_hashtags.content_item_id) AND (ci.state = 'ready'::content_state) AND (ci.visibility = 'public'::text) AND (ci.moderation_state = 'approved'::text) AND (h.state = ANY (ARRAY['active'::text, 'restricted'::text]))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "content_items",
+      "policyname": "content_items_select_visible_creator_or_staff",
+      "qual": "(((state = 'ready'::content_state) AND (publish_state = 'published'::text) AND (visibility = 'public'::text) AND (moderation_state = 'approved'::text)) OR (creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "content_reactions",
+      "policyname": "content_reactions_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "content_safety_declarations",
+      "policyname": "content_safety_declarations_select_owner_or_staff",
+      "qual": "((uploader_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "content_saves",
+      "policyname": "content_saves_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "conversation_members",
+      "policyname": "conversation_members_select_participant",
+      "qual": "(( SELECT private.has_protected_app_access() AS has_protected_app_access) AND ( SELECT private.is_current_conversation_member(conversation_members.conversation_id) AS is_current_conversation_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "conversations",
+      "policyname": "conversations_select_member_or_staff",
+      "qual": "(( SELECT private.is_staff_member() AS is_staff_member) OR (EXISTS ( SELECT 1\n   FROM conversation_members cm\n  WHERE ((cm.conversation_id = conversations.id) AND (cm.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "creator_media_offers",
+      "policyname": "creator_media_offers_select_participant",
+      "qual": "(( SELECT private.has_protected_app_access() AS has_protected_app_access) AND ( SELECT private.is_current_conversation_member(creator_media_offers.conversation_id) AS is_current_conversation_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "creator_monetisation_settings",
+      "policyname": "creator_monetisation_settings_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "creator_onboarding_action_receipts",
+      "policyname": "creator_onboarding_action_receipts_select_actor_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "dac7_report_lines",
+      "policyname": "dac7_report_lines_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "dac7_reports",
+      "policyname": "dac7_reports_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "data_requests",
+      "policyname": "data_requests_select_self_or_staff",
+      "qual": "((requester_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "direct_message_requests",
+      "policyname": "direct_message_requests_select_participant",
+      "qual": "(( SELECT private.has_protected_app_access() AS has_protected_app_access) AND ((initiator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (recipient_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "engagement_action_receipts",
+      "policyname": "engagement_action_receipts_select_self_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entitlement_events",
+      "policyname": "entitlement_events_select_owner_or_staff",
+      "qual": "(EXISTS ( SELECT 1\n   FROM entitlements e\n  WHERE ((e.id = entitlement_events.entitlement_id) AND ((e.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "entitlements",
+      "policyname": "entitlements_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "event_access_pass_types",
+      "policyname": "event_access_pass_types_select_public_owner_holder_or_staff",
+      "qual": "(EXISTS ( SELECT 1\n   FROM events e\n  WHERE ((e.id = event_access_pass_types.event_id) AND ((e.state = 'published'::text) OR (e.creator_user_id = private.current_app_user_id()) OR private.is_staff_member()))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "event_access_passes",
+      "policyname": "event_access_passes_select_self_creator_or_staff",
+      "qual": "((holder_user_id = private.current_app_user_id()) OR private.is_staff_member() OR (EXISTS ( SELECT 1\n   FROM events e\n  WHERE ((e.id = event_access_passes.event_id) AND (e.creator_user_id = private.current_app_user_id())))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "event_access_purchase_requests",
+      "policyname": "event_access_purchase_requests_select_self_creator_or_staff",
+      "qual": "((buyer_user_id = private.current_app_user_id()) OR private.is_staff_member() OR (EXISTS ( SELECT 1\n   FROM events e\n  WHERE ((e.id = event_access_purchase_requests.event_id) AND (e.creator_user_id = private.current_app_user_id())))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "event_access_requests",
+      "policyname": "event_access_requests_select_self_creator_or_staff",
+      "qual": "((requester_user_id = private.current_app_user_id()) OR private.is_staff_member() OR (EXISTS ( SELECT 1\n   FROM events e\n  WHERE ((e.id = event_access_requests.event_id) AND (e.creator_user_id = private.current_app_user_id())))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "events",
+      "policyname": "events_select_public_owner_or_staff",
+      "qual": "((state = 'published'::text) OR (creator_user_id = private.current_app_user_id()) OR private.is_staff_member())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "feature_flags",
+      "policyname": "feature_flags_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "feed_impression_receipts",
+      "policyname": "feed_impression_receipts_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "follow_action_receipts",
+      "policyname": "follow_action_receipts_select_actor_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "hashtags",
+      "policyname": "hashtags_select_active_or_staff",
+      "qual": "((state = ANY (ARRAY['active'::text, 'restricted'::text])) OR private.is_staff_member())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "idempotency_keys",
+      "policyname": "idempotency_keys_select_staff",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "identity_verifications",
+      "policyname": "identity_verifications_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "jurisdiction_tax_rules",
+      "policyname": "jurisdiction_tax_rules_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "live_chat_messages",
+      "policyname": "live_chat_messages_select_participant_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member) OR (EXISTS ( SELECT 1\n   FROM live_rooms lr\n  WHERE ((lr.id = live_chat_messages.room_id) AND (lr.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))) OR (EXISTS ( SELECT 1\n   FROM live_rooms lr\n  WHERE ((lr.id = live_chat_messages.room_id) AND (lr.state = 'live'::text) AND (EXISTS ( SELECT 1\n           FROM media_safety_cases safety\n          WHERE ((safety.live_room_id = lr.id) AND (safety.state = 'approved'::text) AND (safety.provider_release_allowed IS TRUE)))) AND (NOT (EXISTS ( SELECT 1\n           FROM blocks b\n          WHERE (((b.blocker_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (b.blocked_user_id = lr.creator_user_id)) OR ((b.blocker_user_id = lr.creator_user_id) AND (b.blocked_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))))) AND ((lr.access_rule = 'public'::text) OR (EXISTS ( SELECT 1\n           FROM subscriptions s\n          WHERE ((s.subscriber_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (s.creator_user_id = lr.creator_user_id) AND (s.scope = 'creator'::text) AND (s.state = ANY (ARRAY['active'::text, 'renewal_pending'::text, 'grace_period'::text])) AND ((s.current_period_ends_at IS NULL) OR (s.current_period_ends_at > now()))))) OR (EXISTS ( SELECT 1\n           FROM live_passes lp\n          WHERE ((lp.room_id = lr.id) AND (lp.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (lp.state = 'active'::text) AND (lp.starts_at <= now()) AND ((lp.expires_at IS NULL) OR (lp.expires_at > now())))))) AND ((NOT lr.members_only_chat) OR (EXISTS ( SELECT 1\n           FROM subscriptions s\n          WHERE ((s.subscriber_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (s.creator_user_id = lr.creator_user_id) AND (s.scope = 'creator'::text) AND (s.state = ANY (ARRAY['active'::text, 'renewal_pending'::text, 'grace_period'::text])) AND ((s.current_period_ends_at IS NULL) OR (s.current_period_ends_at > now()))))))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "live_pass_purchase_requests",
+      "policyname": "live_pass_purchase_requests_select_buyer_creator_or_staff",
+      "qual": "((buyer_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member) OR (EXISTS ( SELECT 1\n   FROM live_rooms lr\n  WHERE ((lr.id = live_pass_purchase_requests.room_id) AND (lr.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "live_passes",
+      "policyname": "live_passes_select_holder_creator_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member) OR (EXISTS ( SELECT 1\n   FROM live_rooms lr\n  WHERE ((lr.id = live_passes.room_id) AND (lr.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "live_replay_assets",
+      "policyname": "live_replay_assets_select_creator_pass_holder_or_staff",
+      "qual": "(( SELECT private.is_staff_member() AS is_staff_member) OR (EXISTS ( SELECT 1\n   FROM live_rooms lr\n  WHERE ((lr.id = live_replay_assets.room_id) AND (lr.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))) OR (EXISTS ( SELECT 1\n   FROM live_passes lp\n  WHERE ((lp.room_id = live_replay_assets.room_id) AND (lp.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (lp.state = 'active'::text) AND (lp.expires_at > now())))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "live_room_control_actions",
+      "policyname": "live_room_control_actions_select_creator_or_staff",
+      "qual": "(( SELECT private.is_staff_member() AS is_staff_member) OR (EXISTS ( SELECT 1\n   FROM live_rooms lr\n  WHERE ((lr.id = live_room_control_actions.room_id) AND (lr.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "live_rooms",
+      "policyname": "live_rooms_select_creator_or_staff",
+      "qual": "((creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "managed_creator_agreements",
+      "policyname": "managed_creator_agreements_party_or_staff_select",
+      "qual": "((EXISTS ( SELECT 1\n   FROM managed_creator_relationships mcr\n  WHERE ((mcr.id = managed_creator_agreements.relationship_id) AND ((mcr.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (EXISTS ( SELECT 1\n           FROM organization_memberships om\n          WHERE ((om.organization_id = mcr.organization_id) AND (om.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (om.state = 'active'::text)))))))) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "managed_creator_allocation_records",
+      "policyname": "managed_creator_allocation_records_party_or_staff_select",
+      "qual": "((creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (EXISTS ( SELECT 1\n   FROM organization_memberships om\n  WHERE ((om.organization_id = managed_creator_allocation_records.organization_id) AND (om.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (om.state = 'active'::text)))) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "managed_creator_relationships",
+      "policyname": "managed_creator_relationships_party_or_staff_select",
+      "qual": "((creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (EXISTS ( SELECT 1\n   FROM organization_memberships om\n  WHERE ((om.organization_id = managed_creator_relationships.organization_id) AND (om.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (om.state = 'active'::text)))) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mcp_connections",
+      "policyname": "mcp_connections_select_self_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mcp_private_draft_origins",
+      "policyname": "mcp_private_draft_origins_select_self_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mcp_tool_calls",
+      "policyname": "mcp_tool_calls_select_self_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "media_assets",
+      "policyname": "media_assets_select_visible_creator_or_staff",
+      "qual": "(EXISTS ( SELECT 1\n   FROM content_items ci\n  WHERE ((ci.id = media_assets.content_item_id) AND (((ci.state = 'ready'::content_state) AND (ci.publish_state = 'published'::text) AND (ci.visibility = 'public'::text) AND (ci.moderation_state = 'approved'::text)) OR (ci.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "media_moderation_appeals",
+      "policyname": "media_moderation_appeals_select_appellant_or_staff",
+      "qual": "((appellant_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "media_moderation_jobs",
+      "policyname": "media_moderation_jobs_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "media_safety_cases",
+      "policyname": "media_safety_cases_select_creator_or_staff",
+      "qual": "((EXISTS ( SELECT 1\n   FROM content_items ci\n  WHERE ((ci.id = media_safety_cases.content_item_id) AND (ci.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))) OR (EXISTS ( SELECT 1\n   FROM live_rooms lr\n  WHERE ((lr.id = media_safety_cases.live_room_id) AND (lr.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "message_attachments",
+      "policyname": "message_attachments_select_participant",
+      "qual": "(( SELECT private.has_protected_app_access() AS has_protected_app_access) AND (EXISTS ( SELECT 1\n   FROM messages message\n  WHERE ((message.id = message_attachments.message_id) AND (message.delivery_state = 'visible'::text) AND ( SELECT private.is_current_conversation_member(message.conversation_id) AS is_current_conversation_member)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "message_reactions",
+      "policyname": "message_reactions_select_participant",
+      "qual": "(( SELECT private.has_protected_app_access() AS has_protected_app_access) AND (EXISTS ( SELECT 1\n   FROM messages message\n  WHERE ((message.id = message_reactions.message_id) AND (message.delivery_state = 'visible'::text) AND ( SELECT private.is_current_conversation_member(message.conversation_id) AS is_current_conversation_member)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "messages",
+      "policyname": "messages_select_visible_participant",
+      "qual": "((delivery_state = 'visible'::text) AND ( SELECT private.has_protected_app_access() AS has_protected_app_access) AND ( SELECT private.is_current_conversation_member(messages.conversation_id) AS is_current_conversation_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mutual_interests",
+      "policyname": "mutual_interests_select_self_or_staff",
+      "qual": "((actor_user_id = private.current_app_user_id()) OR (target_user_id = private.current_app_user_id()) OR private.is_staff_member())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mutual_profiles",
+      "policyname": "mutual_profiles_select_self_or_staff",
+      "qual": "((user_id = private.current_app_user_id()) OR private.is_staff_member())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "mutuals",
+      "policyname": "mutuals_select_member_or_staff",
+      "qual": "((user_a_id = private.current_app_user_id()) OR (user_b_id = private.current_app_user_id()) OR private.is_staff_member())"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "notification_delivery_attempts",
+      "policyname": "notification_delivery_attempts_select_staff",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "notification_devices",
+      "policyname": "notification_devices_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "notification_preferences",
+      "policyname": "notification_preferences_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "notifications",
+      "policyname": "notifications_select_self",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND ( SELECT private.has_protected_app_access() AS has_protected_app_access))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "oauth_access_tokens",
+      "policyname": "oauth_access_tokens_select_actor_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "oauth_authorization_codes",
+      "policyname": "oauth_authorization_codes_select_actor_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "oauth_authorization_requests",
+      "policyname": "oauth_authorization_requests_select_approver_or_staff",
+      "qual": "((approved_by_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "oauth_clients",
+      "policyname": "oauth_clients_select_staff",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "organization_memberships",
+      "policyname": "organization_memberships_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "organization_settlement_wallets",
+      "policyname": "organization_settlement_wallets_member_or_staff_select",
+      "qual": "((EXISTS ( SELECT 1\n   FROM organization_memberships om\n  WHERE ((om.organization_id = organization_settlement_wallets.organization_id) AND (om.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (om.state = 'active'::text)))) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "organization_support_policies",
+      "policyname": "organization_support_policies_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "organizations",
+      "policyname": "organizations_select_member_or_staff",
+      "qual": "(( SELECT private.is_staff_member() AS is_staff_member) OR (EXISTS ( SELECT 1\n   FROM organization_memberships om\n  WHERE ((om.organization_id = organizations.id) AND (om.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (om.state = 'active'::text)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "paid_message_delivery_requests",
+      "policyname": "paid_message_delivery_requests_select_party_or_staff",
+      "qual": "((sender_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (recipient_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "partner_campaigns",
+      "policyname": "partner_campaigns_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "partner_contracts",
+      "policyname": "partner_contracts_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "payment_commercial_policy_overrides",
+      "policyname": "payment_commercial_policy_overrides_select_staff",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "payment_confirmation_deliveries",
+      "policyname": "payment_confirmation_deliveries_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "payment_intents",
+      "policyname": "payment_intents_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "payment_ledger_entries",
+      "policyname": "payment_ledger_entries_select_account_owner_or_staff",
+      "qual": "((account_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "payment_settlement_attempts",
+      "policyname": "payment_settlement_attempts_select_owner_or_staff",
+      "qual": "(EXISTS ( SELECT 1\n   FROM payment_intents pi\n  WHERE ((pi.id = payment_settlement_attempts.payment_intent_id) AND ((pi.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "performer_consent_requests",
+      "policyname": "performer_consent_requests_select_party_or_staff",
+      "qual": "((requested_by_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (EXISTS ( SELECT 1\n   FROM performer_subjects ps\n  WHERE ((ps.id = performer_consent_requests.performer_subject_id) AND (ps.linked_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "performer_consents",
+      "policyname": "performer_consents_select_party_or_staff",
+      "qual": "((recorded_by_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (EXISTS ( SELECT 1\n   FROM performer_subjects ps\n  WHERE ((ps.id = performer_consents.performer_subject_id) AND (ps.linked_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "performer_subjects",
+      "policyname": "performer_subjects_select_self_owner_or_staff",
+      "qual": "((owner_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (linked_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_fee_statements",
+      "policyname": "platform_fee_statements_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_playback_heartbeats",
+      "policyname": "platform_playback_heartbeats_select_self_or_staff",
+      "qual": "((EXISTS ( SELECT 1\n   FROM platform_playback_sessions session\n  WHERE ((session.id = platform_playback_heartbeats.session_id) AND (session.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id))))) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_playback_sessions",
+      "policyname": "platform_playback_sessions_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_tier_policies",
+      "policyname": "platform_tier_policies_select_active_or_staff",
+      "qual": "((state = 'active'::text) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "platform_usage_windows",
+      "policyname": "platform_usage_windows_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "product_tax_matrix",
+      "policyname": "product_tax_matrix_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "profiles",
+      "policyname": "profiles_select_public_self_or_staff",
+      "qual": "((visibility = 'public'::text) OR (user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "provider_event_replay_requests",
+      "policyname": "provider_event_replay_requests_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "provider_events",
+      "policyname": "provider_events_select_staff",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "provider_media_scan_events",
+      "policyname": "provider_media_scan_events_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "provider_webhook_receipts",
+      "policyname": "provider_webhook_receipts_select_staff",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receipt_lines",
+      "policyname": "receipt_lines_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "receipts",
+      "policyname": "receipts_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "recipient_monetisation_overrides",
+      "policyname": "recipient_monetisation_overrides_self_or_staff_select",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "recipient_monetisation_policies",
+      "policyname": "recipient_monetisation_policies_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "recipient_monetisation_risk_assessments",
+      "policyname": "recipient_monetisation_risk_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "recovery_link_intents",
+      "policyname": "recovery_link_intents_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_abuse_flags",
+      "policyname": "referral_abuse_flags_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_attributions",
+      "policyname": "referral_attributions_select_party_or_staff",
+      "qual": "((referrer_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (referred_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_commissions",
+      "policyname": "referral_commissions_select_referrer_or_staff",
+      "qual": "((referrer_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_programs",
+      "policyname": "referral_programs_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "referral_tokens",
+      "policyname": "referral_tokens_select_creator_or_staff",
+      "qual": "((creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "refund_remediation_evidence",
+      "policyname": "refund_remediation_evidence_select_self_or_staff",
+      "qual": "(EXISTS ( SELECT 1\n   FROM refunds_and_disputes rd\n  WHERE ((rd.id = refund_remediation_evidence.refund_dispute_id) AND ((rd.reporter_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "refunds_and_disputes",
+      "policyname": "refunds_and_disputes_select_self_or_staff",
+      "qual": "((reporter_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "regulatory_report_workflows",
+      "policyname": "regulatory_report_workflows_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "reports",
+      "policyname": "reports_select_reporter_or_staff",
+      "qual": "((reporter_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "seller_of_record_determinations",
+      "policyname": "seller_of_record_determinations_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "share_records",
+      "policyname": "share_records_select_actor_or_staff",
+      "qual": "((actor_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "staff_memberships",
+      "policyname": "staff_memberships_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "staff_permissions",
+      "policyname": "staff_permissions_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "structured_creator_requests",
+      "policyname": "structured_creator_requests_select_participant",
+      "qual": "(( SELECT private.has_protected_app_access() AS has_protected_app_access) AND ( SELECT private.is_current_conversation_member(structured_creator_requests.conversation_id) AS is_current_conversation_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "subscription_authorization_intents",
+      "policyname": "subscription_authorization_intents_select_self_creator_or_staff",
+      "qual": "(EXISTS ( SELECT 1\n   FROM subscriptions s\n  WHERE ((s.id = subscription_authorization_intents.subscription_id) AND ((s.subscriber_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (s.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "subscription_collections",
+      "policyname": "subscription_collections_select_self_creator_or_staff",
+      "qual": "(EXISTS ( SELECT 1\n   FROM subscriptions s\n  WHERE ((s.id = subscription_collections.subscription_id) AND ((s.subscriber_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (s.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "subscription_events",
+      "policyname": "subscription_events_select_self_creator_or_staff",
+      "qual": "(EXISTS ( SELECT 1\n   FROM subscriptions s\n  WHERE ((s.id = subscription_events.subscription_id) AND ((s.subscriber_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (s.creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member)))))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "subscription_plans",
+      "policyname": "subscription_plans_select_active_or_staff",
+      "qual": "((state = 'active'::text) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "subscriptions",
+      "policyname": "subscriptions_select_self_creator_or_staff",
+      "qual": "((subscriber_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (creator_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "support_cases",
+      "policyname": "support_cases_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tax_adjustments",
+      "policyname": "tax_adjustments_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tax_profile_versions",
+      "policyname": "tax_profile_versions_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tax_profiles",
+      "policyname": "tax_profiles_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "tier_waivers",
+      "policyname": "tier_waivers_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_follows",
+      "policyname": "user_follows_select_participant_or_staff",
+      "qual": "((follower_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR (followed_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_mutes",
+      "policyname": "user_mutes_select_self_or_staff",
+      "qual": "((muting_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_provider_identities",
+      "policyname": "user_provider_identities_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "user_social_counts",
+      "policyname": "user_social_counts_select_authenticated",
+      "qual": "true"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "users",
+      "policyname": "users_select_self_or_staff",
+      "qual": "((id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vat_determinations",
+      "policyname": "vat_determinations_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vat_invoice_lines",
+      "policyname": "vat_invoice_lines_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "vat_invoices",
+      "policyname": "vat_invoices_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "verification_events",
+      "policyname": "verification_events_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "verification_records",
+      "policyname": "verification_records_select_self_org_performer_or_staff",
+      "qual": "(((subject_type = 'user'::text) AND (subject_id = ( SELECT private.current_app_user_id() AS current_app_user_id))) OR ((subject_type = 'organization'::text) AND (EXISTS ( SELECT 1\n   FROM organization_memberships om\n  WHERE ((om.organization_id = verification_records.subject_id) AND (om.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (om.state = ANY (ARRAY['active'::text, 'invited'::text])))))) OR ((subject_type = 'performer'::text) AND (EXISTS ( SELECT 1\n   FROM performer_subjects ps\n  WHERE ((ps.id = verification_records.subject_id) AND (ps.linked_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)))))) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "verification_sessions",
+      "policyname": "verification_sessions_select_self_org_performer_or_staff",
+      "qual": "(((subject_type = 'user'::text) AND (subject_id = ( SELECT private.current_app_user_id() AS current_app_user_id))) OR ((subject_type = 'organization'::text) AND (EXISTS ( SELECT 1\n   FROM organization_memberships om\n  WHERE ((om.organization_id = verification_sessions.subject_id) AND (om.user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) AND (om.state = ANY (ARRAY['active'::text, 'invited'::text])))))) OR ((subject_type = 'performer'::text) AND (EXISTS ( SELECT 1\n   FROM performer_subjects ps\n  WHERE ((ps.id = verification_sessions.subject_id) AND (ps.linked_user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)))))) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "viewer_content_impressions",
+      "policyname": "viewer_content_impressions_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "viewer_feed_preferences",
+      "policyname": "viewer_feed_preferences_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "viewer_hidden_creators",
+      "policyname": "viewer_hidden_creators_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "viewer_hidden_topics",
+      "policyname": "viewer_hidden_topics_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallet_auth_challenges",
+      "policyname": "wallet_auth_challenges_staff_select",
+      "qual": "( SELECT private.is_staff_member() AS is_staff_member)"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallet_link_challenges",
+      "policyname": "wallet_link_challenges_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallet_onramp_sessions",
+      "policyname": "wallet_onramp_sessions_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallet_transaction_records",
+      "policyname": "wallet_transaction_records_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "wallets",
+      "policyname": "wallets_select_self_or_staff",
+      "qual": "((user_id = ( SELECT private.current_app_user_id() AS current_app_user_id)) OR ( SELECT private.is_staff_member() AS is_staff_member))"
+    },
+    {
+      "schemaname": "public",
+      "tablename": "worker_queue_recovery_requests",
+      "policyname": "worker_queue_recovery_requests_browser_deny",
+      "qual": "false"
+    }
+  ],
+  "funcs": [
+    {
+      "nspname": "private",
+      "proname": "apply_follow_count_delta",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "assert_recipient_monetisation_ready",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "assign_media_asset_position",
+      "prosecdef": false,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "broadcast_account_projection_change",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "broadcast_conversation_projection_change",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "broadcast_live_projection_change",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "bump_content_asset_revision",
+      "prosecdef": false,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "bump_content_performer_revision",
+      "prosecdef": false,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "clear_poll_children_for_parent_delete",
+      "prosecdef": false,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "content_composition_provenance_ready",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "content_composition_provider_ready",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "content_composition_safety_ready",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "content_performer_readiness",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "content_safety_automated_asset_evidence_ready",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "content_safety_automated_candidate_asset",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "content_safety_automated_evidence_ready",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "content_safety_release_evidence_ready",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "content_safety_release_ready",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "current_app_user_id",
+      "prosecdef": true,
+      "proacl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "authenticated=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "eligible_content",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "eligible_content_access_base",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "emit_realtime_invalidation",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "enforce_comment_parent",
+      "prosecdef": false,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "enforce_content_asset_shape",
+      "prosecdef": false,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "enforce_content_safety_release",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "enforce_explicit_checkout_consent",
+      "prosecdef": false,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "enforce_live_safety_release",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "enforce_media_evidence_asset_scope",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "enforce_poll_shape",
+      "prosecdef": false,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "ensure_content_engagement_projection",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "ensure_user_social_projection",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "has_protected_app_access",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "hold_content_on_adverse_media_evidence",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "is_current_conversation_member",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "is_staff_member",
+      "prosecdef": true,
+      "proacl": [
+        "=X/postgres",
+        "postgres=X/postgres",
+        "authenticated=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "live_safety_release_ready",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "prevent_poll_option_rewrite_after_vote",
+      "prosecdef": false,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "realtime_conversation_access",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "realtime_live_access",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "realtime_topic_can_receive",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "realtime_topic_can_send",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "refresh_content_engagement_counter",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "remove_blocked_follow_edges",
+      "prosecdef": true,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "resolve_creator_kyc_state",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "resolve_creator_monetisation_policy",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "resolve_managed_creator_allocation",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "resolve_recipient_monetisation_policy",
+      "prosecdef": false,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "sync_content_publication_job",
+      "prosecdef": true,
+      "proacl": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "nspname": "private",
+      "proname": "sync_performer_verification_record",
+      "prosecdef": false,
+      "proacl": null
+    },
+    {
+      "nspname": "private",
+      "proname": "sync_poll_vote_counts",
+      "prosecdef": false,
+      "proacl": null
+    }
+  ]
+}

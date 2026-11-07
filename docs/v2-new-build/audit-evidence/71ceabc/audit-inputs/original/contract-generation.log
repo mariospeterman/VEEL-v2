@@ -1,0 +1,10 @@
+
+> veel-shoot-own-shine@0.0.0 contracts:generate /workspace/scratch/0635fbdaf32f/wevid-audit
+> pnpm --filter @veel/contracts generate
+
+
+> @veel/contracts@0.0.0 generate /workspace/scratch/0635fbdaf32f/wevid-audit/packages/contracts
+> openapi-typescript openapi.yaml -o src/generated/openapi.ts
+
+✨ openapi-typescript 7.13.0
+🚀 openapi.yaml → src/generated/openapi.ts [1.3s]

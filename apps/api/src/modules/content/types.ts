@@ -6,7 +6,7 @@ export type CreateContentRequest = components["schemas"]["CreateContentRequest"]
 export type CreateUploadRequest = components["schemas"]["CreateUploadRequest"];
 export type Entitlement = components["schemas"]["Entitlement"];
 export type FeedPage = components["schemas"]["FeedPage"];
-export type FeedMode = "recommended" | "following";
+export type FeedMode = "latest" | "following";
 export type FeedSurface = "home" | "bits" | "moments";
 export type UploadSession = components["schemas"]["UploadSession"];
 export type UpdateContentRequest = components["schemas"]["UpdateContentRequest"];
@@ -29,6 +29,11 @@ export interface ContentRepository {
   captureProviderObservationCutoff?(): Promise<Date>;
   createDraft(input: CreateContentDraftInput): Promise<ContentItem>;
   createMediaAsset(input: CreateMediaAssetInput): Promise<{ id: string } | void>;
+  reserveVideoAssetUpload?(input: ReserveVideoAssetUploadInput): Promise<ReservedVideoAssetUpload>;
+  recordVideoUploadProviderAsset?(input: RecordVideoUploadProviderAssetInput): Promise<RecordedVideoAssetUpload>;
+  completeVideoAssetUpload?(input: CompleteVideoAssetUploadInput): Promise<CompletedVideoAssetUpload>;
+  beginVideoUploadCompensation?(input: BeginVideoUploadCompensationInput): Promise<VideoUploadCompensation>;
+  completeVideoUploadCompensation?(input: CompleteVideoUploadCompensationInput): Promise<void>;
   scheduleUnattachedMediaProviderCleanup?(input: ScheduleUnattachedMediaProviderCleanupInput): Promise<void>;
   reserveImageAssetUpload?(input: ReserveImageAssetUploadInput): Promise<ReservedImageAssetUpload>;
   completeImageAssetUpload?(input: CompleteImageAssetUploadInput): Promise<void>;
@@ -43,6 +48,7 @@ export interface ContentRepository {
   findMediaAssetByProviderAsset?(input: FindMediaAssetByProviderAssetInput): Promise<{ id: string } | null>;
   findOwnedMediaAssetForSync?(input: FindOwnedMediaAssetForSyncInput): Promise<OwnedMediaAssetForSync | null>;
   findOwnedContentForUpload(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
+  findOwnedContentForPublication?(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
   findOwnedContentForUpdate?(input: FindOwnedContentForUploadInput): Promise<OwnedContentForUpload | null>;
   listHomeFeed(input: ListHomeFeedInput): Promise<FeedPage>;
   listOwnedContent?(input: ListOwnedContentInput): Promise<CreatorMediaPage>;
@@ -272,7 +278,7 @@ export interface UpdateOwnedContentInput {
   bodyTextProvided: boolean;
   expectedCompositionRevision?: number | undefined;
   assetOrder?: string[] | undefined;
-  requestHash?: string | undefined;
+  requestHash: string;
   visibility?: string | undefined;
   distributionMode?: "post" | "moment" | undefined;
   scheduledFor?: string | null | undefined;
@@ -294,6 +300,7 @@ export interface PublishOwnedContentInput {
   supabaseUserId: string;
   contentId: string;
   idempotencyKey: string;
+  requestHash: string;
   scheduledFor?: string | null | undefined;
   scheduledForProvided?: boolean | undefined;
 }
@@ -353,6 +360,63 @@ export interface CreateMediaAssetInput {
   providerState: string;
   quotaWindowStart: Date;
   dailyMediaUploadQuota: number;
+}
+
+export interface ReserveVideoAssetUploadInput {
+  supabaseUserId: string;
+  contentId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  mimeType: "video/mp4" | "video/quicktime" | "video/webm";
+  quotaWindowStart: Date;
+  dailyMediaUploadQuota: number;
+}
+
+export interface ReservedVideoAssetUpload {
+  mediaAssetId: string;
+  state: "create_provider_asset" | "provider_creation_pending" | "attach_provider_asset" | "completed";
+  providerAssetId?: string;
+}
+
+export interface RecordVideoUploadProviderAssetInput {
+  supabaseUserId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  providerAssetId: string;
+}
+
+export interface RecordedVideoAssetUpload {
+  mediaAssetId: string;
+  providerAssetId: string;
+}
+
+export interface CompleteVideoAssetUploadInput {
+  supabaseUserId: string;
+  idempotencyKey: string;
+  requestHash: string;
+}
+
+export interface CompletedVideoAssetUpload {
+  mediaAssetId: string;
+  providerAssetId: string;
+}
+
+export interface BeginVideoUploadCompensationInput {
+  supabaseUserId: string;
+  idempotencyKey: string;
+  requestHash: string;
+  failureCode: string;
+}
+
+export interface VideoUploadCompensation {
+  mediaAssetId: string;
+  providerAssetId: string;
+}
+
+export interface CompleteVideoUploadCompensationInput {
+  supabaseUserId: string;
+  idempotencyKey: string;
+  requestHash: string;
 }
 
 export interface ScheduleUnattachedMediaProviderCleanupInput {
@@ -480,11 +544,33 @@ export interface CreateMediaUploadProviderSessionInput {
   ttlSeconds?: number;
 }
 
+export interface CreateMediaProviderAssetInput {
+  title: string;
+}
+
+export interface CreateMediaUploadSessionForProviderAssetInput {
+  providerAssetId: string;
+  ttlSeconds?: number;
+}
+
+export interface ImageDeliveryResource {
+  url: string;
+  expiresAt: string;
+  variants: Array<{ widthPixels: number; url: string }>;
+}
+
 export interface MediaUploadProviderAdapter {
   provider: "bunny";
   isConfigured(): boolean;
   createUploadSession(
     input: CreateMediaUploadProviderSessionInput
+  ): Promise<MediaUploadProviderSession>;
+  createProviderAsset?(input: CreateMediaProviderAssetInput): Promise<{
+    provider: "bunny";
+    providerAssetId: string;
+  }>;
+  createUploadSessionForProviderAsset?(
+    input: CreateMediaUploadSessionForProviderAssetInput
   ): Promise<MediaUploadProviderSession>;
   isImageUploadConfigured?(): boolean;
   createImageObjectReference?(input: {
@@ -506,12 +592,17 @@ export interface MediaUploadProviderAdapter {
   createPlaybackResource?(
     input: CreateMediaPlaybackResourceInput
   ): NonNullable<ContentItem["playback"]>;
+  createImageDeliveryResource?(input: {
+    providerAssetId: string;
+    now?: Date;
+  }): ImageDeliveryResource;
   getPlaybackData?(input: GetMediaPlaybackProviderDataInput): Promise<MediaPlaybackProviderData>;
 }
 
 export interface CreateMediaPlaybackResourceInput {
   providerAssetId: string;
   now?: Date;
+  expiresAt?: Date;
 }
 
 export interface GetMediaPlaybackProviderDataInput {

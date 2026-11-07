@@ -1,4 +1,10 @@
 import { randomUUID } from "node:crypto";
+import {
+  bindCursorScope,
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
+  keysetPage
+} from "../../shared/keyset-pagination.js";
 import { type PostgresSql, withPostgresTransaction } from "../../shared/postgres.js";
 import type { EventRepository, AccessPassOffer } from "./types.js";
 import { grantAccessPass, hashQrToken } from "./event-access-pass-repository.js";
@@ -6,6 +12,7 @@ import { toEventAccessPass, toEventAccessPassRequest } from "./event-repository-
 import type { AccessPassRequestRow, AccessPassRow } from "./event-repository-rows.js";
 
 type FindEventMethod = EventRepository["findEvent"];
+export const eventAccessPassCursorScope = "GET /v1/events/access-passes";
 
 export function createEventAccessPassRepositoryMethods(
   sql: PostgresSql,
@@ -244,6 +251,11 @@ export function createEventAccessPassRepositoryMethods(
       return rows[0] ? toEventAccessPass(rows[0]) : null;
     },
     async listAccessPasses(input) {
+      const cursorScope = bindCursorScope(eventAccessPassCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<AccessPassRow[]>`
         with actor as (
           select id
@@ -263,18 +275,24 @@ export function createEventAccessPassRepositoryMethods(
           te.created_at
         from event_access_passes te
         join actor on actor.id = te.holder_user_id
-        where (${input.cursor ?? null}::timestamptz is null or te.created_at < ${input.cursor ?? null}::timestamptz)
-        order by te.created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or (
+            ${cursor.id}::uuid is null
+            and te.created_at <= ${cursor.timestamp}::timestamptz
+          )
+          or (
+            ${cursor.id}::uuid is not null
+            and (te.created_at, te.id) < (${cursor.timestamp}::timestamptz, ${cursor.id}::uuid)
+          )
+        )
+        order by te.created_at desc, te.id desc
         limit ${input.limit + 1}
       `;
 
-      const pageRows = rows.slice(0, input.limit);
-      const extraRow = rows[input.limit];
-
-      return {
-        items: pageRows.map(toEventAccessPass),
-        nextCursor: extraRow ? extraRow.created_at.toISOString() : null
-      };
+      return keysetPage(rows, input.limit, toEventAccessPass, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     }
   };
 }

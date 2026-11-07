@@ -1,11 +1,13 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import type { BrowserContext } from "@playwright/test";
+import type { BrowserContext, Request } from "@playwright/test";
 
 const rawBackendCopy = /HTTP (401|403|404|429|500|503)|Missing or invalid bearer token|API is unavailable/;
 const e2eToken = "veel-e2e-token";
 const e2eOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000").origin;
+const viewerUserId = "00000000-0000-4000-8000-000000000009";
+const recentSearchStorageKey = `wevid:search:recent:v2:${viewerUserId}`;
 const firstConversationId = "00000000-0000-4000-8000-000000000081";
 const secondConversationId = "00000000-0000-4000-8000-000000000082";
 const unavailableConversationId = "00000000-0000-4000-8000-000000000083";
@@ -15,9 +17,15 @@ let apiServer: Server;
 let mutualsInterestAttempts = 0;
 let contentPreference: "both" | "sfw" | "nsfw" = "both";
 let pendingFeedRequestGate: { release: Promise<void>; started: () => void } | null = null;
+let pendingMessageResponseGate: { release: Promise<void>; started: () => void } | null = null;
 const feedRequestModes: string[] = [];
 const mutualsInterestKeys: string[] = [];
-const profileMutationSteps: Array<{ kind: "avatar" | "profile"; body: Record<string, unknown>; host: string | undefined }> = [];
+const profileMutationSteps: Array<{ kind: "profile"; body: Record<string, unknown>; host: string | undefined }> = [];
+const subscriptionPageRequests: Array<{
+  cursor: string | null;
+  scope: string | null;
+  view: string | null;
+}> = [];
 
 test.beforeAll(async () => {
   apiServer = createServer(async (request, response) => {
@@ -54,8 +62,10 @@ async function addE2eCookie(context: BrowserContext) {
 test.beforeEach(() => {
   contentPreference = "both";
   pendingFeedRequestGate = null;
+  pendingMessageResponseGate = null;
   feedRequestModes.length = 0;
   profileMutationSteps.length = 0;
+  subscriptionPageRequests.length = 0;
 });
 
 test("renders the public landing with the current WeVid visual contract", async ({ page }) => {
@@ -99,39 +109,22 @@ test("renders a deep-linked onboarding step without an entrance-animation delay"
   await expect(page.locator(".landing-auth-inline")).toHaveCSS("visibility", "visible");
 });
 
-test("persists handle and name before attaching an optional profile picture across loopback aliases", async ({ context, page }) => {
+test("persists the basic profile and continues without the disabled avatar pipeline", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/?mode=onboarding&step=profile&next=%2Fapp%2Fhome", { waitUntil: "domcontentloaded" });
   await waitForClientReady(page);
 
   await page.getByLabel("Handle").fill("new_creator");
   await page.getByLabel("Display name").fill("New Creator");
-  await page.locator('input[name="profile-picture"]').setInputFiles({
-    name: "avatar.png",
-    mimeType: "image/png",
-    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64")
-  });
+  await expect(page.getByText("Photo optional · available after setup")).toBeVisible();
+  await expect(page.locator('input[name="profile-picture"]')).toHaveCount(0);
   await page.getByRole("button", { name: "Save and continue" }).click();
-  await expect.poll(() => profileMutationSteps.length).toBe(3);
+  await expect.poll(() => profileMutationSteps.length).toBe(1);
 
   expect(profileMutationSteps).toEqual([
     {
       kind: "profile",
       body: { displayName: "New Creator", handle: "new_creator" },
-      host: "127.0.0.1:4000"
-    },
-    {
-      kind: "avatar",
-      body: expect.objectContaining({ contentType: "image/png", fileName: "avatar.png" }),
-      host: "127.0.0.1:4000"
-    },
-    {
-      kind: "profile",
-      body: {
-        avatarUrl: "https://media.example.test/profile-avatar.png",
-        displayName: "New Creator",
-        handle: "new_creator"
-      },
       host: "127.0.0.1:4000"
     }
   ]);
@@ -186,6 +179,17 @@ test("renders the canonical protected app home shell through /app", async ({ con
   await expect(page.getByRole("link", { name: "WeVid app home" }).first()).toBeVisible();
   await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
+});
+
+test("keeps search, notifications, and wallet reachable from the phone shell", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/app/home", { waitUntil: "domcontentloaded", timeout: 45_000 });
+
+  const shortcuts = page.getByRole("navigation", { name: "Mobile account shortcuts" });
+  await expect(shortcuts.getByRole("link", { name: "Search" })).toBeVisible();
+  await expect(shortcuts.getByRole("link", { name: "Notifications" })).toBeVisible();
+  await expect(shortcuts.getByRole("link", { name: "Wallet" })).toBeVisible();
 });
 
 test("exposes one keyboard-addressable main target without blocking accessibility violations", async ({ context, page }) => {
@@ -312,7 +316,7 @@ test("follows from the real Home feed and renders the immersive Bits surface", a
   await expect(page.locator(".home-feed")).toHaveAttribute("data-scroll-persistence", "ready");
   await page.addStyleTag({ content: ".home-feed { min-height: 3000px; }" });
   await page.locator(".page-frame").evaluate((frame) => frame.scrollTo({ top: 480 }));
-  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("wevid:home:recommended:scroll")))
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem("wevid:home:latest:scroll")))
     .toBe("480");
   await expect(page.getByRole("button", { name: "Follow", exact: true })).toHaveCount(2);
   const followResponse = page.waitForResponse((response) =>
@@ -323,8 +327,8 @@ test("follows from the real Home feed and renders the immersive Bits surface", a
   await expect(page.getByRole("button", { name: "Following", exact: true })).toHaveCount(2);
   await page.getByRole("button", { name: "Following", exact: true }).first().click();
   await expect(page.getByRole("button", { name: "Follow", exact: true })).toHaveCount(2);
-  await page.getByRole("tab", { name: "For you" }).focus();
-  await page.getByRole("tab", { name: "For you" }).press("ArrowRight");
+  await page.getByRole("tab", { name: "Latest" }).focus();
+  await page.getByRole("tab", { name: "Latest" }).press("ArrowRight");
   await expect(page.getByRole("tab", { name: "Following" })).toBeFocused();
   await expect(page.getByRole("tab", { name: "Following" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
@@ -333,8 +337,8 @@ test("follows from the real Home feed and renders the immersive Bits surface", a
   await waitForClientReady(page);
   await expect(page.getByRole("region", { name: "Bits feed" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Post by Aria Moon" }).first()).toBeVisible();
-  await page.getByRole("tab", { name: "For you" }).focus();
-  await page.getByRole("tab", { name: "For you" }).press("ArrowDown");
+  await page.getByRole("tab", { name: "Latest" }).focus();
+  await page.getByRole("tab", { name: "Latest" }).press("ArrowDown");
   await expect(page.getByRole("tab", { name: "Following" })).toBeFocused();
   const layout = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
@@ -442,7 +446,7 @@ test("keeps one content preference across Settings and the compact feed filter",
   await expect.poll(() => feedRequestModes.at(-1)).toBe("following");
 });
 
-test("separates platform plans from creator memberships responsively", async ({ context, page }) => {
+test("separates plans and renders every creator-membership page responsively", async ({ context, page }) => {
   await addE2eCookie(context);
   await page.goto("/app/subscriptions", { waitUntil: "domcontentloaded", timeout: 45_000 });
 
@@ -451,7 +455,16 @@ test("separates platform plans from creator memberships responsively", async ({ 
   await expect(page.getByRole("heading", { exact: true, name: "Creator memberships" })).toBeVisible();
   await expect(page.getByText("Free Verified", { exact: true })).toHaveCount(2);
   await expect(page.getByText("Veel Studio", { exact: true })).toBeVisible();
-  await expect(page.getByText("No joined memberships", { exact: true })).toBeVisible();
+  await expect(page.getByText("Creator Membership 1", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "More creator memberships" }).click();
+  await expect(page.getByText("Creator Membership 25", { exact: true })).toBeVisible();
+  await expect(page.getByText("No joined memberships", { exact: true })).toHaveCount(0);
+  await expect.poll(() => subscriptionPageRequests).toEqual(expect.arrayContaining([
+    { cursor: null, scope: "platform", view: null },
+    { cursor: null, scope: "creator", view: null },
+    { cursor: "creator-page-2", scope: "creator", view: null },
+    { cursor: null, scope: null, view: "history" }
+  ]));
 
   const layout = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
@@ -489,6 +502,21 @@ test("selects a requested conversation and keeps the inbox within the viewport",
     scrollWidth: document.documentElement.scrollWidth
   }));
   expect(layout.scrollWidth).toBe(layout.clientWidth);
+});
+
+test("returns from a phone conversation to the inbox without reopening the first thread", async ({ context, page }) => {
+  await addE2eCookie(context);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/app/messages?conversation=${secondConversationId}`, {
+    waitUntil: "domcontentloaded",
+    timeout: 45_000
+  });
+
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/messages$/);
+  await expect(page.getByRole("button", { name: /Studio team/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Production notes/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Production notes" })).toHaveCount(0);
 });
 
 test("does not clear unread state when conversation messages fail to load", async ({ context, page }) => {
@@ -566,9 +594,6 @@ test("runs content engagement actions responsively through canonical API routes"
   });
   await page.getByRole("button", { name: "Share outside WeVid" }).click();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("wevid:test:last-shared-url"))).toContain("/content/");
-  await page.getByLabel("Send in Messages").selectOption(firstConversationId);
-  await page.getByRole("button", { name: "Send post" }).click();
-  await expect(page.getByText("Post sent in Messages.")).toBeVisible();
 
   await page.getByRole("button", { name: "Report", exact: true }).click();
   await page.getByLabel("Report reason").fill("Misleading content metadata");
@@ -587,6 +612,85 @@ test("runs content engagement actions responsively through canonical API routes"
   await expect(page.getByText(rawBackendCopy)).toHaveCount(0);
 });
 
+test("opens an internal share as a draft and sends only after explicit confirmation", async ({ context, page }) => {
+  await addE2eCookie(context);
+  let messagePostCount = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      new URL(request.url()).pathname === `/v1/messages/conversations/${firstConversationId}/messages`
+    ) {
+      messagePostCount += 1;
+    }
+  });
+
+  await page.goto("/content/00000000-0000-4000-8000-000000000040", {
+    waitUntil: "domcontentloaded",
+    timeout: 45_000
+  });
+  await expect(page.getByText("Studio sunrise session")).toBeVisible();
+  await page.getByRole("button", { name: "Share" }).click();
+  await page.getByLabel("Share in Messages").selectOption(firstConversationId);
+  await expect(page.getByText("This opens a message draft. Review it and select Send in Messages to deliver the post.")).toBeVisible();
+
+  await Promise.all([
+    page.waitForURL((url) =>
+      url.pathname === "/app/messages" &&
+      url.searchParams.get("conversation") === firstConversationId &&
+      url.searchParams.get("share") === "00000000-0000-4000-8000-000000000040"
+    ),
+    page.getByRole("button", { name: "Open message draft" }).click()
+  ]);
+
+  const composer = page.getByRole("textbox", { name: "Composer" });
+  await expect(composer).toBeVisible();
+  await expect(page.getByText("Post added to this message draft. Add a message, review it, then select Send. Nothing is delivered until sending succeeds.")).toBeVisible();
+  expect(messagePostCount).toBe(0);
+
+  await page.getByText("Share approved WeVid media", { exact: true }).click();
+  await expect(page.getByPlaceholder("Existing content ID to share")).toHaveValue("00000000-0000-4000-8000-000000000040");
+  await composer.fill("Sharing this studio post.");
+
+  let releaseMessageResponse: () => void = () => undefined;
+  let markMessageRequestStarted: () => void = () => undefined;
+  const messageRequestStarted = new Promise<void>((resolve) => {
+    markMessageRequestStarted = resolve;
+  });
+  const messageResponseRelease = new Promise<void>((resolve) => {
+    releaseMessageResponse = resolve;
+  });
+  pendingMessageResponseGate = {
+    release: messageResponseRelease,
+    started: markMessageRequestStarted
+  };
+  const messageRequestPromise = page.waitForRequest((request) =>
+    request.method() === "POST" &&
+    new URL(request.url()).pathname === `/v1/messages/conversations/${firstConversationId}/messages`
+  );
+
+  let messageRequest: Request | undefined;
+  try {
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await messageRequestStarted;
+    messageRequest = await messageRequestPromise;
+    expect(messagePostCount).toBe(1);
+    expect(messageRequest.postDataJSON()).toEqual({
+      body: "Sharing this studio post.",
+      replyToMessageId: null,
+      sharedContentItemId: "00000000-0000-4000-8000-000000000040",
+      attachmentContentItemIds: []
+    });
+    expect(messageRequest.headers()["idempotency-key"]).toMatch(/\S+/);
+    await expect(page.getByText("Message sent.")).toHaveCount(0);
+  } finally {
+    releaseMessageResponse();
+  }
+
+  const messageResponse = await messageRequest?.response();
+  expect(messageResponse?.status()).toBe(201);
+  await expect(page.getByText("Message sent.")).toBeVisible();
+});
+
 test("searches genuine grouped discovery and keeps recent queries on device", async ({ context, page }) => {
   test.setTimeout(90_000);
   await addE2eCookie(context);
@@ -597,7 +701,11 @@ test("searches genuine grouped discovery and keeps recent queries on device", as
   await expect(page.getByRole("heading", { name: "Posts" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Topics" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Live now" })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem("wevid:search:recent"))).toContain("studio");
+  await expect.poll(() => page.evaluate(
+    (key) => sessionStorage.getItem(key),
+    recentSearchStorageKey
+  )).toContain('"query":"studio"');
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("wevid:search:recent"))).toBeNull();
   await page.goto("/app/search", { waitUntil: "domcontentloaded", timeout: 45_000 });
   await expect(page.getByRole("heading", { name: "Recent searches" })).toBeVisible();
   await expect(page.getByRole("link", { name: "studio", exact: true })).toBeVisible();
@@ -715,13 +823,6 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     return;
   }
 
-  if (method === "POST" && url.pathname === "/v1/profiles/me/avatar") {
-    const body = await readJsonBody<Record<string, unknown>>(request);
-    profileMutationSteps.push({ kind: "avatar", body, host: request.headers.host });
-    sendJson(response, 201, { avatarUrl: "https://media.example.test/profile-avatar.png" });
-    return;
-  }
-
   if (method === "GET" && url.pathname === "/v1/ai/capabilities") {
     sendJson(response, 200, {
       items: [{
@@ -754,7 +855,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 
   if (method === "GET" && url.pathname === "/v1/feed/preferences") {
     sendJson(response, 200, {
-      defaultMode: "recommended",
+      defaultMode: "latest",
       nsfwPreference: contentPreference,
       hiddenCreatorIds: [],
       hiddenTopics: []
@@ -770,7 +871,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     const body = await readJsonBody<{ nsfwPreference?: "both" | "sfw" | "nsfw" }>(request);
     if (body.nsfwPreference) contentPreference = body.nsfwPreference;
     sendJson(response, 200, {
-      defaultMode: "recommended",
+      defaultMode: "latest",
       nsfwPreference: contentPreference,
       hiddenCreatorIds: [],
       hiddenTopics: []
@@ -789,7 +890,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   }
 
   if (method === "GET" && url.pathname === "/v1/content/feed") {
-    feedRequestModes.push(url.searchParams.get("mode") ?? "recommended");
+    feedRequestModes.push(url.searchParams.get("mode") ?? "latest");
     const requestGate = pendingFeedRequestGate;
     if (requestGate) {
       pendingFeedRequestGate = null;
@@ -799,9 +900,9 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     sendJson(response, 200, {
       items: [contentItem(), carouselContentItem()],
       nextCursor: null,
-      mode: url.searchParams.get("mode") ?? "recommended",
+      mode: url.searchParams.get("mode") ?? "latest",
       surface: url.searchParams.get("surface") ?? "home",
-      rankingVersion: "deterministic_v1",
+      rankingVersion: "chronological_v1",
       generatedAt: "2026-08-15T12:00:00.000Z"
     });
     return;
@@ -946,7 +1047,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       return;
     }
     sendJson(response, 200, {
-      defaultMode: "recommended",
+      defaultMode: "latest",
       nsfwPreference: "both",
       hiddenCreatorIds: [user().id],
       hiddenTopics: []
@@ -1062,12 +1163,34 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   }
 
   if (method === "GET" && url.pathname === "/v1/subscriptions") {
-    sendJson(response, 200, { items: [] });
+    const cursor = url.searchParams.get("cursor");
+    const scope = url.searchParams.get("scope");
+    const view = url.searchParams.get("view");
+    subscriptionPageRequests.push({ cursor, scope, view });
+
+    if (scope === "creator" && view === null) {
+      if (cursor === null) {
+        sendJson(response, 200, {
+          items: Array.from({ length: 20 }, (_, index) => creatorSubscription(index + 1)),
+          nextCursor: "creator-page-2"
+        });
+        return;
+      }
+      if (cursor === "creator-page-2") {
+        sendJson(response, 200, {
+          items: Array.from({ length: 5 }, (_, index) => creatorSubscription(index + 21)),
+          nextCursor: null
+        });
+        return;
+      }
+    }
+
+    sendJson(response, 200, { items: [], nextCursor: null });
     return;
   }
 
   if (method === "GET" && url.pathname === "/v1/messages/conversations") {
-    sendJson(response, 200, { items: conversations() });
+    sendJson(response, 200, { items: conversations(), nextCursor: null });
     return;
   }
 
@@ -1075,7 +1198,7 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     method === "GET" &&
     /^\/v1\/messages\/conversations\/[0-9a-f-]+\/commercial-interactions$/.test(url.pathname)
   ) {
-    sendJson(response, 200, { mediaOffers: [], creatorRequests: [] });
+    sendJson(response, 200, { mediaOffers: [], creatorRequests: [], nextCursor: null });
     return;
   }
 
@@ -1126,6 +1249,12 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
   );
   if (method === "POST" && conversationMessagesMatch) {
     const body = await readJsonBody<{ body?: string; sharedContentItemId?: string }>(request);
+    const responseGate = pendingMessageResponseGate;
+    if (responseGate) {
+      pendingMessageResponseGate = null;
+      responseGate.started();
+      await responseGate.release;
+    }
     sendJson(response, 201, {
       ...message(conversationMessagesMatch[1] ?? firstConversationId, body.body ?? "Shared a post"),
       sharedContent: body.sharedContentItemId ? contentItem() : null
@@ -1162,7 +1291,13 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       hashtags: [{ slug: "studio", displayName: "Studio", state: "active" }],
       events: [],
       liveRooms: [liveRoom()],
-      nextCursor: null
+      nextCursors: {
+        content: null,
+        creators: null,
+        hashtags: null,
+        events: null,
+        liveRooms: null
+      }
     });
     return;
   }
@@ -1173,7 +1308,10 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
 function setCorsHeaders(response: ServerResponse) {
   response.setHeader("Access-Control-Allow-Origin", e2eOrigin);
   response.setHeader("Access-Control-Allow-Credentials", "true");
-  response.setHeader("Access-Control-Allow-Headers", "authorization,content-type,idempotency-key,accept");
+  response.setHeader(
+    "Access-Control-Allow-Headers",
+    "authorization,content-type,idempotency-key,accept,x-wevid-expected-actor-id"
+  );
   response.setHeader("Access-Control-Allow-Methods", "DELETE,GET,POST,PATCH,OPTIONS");
 }
 
@@ -1205,9 +1343,10 @@ function user() {
 function sessionState() {
   return {
     authenticated: true,
+    clientSessionScope: "s".repeat(43),
     appAccessState: { allowed: true, reason: "ready" },
     user: {
-      id: "00000000-0000-4000-8000-000000000009",
+      id: viewerUserId,
       handle: "viewer",
       displayName: "Viewer",
       avatarUrl: null,
@@ -1394,6 +1533,31 @@ function subscriptionPlan(id: string, label: string, amountMinor: number) {
     tokenMint: null,
     tokenProgram: null
   };
+}
+
+function creatorSubscription(index: number) {
+  return {
+    id: uuidFor(5_000 + index),
+    scope: "creator",
+    planId: `creator-plan-${index}`,
+    creator: {
+      ...user(),
+      id: uuidFor(6_000 + index),
+      handle: `creator_${index}`,
+      displayName: `Creator Membership ${index}`
+    },
+    state: "active",
+    renewalMode: "delegated_solana_subscription",
+    currentPeriodEndsAt: "2026-12-05T10:00:00.000Z",
+    nextCollectionAt: "2026-12-05T10:00:00.000Z",
+    cancelledAt: null,
+    revokedAt: null,
+    failureReason: null
+  };
+}
+
+function uuidFor(value: number): string {
+  return `00000000-0000-4000-8000-${value.toString(16).padStart(12, "0")}`;
 }
 
 function conversations() {

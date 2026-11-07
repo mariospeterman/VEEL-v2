@@ -162,6 +162,7 @@ export interface McpToolCallAuditInput {
   connectionId: string;
   supabaseUserId: string;
   toolName: string;
+  toolVersion: string | null;
   state: McpToolCallState;
   riskLevel: McpToolRiskLevel;
   requiredScopes: McpScope[];
@@ -204,13 +205,15 @@ export interface McpRepository {
     connectionExpiresAt: Date;
   }): Promise<OAuthAuthorizationCode | null>;
   denyOAuthAuthorizationRequest(input: { requestId: string; supabaseUserId: string }): Promise<OAuthAuthorizationRequest | null>;
-  findOAuthAuthorizationCodeByHash(input: { codeHash: string }): Promise<OAuthAuthorizationCode | null>;
-  markOAuthAuthorizationCodeUsed(input: { codeId: string }): Promise<void>;
-  issueOAuthAccessToken(input: {
-    codeId: string;
+  exchangeOAuthAuthorizationCode(input: {
+    codeHash: string;
+    clientId: string;
+    redirectUri: string;
+    codeChallenge: string;
+    resource: string;
     tokenHash: string;
     expiresAt: Date;
-  }): Promise<{ expiresAt: string; scopes: McpScope[] }>;
+  }): Promise<{ expiresAt: string; scopes: McpScope[] } | null>;
   findConnectionByOAuthAccessTokenHash(input: { tokenHash: string }): Promise<OAuthAccessTokenRecord | null>;
   revokeOAuthAccessTokenHash(input: { tokenHash: string }): Promise<void>;
   listActiveStaffRoles(input: { supabaseUserId: string }): Promise<string[]>;

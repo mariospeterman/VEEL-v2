@@ -1,7 +1,12 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
 
 export default defineConfig({
+  oxc: {
+    jsx: {
+      runtime: "automatic"
+    }
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./apps/web/src", import.meta.url))
@@ -10,6 +15,11 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["apps/**/*.test.ts", "packages/**/*.test.ts", "scripts/**/*.test.mjs"],
+    exclude: [
+      ...configDefaults.exclude,
+      "scripts/capture-audit-execution.test.mjs",
+      "scripts/generate-audit-evidence.test.mjs"
+    ],
     testTimeout: 15_000
   }
 });

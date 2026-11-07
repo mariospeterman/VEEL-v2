@@ -46,6 +46,8 @@ export interface VerificationRecordResource {
   status: "valid" | "invalid" | "pending" | "expired" | "revoked" | "blocked";
   provider: string;
   method: string;
+  thresholdAge?: number | null;
+  resultOverThreshold?: boolean | null;
   assuranceLevel: string;
   verifiedAt: string | null;
   expiresAt: string | null;
@@ -83,11 +85,20 @@ export interface CreateVerificationSessionInput {
   webhookBaseUrl: string;
   policyVersion?: string | null;
   termsAcceptedAt?: Date | null;
+  onProviderSelected?: (selection: VerificationProviderSelection) => Promise<void>;
+}
+
+export interface VerificationProviderSelection {
+  provider: Extract<VerificationProvider, "sumsub" | "didit" | "yoti" | "persona" | "veriff">;
+  method: VerificationMethod;
+  assuranceLevel: VerificationRecordResource["assuranceLevel"];
+  reusable: boolean;
 }
 
 export interface VerificationProviderSession {
   provider: VerificationProvider;
   providerReference: string;
+  providerExternalUserId?: string | null;
   providerSessionId?: string | null;
   providerApplicantId?: string | null;
   providerInquiryId?: string | null;
@@ -101,12 +112,19 @@ export interface VerificationProviderSession {
 
 export interface VerificationProviderWaterfall {
   createSession(input: CreateVerificationSessionInput): Promise<VerificationProviderSession>;
+  reconcileSession?(input: {
+    provider: VerificationProvider;
+    providerReference: string;
+    purpose: "age_access";
+  }): Promise<VerificationProviderReconciliation>;
 }
 
 export interface NormalizedVerificationWebhook {
   provider: VerificationProvider;
   providerEventId: string;
   providerReference: string;
+  providerSubjectReference?: string | null;
+  providerCorrelationId?: string | null;
   eventType: string;
   status: "pending" | "valid" | "invalid" | "blocked";
   signatureHash: string | null;
@@ -117,6 +135,11 @@ export interface NormalizedVerificationWebhook {
     livenessApproved: boolean;
     faceMatchApproved: boolean;
   } | null;
+}
+
+export interface VerificationProviderReconciliation extends NormalizedVerificationWebhook {
+  launchUrl?: string | null;
+  expiresAt?: Date | null;
 }
 
 export interface CapabilityResolution {
@@ -153,6 +176,31 @@ export interface VerificationRepository {
     policyVersion?: string | null;
     termsAcceptedAt?: Date | null;
   }): Promise<string>;
+  reservePendingSession?(input: {
+    supabaseUserId: string;
+    purpose: Extract<
+      VerificationPurpose,
+      "age_access" | "adult_publisher_eligibility" | "creator_kyc" | "org_kyb"
+    >;
+    organizationId?: string | null;
+    idempotencyKey: string;
+    requestHash: string;
+    policyVersion?: string | null;
+    termsAcceptedAt?: Date | null;
+  }): Promise<{
+    id: string;
+    subjectReference: string;
+    requiresManualReview?: boolean;
+  }>;
+  selectPendingSessionProvider?(input: {
+    sessionId: string;
+    selection: VerificationProviderSelection;
+  }): Promise<boolean>;
+  completePendingSession?(input: {
+    sessionId: string;
+    providerSession: VerificationProviderSession;
+  }): Promise<void>;
+  failPendingSession?(input: { sessionId: string; reason: string }): Promise<void>;
   applyProviderWebhook(input: NormalizedVerificationWebhook & {
     payloadHash: string;
   }): Promise<"applied" | "duplicate" | "unmatched">;

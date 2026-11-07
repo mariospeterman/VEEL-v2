@@ -18,13 +18,21 @@ import {
   UsersRound,
   X
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { WebAuthState } from "@/supabase/auth-state";
 import { recordOnboardingEvent } from "@/analytics/onboarding-analytics";
-import { LandingAuthSurface } from "./landing-auth-surface";
 import { landingContent } from "./landing-content";
 import type { LandingEntryMode, LandingEntryState } from "./landing-entry";
 import { legalDocLabels, legalDocSlugs } from "./legal-docs";
+
+const LandingAuthSurface = dynamic(
+  () => import("./landing-auth-surface").then((module) => module.LandingAuthSurface),
+  {
+    loading: () => <p className="landing-auth-method-title">Loading sign-in methods…</p>,
+    ssr: false
+  }
+);
 
 const productIcons = {
   media: Play,

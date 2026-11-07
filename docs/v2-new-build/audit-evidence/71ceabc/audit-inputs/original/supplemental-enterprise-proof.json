@@ -1,0 +1,32 @@
+{
+  "method": "actual script executed with isolated process/fetch, no network or provider access",
+  "requests": [
+    "https://staging.example/v1/organizations",
+    "https://staging.example/v1/managed-creator-relationships",
+    "https://staging.example/v1/managed-creator-relationships/rel-1/reporting"
+  ],
+  "evidenceAccessCounts": {
+    "kyb": 1,
+    "contract": 1
+  },
+  "result": {
+    "state": "PROVIDER_PROVEN",
+    "organization": {
+      "active": true,
+      "kybVerified": true,
+      "enterpriseEntitlement": true
+    },
+    "managedCreator": {
+      "active": true,
+      "agreementAccepted": true,
+      "settlementWalletReady": true
+    },
+    "reporting": {
+      "currencyBuckets": 0
+    },
+    "evidence": {
+      "kyb": "configured_redacted",
+      "enterpriseContract": "configured_redacted"
+    }
+  }
+}

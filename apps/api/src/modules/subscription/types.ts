@@ -24,6 +24,8 @@ export type RecordPlatformPlaybackHeartbeatRequest =
 export interface PlatformPlaybackDecision {
   countsTowardAllowance: boolean;
   limitReached: boolean;
+  leaseRequired: boolean;
+  leaseExpiresAt: string | null;
 }
 
 export interface CreateSubscriptionAuthorizationIntentInput {
@@ -36,6 +38,9 @@ export interface CreateSubscriptionAuthorizationIntentInput {
   delegationProgramId: string;
   provider: string;
   supportedMints: string[];
+  platformReceiverWallet: string;
+  assetDecimals: number;
+  network: "devnet" | "mainnet-beta";
 }
 
 export interface SubmitSubscriptionAuthorizationInput {
@@ -56,6 +61,8 @@ export interface CancelSubscriptionInput {
 export interface SubscriptionAuthorizationVerificationContext {
   authorizationIntentId: string;
   setupReference: string;
+  submittedSignature: string | null;
+  submittedAt: Date | null;
   delegationProgramId: string;
   collectorAddress: string | null;
   subscriberWallet: string | null;
@@ -65,7 +72,7 @@ export interface SubscriptionAuthorizationVerificationContext {
   tokenMint: string | null;
   tokenProgram: "spl_token" | "token_2022" | null;
   amountMinor: number;
-  amountAtomic: number;
+  amountAtomic: string;
   periodDays: number;
   periodSeconds: number;
   delegationNonce: number;
@@ -100,8 +107,18 @@ export interface SubscriptionRepository {
     sequence: number;
     playedSeconds: number;
   }): Promise<PlatformPlaybackSession | null>;
-  listPlans(input: { supabaseUserId: string }): Promise<SubscriptionPlanPage>;
-  listSubscriptions(input: { supabaseUserId: string }): Promise<SubscriptionPage>;
+  listPlans(input: {
+    supabaseUserId: string;
+    cursor?: string;
+    limit: number;
+  }): Promise<SubscriptionPlanPage>;
+  listSubscriptions(input: {
+    supabaseUserId: string;
+    cursor?: string;
+    limit: number;
+    scope?: "platform" | "creator";
+    view: "active" | "history";
+  }): Promise<SubscriptionPage>;
   getCreatorOffer(input: { supabaseUserId: string }): Promise<SubscriptionPlan | null>;
   upsertCreatorOffer(input: {
     supabaseUserId: string;
@@ -110,6 +127,7 @@ export interface SubscriptionRepository {
     body: UpsertCreatorMembershipOfferRequest;
     tokenMint: string;
     programId: string;
+    assetDecimals: number;
     amountAtomic: number;
     creatorAmountAtomic: number;
     platformAmountAtomic: number;
@@ -152,9 +170,10 @@ export interface VerifySubscriptionAuthorizationInput {
   tokenMint: string | null;
   tokenProgram: "spl_token" | "token_2022" | null;
   amountMinor: number;
-  amountAtomic: number;
+  amountAtomic: string;
   periodDays: number;
   periodSeconds: number;
+  delegationNonce: number;
   delegationExpiresAt: Date;
   provider: string;
   planId: string;
@@ -162,6 +181,12 @@ export interface VerifySubscriptionAuthorizationInput {
   subscriptionPda: string | null;
   merchantWallet: string | null;
   expiresAt: Date;
+  /**
+   * Durable acceptance time for a signature already stored by the API. This lets the
+   * reconciliation worker verify evidence after the short-lived intent window closes
+   * without accepting a new late submission.
+   */
+  acceptedAt?: Date | null;
 }
 
 export type SubscriptionVerificationFailureReason =
@@ -172,8 +197,12 @@ export type SubscriptionVerificationFailureReason =
   | "plan_not_found"
   | "plan_terms_mismatch"
   | "authority_not_found"
+  | "authority_address_mismatch"
+  | "authority_init_mismatch"
   | "subscription_not_found"
   | "delegation_not_found"
+  | "delegation_address_mismatch"
+  | "delegated_allowance_mismatch"
   | "subscriber_mismatch"
   | "creator_mismatch"
   | "merchant_mismatch"
@@ -184,6 +213,8 @@ export type SubscriptionVerificationFailureReason =
   | "expired"
   | "cancelled"
   | "revoked"
+  | "transaction_pending"
+  | "transaction_not_found"
   | "transaction_failed"
   | "signature_reused"
   | "intent_expired"

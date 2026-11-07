@@ -1,5 +1,10 @@
 import { appShellNavItems } from "@veel/ui";
-import { getEvent, type Event } from "@/api-client";
+import {
+  getEvent,
+  getEventAccessPassActivity,
+  type Event,
+  type EventAccessPass
+} from "@/api-client";
 import { ErrorState } from "../../ui";
 import { EventAccessPassPanel } from "./event-access-pass-panel";
 
@@ -9,7 +14,13 @@ export default async function EventPage({
   params: Promise<{ eventId: string }>;
 }) {
   const { eventId } = await params;
-  const eventResult = await getEvent(eventId);
+  const [eventResult, passesResult] = await Promise.all([
+    getEvent(eventId),
+    getEventAccessPassActivity()
+  ]);
+  const eventPass = passesResult.ok
+    ? passesResult.data.items.find((pass) => pass.eventId === eventId) ?? null
+    : null;
 
   return (
     <main className="min-h-screen bg-(--background) text-(--foreground)">
@@ -18,8 +29,8 @@ export default async function EventPage({
       <section className="mx-auto grid w-full max-w-6xl gap-5 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         {eventResult.ok ? (
           <>
-            <EventBody event={eventResult.data} />
-            <EventState event={eventResult.data} />
+            <EventBody event={eventResult.data} eventPass={eventPass} />
+            <EventState event={eventResult.data} eventPass={eventPass} />
           </>
         ) : (
           <section className="lg:col-span-2">
@@ -35,7 +46,7 @@ export default async function EventPage({
   );
 }
 
-function EventBody({ event }: { event: Event }) {
+function EventBody({ event, eventPass }: { event: Event; eventPass: EventAccessPass | null }) {
   return (
     <section className="grid content-start gap-5">
       <div>
@@ -46,12 +57,12 @@ function EventBody({ event }: { event: Event }) {
         </p>
       </div>
 
-      <EventAccessPassPanel event={event} />
+      <EventAccessPassPanel event={event} eventPass={eventPass} />
     </section>
   );
 }
 
-function EventState({ event }: { event: Event }) {
+function EventState({ event, eventPass }: { event: Event; eventPass: EventAccessPass | null }) {
   return (
     <aside className="grid content-start gap-3">
       <section className="rounded border border-(--line) bg-(--panel) p-4">
@@ -66,7 +77,9 @@ function EventState({ event }: { event: Event }) {
       <section className="rounded border border-(--line) bg-(--panel) p-4">
         <p className="text-sm font-medium">Your pass</p>
         <p className="mt-3 text-sm leading-6 text-(--muted)">
-          Availability is checked before checkout. Paid passes appear only after payment confirmation.
+          {eventPass
+            ? `Your latest pass is ${eventPass.state}. Only active or checked-in passes grant access.`
+            : "Availability is checked before checkout. Paid passes appear only after payment confirmation."}
         </p>
       </section>
     </aside>

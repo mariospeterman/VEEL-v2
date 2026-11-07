@@ -20,6 +20,8 @@ export interface ApplicationSessionVerifier {
 export interface VerifiedRecoveryIdentity {
   provider: "supabase";
   providerSubject: string;
+  providerSessionId: string;
+  authenticatedAt: Date;
   email: string | null;
 }
 

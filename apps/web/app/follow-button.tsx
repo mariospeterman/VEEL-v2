@@ -20,13 +20,12 @@ export function FollowButton({
   const retry = useRef<{ following: boolean; key: string } | null>(null);
 
   useEffect(() => {
-    if (!pending) setState(initialState);
+    setState(initialState);
   }, [
     initialState.followerCount,
     initialState.following,
     initialState.followingCount,
-    initialState.userId,
-    pending
+    initialState.userId
   ]);
 
   async function toggle() {

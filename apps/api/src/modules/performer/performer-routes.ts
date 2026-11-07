@@ -5,7 +5,10 @@ import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js
 import type { ApplicationSessionVerifier } from "../session/types.js";
 import { VerificationProviderUnavailableError } from "../verification/verification-provider-adapters.js";
 import type { VerificationProviderWaterfall } from "../verification/types.js";
-import { PerformerRepositoryConfigurationError } from "./performer-repository.js";
+import {
+  PerformerIdempotencyConflictError,
+  PerformerRepositoryConfigurationError
+} from "./performer-repository.js";
 import type { PerformerAllowedUse, PerformerRepository } from "./types.js";
 
 interface PerformerRouteOptions {
@@ -17,6 +20,9 @@ interface PerformerRouteOptions {
 const allowedUseValues = new Set<PerformerAllowedUse>([
   "capture", "upload", "distribution", "monetisation", "live", "replay", "promotion"
 ]);
+const requiredDistributionUses: readonly PerformerAllowedUse[] = [
+  "capture", "upload", "distribution"
+];
 
 export async function registerPerformerRoutes(app: FastifyInstance, options: PerformerRouteOptions): Promise<void> {
   app.get("/v1/content/:contentId/performers", async (request, reply) => {
@@ -49,6 +55,7 @@ export async function registerPerformerRoutes(app: FastifyInstance, options: Per
       !Array.isArray(allowedUses) || allowedUses.length === 0 ||
       new Set(allowedUses).size !== allowedUses.length ||
       allowedUses.some((value) => !allowedUseValues.has(value)) ||
+      requiredDistributionUses.some((value) => !allowedUses.includes(value)) ||
       typeof idempotencyKey !== "string" || idempotencyKey.length === 0 || idempotencyKey.length > 128
     ) {
       return reply.code(400).send({ code: "validation_failed", message: "Provide one performer and valid allowed uses" });
@@ -62,7 +69,7 @@ export async function registerPerformerRoutes(app: FastifyInstance, options: Per
         contentId,
         performerHandle,
         externalLabel,
-        allowedUses,
+        allowedUses: [...allowedUses].sort(),
         invitationTokenHash: rawToken ? tokenHash(rawToken) : null,
         invitationExpiresAt: rawToken ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000) : null,
         idempotencyKey
@@ -171,6 +178,12 @@ function performerError(request: FastifyRequest, reply: FastifyReply, error: unk
   if (error instanceof PerformerRepositoryConfigurationError) {
     request.log.warn({ error }, "Performer consent repository unavailable");
     return reply.code(503).send({ code: "service_unavailable", message: "Performer consent is temporarily unavailable" });
+  }
+  if (error instanceof PerformerIdempotencyConflictError) {
+    return reply.code(409).send({
+      code: "idempotency_conflict",
+      message: "Idempotency key was already used for a different performer request"
+    });
   }
   throw error;
 }

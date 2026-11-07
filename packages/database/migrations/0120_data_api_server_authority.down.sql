@@ -1,0 +1,3 @@
+-- Browser-role revocation is intentionally irreversible. Application rollback
+-- keeps the server-owned authority boundary. Any future direct projection must
+-- be introduced by a reviewed forward migration with explicit minimal grants.

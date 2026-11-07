@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: Convergence 07 remote MCP profile, analytics, and private-draft behavior
-Last updated: 2026-08-24
+Last updated: 2026-11-05
 Source of truth: yes for this bounded product slice
 
 Owns:
@@ -42,8 +42,17 @@ keys, provider payloads, auth tokens, private messages, and raw personal data ar
 
 ## Protocol and trust boundary
 
-- Stable MCP protocol target: `2025-11-25`; the July 2026 release candidate is observed but not
-  adopted before finalization and supported-client proof.
+- Deliberate MCP compatibility target: the handshake-era `2025-11-25` specification. The official
+  current final specification is `2026-07-28`, but that revision replaces initialization with
+  stateless `server/discover` and per-request capability/version metadata. The current endpoint does
+  not implement that lifecycle and rejects an explicit `2026-07-28` protocol header; this is
+  intentional compatibility, not a claim of latest-version support.
+- The endpoint is a narrow, hand-written Fastify/JSON-RPC implementation; no
+  `@modelcontextprotocol/*` SDK is installed. `initialize` echoes `2025-06-18` only when that exact
+  revision is requested and otherwise offers `2025-11-25`. Post-initialization protocol headers
+  tolerate `2025-03-26`, `2025-06-18`, and `2025-11-25`, but that allowlist does not claim every
+  optional feature or official-SDK compatibility at those revisions. Real-client staging remains
+  mandatory.
 - OAuth authorization-code plus S256 PKCE, exact redirect matching, audience/resource binding,
   short-lived hash-only bearer tokens, revocation, and per-request authorization remain mandatory.
 - Streamable HTTP requests with an `Origin` header are accepted only from configured WeVid origins;
@@ -65,6 +74,9 @@ keys, provider payloads, auth tokens, private messages, and raw personal data ar
   draft for the same logical operation.
 - Analytics privacy suppression and stale/unavailable freshness are returned honestly; the bridge
   cannot infer or fill suppressed values.
+- Tool execution uses the same Fastify rate-limit store as the API, keyed by connection ID and tool
+  risk class with a one-minute TTL. Production refuses the process-memory store; replicas therefore
+  share the quota. Exceeded calls return HTTP 429, MCP error `-32029`, and a bounded `Retry-After`.
 - Connection revocation remains available in WeVid settings. Operator health uses existing MCP audit,
   OAuth, rate-limit, and staging-proof surfaces; no second operations console is introduced.
 

@@ -123,6 +123,10 @@
       display: none;
     }
 
+    .auth-embedded-email {
+      grid-template-columns: 1fr;
+    }
+
     .auth-switch {
       margin: 2px 0 0;
       font-size: 14px;

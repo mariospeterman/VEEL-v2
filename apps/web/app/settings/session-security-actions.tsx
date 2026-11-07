@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ApiMutationError, revokeAllApplicationSessions } from "@/api-mutations";
 import { createSupabaseBrowserClient } from "@/supabase/client";
 import { useProviderSessionLogout } from "@/wallet/provider-session-logout";
+import { clearUserScopedBrowserState } from "@/session/clear-user-scoped-browser-state";
 
 export function SessionSecurityActions() {
   const [confirming, setConfirming] = useState(false);
@@ -17,9 +18,10 @@ export function SessionSecurityActions() {
 
     try {
       await revokeAllApplicationSessions();
+      clearUserScopedBrowserState();
       await Promise.allSettled([
         logoutProviderSessions(),
-        logoutSupabaseLocally(),
+        logoutSupabaseGlobally(),
         fetch("/auth/logout", { cache: "no-store", credentials: "include", method: "POST" })
       ]);
       window.location.replace("/");
@@ -60,10 +62,10 @@ export function SessionSecurityActions() {
   );
 }
 
-async function logoutSupabaseLocally() {
+async function logoutSupabaseGlobally() {
   try {
     const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signOut({ scope: "local" });
+    await supabase.auth.signOut({ scope: "global" });
   } catch {
     // Supabase recovery is optional and does not control the WeVid session revocation.
   }

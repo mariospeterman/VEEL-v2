@@ -1,0 +1,33 @@
+{
+  "scope": "Minimal relational reproduction of the audited joins/selection, SQLite; not a migrated Postgres integration run",
+  "push_starvation": {
+    "first_insert_count": 2,
+    "second_insert_count": 0,
+    "enqueued": [
+      [
+        "n1"
+      ],
+      [
+        "n2"
+      ]
+    ],
+    "missing_newest": "n3"
+  },
+  "account_switch_owner_mismatch": [
+    [
+      "A",
+      "B",
+      "n1"
+    ],
+    [
+      "A",
+      "B",
+      "n2"
+    ]
+  ],
+  "watch_time_fanout": {
+    "actual_canonical_seconds": 10,
+    "reported_seconds": 20,
+    "duration_bearing_assets": 2
+  }
+}

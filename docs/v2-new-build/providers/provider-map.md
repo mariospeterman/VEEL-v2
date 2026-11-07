@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: provider ownership, boundaries, integrations
-Last updated: 2026-08-20
+Last updated: 2026-11-05
 Source of truth: yes for v2 provider relations
 
 Owns:
 - provider map decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -35,13 +35,13 @@ This map defines which provider does which job and what WeVid owns. It exists to
 | Helius | payment/access evidence | normalize/verify event, dedupe, audit | none | signed/authorized webhook or API response |
 | Bunny Stream/CDN/TUS | VOD upload/transcode/playback | content state, access policy, signed/safe playback | safe upload/playback data | provider webhook/status |
 | Bunny Storage + Optimizer | private original-image storage and on-demand responsive derivatives | narrow server-streamed upload, MIME/dimension/decompression/checksum/orientation validation, metadata stripping, opaque paths, quarantine/release and signed frontend-safe projection | WeVid upload progress and released optimized URLs only; no Storage `AccessKey` | `candidate`, fail-closed until exact staging upload/Shield/sanitization/Optimizer/delete/recovery/rotation proof |
-| Livepeer | live streaming/replay infra | room policy, host/viewer split, pass access | playback-safe viewer resource | provider webhook/status |
+| Livepeer | browser broadcast, OBS ingest, live transcoding/playback, and replay infra | room policy, owner-only host credential capability, viewer split, pass access, suspension, and replay quarantine | official SDK camera/microphone controls first; OBS under Advanced; host credential memory-only; viewers receive playback-safe resources only | provider webhook/status plus real camera and OBS staging ingest |
 | Didit/Yoti/EUDI/Scytales | reusable/light age assurance | session creation, minimal result storage | provider redirect/widget/link only | signed notification/result |
 | Persona/Didit | light document age fallback and cost-control KYC/KYB candidate | inquiry/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
 | Sumsub | reusable KYC/KYB and creator compliance candidate | reusable identity, copied applicant, applicant/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
 | Veriff | creator KYC/KYB heavy fallback and returning-user biometric candidate | applicant/session mapping, minimal state | provider redirect/widget only | signed webhook/result |
 | Wallet funding/onramp | user-owned wallet funding only | start session, show funding state | funding widget/session only | provider callback for funding status only |
-| Solana Commerce Kit, selected package only | standards-compliant Solana Pay query encoding and SVG QR/deep-link interoperability through exact-pinned `@solana-commerce/solana-pay` `0.1.1` at reviewed upstream `6164d5104f3d1bd4cfbb637075f000d6ac23d6c3` | payment intents, immutable prices/recipients/splits, checkout capability, transaction composition, exact settlement verification, receipts, domain outcome, and unified checkout policy | WeVid checkout UI and wallet handoff only; no raw package/provider payload | `candidate`, `CODE_COMPLETE_PROVIDER_BLOCKED`; narrow known-defect wrapper and compatibility proof are complete, but real devnet embedded/external wallet, QR/mobile, account/terms, security, and rollback evidence are required before `staging-approved` |
+| Solana Pay codec dependency island | standards-compliant transaction-request URL parsing/encoding through exact-pinned `@solana/pay` `1.0.26` on its compatible Solana Kit 6 family, plus exact-pinned Node `qrcode` `1.5.4` SVG generation | payment intents, immutable prices/recipients/splits, checkout capability, transaction composition, exact settlement verification, receipts, domain outcome, and unified checkout policy; API/worker Solana Kit 7 dependencies remain untouched | WeVid checkout UI and wallet handoff only; no raw package payload and no browser QR authority | `candidate`, `CODE_COMPLETE_PROVIDER_BLOCKED`; narrow round-trip/unsafe-link/SVG tests are complete, but real devnet embedded/external wallet, QR/mobile, security, and rollback evidence are required before `staging-approved`; Commerce Kit is retired/replaced |
 | Solana Subscription Delegation Program | canonical recurring delegation through exact-pinned `@solana/subscriptions` `0.5.0` and `@solana/kit` `7.1.0`; bounded user authorization and official `transferRecurring` instructions | plan/offer policy, eligibility, exact recipient splits, collection schedule/reconciliation, receipts, access, cancellation, grace/recovery, provider approval | one wallet approval, friendly membership/plan state, and cancellation only; no PDA/mint/program form fields | `candidate`, `CODE_COMPLETE_PROVIDER_BLOCKED`; local adapter/state-machine/fixture proof is complete, while real devnet setup/first collection/renewal/revoke/failure/rotation/rollback evidence from `pnpm proof:subscriptions` is required before `staging-approved` |
 | Email/push provider | notifications | notification policy, templates, retries | no secrets | delivery status |
 | OpenTelemetry/logging | observability | traces, logs, redaction | none | trace/log pipeline |
@@ -61,6 +61,7 @@ Frontend
 
 API
   -> computes amount, recipients, splits, reference, memo
+  -> uses the isolated Solana Pay codec only for a validated transaction-request URL and SVG QR
   -> builds transaction request
   -> verifies confirmed transaction facts
   -> grants the domain outcome: receipt, entitlement, Event Access Pass, message delivery, or paid order
@@ -82,6 +83,7 @@ VOD:
 Live:
   API -> Livepeer create stream
   Creator endpoint -> masked host connection
+  Owner reveal -> memory-only SDK browser broadcast (primary) or OBS (Advanced)
   Viewer endpoint -> playback-safe data only
   Livepeer -> API stream/replay webhook
 ```

@@ -5,6 +5,7 @@ import { adminListInput, requireAdminAccess, requireAdminMutation } from "./admi
 import { validateModerationAction, validateReportAction } from "./admin-route-validators.js";
 import type { AdminModerationActionRequest, AdminReportActionRequest } from "./types.js";
 import { AdminRepositoryStateConflictError } from "./admin-repository.js";
+import { MutationCommandIdempotencyConflictError } from "../../shared/mutation-command-receipt.js";
 
 export function registerAdminModerationRoutes(
   app: FastifyInstance,
@@ -76,6 +77,12 @@ export function registerAdminModerationRoutes(
         idempotencyKey: mutation.idempotencyKey
       });
     } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Idempotency key was already used for a different admin mutation"
+        });
+      }
       if (error instanceof AdminRepositoryStateConflictError) {
         return reply.code(409).send({ code: "conflict", message: error.message });
       }
@@ -118,12 +125,23 @@ export function registerAdminModerationRoutes(
     );
     if (!mutation) return reply;
 
-    const report = await options.adminRepository.updateReport({
-      supabaseUserId: mutation.supabaseUserId,
-      reportId,
-      body: mutation.body,
-      idempotencyKey: mutation.idempotencyKey
-    });
+    let report;
+    try {
+      report = await options.adminRepository.updateReport({
+        supabaseUserId: mutation.supabaseUserId,
+        reportId,
+        body: mutation.body,
+        idempotencyKey: mutation.idempotencyKey
+      });
+    } catch (error) {
+      if (error instanceof MutationCommandIdempotencyConflictError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "Idempotency key was already used for a different admin mutation"
+        });
+      }
+      throw error;
+    }
 
     if (!report) {
       return reply.code(404).send({

@@ -1,12 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import bs58 from "bs58";
 import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { calculateSettlementSplit, PaymentAmountError } from "../src/modules/payment/payment-amounts";
 import {
   buildCreatorSplitTransaction,
+  createSolanaRpcSettlementVerifier,
   SolanaPaymentConfigurationError,
+  validateSignedPaymentTransaction,
+  verifySolanaTransactionExpiry,
   verifySolanaTransfer
 } from "../src/modules/payment/solana-payment";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 import {
   TOKEN_PROGRAM_ID,
   deriveAssociatedTokenAddress
@@ -34,6 +41,18 @@ describe("payment amount calculation", () => {
       enterpriseManagementAmountAtomic: 0,
       platformFeeGrossAtomic: 1_000_000,
       platformFeeAmountAtomic: 1_000_000,
+      referralAmountAtomic: 0
+    });
+  });
+
+  it("keeps a non-cent USDC creator split exact in atomic units", () => {
+    expect(calculateSettlementSplit({ totalAmountAtomic: 10_010_000, platformFeeBps: 1_500 })).toEqual({
+      totalAmountAtomic: 10_010_000,
+      creatorSideProceedsAtomic: 8_508_500,
+      creatorAmountAtomic: 8_508_500,
+      enterpriseManagementAmountAtomic: 0,
+      platformFeeGrossAtomic: 1_501_500,
+      platformFeeAmountAtomic: 1_501_500,
       referralAmountAtomic: 0
     });
   });
@@ -129,6 +148,28 @@ describe("payment amount calculation", () => {
 });
 
 describe("Solana creator split settlement verification", () => {
+  it("passes cancellation through to the Solana RPC fetch", async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("Cancelled", "AbortError"));
+        }, { once: true });
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const controller = new AbortController();
+    const verifier = createSolanaRpcSettlementVerifier("https://rpc.example.test");
+    const verification = verifier.verifyTransfer(settlementInput(), {
+      signal: controller.signal
+    });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+
+    controller.abort();
+
+    await expect(verification).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  });
+
   it("confirms an exact native SOL creator split", async () => {
     await expect(expectSettlement([
       transfer(creatorWallet, 9_000_000),
@@ -218,6 +259,74 @@ describe("Solana creator split settlement verification", () => {
       transfer(platformFeeWallet, 1_000_000),
       memo("veel:intent-1")
     ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
+  });
+
+  it("does not reuse one native SOL transfer for equal creator and Enterprise legs", async () => {
+    const input = settlementInput({
+      enterpriseWallet: creatorWallet,
+      creatorAmountMinor: 4_500_000,
+      enterpriseManagementAmountMinor: 4_500_000
+    });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 4_500_000),
+      transfer(platformFeeWallet, 1_000_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 4_500_000),
+      transfer(creatorWallet, 4_500_000),
+      transfer(platformFeeWallet, 1_000_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: true, blockTime });
+  });
+
+  it("does not reuse one native SOL transfer for equal platform and referral legs", async () => {
+    const input = settlementInput({
+      referralWallet: platformFeeWallet,
+      platformFeeAmountMinor: 500_000,
+      referralAmountMinor: 500_000
+    });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 9_000_000),
+      transfer(platformFeeWallet, 500_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
+
+    await expect(expectSettlement([
+      transfer(creatorWallet, 9_000_000),
+      transfer(platformFeeWallet, 500_000),
+      transfer(platformFeeWallet, 500_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: true, blockTime });
+  });
+
+  it("does not reuse one USDC transfer for equal creator and Enterprise legs", async () => {
+    const input = settlementInput({
+      currency: "USDC",
+      tokenMint: usdcMint,
+      tokenDecimals: 6,
+      totalAmountMinor: 1_000_000,
+      enterpriseWallet: creatorWallet,
+      creatorAmountMinor: 450_000,
+      enterpriseManagementAmountMinor: 450_000,
+      platformFeeAmountMinor: 100_000
+    });
+
+    await expect(expectSettlement([
+      tokenTransfer(creatorWallet, 450_000),
+      tokenTransfer(platformFeeWallet, 100_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: false, failureCode: "transfer_mismatch" });
+
+    await expect(expectSettlement([
+      tokenTransfer(creatorWallet, 450_000),
+      tokenTransfer(creatorWallet, 450_000),
+      tokenTransfer(platformFeeWallet, 100_000),
+      memo("veel:intent-1")
+    ], { input })).resolves.toEqual({ confirmed: true, blockTime });
   });
 
   it("requires exact decoded memo content and rejects settlement after intent expiry", async () => {
@@ -334,6 +443,98 @@ describe("Solana Pay transaction construction", () => {
   });
 });
 
+describe("signed Solana transaction expiry proof", () => {
+  it("validates the canonical exact payer-signed transaction without provider I/O", () => {
+    const signed = signedPaymentTransaction();
+
+    expect(validateSignedPaymentTransaction(signed)).toEqual({
+      recentBlockhash: signed.recentBlockhash
+    });
+  });
+
+  it("rejects noncanonical, tampered, signature-mismatched, and wrong-payer transaction bytes", () => {
+    const signed = signedPaymentTransaction();
+    const other = signedPaymentTransaction();
+    const tamperedBytes = Buffer.from(signed.signedTransactionBase64, "base64");
+    tamperedBytes[1] = (tamperedBytes[1] ?? 0) ^ 1;
+
+    expect(validateSignedPaymentTransaction({
+      ...signed,
+      signedTransactionBase64: `${signed.signedTransactionBase64}\n`
+    })).toBeNull();
+    expect(validateSignedPaymentTransaction({
+      ...signed,
+      signature: bs58.encode(tamperedBytes.subarray(1, 65)),
+      signedTransactionBase64: tamperedBytes.toString("base64")
+    })).toBeNull();
+    expect(validateSignedPaymentTransaction({
+      ...signed,
+      signature: other.signature
+    })).toBeNull();
+    expect(validateSignedPaymentTransaction({
+      ...signed,
+      buyerWallet: other.buyerWallet
+    })).toBeNull();
+  });
+
+  it("keeps a valid-blockhash transaction recoverable without consulting status history", async () => {
+    const signed = signedPaymentTransaction();
+    const getSignatureStatuses = vi.fn();
+
+    await expect(verifySolanaTransactionExpiry({
+      isBlockhashValid: vi.fn().mockResolvedValue({ value: true }),
+      getSignatureStatuses
+    } as never, signed)).resolves.toEqual({ state: "active" });
+
+    expect(getSignatureStatuses).not.toHaveBeenCalled();
+  });
+
+  it("keeps an expired-blockhash transaction recoverable when its signature was observed", async () => {
+    const signed = signedPaymentTransaction();
+
+    await expect(verifySolanaTransactionExpiry({
+      isBlockhashValid: vi.fn().mockResolvedValue({ value: false }),
+      getSignatureStatuses: vi.fn().mockResolvedValue({
+        value: [{ confirmationStatus: "processed", err: null }]
+      })
+    } as never, signed)).resolves.toEqual({ state: "observed" });
+  });
+
+  it("proves expiry only after the blockhash and signature-history fences both close", async () => {
+    const signed = signedPaymentTransaction();
+    const isBlockhashValid = vi.fn().mockResolvedValue({ value: false });
+    const getSignatureStatuses = vi.fn().mockResolvedValue({ value: [null] });
+
+    await expect(verifySolanaTransactionExpiry({
+      isBlockhashValid,
+      getSignatureStatuses
+    } as never, signed)).resolves.toEqual({ state: "expired" });
+
+    expect(isBlockhashValid).toHaveBeenCalledWith(
+      signed.recentBlockhash,
+      { commitment: "confirmed" }
+    );
+    expect(getSignatureStatuses).toHaveBeenCalledWith(
+      [signed.signature],
+      { searchTransactionHistory: true }
+    );
+  });
+
+  it("rejects bytes whose payer or first signature does not match the accepted command", async () => {
+    const signed = signedPaymentTransaction();
+    const connection = {
+      isBlockhashValid: vi.fn(),
+      getSignatureStatuses: vi.fn()
+    };
+
+    await expect(verifySolanaTransactionExpiry(connection as never, {
+      ...signed,
+      signature: bs58.encode(new Uint8Array(64).fill(9))
+    })).resolves.toEqual({ state: "invalid" });
+    expect(connection.isBlockhashValid).not.toHaveBeenCalled();
+  });
+});
+
 function expectSettlement(
   instructions: unknown[],
   options: {
@@ -446,6 +647,27 @@ function storedUsdcIntent(): StoredPaymentIntent {
       policySource: "environment_default",
       policyRevision: 0
     }
+  };
+}
+
+function signedPaymentTransaction() {
+  const payer = Keypair.generate();
+  const recentBlockhash = Keypair.generate().publicKey.toBase58();
+  const transaction = new Transaction({
+    feePayer: payer.publicKey,
+    recentBlockhash
+  }).add(SystemProgram.transfer({
+    fromPubkey: payer.publicKey,
+    toPubkey: Keypair.generate().publicKey,
+    lamports: 1
+  }));
+  transaction.sign(payer);
+
+  return {
+    buyerWallet: payer.publicKey.toBase58(),
+    recentBlockhash,
+    signature: bs58.encode(transaction.signature!),
+    signedTransactionBase64: transaction.serialize().toString("base64")
   };
 }
 

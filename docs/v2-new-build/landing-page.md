@@ -2,7 +2,7 @@
 
 Status: accepted
 Scope: canonical public `/` product story, claims, conversion, and progressive media
-Last updated: 2026-08-25
+Last updated: 2026-11-05
 Source of truth: yes, for landing behavior and public claims presentation
 
 Owns:
@@ -46,10 +46,11 @@ The public sequence is:
 
 Studio is the individual creator capability tier and `/app/studio` workspace. It extends the existing account/profile with professional analytics, scheduling, pricing, live-conversion, and approved assistant capabilities. Enterprise is the separate organization workspace with contract/KYB gates, creator consent, and permission-based RBAC. Neither tier buys discovery, Mutuals treatment, message priority, or moderation priority.
 
-The money section may visualize the canonical four-stage handoff: Commerce Kit formats a Solana Pay
-QR/link, the user approves in a user-controlled wallet, the network confirms and the backend verifies,
-then entitlement and receipt state change. Commerce Kit is presentation/interoperability only. It is
-not payment, settlement, entitlement, wallet, order, refund, tax, or accounting authority. Public copy
+The money section may visualize the canonical four-stage handoff: the isolated Solana Pay codec
+formats a validated QR/link, the user approves in a user-controlled wallet, the network confirms and
+the backend verifies, then entitlement and receipt state change. The codec is
+presentation/interoperability only. It is not payment, settlement, entitlement, wallet, order,
+refund, tax, or accounting authority. Public copy
 may explain that blockchain settlement has no card-style chargeback rail only when it also preserves
 refund, dispute, consumer-law, and remediation duties.
 

@@ -1,17 +1,18 @@
 "use client";
 
-import { EmbeddedWalletLoginButton } from "./embedded-wallet-login";
+import { EmbeddedWalletLoginMethods } from "./embedded-wallet-login";
+import type { EmbeddedAuthMethod } from "./embedded-auth-method";
 import { EmbeddedWalletProviders } from "./embedded-wallet-providers";
 import type { WalletAuthPurpose } from "./backend-wallet-auth";
 
 export function EmbeddedWalletLoginRuntime({
-  label,
+  initialMethod,
   onAccountNotFound,
   onLinked,
   purpose,
   secondary
 }: {
-  label: string;
+  initialMethod: EmbeddedAuthMethod;
   purpose: WalletAuthPurpose;
   onAccountNotFound?: (() => void) | undefined;
   onLinked?: ((address: string) => void) | undefined;
@@ -19,7 +20,13 @@ export function EmbeddedWalletLoginRuntime({
 }) {
   return (
     <EmbeddedWalletProviders purpose={purpose}>
-      <EmbeddedWalletLoginButton autoStart label={label} onAccountNotFound={onAccountNotFound} onLinked={onLinked} purpose={purpose} secondary={secondary} />
+      <EmbeddedWalletLoginMethods
+        initialMethod={initialMethod}
+        onAccountNotFound={onAccountNotFound}
+        onLinked={onLinked}
+        purpose={purpose}
+        secondary={secondary}
+      />
     </EmbeddedWalletProviders>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ApiMutationError, createLiveRoom } from "@/api-mutations";
+import { OwnedLiveRoomHistory } from "./owned-live-room-history";
 
 type AccessMode = "public" | "profile_members" | "paid_event";
 
@@ -54,9 +55,9 @@ export function LiveCreateWorkspace({ enabled }: { enabled: boolean }) {
     <section className="rounded border border-(--line) bg-(--panel) p-4 sm:p-5">
       <div>
         <p className="text-sm font-medium text-(--accent-text)">Live</p>
-        <h2 className="mt-1 text-lg font-semibold tracking-normal">Start with OBS</h2>
+        <h2 className="mt-1 text-lg font-semibold tracking-normal">Go live</h2>
         <p className="mt-1 text-sm leading-6 text-(--muted)">
-          Create the room, then connect OBS from a private host screen. Adult live is not available.
+          Create the room, then preview your camera and microphone on the private host screen. OBS remains available for advanced setups. Adult live is not available.
         </p>
       </div>
 
@@ -124,6 +125,7 @@ export function LiveCreateWorkspace({ enabled }: { enabled: boolean }) {
         {!enabled ? <p className="text-sm text-(--muted)">Finish age access before creating a live room.</p> : null}
         {error ? <p className="text-sm font-medium text-red-400" role="alert">{error}</p> : null}
       </form>
+      <OwnedLiveRoomHistory />
     </section>
   );
 }

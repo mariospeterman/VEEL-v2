@@ -17,6 +17,11 @@ export const stagingProofPlan = [
     required: ["WEB_URL", "API_URL"]
   },
   {
+    name: "solana-network",
+    command: ["node", "scripts/verify-solana-rpc-network.mjs"],
+    required: ["SOLANA_CLUSTER", "SOLANA_RPC_URL"]
+  },
+  {
     name: "bunny-sfw",
     command: ["pnpm", "proof:bunny-sfw"],
     required: [
@@ -50,9 +55,7 @@ export const stagingProofPlan = [
       "API_URL",
       "ENTERPRISE_STAGING_SESSION_COOKIE",
       "ENTERPRISE_STAGING_ORGANIZATION_ID",
-      "ENTERPRISE_STAGING_RELATIONSHIP_ID",
-      "ENTERPRISE_STAGING_KYB_EVIDENCE_ID",
-      "ENTERPRISE_STAGING_CONTRACT_EVIDENCE_ID"
+      "ENTERPRISE_STAGING_RELATIONSHIP_ID"
     ]
   },
   {

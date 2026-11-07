@@ -22,6 +22,8 @@ export interface CreateEventInput {
 export interface UpdateEventInput {
   supabaseUserId: string;
   eventId: string;
+  idempotencyKey: string;
+  requestHash: string;
   body: UpdateEventRequest;
 }
 

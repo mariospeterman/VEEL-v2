@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: product workflows
-Last updated: 2026-06-03
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
 - product flows decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -33,17 +33,21 @@ Non-goals:
 sequenceDiagram
   participant User
   participant Web as Next.js PWA
-  participant Auth as Supabase Auth
+  participant Wallet as External or embedded wallet
   participant API as Fastify API
   participant DB as Postgres
   participant Age as Age/KYC Provider
 
   User->>Web: Open app
-  Web->>Auth: Get session
-  Auth-->>Web: JWT or anonymous
-  Web->>API: GET /me with JWT
+  Web->>API: Request wallet challenge
+  Web->>Wallet: Ask user to sign challenge
+  Wallet-->>Web: Wallet signature
+  Web->>API: Exchange signed challenge
+  API->>DB: Map wallet to user and create app session
+  API-->>Web: Opaque HttpOnly application-session cookie
+  Web->>API: GET /v1/session with cookie
   API->>DB: Load user, profile, wallet, age state
-  API-->>Web: Safe app session
+  API-->>Web: Safe session projection
   alt Age required
     Web->>API: Start age check
     API->>Age: Create provider session
@@ -98,9 +102,8 @@ Rules:
 
 Home is mixed media:
 
-- followed creators
-- recommended media
-- clips
+- latest eligible media
+- the same chronological media narrowed to followed creators
 - bits
 - pictures
 - live rooms
@@ -110,6 +113,10 @@ Home is mixed media:
 Bits is immersive vertical media.
 
 Discover is search/explore.
+
+Latest and Following both use stable reverse `(published_at, id)` order. There is no engagement
+score, bounded ranking session, or recommendation fallback. Home/Bits exclude retired text and poll
+formats while authorized historical detail remains readable.
 
 Source context rule:
 
@@ -122,7 +129,7 @@ Source context rule:
 ```mermaid
 flowchart TD
   Draft["Create draft"] --> UploadIntent["Backend upload intent"]
-  UploadIntent --> ProviderUpload["Direct Bunny TUS / Livepeer flow"]
+  UploadIntent --> ProviderUpload["Bunny media upload flow"]
   ProviderUpload --> ProviderWebhook["Provider webhook/status refresh"]
   ProviderWebhook --> Ready["Asset ready"]
   Ready --> Metadata["Caption, hashtags, mentions, thumbnail, teaser"]
@@ -131,13 +138,16 @@ flowchart TD
   Review --> Publish["Publish"]
 ```
 
-Create MVP is intentionally raw and simple:
+Create begins with exactly **Add photos/videos** and **Go live**. The media MVP is intentionally raw
+and simple:
 
 1. Record or upload media.
 2. Edit essentials:
    - trim/crop where provider/browser support is simple
    - choose thumbnail/frame
-   - if video is longer than Bit length, choose the free Bit/teaser segment
+   - use provider-confirmed duration to classify a video of 60 seconds or less as a Bit and a longer
+     video as VOD; do not show a technical format selector
+   - if a VOD has a teaser, select that teaser without changing the canonical classification
 3. Add caption:
    - caption text
    - hashtags `#`
@@ -156,8 +166,14 @@ Create MVP is intentionally raw and simple:
 6. Preview.
 7. Publish or submit for review if moderation requires it.
 
+The Moments surface may open the same media composer with contextual 24-hour lifecycle metadata.
+Moment is not a third Create action or a creator-selected media type. Fresh text/poll creation,
+editing, publication, scheduling, and voting are retired; historical authorized detail is read-only.
+
 Not MVP:
 
+- text posts and polls
+- Post/Moment and Bit/clip/VOD format pickers
 - CapCut-level timeline editor
 - client-owned video processing
 - direct provider object creation from frontend
@@ -249,7 +265,8 @@ Rules:
 flowchart TD
   CreateRoom["Creator creates room"] --> Start["Creator starts session"]
   Start --> Livepeer["Backend creates Livepeer stream"]
-  Livepeer --> Host["Creator receives host connection"]
+  Livepeer --> Camera["Primary: browser camera/microphone broadcast"]
+  Livepeer --> OBS["Advanced: OBS connection"]
   Livepeer --> Viewer["Viewer receives safe playback state"]
   Viewer --> Pass["Pass required?"]
   Pass --> Payment["Live pass payment"]
@@ -259,7 +276,10 @@ flowchart TD
   End --> Replay["Replay asset if available"]
 ```
 
-Viewers never receive stream keys or ingest URLs.
+The browser broadcast uses the official Livepeer React broadcast SDK. The owner-only recent-auth
+reveal is no-store and its stream credential remains in component memory for the active host
+workspace; OBS uses the same exception under Advanced setup. Viewers never receive stream keys or
+ingest URLs.
 
 ## Messages Flow
 

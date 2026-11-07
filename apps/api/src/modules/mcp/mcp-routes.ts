@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { AdminRepository } from "../admin/types.js";
 import type { AgeRepository } from "../age/types.js";
@@ -56,12 +56,34 @@ type McpTokenAccess =
   | { ok: true; connection: McpConnection & { supabaseUserId: string } }
   | { ok: false; statusCode: 401 | 403 | 404 | 503; body: { code: string; message: string } };
 
-const toolCallBuckets = new Map<string, { count: number; resetAt: number }>();
+type McpToolRateLimiter = (
+  request: FastifyRequest,
+  connectionId: string,
+  riskLevel: McpToolDefinition["riskLevel"]
+) => Promise<{ exceeded: boolean; retryAfterSeconds: number }>;
 
 export async function registerMcpRoutes(
   app: FastifyInstance,
   options: RegisterMcpRoutesOptions
 ): Promise<void> {
+  const rateLimitKeyByRequest = new WeakMap<FastifyRequest, string>();
+  const checkToolRateLimit = app.createRateLimit({
+    max: app.config.MCP_TOOL_CALL_RATE_LIMIT_PER_MINUTE,
+    timeWindow: "1 minute",
+    keyGenerator: (request) => rateLimitKeyByRequest.get(request) ?? "mcp-tool:unbound"
+  });
+  const consumeToolRateLimit: McpToolRateLimiter = async (request, connectionId, riskLevel) => {
+    rateLimitKeyByRequest.set(request, `mcp-tool:${connectionId}:${riskLevel}`);
+    try {
+      const result = await checkToolRateLimit(request);
+      return result.isAllowed
+        ? { exceeded: false, retryAfterSeconds: 0 }
+        : { exceeded: result.isExceeded, retryAfterSeconds: result.ttlInSeconds };
+    } finally {
+      rateLimitKeyByRequest.delete(request);
+    }
+  };
+
   await registerMcpMediaRoutes(app, options, (request) => verifyMcpTokenAccess(request, options));
   app.addContentTypeParser(
     "application/x-www-form-urlencoded",
@@ -263,30 +285,24 @@ export async function registerMcpRoutes(
     }
 
     try {
-      const [client, authorizationCode] = await Promise.all([
-        options.mcpRepository.findOAuthClientByClientId({ clientId: body.client_id }),
-        options.mcpRepository.findOAuthAuthorizationCodeByHash({ codeHash: hashToken(body.code) })
-      ]);
-      if (!client || client.status !== "active" || !authorizationCode || authorizationCode.publicClientId !== body.client_id) {
-        return reply.code(400).send(oauthError("invalid_grant", "Authorization code is invalid"));
-      }
-      if (authorizationCode.usedAt || new Date(authorizationCode.expiresAt).getTime() <= Date.now()) {
-        return reply.code(400).send(oauthError("invalid_grant", "Authorization code is expired or already used"));
-      }
-      if (authorizationCode.redirectUri !== body.redirect_uri) {
-        return reply.code(400).send(oauthError("invalid_grant", "redirect_uri does not match"));
-      }
-      if (!verifyPkce(body.code_verifier, authorizationCode.codeChallenge)) {
+      const codeChallenge = pkceChallenge(body.code_verifier);
+      if (!codeChallenge) {
         return reply.code(400).send(oauthError("invalid_grant", "PKCE verification failed"));
       }
 
-      await options.mcpRepository.markOAuthAuthorizationCodeUsed({ codeId: authorizationCode.id });
       const accessToken = `veel_oauth_at_${randomBytes(32).toString("base64url")}`;
-      const issued = await options.mcpRepository.issueOAuthAccessToken({
-        codeId: authorizationCode.id,
+      const issued = await options.mcpRepository.exchangeOAuthAuthorizationCode({
+        codeHash: hashToken(body.code),
+        clientId: body.client_id,
+        redirectUri: body.redirect_uri,
+        codeChallenge,
+        resource: mcpResourceIdentifier(app),
         tokenHash: hashToken(accessToken),
         expiresAt: new Date(Date.now() + app.config.MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS * 1000)
       });
+      if (!issued) {
+        return reply.code(400).send(oauthError("invalid_grant", "Authorization code is invalid, expired, or already used"));
+      }
 
       return reply.send({
         access_token: accessToken,
@@ -506,12 +522,12 @@ export async function registerMcpRoutes(
 
     if (message.method === "tools/call") {
       return handleToolCall({
-        app,
         request,
         reply,
         options,
         id: message.id,
         connection: tokenAccess.connection,
+        consumeToolRateLimit,
         params: message.params
       });
     }
@@ -521,12 +537,12 @@ export async function registerMcpRoutes(
 }
 
 async function handleToolCall(input: {
-  app: FastifyInstance;
   request: FastifyRequest;
   reply: FastifyReply;
   options: RegisterMcpRoutesOptions;
   id: unknown;
   connection: McpConnection & { supabaseUserId: string };
+  consumeToolRateLimit: McpToolRateLimiter;
   params: unknown;
 }) {
   const parsed = parseToolCallParams(input.params);
@@ -556,9 +572,15 @@ async function handleToolCall(input: {
     return input.reply.send(jsonRpcError(input.id, -32603, "Connection is missing the required tool scope"));
   }
 
-  if (!consumeToolRateLimit(input.connection.id, input.app.config.MCP_TOOL_CALL_RATE_LIMIT_PER_MINUTE)) {
+  const toolRateLimit = await input.consumeToolRateLimit(
+    input.request,
+    input.connection.id,
+    tool.riskLevel
+  );
+  if (toolRateLimit.exceeded) {
     await auditDeniedTool(input.options, input.connection, tool.name, parsed.arguments, "Tool rate limit exceeded");
-    return input.reply.send(jsonRpcError(input.id, -32029, "Tool rate limit exceeded"));
+    input.reply.header("retry-after", String(Math.max(1, toolRateLimit.retryAfterSeconds)));
+    return input.reply.code(429).send(jsonRpcError(input.id, -32029, "Tool rate limit exceeded"));
   }
 
   try {
@@ -579,6 +601,7 @@ async function handleToolCall(input: {
           connectionId: input.connection.id,
           supabaseUserId: input.connection.supabaseUserId,
           toolName: tool.name,
+          toolVersion: tool.version,
           state: "allowed",
           riskLevel: tool.riskLevel,
           requiredScopes: tool.requiredScopes,
@@ -614,6 +637,7 @@ async function handleToolCall(input: {
       connectionId: input.connection.id,
       supabaseUserId: input.connection.supabaseUserId,
       toolName: tool.name,
+      toolVersion: tool.version,
       state: "failed",
       riskLevel: tool.riskLevel,
       requiredScopes: tool.requiredScopes,
@@ -798,6 +822,7 @@ async function auditDeniedTool(
     connectionId: connection.id,
     supabaseUserId: connection.supabaseUserId,
     toolName,
+    toolVersion: registered?.version ?? null,
     state: "denied",
     riskLevel: registered?.riskLevel ?? "read",
     requiredScopes: registered?.requiredScopes ?? ["creator.profile.read"],
@@ -957,16 +982,9 @@ function formBody(body: unknown): Record<string, string> {
   );
 }
 
-function verifyPkce(codeVerifier: string, codeChallenge: string): boolean {
-  if (codeVerifier.length < 43 || codeVerifier.length > 128) return false;
-  const expected = createHash("sha256").update(codeVerifier).digest("base64url");
-  return timingSafeStringEqual(expected, codeChallenge);
-}
-
-function timingSafeStringEqual(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+function pkceChallenge(codeVerifier: string): string | null {
+  if (codeVerifier.length < 43 || codeVerifier.length > 128 || !/^[A-Za-z0-9._~-]+$/.test(codeVerifier)) return null;
+  return createHash("sha256").update(codeVerifier).digest("base64url");
 }
 
 function oauthRedirectUri(
@@ -1092,18 +1110,6 @@ function hasUnsupportedMcpProtocolHeader(request: FastifyRequest): boolean {
 
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
-}
-
-function consumeToolRateLimit(connectionId: string, limit: number): boolean {
-  const now = Date.now();
-  const existing = toolCallBuckets.get(connectionId);
-  if (!existing || existing.resetAt <= now) {
-    toolCallBuckets.set(connectionId, { count: 1, resetAt: now + 60_000 });
-    return true;
-  }
-  if (existing.count >= limit) return false;
-  existing.count += 1;
-  return true;
 }
 
 function mcpPublicBaseUrl(app: FastifyInstance): string {

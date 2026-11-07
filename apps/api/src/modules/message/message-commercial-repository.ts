@@ -5,6 +5,12 @@ import {
   MessageIdempotencyConflictError,
   MessageRequestForbiddenError
 } from "./message-errors.js";
+import {
+  bindCursorScope,
+  decodeTimestampKindIdCursor,
+  encodeTimestampKindIdCursor,
+  keysetPage
+} from "../../shared/keyset-pagination.js";
 import type {
   BindCommercialPaymentIntentInput,
   CommercialPaymentAuthority,
@@ -14,9 +20,19 @@ import type {
   CreateStructuredCreatorRequestInput,
   CreatorMediaOffer,
   StructuredCreatorRequest,
+  PaginatedConversationInput,
   UpdateCreatorMediaOfferInput,
   UpdateStructuredCreatorRequestInput
 } from "./types.js";
+
+const commercialCursorScope = "messages:commercial-interactions";
+const commercialKinds = ["media_offer", "creator_request"] as const;
+
+interface CommercialInteractionCursorRow {
+  kind: (typeof commercialKinds)[number];
+  id: string;
+  created_at: Date;
+}
 
 interface CommercialContext {
   actor_id: string;
@@ -49,12 +65,13 @@ interface CreatorRequestRow {
   creator_user_id: string;
   deliverable: string;
   permitted_category: StructuredCreatorRequest["permittedCategory"];
-  proposed_amount_minor: number | null;
-  agreed_amount_minor: number | null;
+  proposed_amount_minor: string | number | null;
+  agreed_amount_minor: string | number | null;
   currency: "SOL" | "USDC";
   expected_delivery_days: number | null;
   clarification_rule: string;
   cancellation_rule: string;
+  terms_revision: number;
   state: StructuredCreatorRequest["state"];
   payment_intent_id: string | null;
   expires_at: Date;
@@ -68,27 +85,83 @@ interface CreatorRequestRow {
 
 export async function listCommercialInteractions(
   sql: postgres.Sql,
-  input: ConversationInput
+  input: PaginatedConversationInput
 ): Promise<ConversationCommercialInteractions | null> {
   const context = await readCommercialContext(sql, input, true);
   if (!context) return null;
+
+  const cursorScope = bindCursorScope(commercialCursorScope, {
+    actor: context.actor_id,
+    conversation: input.conversationId,
+    sort: "created_at:desc,kind:desc,id:desc"
+  });
+  const cursor = decodeTimestampKindIdCursor(
+    cursorScope,
+    input.cursor,
+    commercialKinds
+  );
+  const interactionRows = await sql<CommercialInteractionCursorRow[]>`
+    with interactions as (
+      select 'media_offer'::text as kind, id, created_at
+      from creator_media_offers
+      where conversation_id = ${input.conversationId}
+      union all
+      select 'creator_request'::text as kind, id, created_at
+      from structured_creator_requests
+      where conversation_id = ${input.conversationId}
+    )
+    select kind, id, created_at
+    from interactions
+    where (
+      ${cursor.timestamp}::timestamptz is null
+      or (created_at, kind, id) < (
+        ${cursor.timestamp}::timestamptz,
+        coalesce(${cursor.kind}::text, 'zzzzzzzz'),
+        coalesce(${cursor.id}::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)
+      )
+    )
+    order by created_at desc, kind desc, id desc
+    limit ${input.limit + 1}
+  `;
+  const page = keysetPage(
+    interactionRows,
+    input.limit,
+    (row) => row,
+    (row) => encodeTimestampKindIdCursor(
+      cursorScope,
+      row.created_at,
+      row.kind,
+      row.id
+    )
+  );
+  const offerIds = page.items
+    .filter((row) => row.kind === "media_offer")
+    .map((row) => row.id);
+  const requestIds = page.items
+    .filter((row) => row.kind === "creator_request")
+    .map((row) => row.id);
   const [offerRows, requestRows] = await Promise.all([
-    sql<MediaOfferRow[]>`
-      select * from creator_media_offers
-      where conversation_id = ${input.conversationId}
-      order by created_at desc
-      limit 50
-    `,
-    sql<CreatorRequestRow[]>`
-      select * from structured_creator_requests
-      where conversation_id = ${input.conversationId}
-      order by created_at desc
-      limit 50
-    `
+    offerIds.length > 0
+      ? sql<MediaOfferRow[]>`
+          select * from creator_media_offers
+          where conversation_id = ${input.conversationId}
+            and id in ${sql(offerIds)}
+          order by created_at desc, id desc
+        `
+      : Promise.resolve([]),
+    requestIds.length > 0
+      ? sql<CreatorRequestRow[]>`
+          select * from structured_creator_requests
+          where conversation_id = ${input.conversationId}
+            and id in ${sql(requestIds)}
+          order by created_at desc, id desc
+        `
+      : Promise.resolve([])
   ]);
   return {
     mediaOffers: offerRows.map(toMediaOffer),
-    creatorRequests: requestRows.map(toCreatorRequest)
+    creatorRequests: requestRows.map(toCreatorRequest),
+    nextCursor: page.nextCursor
   };
 }
 
@@ -302,6 +375,7 @@ export async function updateStructuredCreatorRequest(
         expected_delivery_days = ${transition.expectedDeliveryDays},
         clarification_rule = ${transition.clarificationRule},
         cancellation_rule = ${transition.cancellationRule},
+        terms_revision = ${transition.termsRevision},
         accepted_at = case when ${transition.state} = 'accepted' then coalesce(accepted_at, now()) else accepted_at end,
         delivered_at = case when ${transition.state} = 'delivered' then now() else delivered_at end,
         completed_at = case when ${transition.state} = 'completed' then now() else completed_at end,
@@ -419,6 +493,16 @@ function resolveRequestTransition(
   const creator = actorUserId === existing.creator_user_id;
   const requester = actorUserId === existing.requester_user_id;
   const action = input.body.action;
+  const termFields = ["agreedAmountMinor", "expectedDeliveryDays", "clarificationRule", "cancellationRule"] as const;
+  const hasTermMutation = termFields.some((field) => Object.prototype.hasOwnProperty.call(input.body, field));
+  const negotiatesTerms = action === "accept" || action === "propose_terms" || action === "accept_terms";
+  if (
+    (negotiatesTerms && input.body.expectedTermsRevision !== existing.terms_revision) ||
+    (!negotiatesTerms && input.body.expectedTermsRevision !== undefined) ||
+    (action !== "propose_terms" && hasTermMutation)
+  ) {
+    throw new MessageRequestForbiddenError();
+  }
   let state: CreatorRequestRow["state"];
   if (action === "accept" && creator && existing.state === "proposed") state = "accepted";
   else if (action === "propose_terms" && creator && ["proposed", "terms_proposed"].includes(existing.state)) state = "terms_proposed";
@@ -430,17 +514,40 @@ function resolveRequestTransition(
   else if (action === "cancel" && requester && ["proposed", "terms_proposed", "accepted"].includes(existing.state) && !existing.payment_intent_id) state = "cancelled";
   else throw new MessageRequestForbiddenError();
 
-  const agreedAmountMinor = input.body.agreedAmountMinor ?? existing.agreed_amount_minor ?? existing.proposed_amount_minor;
-  if (["accept", "accept_terms", "propose_terms"].includes(action) && !agreedAmountMinor) {
-    throw new MessageRequestForbiddenError();
+  let agreedAmountMinor: string | number | null = existing.agreed_amount_minor;
+  if (action === "propose_terms") {
+    const proposedAmount = input.body.agreedAmountMinor;
+    if (typeof proposedAmount !== "number" || !Number.isSafeInteger(proposedAmount) || proposedAmount <= 0) {
+      throw new MessageRequestForbiddenError();
+    }
+    agreedAmountMinor = proposedAmount;
+  } else if (action === "accept") {
+    agreedAmountMinor = existing.proposed_amount_minor;
+  }
+  if (negotiatesTerms) {
+    agreedAmountMinor = toSafePositiveMinorAmount(agreedAmountMinor);
+    if (agreedAmountMinor === null) throw new MessageRequestForbiddenError();
   }
   return {
     state,
-    agreedAmountMinor,
-    expectedDeliveryDays: input.body.expectedDeliveryDays ?? existing.expected_delivery_days,
-    clarificationRule: input.body.clarificationRule?.trim() ?? existing.clarification_rule,
-    cancellationRule: input.body.cancellationRule?.trim() ?? existing.cancellation_rule
+    agreedAmountMinor: negotiatesTerms ? agreedAmountMinor : existing.agreed_amount_minor,
+    expectedDeliveryDays: action === "propose_terms"
+      ? input.body.expectedDeliveryDays ?? existing.expected_delivery_days
+      : existing.expected_delivery_days,
+    clarificationRule: action === "propose_terms"
+      ? input.body.clarificationRule?.trim() ?? existing.clarification_rule
+      : existing.clarification_rule,
+    cancellationRule: action === "propose_terms"
+      ? input.body.cancellationRule?.trim() ?? existing.cancellation_rule
+      : existing.cancellation_rule,
+    termsRevision: action === "propose_terms" ? existing.terms_revision + 1 : existing.terms_revision
   };
+}
+
+function toSafePositiveMinorAmount(value: string | number | null): number | null {
+  if (value === null) return null;
+  const amount = typeof value === "number" ? value : Number(value);
+  return Number.isSafeInteger(amount) && amount > 0 ? amount : null;
 }
 
 function toMediaOffer(row: MediaOfferRow): CreatorMediaOffer {
@@ -485,6 +592,7 @@ function toCreatorRequest(row: CreatorRequestRow): StructuredCreatorRequest {
     expectedDeliveryDays: row.expected_delivery_days,
     clarificationRule: row.clarification_rule,
     cancellationRule: row.cancellation_rule,
+    termsRevision: Number(row.terms_revision),
     state,
     paymentIntentId: row.payment_intent_id,
     expiresAt: row.expires_at.toISOString(),

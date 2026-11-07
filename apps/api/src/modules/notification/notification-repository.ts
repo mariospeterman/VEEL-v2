@@ -1,5 +1,10 @@
 import { createHash } from "node:crypto";
 import { parseAes256GcmKey } from "@veel/config";
+import {
+  bindCursorScope,
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor
+} from "../../shared/keyset-pagination.js";
 import { resolvePostgresClient, type PostgresSql } from "../../shared/postgres.js";
 import { createNotificationDeviceRepositoryMethods } from "./notification-device-repository.js";
 import {
@@ -16,6 +21,8 @@ interface NotificationRepositoryOptions {
   encryptionKey?: string | undefined;
 }
 
+export const notificationCursorScope = "GET /v1/notifications";
+
 export function createPostgresNotificationRepository(
   database?: string | PostgresSql,
   options: NotificationRepositoryOptions = {}
@@ -29,6 +36,11 @@ export function createPostgresNotificationRepository(
 
   return {
     async listNotifications(input) {
+      const cursorScope = bindCursorScope(notificationCursorScope, {
+        actor: input.supabaseUserId,
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<NotificationRow[]>`
         with target_user as (
           select id
@@ -49,12 +61,24 @@ export function createPostgresNotificationRepository(
           n.read_at
         from notifications n
         join target_user tu on tu.id = n.user_id
-        where (${input.cursor ?? null}::timestamptz is null or n.created_at < ${input.cursor ?? null}::timestamptz)
-        order by n.created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or (
+            ${cursor.id}::uuid is null
+            and n.created_at <= ${cursor.timestamp}::timestamptz
+          )
+          or (
+            ${cursor.id}::uuid is not null
+            and (n.created_at, n.id) < (${cursor.timestamp}::timestamptz, ${cursor.id}::uuid)
+          )
+        )
+        order by n.created_at desc, n.id desc
         limit ${input.limit + 1}
       `;
 
-      return toNotificationPage(rows, input.limit);
+      return toNotificationPage(rows, input.limit, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async markRead(input) {
       return sql.begin(async (transaction) => {

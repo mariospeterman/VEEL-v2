@@ -1,7 +1,9 @@
 import { createHmac } from "node:crypto";
 import type { ServerEnv } from "@veel/config";
+import { cursorTimestamp, parseDatabaseDate } from "../../shared/database-timestamp.js";
 import type {
   CreateVerificationSessionInput,
+  VerificationProviderReconciliation,
   VerificationProvider,
   VerificationProviderSession,
   VerificationProviderWaterfall
@@ -29,6 +31,16 @@ interface VerificationProviderAdapter {
   provider: Extract<VerificationProvider, "sumsub" | "didit" | "yoti" | "persona" | "veriff">;
   isConfigured(input: CreateVerificationSessionInput): boolean;
   createSession(input: CreateVerificationSessionInput): Promise<VerificationProviderSession>;
+  reconcileSession?(input: {
+    providerReference: string;
+    purpose: CreateVerificationSessionInput["purpose"];
+  }): Promise<VerificationProviderReconciliation>;
+}
+
+type SelectableVerificationProvider = VerificationProviderAdapter["provider"];
+
+interface StaticVerificationProviderWaterfallOptions {
+  ageAccessPrimaryProvider?: SelectableVerificationProvider | null;
 }
 
 export function createVerificationProviderWaterfall(env: ServerEnv): VerificationProviderWaterfall {
@@ -39,7 +51,9 @@ export function createVerificationProviderWaterfall(env: ServerEnv): Verificatio
     createSumsubVerificationProviderAdapter(env),
     createPersonaVerificationProviderAdapter(env),
     createVeriffVerificationProviderAdapter(env)
-  ]);
+  ], {
+    ageAccessPrimaryProvider: configuredAgeAccessProvider(env)
+  });
 }
 
 const mockVerificationProviderReferencePrefix = "mock-verification:";
@@ -66,22 +80,24 @@ function createMockVerificationProviderAdapter(env: ServerEnv): VerificationProv
       return {
         provider: "didit",
         providerReference,
+        providerExternalUserId: providerSubjectReference(input),
         providerSessionId: providerReference,
         launchUrl: appendQuery(input.callbackUrl, {
           provider: "mock",
           reference: providerReference
         }),
         expiresAt: expiresInSeconds(15 * 60),
-        method: isOrganization ? "kyb_registry" : isAge ? "reusable_age" : "gov_id_selfie",
+        method: isOrganization ? "kyb_registry" : isAge ? "age_estimation" : "gov_id_selfie",
         assuranceLevel: isOrganization ? "business_verified" : isAge ? "medium" : "documentary",
-        reusable: true
+        reusable: false
       };
     }
   };
 }
 
 export function createStaticVerificationProviderWaterfall(
-  adapters: VerificationProviderAdapter[]
+  adapters: VerificationProviderAdapter[],
+  options: StaticVerificationProviderWaterfallOptions = {}
 ): VerificationProviderWaterfall {
   const byProvider = new Map<VerificationProviderAdapter["provider"], VerificationProviderAdapter[]>();
 
@@ -94,7 +110,13 @@ export function createStaticVerificationProviderWaterfall(
 
   return {
     async createSession(input) {
-      for (const provider of providerOrder(input.providerPreference)) {
+      const providers = input.purpose === "age_access"
+        ? options.ageAccessPrimaryProvider
+          ? [options.ageAccessPrimaryProvider]
+          : []
+        : providerOrder(input.providerPreference);
+
+      for (const provider of providers) {
         const providerAdapters = byProvider.get(provider) ?? [];
 
         for (const adapter of providerAdapters) {
@@ -102,19 +124,42 @@ export function createStaticVerificationProviderWaterfall(
             continue;
           }
 
-          try {
-            return await adapter.createSession(input);
-          } catch (error) {
-            if (error instanceof VerificationProviderHttpError && error.status >= 500) {
-              continue;
-            }
-
-            throw error;
-          }
+          await input.onProviderSelected?.({
+            provider: adapter.provider,
+            method: verificationMethod(input, adapter.provider),
+            assuranceLevel: verificationAssurance(input, adapter.provider),
+            reusable: false
+          });
+          // Once a provider call starts its outcome can be ambiguous (for example,
+          // a remote session may exist even if the response is lost). Do not open a
+          // second provider session automatically. Recovery reuses the durable local
+          // reservation and provider reconciliation instead.
+          return adapter.createSession(input);
         }
       }
 
       throw new VerificationProviderUnavailableError();
+    },
+    async reconcileSession(input) {
+      if (input.provider !== "didit" && input.provider !== "yoti") {
+        throw new VerificationProviderUnavailableError();
+      }
+      const provider = input.provider;
+      const adapter = (byProvider.get(provider) ?? []).find((candidate) =>
+        candidate.reconcileSession && candidate.isConfigured({
+          supabaseUserId: "reconciliation",
+          purpose: input.purpose as CreateVerificationSessionInput["purpose"],
+          providerPreference: provider,
+          idempotencyKey: `reconcile:${input.providerReference}`,
+          callbackUrl: "https://localhost.invalid/reconciliation",
+          webhookBaseUrl: "https://localhost.invalid/reconciliation"
+        })
+      );
+      if (!adapter?.reconcileSession) throw new VerificationProviderUnavailableError();
+      return adapter.reconcileSession({
+        providerReference: input.providerReference,
+        purpose: input.purpose as CreateVerificationSessionInput["purpose"]
+      });
     }
   };
 }
@@ -132,14 +177,16 @@ function createSumsubVerificationProviderAdapter(env: ServerEnv): VerificationPr
         throw new VerificationProviderHttpError("sumsub", 503, "Sumsub is not configured");
       }
 
-      const path = "/resources/accessTokens/sdk";
-      const externalUserId = input.purpose === "org_kyb"
-        ? `org:${input.organizationId}`
-        : `user:${input.supabaseUserId}`;
+      const path = "/resources/sdkIntegrations/levels/-/websdkLink";
+      const externalUserId = providerSubjectReference(input);
       const body = JSON.stringify({
-        ttlInSecs: 600,
+        ttlInSecs: 1800,
         userId: externalUserId,
-        levelName
+        levelName,
+        redirect: {
+          successUrl: input.callbackUrl,
+          rejectUrl: input.callbackUrl
+        }
       });
       const timestamp = Math.floor(Date.now() / 1000).toString();
       const signature = createHmac("sha256", env.SUMSUB_SECRET_KEY)
@@ -156,19 +203,19 @@ function createSumsubVerificationProviderAdapter(env: ServerEnv): VerificationPr
         body
       });
       const responseBody = objectBody(await response.json());
-      const token = firstString(responseBody.token);
-      const userId = firstString(responseBody.userId) ?? externalUserId;
+      const launchUrl = firstString(responseBody.url);
 
-      if (!token) {
-        throw new VerificationProviderHttpError("sumsub", 502, "Sumsub response is missing an access token");
+      if (!launchUrl) {
+        throw new VerificationProviderHttpError("sumsub", 502, "Sumsub response is missing a WebSDK launch URL");
       }
 
       return {
         provider: "sumsub",
-        providerReference: userId,
-        providerApplicantId: userId,
-        launchUrl: appendQuery(input.callbackUrl, { provider: "sumsub", token }),
-        expiresAt: expiresInSeconds(600),
+        providerReference: externalUserId,
+        providerExternalUserId: externalUserId,
+        providerApplicantId: null,
+        launchUrl,
+        expiresAt: expiresInSeconds(1800),
         method: verificationMethod(input, "sumsub"),
         assuranceLevel: verificationAssurance(input, "sumsub")
       };
@@ -224,12 +271,54 @@ function createDiditVerificationProviderAdapter(env: ServerEnv): VerificationPro
       return {
         provider: "didit",
         providerReference: id,
+        providerExternalUserId: providerSubjectReference(input),
         providerSessionId: id,
         launchUrl: url,
         expiresAt: expiresInSeconds(24 * 60 * 60),
         method: verificationMethod(input, "didit"),
         assuranceLevel: verificationAssurance(input, "didit"),
         reusable: false
+      };
+    },
+    async reconcileSession(input) {
+      if (!env.DIDIT_API_KEY) {
+        throw new VerificationProviderHttpError("didit", 503, "Didit is not configured");
+      }
+      const response = await providerFetch(
+        "didit",
+        `${withoutTrailingSlash(env.DIDIT_API_BASE_URL)}/v3/session/${encodeURIComponent(input.providerReference)}/decision/`,
+        {
+          method: "GET",
+          headers: { "x-api-key": env.DIDIT_API_KEY }
+        }
+      );
+      const body = objectBody(await response.json());
+      const decision = objectBody(body.decision, true) ?? body;
+      const status = firstString(body.status, decision.status);
+      const mapped = mapDiditDecisionStatus(status);
+      const occurredAt = parseDate(firstString(
+        objectBody(body.decision_trace, true)?.decided_at,
+        decision.updated_at,
+        body.updated_at
+      ));
+      const expiresAt = parseDate(firstString(body.expires_at));
+      const providerReference = firstString(body.session_id, body.id) ?? input.providerReference;
+      return {
+        provider: "didit",
+        providerReference,
+        providerEventId: `${providerReference}:authenticated:${status ?? "unknown"}:${occurredAt ? cursorTimestamp(occurredAt) : "observed"}`,
+        eventType: "session.authenticated_result",
+        status: mapped.status,
+        signatureHash: null,
+        occurredAt,
+        failureReasonCode: mapped.failureReasonCode,
+        identityEvidence: {
+          documentApproved: hasApprovedEntries(decision.id_verifications),
+          livenessApproved: hasApprovedEntries(decision.liveness_checks),
+          faceMatchApproved: hasApprovedEntries(decision.face_matches)
+        },
+        launchUrl: firstString(body.session_url),
+        expiresAt
       };
     }
   };
@@ -256,7 +345,10 @@ function createYotiVerificationProviderAdapter(env: ServerEnv): VerificationProv
         body: JSON.stringify({
           type: "OVER",
           ttl: 900,
-          reference_id: input.idempotencyKey,
+          retry_enabled: true,
+          resume_enabled: true,
+          synchronous_checks: true,
+          reference_id: providerSubjectReference(input),
           callback: { url: input.callbackUrl, auto: true },
           notification_url: `${input.webhookBaseUrl}/yoti`,
           digital_id: {
@@ -264,14 +356,22 @@ function createYotiVerificationProviderAdapter(env: ServerEnv): VerificationProv
             threshold: 18,
             age_estimation_allowed: true,
             age_estimation_threshold: 25,
+            retry_enabled: true,
             retry_limit: 3
           },
-          age_estimation: { allowed: true, threshold: 25, level: "PASSIVE", retry_limit: 3 },
+          age_estimation: {
+            allowed: true,
+            threshold: 25,
+            level: "PASSIVE",
+            retry_enabled: true,
+            retry_limit: 3
+          },
           doc_scan: {
             allowed: true,
             threshold: 18,
             authenticity: "AUTO",
             level: "PASSIVE",
+            retry_enabled: true,
             retry_limit: 3
           },
           credit_card: { allowed: false }
@@ -287,15 +387,55 @@ function createYotiVerificationProviderAdapter(env: ServerEnv): VerificationProv
       return {
         provider: "yoti",
         providerReference: id,
+        providerExternalUserId: providerSubjectReference(input),
         providerSessionId: id,
         launchUrl: appendQuery(env.YOTI_LAUNCH_BASE_URL, {
           sessionId: id,
           sdkId: env.YOTI_SDK_ID
         }),
         expiresAt: expiresInSeconds(900),
-        method: "reusable_age",
+        method: "age_estimation",
         assuranceLevel: "medium",
-        reusable: true
+        reusable: false
+      };
+    },
+    async reconcileSession(input) {
+      if (!env.YOTI_SDK_ID || !env.YOTI_API_TOKEN) {
+        throw new VerificationProviderHttpError("yoti", 503, "Yoti is not configured");
+      }
+      const response = await providerFetch(
+        "yoti",
+        `${withoutTrailingSlash(env.YOTI_API_BASE_URL)}/sessions/${encodeURIComponent(input.providerReference)}/result`,
+        {
+          method: "GET",
+          headers: {
+            authorization: `Bearer ${env.YOTI_API_TOKEN}`,
+            "yoti-sdk-id": env.YOTI_SDK_ID
+          }
+        }
+      );
+      const body = objectBody(await response.json());
+      const status = firstString(body.status, body.state)?.toUpperCase() ?? "PENDING";
+      const result = firstString(body.result, body.outcome, body.decision)?.toUpperCase() ?? null;
+      const mapped = mapYotiResultStatus(status, body.result, result);
+      const occurredAt = parseDate(firstString(body.updated_at, body.updatedAt));
+      const expiresAt = parseDate(firstString(body.expires_at, body.expiresAt));
+      const providerReference = firstString(body.id, body.session_id, body.session_key) ?? input.providerReference;
+      return {
+        provider: "yoti",
+        providerReference,
+        providerSubjectReference: firstString(body.reference_id),
+        providerEventId: `${providerReference}:authenticated:${status}:${occurredAt ? cursorTimestamp(occurredAt) : "observed"}`,
+        eventType: `session.authenticated_result.${firstString(body.method)?.toLowerCase() ?? "unknown"}`,
+        status: mapped.status,
+        signatureHash: null,
+        occurredAt,
+        failureReasonCode: mapped.failureReasonCode,
+        launchUrl: appendQuery(env.YOTI_LAUNCH_BASE_URL, {
+          sessionId: providerReference,
+          sdkId: env.YOTI_SDK_ID
+        }),
+        expiresAt
       };
     }
   };
@@ -320,7 +460,8 @@ function createPersonaVerificationProviderAdapter(env: ServerEnv): VerificationP
           authorization: `Bearer ${env.PERSONA_API_KEY}`,
           "content-type": "application/json",
           "idempotency-key": input.idempotencyKey,
-          "key-inflection": "kebab"
+          "key-inflection": "kebab",
+          "persona-version": "2026-09-29"
         },
         body: JSON.stringify({
           data: {
@@ -334,25 +475,48 @@ function createPersonaVerificationProviderAdapter(env: ServerEnv): VerificationP
                   : "WeVid creator KYC"
             }
           },
-          meta: {
-            "redirect-uri": input.callbackUrl
-          }
+          meta: {}
         })
       });
       const body = objectBody(await response.json());
       const data = objectBody(body.data);
-      const meta = objectBody(body.meta, true);
       const attributes = objectBody(data.attributes, true);
       const id = firstString(data.id);
-      const url = firstString(meta?.["one-time-link"], meta?.["one_time_link"]);
 
-      if (!id || !url) {
-        throw new VerificationProviderHttpError("persona", 502, "Persona response is missing inquiry launch data");
+      if (!id) {
+        throw new VerificationProviderHttpError("persona", 502, "Persona response is missing an inquiry id");
+      }
+
+      const launchResponse = await providerFetch(
+        "persona",
+        `${env.PERSONA_API_BASE_URL}/api/v1/inquiries/${encodeURIComponent(id)}/generate-one-time-link`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${env.PERSONA_API_KEY}`,
+            "content-type": "application/json",
+            "idempotency-key": `${input.idempotencyKey}:launch`,
+            "key-inflection": "kebab",
+            "persona-version": "2026-09-29"
+          },
+          body: JSON.stringify({
+            meta: {
+              "redirect-uri": input.callbackUrl
+            }
+          })
+        }
+      );
+      const launchBody = objectBody(await launchResponse.json());
+      const launchMeta = objectBody(launchBody.meta, true);
+      const url = firstString(launchMeta?.["one-time-link"], launchMeta?.["one_time_link"]);
+      if (!url) {
+        throw new VerificationProviderHttpError("persona", 502, "Persona response is missing a one-time link");
       }
 
       return {
         provider: "persona",
         providerReference: id,
+        providerExternalUserId: providerSubjectReference(input),
         providerInquiryId: id,
         launchUrl: url,
         expiresAt: parseDate(firstString(attributes?.["expires-at"], attributes?.["expires_at"])) ?? expiresInSeconds(86_400),
@@ -383,8 +547,8 @@ function createVeriffVerificationProviderAdapter(env: ServerEnv): VerificationPr
         body: JSON.stringify({
           verification: {
             callback: input.callbackUrl,
-            vendorData: input.supabaseUserId,
-            endUserId: input.supabaseUserId
+            vendorData: providerSubjectReference(input),
+            endUserId: providerSubjectReference(input)
           }
         })
       });
@@ -400,6 +564,7 @@ function createVeriffVerificationProviderAdapter(env: ServerEnv): VerificationPr
       return {
         provider: "veriff",
         providerReference: id,
+        providerExternalUserId: providerSubjectReference(input),
         providerSessionId: id,
         launchUrl: url,
         expiresAt: expiresInSeconds(7 * 24 * 60 * 60),
@@ -423,6 +588,18 @@ function providerOrder(preference: CreateVerificationSessionInput["providerPrefe
     preference,
     ...(["didit", "yoti", "sumsub", "persona", "veriff"] as const).filter((provider) => provider !== preference)
   ];
+}
+
+function configuredAgeAccessProvider(env: ServerEnv): SelectableVerificationProvider | null {
+  if (env.AGE_VERIFICATION_DRIVER) {
+    return env.AGE_VERIFICATION_DRIVER;
+  }
+
+  if (env.NODE_ENV !== "production" && env.AGE_VERIFICATION_ALLOW_MOCK_PROVIDER) {
+    return "didit";
+  }
+
+  return null;
 }
 
 function sumsubLevelName(env: ServerEnv, input: CreateVerificationSessionInput) {
@@ -458,7 +635,7 @@ function verificationMethod(
   if (input.purpose === "org_kyb") return "kyb_registry";
   if (input.purpose !== "age_access") return "gov_id_selfie";
   if (provider === "didit") return "age_estimation";
-  if (provider === "yoti") return "reusable_age";
+  if (provider === "yoti") return "age_estimation";
   if (provider === "persona") return "doc_scan";
   return "gov_id_selfie";
 }
@@ -515,8 +692,50 @@ function firstString(...values: unknown[]): string | null {
 
 function parseDate(value: string | null): Date | null {
   if (!value) return null;
-  const date = new Date(value);
+  const date = parseDatabaseDate(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function mapDiditDecisionStatus(status: string | null): {
+  status: VerificationProviderReconciliation["status"];
+  failureReasonCode: string | null;
+} {
+  if (status === "Approved") return { status: "valid", failureReasonCode: null };
+  if (status === "Declined") return { status: "blocked", failureReasonCode: "Declined" };
+  if (["Expired", "Abandoned", "Kyc Expired"].includes(status ?? "")) {
+    return { status: "invalid", failureReasonCode: status };
+  }
+  return { status: "pending", failureReasonCode: null };
+}
+
+function mapYotiResultStatus(
+  status: string,
+  rawResult: unknown,
+  result: string | null
+): {
+  status: VerificationProviderReconciliation["status"];
+  failureReasonCode: string | null;
+} {
+  if (status === "COMPLETE") {
+    if (rawResult === false || ["FAIL", "FAILED", "UNDER", "NO", "DECLINED"].includes(result ?? "")) {
+      return { status: "blocked", failureReasonCode: result ?? "FAIL" };
+    }
+    return { status: "valid", failureReasonCode: null };
+  }
+  // Yoti can emit FAIL before a retry/resume later completes successfully.
+  // Keep the authenticated current FAIL recoverable; only COMPLETE decides pass/fail.
+  if (status === "FAIL") return { status: "pending", failureReasonCode: "FAIL" };
+  if (["CANCELLED", "EXPIRED"].includes(status)) {
+    return { status: "invalid", failureReasonCode: status };
+  }
+  return { status: "pending", failureReasonCode: null };
+}
+
+function hasApprovedEntries(value: unknown): boolean {
+  return Array.isArray(value) && value.some((entry) => {
+    const record = objectBody(entry, true);
+    return firstString(record?.status)?.toLowerCase() === "approved";
+  });
 }
 
 function expiresInSeconds(seconds: number): Date {

@@ -10,6 +10,7 @@ export {
   CreatorOnboardingTermsRequiredError,
   CreatorOnboardingWalletConflictError,
   ProfileHandleConflictError,
+  ProfileIdempotencyConflictError,
   ProfileRepositoryConfigurationError
 } from "./profile-errors.js";
 

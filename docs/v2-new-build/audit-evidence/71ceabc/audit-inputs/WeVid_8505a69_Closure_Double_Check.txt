@@ -1,0 +1,105 @@
+WEVID — INDEPENDENT CHECK OF THE 8505a69 CLOSURE HANDOFF
+6 November 2026
+
+Conclusion: the pushed commit and green GitHub checks are confirmed. The stronger claim that all independent implementation work is complete and only external acceptance remains is not supported by the current source. Several local correctness, authorization and recovery defects remain. Another focused repair pass is needed before treating provider keys as the only prerequisite for integrated testing.
+
+Scope: exact clean read-only checkout of mariospeterman/VEEL-v2 at 8505a69decabed50691557f255d2fc832fef6145, compared with f46be653eed21541cb4cf82ebfb29ade058cef84; PR134, base 71ceabcfaa8a5258e1b935a391ff4e6e7330c682. This is a targeted closure review of changed code and relevant unchanged authorities, not another complete semantic audit of the entire repository. No application source was edited; no provider account, remote database or chain was operated.
+
+1. WHAT GITHUB CONFIRMS
+
+PR134 is open, draft, mergeable and CLEAN, with the wevid-active-slice label. Its head is the supplied 8505a69. A clean merge state means no Git merge conflict; it is not application/security acceptance.
+
+Exact-head checks: nine success results, one skipped result. CodeQL alert gate and analysis, secret scan, dependency review, pinned-toolchain proof, PostgreSQL integration/rollback, migration plan and preview preflight are successful. Supabase Preview is skipped because the branch is not associated with a Supabase Branch.
+
+The exact-head CI logs show:
+- Default Vitest: 1,039 passed, 50 skipped, 127 passing test files and 24 skipped files.
+- Native PostgreSQL API integration: 47 tests in 23 files passed.
+- Browser smoke: 247 passed, 3 skipped.
+- Production dependency audit passed with the accepted GHSA-mrhx-c7xc-m3w5 exception expiring 18 November 2026. This is not a zero-advisory graph.
+
+The native test job and smoke jobs are genuine passes. They do not cover every historical-data upgrade or failure/revocation scenario identified below. Browser smoke is a local fixture harness, not actual Bunny, wallet, Livepeer or identity-provider acceptance. The setup guide correctly makes that distinction.
+
+CodeQL #28's stated SHA256 rationale is consistent with Bunny's official presigned upload contract. Root-relative exact-origin redirect validation is a sensible boundary for #29. The successful CodeQL check is verified; this review did not independently retrieve the two dismissed alert records. Dismissal of those alerts does not close unrelated ACL, verification or payment defects.
+
+The original dirty Mac worktree and its protected-status-file SHA256 are not inspectable from this remote commit. Their preservation remains the handoff's report, not an independently reproduced filesystem check.
+
+2. SOURCE-VERIFIED IMPROVEMENTS
+
+The requested media direction is substantially implemented: two Create actions, no active poll/text creation, server/MCP retirement boundaries, chronological publication-time feed instead of scoring, reversible rendered-card windowing, incremental chunked hashing, scoped offline message queues, clearer share-as-draft behavior and official Livepeer browser broadcast components. The maintained Solana Pay work is isolated behind a narrow codec. Exact worker email amounts and a total Resend deadline are repaired. A separate recurring authorization reconciliation worker is present. Selected age-provider configuration now affects runtime, unsupported capability advertisements were reduced, and unsafe public avatar writes are closed.
+
+These improvements should be preserved. The defects below concern remaining integration boundaries and incomplete earlier requirements; they do not justify a rewrite or reintroduction of polls/ranking frameworks.
+
+3. LOCAL FIXES STILL REQUIRED
+
+F01 — P1: 0130 cannot upgrade an ordinary populated preference table.
+packages/database/migrations/0130_media_core_scope_transition.sql:4 updates recommended to latest before removing the existing CHECK at:11. The old CHECK allows recommended/following only. An existing recommended row causes SQLSTATE 23514, aborting the migration. A disposable probe applied the actual chain through 0129, inserted that valid historical state and reproduced the failure. An empty-table CI migration can pass while this upgrade fails. Fix through the reviewed immutable-migration/bridge procedure; do not change a migration silently if a retained/shared environment or durable migration history already applied it. A migration after 0130 alone cannot repair an earlier failure in the chain. Require a populated 129→current native PostgreSQL regression.
+
+F02 — P1:canonical identity/session/recovery access is still overbroad for low-privilege staff.
+New 0132 correctly revokes the finance surfaces it names, but does not repair the canonical identity/session/recovery tables from DB-01. With the actual 132 schema and explicit repository grants, a linked authenticated event_ops identity can read another user's user_provider_identities, app_sessions metadata/token hashes and recovery_link_intents metadata/token hashes. These are token hashes, not plaintext credentials; no account-takeover claim is made. Read the full migrated grant/policy catalog, preserve legitimate self-service/Realtime and enforce action-specific staff permission or remove direct access. Prove both explicit-grant and retained-grant histories with native roles.
+
+F03 — P1:current verification still has conflicting authorities.
+The age repository chooses the current event, but profile-dashboard-repository.ts:350,368 and effective private.resolve_creator_kyc_state in 0108 still prefer historical valid evidence. Organization and managed-creator KYB readers retain the same pattern. Current-head probes produce canonical age blocked while onboarding says age_verified=true; an actual migrated earning-policy function returns verified for older valid KYC followed by newer blocked KYC. This proves contradictory projections and policy selection, not that every separate HTTP guard is bypassed. Share one subject/purpose current-decision selector across runtime SQL and application consumers, then evaluate assurance/expiry/revocation.
+
+F04 — P1 functional blocker:adult approval cannot supply its required performer age fact.
+verification-repository.ts:523 writes threshold_age/result_over_threshold only for age_access. Approved adult_publisher_eligibility gets NULL, while content-safety-repository.ts:123 and performer-repository.ts:287 require result_over_threshold on that adult record. The derived age record does not meet that predicate. The exact writer/selector probe returns zero eligible evidence rows. Persist authenticated purpose-specific adult facts or deliberately link acceptable adult+age evidence through one policy; do not infer adulthood from document/liveness success. Prove the native provider-normalization→performer→release→publish path.
+
+F05 — P1/P2:lost age/ID responses still cannot resume the same attempt.
+Reservations reject an identical key instead of returning a durable resumable launch handoff. No authenticated attempt-resume path is present. A new click uses a new key and may create another remote session while the first is pending. The no-automatic-second-provider safeguard is good but does not complete recovery. Implement durable attempt status/resume/reconciliation using the selected provider's supported API. Long document processing must remain recoverable, not depend on a short landing poll loop. Yoti retry/resume flags are now requested, but same-signed-second fail→pass ambiguity still needs authenticated result reconciliation; do not trust unsigned sequence numbers. Parsed reverify settings are also not runtime policy implementation.
+
+F06 — P1 money risk:wallet retry can ask the user to make a second transfer.
+apps/web/src/payment-wallet-bridge.tsx:44 obtains a broadcast signature;:45 can fail while acknowledging it to WeVid. The catch path loses the signature, and Try connected wallet again clears the guard and rebuilds/signs another transaction. The backend can rebuild a submitted intent, so it does not prevent a second debit when a refreshed blockhash is used. A bounded execution of the exact async source with mocked wallet/API demonstrates two distinct signatures for one intent after first-acknowledgement loss. No chain transfer was sent. Retain and reconcile the first signature/logical command before requesting wallet approval again; distinguish pre-sign rejection from post-send uncertainty. Backend duplicate receipt protection alone cannot undo a second direct transfer.
+
+F07 — P1/P2:feed restoration can replace fresh safety preferences with stale resources.
+feed-experience.tsx:235 restores a full cached page for up to 30 minutes over freshly authorized server data. Cache key: clientSessionScope+surface+mode, without sensitivity/policy generation. Both→Safe-only in Settings followed by Home can restore old adult cards; hide/block/unpublish changes can also be lost on return. Preserve scroll geometry/IDs, invalidate relevant policy state and reauthorize/hydrate restored visible items before showing resources. This is a static state-flow finding, not a live browser bypass reproduction.
+
+F08 — P1/P2:historical poll replay reads current private projection without authorization.
+content-poll-repository.ts:25 calls selectPoll for an old completed key;:35 reads current question/options/counts without current visibility/eligibility/block checks. The receipt only retained reference IDs, not an immutable saved response. A former voter can therefore use their old receipt to read the current projection after unpublish/private/block changes. The route checks app readiness, not that content's access. Reauthorize current reads or return only an appropriate immutable historical receipt; keep all new voting disabled. Do not solve this by reopening polls or deleting historical votes.
+
+F09 — P1/P2 reliability:paid/member/owner video resources have no expiry renewal path.
+ProviderPlayback expires every playback resource but offers renewal only if playback.usage exists. Owner, paid/member and other non-allowance resources may legitimately omit usage. Their supplied ContentRenderer callback is unreachable, and the proactive timer covers images only. Live viewer playback supplies no refresh callback. Long video/live sessions can become placeholders until reload at token expiry. Separate capability renewal from public-allowance reservation, retain current authorization and use bounded keyed refresh without duplicate usage/payment effects. This is source-traced, not actual provider playback proof.
+
+F10 — P2:camera capture lacks a current application-session revocation boundary.
+The host component clears credentials/tracks on explicit stop/unmount or manually refreshed room state. It has no cross-tab logout/account-switch listener or periodic current-owner/session reconciliation after exposing the direct provider capability. Add browser session-change cleanup and the selected provider's supported ingest revocation/rotation/expiry policy. Explicitly distinguish app cleanup from provider enforcement and advanced OBS behavior. Actual continued provider broadcast after logout/revocation was not tested or claimed.
+
+F11 — P2/performance:chronological ordering is not yet bounded eligibility work.
+content-feed-repository.ts:37 still MATERIALIZED all private.eligible_content(viewer,null) before the page LIMIT. Chronology/indexes do not remove that whole-corpus projection. Refactor the same canonical safety/access authority for bounded indexed candidate selection and fresh delivery checks, then collect native representative EXPLAIN/ANALYZE and latency/memory evidence. The UI bounds rendered cards but retains accumulated page metadata/heights/cache; do not confuse a DOM bound with a measured total-memory bound.
+
+F12 — P2/product:avatars and creator content export remain incomplete implementation.
+Valid avatar requests now always 503; the safe replacement private staging/sanitize/attach/cleanup pipeline is absent. Disabling the unsafe path is correct, but keys cannot enable an unimplemented feature. Similarly, settings logs a data export request, the API inserts/audits data_requests, and admin can manage its status. No creator-original archive job, protected download/delivery or restore proof is present in the worker's ten registered queues. Request tracking is not the requested usable Export my content feature. Implement these accepted independent local boundaries or obtain an explicit product deferral; describe them accurately now.
+
+F13 — P2/evidence:committed closure evidence is stale and does not attest completion.
+On the clean 8505 checkout, running the read-only generator with the actual hash-pinned original audit exits 1: issue-ledger.json/file-coverage.json stale; current-model ledger working; 156 unresolved findings; 1,236 pending coverage paths; no trusted closure attestation. This run used Node 24.22.1 as a supplemental inspection, not the pinned Node 22 CI environment. The 156 count is an evidence-model status, not proof of156 distinct currently exploitable bugs. The committed old JSON still carries obsolete dispositions/metadata. The README correctly says its trust gate cannot pass yet and still says original companion inputs are unavailable, although they were supplied in the review package. Reconcile actual inputs/current source/proof and distinguish freshness from final closure. Do not fabricate attestation or build an unrelated trust platform to rename the state green.
+
+F14 — P2 robustness:base64url(JSON null) is not a typed invalid feed cursor.
+content-feed-cursor.ts:94 accepts JSON null, then:103 dereferences value.version outside validation. The actual module throws TypeError instead of InvalidFeedCursorError; the route cannot map that to its intended client-error response. Validate a non-null plain object before field access, and test null/scalars/arrays and malformed bounds through HTTP as well as the decoder.
+
+F15 — P2 integration risk:async media preparation can overwrite a later selection.
+image-composer.tsx:156 awaits video metadata, then commits setAssets(next) using an earlier assets closure. Another selection/removal can occur while preparation waits, then be replaced by the old completion. Serialize or merge against current state using stable IDs and atomically enforce the 10-item bound. This is source-derived; a browser/component regression is still needed.
+
+F16 — P2 supported-runtime contract:backend token SDKs declare Node 24 while the app pins Node 22.
+Exact published @solana-program/token 0.15.0, token-2022 0.14.1 and record 0.3.0 metadata requires Node>=24; the repo/Docker pin 22.23.4. The narrow Solana Pay codec island itself supports 22. This is a support-contract mismatch, not an observed crash. Choose compatible supported dependencies or an intentionally reviewed runtime update, with lockfile/build/API evidence; do not force peers or blindly upgrade everything.
+
+F17 — P2 configuration/display mismatch:accepted USDC decimals can differ from displayed decimals.
+Config accepts PAYMENT_USDC_DECIMALS 0..18 and quote/build/verification use the configured value, but the shared formatter assumes ticker USDC always means 6. With an operator-configured accepted nine-decimal mint labeled USDC, 1,000,000,000 atomics displays1,000 USDC instead of 1 configured token. Real six-decimal USDC with a false nine-decimal setting instead fails chain validation; no successful incorrect real-USDC settlement is claimed. Constrain the supported mint/decimal contract or project immutable accepted asset metadata consistently, preserving historical terms and exact units.
+
+F18 — P2 setup guide omission:the short key walkthrough omits the payment evidence source and acceptance story.
+The guide lists RPC/fee/wallet values but no Helius webhook secret/callback setup and no quote→consent→wallet→verified payment→access/receipt/Activity steps. The existing callback is POST /v1/webhooks/solana-indexer; the longer runbook is linked, but the short entry point is incomplete. There is no separate Solana Pay protocol API key; operators configure their wallet/media/identity/indexer infrastructure.
+
+Recurring remains deliberately disabled and is not keys-only complete. The companion payment review documents missing pre-broadcast cancellation fencing, full accepted-term/consent/receipt/compliance authority, stricter delegated-account validation, immutable renewal behavior, historical seed unit cleanup and measured indexes/native concurrency proof. Those local residuals must remain explicitly open before enablement; the new setup reconciliation worker does not close them.
+
+4. WHAT TO DO NEXT
+
+Continue PR134 with the focused instruction in WeVid_8505a69_Next_Codex_Instruction.txt. Preserve all implemented media simplification, exact financial authority, current dirty status file, history and remote release gates. Do not apply0130 to a shared database just because empty-database CI passed. Fix the confirmed local boundaries and add regressions that fail on8505 before repair. Provider dashboard/key preparation can proceed in an isolated project, but it is not the only remaining work and must not mask failing local behavior.
+
+After local fixes: use the canonical add-keys guide for actual selected-provider sandbox/devnet acceptance; keep adult live and recurring closed until their own proofs; resolve real provider/device/delivery protection gates; keep production promotion unauthorized. The 91 default-branch Dependabot alert count is user-reported and was not independently enumerated here; branch audit and repository-wide alerts remain separate scopes.
+
+5. REFERENCES AND LIMITS
+
+PR: https://github.com/mariospeterman/VEEL-v2/pull/134
+CI: https://github.com/mariospeterman/VEEL-v2/actions/runs/42070039344
+Security CI: https://github.com/mariospeterman/VEEL-v2/actions/runs/42070039345
+Setup guide at reviewed commit: https://github.com/mariospeterman/VEEL-v2/blob/8505a69decabed50691557f255d2fc832fef6145/docs/v2-new-build/add-keys-and-test-core-app.md
+Bunny presigned upload contract: https://bunny.net/blog/bunny-stream-introducing-pre-signed-and-resumable-uploads/
+GitHub alert resolution: https://docs.github.com/en/code-security/how-tos/manage-security-alerts/manage-code-scanning-alerts/resolve-alerts
+
+Companion package: four scoped reviews, executed synthetic SQL/logic/wallet probes and their source, current CI/source summary, evidence-check observation, and prior media-core review inputs. PGlite and extracted VM logic are supplemental deterministic proofs; they are not native multi-connection integration, hosted grants, live payment, provider acceptance, device or production-scale proof. The full application suites were verified through GitHub logs, not rerun locally in this review. Review coverage limitations are explicit in the individual reports.

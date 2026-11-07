@@ -10,9 +10,9 @@ export type UpdateCreatorOnboardingRequest =
   components["schemas"]["UpdateCreatorOnboardingRequest"];
 
 export interface UpsertMyProfileInput {
+  idempotencyKey: string;
   handle: string;
   displayName?: string | undefined;
-  avatarUrl?: string | null | undefined;
   bio?: string | undefined;
   locationLabel?: string | undefined;
   links?: components["schemas"]["ProfileLink"][] | undefined;

@@ -1,0 +1,3 @@
+-- Browser-role revocation and restrictive defaults are intentionally retained.
+-- A future direct projection must use a reviewed forward migration with
+-- explicit minimal grants and permission-specific authorization.

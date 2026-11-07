@@ -20,7 +20,7 @@ import type {
   Wallet
 } from "@/api-client";
 import type { OrganizationDashboardPage } from "@/api-client";
-import { formatAssetAmount } from "@/format-asset-amount";
+import { formatAtomicAssetAmount } from "@/format-asset-amount";
 import { Card, EmptyState, StatusPill } from "../../ui";
 
 type Dashboard = OrganizationDashboardPage["items"][number];
@@ -282,7 +282,7 @@ function RelationshipCard({ busy, onRun, relationship, reporting }: {
     </div>
     {actions.has("propose_agreement") ? <AgreementForm busy={busy} onRun={onRun} relationship={relationship} /> : null}
     {actions.has("terminate_relationship") ? <TerminationForm busy={busy} onRun={onRun} relationship={relationship} /> : null}
-    {reporting ? <div className="mt-4 border-t border-(--line) pt-3"><p className="text-sm font-semibold">Confirmed allocation reporting</p>{reporting.totals.length === 0 ? <p className="mt-1 text-sm text-(--muted)">No confirmed managed allocations yet.</p> : reporting.totals.map((total) => <p className="mt-1 text-sm text-(--muted)" key={total.currency}>{total.confirmedPaymentCount} payments · creator {formatAssetAmount(total.creatorNetMinor, total.currency)} · management {formatAssetAmount(total.enterpriseManagementMinor, total.currency)}</p>)}</div> : null}
+    {reporting ? <div className="mt-4 border-t border-(--line) pt-3"><p className="text-sm font-semibold">Confirmed allocation reporting</p>{reporting.totals.length === 0 ? <p className="mt-1 text-sm text-(--muted)">No confirmed managed allocations yet.</p> : reporting.totals.map((total) => <p className="mt-1 text-sm text-(--muted)" key={total.currency}>{total.confirmedPaymentCount} payments · creator {formatAtomicAssetAmount(total.creatorNetMinor, total.currency)} · management {formatAtomicAssetAmount(total.enterpriseManagementMinor, total.currency)}</p>)}</div> : null}
   </Card>;
 }
 

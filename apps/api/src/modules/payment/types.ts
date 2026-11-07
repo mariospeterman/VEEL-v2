@@ -1,6 +1,26 @@
 import type { components } from "@veel/contracts";
 import type { SettlementKind } from "./payment-amounts.js";
 
+export type PaymentSettlementFailureCode =
+  | "not_found"
+  | "block_time_missing"
+  | "transient"
+  | "transaction_failed"
+  | "intent_expired_before_settlement"
+  | "signed_transaction_expired"
+  | "reference_missing"
+  | "memo_missing"
+  | "creator_split_paid_treasury"
+  | "transfer_mismatch"
+  | "invalid_expected_amounts"
+  | "invalid_signature";
+
+export type PaymentSettlementIntentState =
+  | "submitted"
+  | "confirmed"
+  | "failed"
+  | "expired";
+
 export type CreatePaymentIntentRequest = components["schemas"]["CreatePaymentIntentRequest"];
 export type PaymentIntent = components["schemas"]["PaymentIntent"];
 export type ProductType = components["schemas"]["ProductType"];
@@ -77,12 +97,20 @@ export interface RecordCheckoutPayerInput extends FindCheckoutPaymentIntentInput
 export interface RecordPaymentSubmissionInput {
   supabaseUserId: string;
   paymentIntentId: string;
+  idempotencyKey?: string;
   signature: string;
   settlement: PaymentSettlementResult;
   writeGuard?: {
     state: "pending" | "transaction_requested" | "submitted";
     submittedSignature: string | null;
   };
+}
+
+export interface FindPaymentSubmissionCommandReceiptInput {
+  supabaseUserId: string;
+  paymentIntentId: string;
+  idempotencyKey: string;
+  signature: string;
 }
 
 export interface StoredPaymentIntent extends PaymentIntent {
@@ -130,6 +158,9 @@ export interface PaymentRepository {
     input: RecordTransactionRequestInput
   ): Promise<Pick<TransactionRequest, "transactionRequestUrl" | "expiresAt"> | null>;
   recordCheckoutPayer(input: RecordCheckoutPayerInput): Promise<StoredPaymentIntent | null>;
+  hasSubmissionCommandReceipt?(
+    input: FindPaymentSubmissionCommandReceiptInput
+  ): Promise<boolean>;
   recordSubmission(input: RecordPaymentSubmissionInput): Promise<void>;
   close?(): Promise<void>;
 }
@@ -201,10 +232,56 @@ export interface PaymentSettlementInput {
 
 export interface PaymentSettlementResult {
   confirmed: boolean;
-  failureCode?: string;
+  failureCode?: PaymentSettlementFailureCode;
   blockTime?: Date;
 }
 
+/**
+ * Maps normalized, backend-verified settlement evidence onto canonical intent state. Missing,
+ * incomplete, and transient provider evidence stays recoverable. A finalized transaction whose
+ * immutable facts cannot satisfy the intent is terminal; expiry is kept distinct for client copy.
+ */
+export function paymentIntentStateForSettlement(
+  input: Pick<PaymentSettlementResult, "confirmed" | "failureCode">
+): PaymentSettlementIntentState {
+  if (input.confirmed) return "confirmed";
+
+  switch (input.failureCode) {
+    case "intent_expired_before_settlement":
+    case "signed_transaction_expired":
+      return "expired";
+    case "transaction_failed":
+    case "reference_missing":
+    case "memo_missing":
+    case "creator_split_paid_treasury":
+    case "transfer_mismatch":
+    case "invalid_expected_amounts":
+    case "invalid_signature":
+      return "failed";
+    case "not_found":
+    case "block_time_missing":
+    case "transient":
+    case undefined:
+      return "submitted";
+  }
+
+  return "submitted";
+}
+
 export interface PaymentSettlementVerifier {
-  verifyTransfer(input: PaymentSettlementInput): Promise<PaymentSettlementResult>;
+  verifyTransfer(
+    input: PaymentSettlementInput,
+    options?: { signal?: AbortSignal }
+  ): Promise<PaymentSettlementResult>;
+  verifyTransactionExpiry?(
+    input: {
+      signature: string;
+      signedTransactionBase64: string;
+      buyerWallet: string | null;
+    },
+    options?: { signal?: AbortSignal }
+  ): Promise<
+    | { state: "expired" }
+    | { state: "active" | "observed" | "invalid" }
+  >;
 }

@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { decodeTimestampIdCursor } from "../../shared/keyset-pagination.js";
 import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
 import { mutationRateLimit } from "../../shared/rate-limits.js";
+import { engagementCommentsCursorScope } from "./engagement-comment-repository.js";
 import {
   isFeedMode,
-  isIsoTimestamp,
   isNsfwPreference,
   isReportSubjectType,
   isShareMode,
@@ -226,10 +227,10 @@ export async function registerEngagementRoutes(
     const query = request.query as { cursor?: string };
     const contentId = params.contentId;
     if (!isUuid(contentId)) return reply.code(400).send(validationResponse("contentId must be a UUID"));
-    if (query.cursor && !isIsoTimestamp(query.cursor)) {
-      return reply.code(400).send(validationResponse("cursor must be an ISO timestamp"));
-    }
-
+    decodeTimestampIdCursor(
+      engagementCommentsCursorScope(access.supabaseUserId, contentId),
+      query.cursor
+    );
     return repositoryReply(request, reply, async () =>
       options.engagementRepository.listComments({
         supabaseUserId: access.supabaseUserId,
@@ -442,6 +443,12 @@ export async function registerEngagementRoutes(
       const requestType = body.type;
       if (requestType !== "export" && requestType !== "delete") {
         return reply.code(400).send(validationResponse("type must be export or delete"));
+      }
+      if (requestType === "export" && !app.config.CONTENT_EXPORTS_ENABLED) {
+        return reply.code(503).send({
+          code: "service_unavailable",
+          message: "Content export is temporarily unavailable"
+        });
       }
       if (reason !== undefined && (reason.length < 3 || reason.length > 500)) {
         return reply.code(400).send(validationResponse("reason must be between 3 and 500 characters"));

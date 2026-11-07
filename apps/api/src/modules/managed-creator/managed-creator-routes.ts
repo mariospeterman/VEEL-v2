@@ -68,7 +68,7 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
           enterpriseManagementShareBps: normalized.enterpriseManagementShareBps
         }),
         idempotencyKey: key,
-        requestHash: requestHash(normalized)
+        requestHash: requestHash({ organizationId, ...normalized })
       });
       return item ? reply.code(201).send(item) : reply.code(403).send({ code: "forbidden", message: "Organization role or creator is not eligible" });
     } catch (error) { return handleError(request, reply, error); }
@@ -89,7 +89,7 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
         relationshipId,
         decision,
         idempotencyKey: key,
-        requestHash: requestHash({ decision })
+        requestHash: requestHash({ relationshipId, decision })
       });
       return item ? reply.send(item) : reply.code(409).send({ code: "conflict", message: "Relationship is no longer actionable" });
     } catch (error) { return handleError(request, reply, error); }
@@ -111,7 +111,7 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
         ...terms,
         termsHash: requestHash(terms),
         idempotencyKey: key,
-        requestHash: requestHash(terms)
+        requestHash: requestHash({ relationshipId, ...terms })
       });
       return item
         ? reply.code(201).send(item)
@@ -134,7 +134,7 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
         agreementId,
         decision,
         idempotencyKey: request.headers["idempotency-key"] as string,
-        requestHash: requestHash({ agreementId, decision })
+        requestHash: requestHash({ relationshipId, agreementId, decision })
       });
       return item
         ? reply.send(item)
@@ -156,7 +156,7 @@ export async function registerManagedCreatorRoutes(app: FastifyInstance, options
         relationshipId,
         reason: reason.trim(),
         idempotencyKey: request.headers["idempotency-key"] as string,
-        requestHash: requestHash({ reason: reason.trim() })
+        requestHash: requestHash({ relationshipId, reason: reason.trim() })
       });
       return item
         ? reply.send(item)

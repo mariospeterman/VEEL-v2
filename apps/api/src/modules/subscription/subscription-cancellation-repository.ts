@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
 import type { SubscriptionRepository } from "./types.js";
 import {
+  SubscriptionCollectionInFlightError,
   SubscriptionIdempotencyConflictError,
   SubscriptionRepositoryConfigurationError
 } from "./subscription-errors.js";
@@ -23,6 +24,14 @@ export function createSubscriptionCancellationRepositoryMethods(
       }
 
       return sql.begin(async (transaction) => {
+        await transaction`
+          select pg_advisory_xact_lock(
+            hashtextextended(
+              ${`subscription:cancel:${actor.id}:${input.idempotencyKey}`},
+              0
+            )
+          )
+        `;
         const receiptRows = await transaction<{
           request_hash: string;
           response_body: ReturnType<typeof toSubscription>;
@@ -42,6 +51,43 @@ export function createSubscriptionCancellationRepositoryMethods(
           return receipt.response_body;
         }
 
+        const targetRows = await transaction<{ id: string }[]>`
+          select s.id
+          from subscriptions s
+          where s.id = ${input.subscriptionId}
+            and s.subscriber_user_id = ${actor.id}
+            and s.state in (
+              'authorization_pending', 'active', 'renewal_pending', 'grace_period', 'suspended'
+            )
+          for update of s
+        `;
+        if (!targetRows[0]) return null;
+
+        const inFlightRows = await transaction<{ id: string }[]>`
+          select collection.id
+          from subscription_collections collection
+          where collection.subscription_id = ${input.subscriptionId}
+            and (
+              (
+                collection.state in ('due', 'processing', 'reconciling', 'failed', 'dead_letter')
+                and collection.broadcast_signature is not null
+              )
+              or (
+                collection.state = 'processing'
+                and collection.broadcast_started_at is not null
+                and (
+                  collection.leased_until is null
+                  or collection.leased_until > now()
+                )
+              )
+            )
+          for update of collection
+          limit 1
+        `;
+        if (inFlightRows[0]) {
+          throw new SubscriptionCollectionInFlightError();
+        }
+
         const rows = await transaction<SubscriptionRow[]>`
           update subscriptions s
           set
@@ -54,9 +100,12 @@ export function createSubscriptionCancellationRepositoryMethods(
           where p.user_id = s.creator_user_id
             and s.id = ${input.subscriptionId}
             and s.subscriber_user_id = ${actor.id}
-            and s.state in ('authorization_pending', 'active', 'renewal_pending', 'grace_period')
+            and s.state in (
+              'authorization_pending', 'active', 'renewal_pending', 'grace_period', 'suspended'
+            )
           returning
             s.id,
+            s.created_at,
             s.scope,
             s.plan_id,
             s.state,
@@ -76,6 +125,7 @@ export function createSubscriptionCancellationRepositoryMethods(
             s.period_seconds,
             s.plan_pda,
             s.subscription_pda,
+            s.failure_reason,
             s.merchant_wallet,
             s.creator_user_id,
             p.handle as creator_handle,
@@ -96,9 +146,12 @@ export function createSubscriptionCancellationRepositoryMethods(
             where s.id = ${input.subscriptionId}
               and s.subscriber_user_id = ${actor.id}
               and s.creator_user_id is null
-              and s.state in ('authorization_pending', 'active', 'renewal_pending', 'grace_period')
+              and s.state in (
+                'authorization_pending', 'active', 'renewal_pending', 'grace_period', 'suspended'
+              )
             returning
               s.id,
+              s.created_at,
               s.scope,
               s.plan_id,
               s.state,
@@ -118,6 +171,7 @@ export function createSubscriptionCancellationRepositoryMethods(
               s.period_seconds,
               s.plan_pda,
               s.subscription_pda,
+              s.failure_reason,
               s.merchant_wallet,
               s.creator_user_id,
               null::text as creator_handle,
@@ -132,7 +186,16 @@ export function createSubscriptionCancellationRepositoryMethods(
             update subscription_collections
             set state = 'cancelled', failure_code = 'subscriber_cancelled', lease_token = null, leased_until = null
             where subscription_id = ${subscription.id}
-              and state in ('due', 'failed')
+              and (
+                (state in ('due', 'failed') and broadcast_signature is null)
+                or (
+                  state = 'processing'
+                  and (
+                    broadcast_started_at is null
+                    or (broadcast_signature is null and leased_until <= now())
+                  )
+                )
+              )
           `;
           await insertSubscriptionEvent(transaction, {
             subscriptionId: subscription.id,

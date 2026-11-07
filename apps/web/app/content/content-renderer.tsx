@@ -1,13 +1,18 @@
 "use client";
 
-import { useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent
 } from "react";
 import type { ContentItem } from "@/api-client";
-import { ApiMutationError, voteOnContentPoll } from "@/api-mutations";
-import { createMutationIdempotencyKey } from "@/api-mutation-transport";
+import { ApiMutationError, getContentForMutation } from "@/api-mutations";
+import {
+  coalesceContentAccessRefresh,
+  contentAccessSourceKey,
+  createContentAccessRetryScheduler,
+  isAuthoritativeContentAccessDenial
+} from "@/media/content-access-refresh";
 import { ProviderPlayback } from "../provider-playback";
 
 type ContentRendererProps = {
@@ -16,7 +21,11 @@ type ContentRendererProps = {
   title: string;
 };
 
-export function ContentRenderer({ active = true, item, title }: ContentRendererProps) {
+export function ContentRenderer({ active = true, item: initialItem, title }: ContentRendererProps) {
+  const { item, refreshAccess, unavailable } = useRenewableContentItem(initialItem);
+  if (unavailable) {
+    return <ContentState title="Media unavailable" detail="Your access changed or this media is no longer available." />;
+  }
   if (isRedacted(item)) return <ContentState title="Locked media" detail="Open the post to view the available access options." />;
 
   if (item.mediaType === "text") {
@@ -34,22 +43,35 @@ export function ContentRenderer({ active = true, item, title }: ContentRendererP
   if (item.mediaType === "image") {
     const image = orderedAssets(item).find((asset) => asset.kind === "image");
     return image?.posterUrl
-      ? <img alt={image.altText ?? ""} className="h-full w-full object-contain" loading={active ? "eager" : "lazy"} src={image.posterUrl} />
+      ? <AuthorizedImage active={active} asset={image} onAccessRefresh={refreshAccess} />
       : <ContentState title="Image unavailable" detail="This image is still being prepared or is no longer available." />;
   }
 
   if (item.mediaType === "carousel") {
-    return <CarouselRenderer active={active} item={item} title={title} />;
+    return <CarouselRenderer active={active} item={item} onAccessRefresh={refreshAccess} title={title} />;
   }
 
-  if (!active && item.posterUrl) {
-    return <img alt="" className="h-full w-full object-contain" loading="lazy" src={item.posterUrl} />;
+  if (!active) {
+    return item.posterUrl
+      ? <img alt="" className="h-full w-full object-contain" loading="lazy" src={item.posterUrl} />
+      : <ContentState title="Media paused" detail="Open this post to load its media." />;
   }
 
-  return <ProviderPlayback playback={item.playback} posterUrl={item.posterUrl} title={title} />;
+  return (
+    <ProviderPlayback
+      onAccessRefresh={() => refreshAccess("playback_lease")}
+      playback={item.playback}
+      posterUrl={item.posterUrl}
+      resourceKey={`content:${item.id}`}
+      title={title}
+    />
+  );
 }
 
-function CarouselRenderer({ active, item, title }: ContentRendererProps & { active: boolean }) {
+function CarouselRenderer({ active, item, onAccessRefresh, title }: ContentRendererProps & {
+  active: boolean;
+  onAccessRefresh: AccessRefresh;
+}) {
   const assets = useMemo(() => orderedAssets(item), [item]);
   const [index, setIndex] = useState(0);
   const statusId = useId();
@@ -94,7 +116,7 @@ function CarouselRenderer({ active, item, title }: ContentRendererProps & { acti
       role="group"
       tabIndex={0}
     >
-      <CarouselAsset active={active} asset={asset} item={item} title={`${title}, item ${index + 1}`} />
+      <CarouselAsset active={active} asset={asset} item={item} onAccessRefresh={onAccessRefresh} title={`${title}, item ${index + 1}`} />
       <AdjacentImagePreload assets={assets} index={index} />
       {assets.length > 1 ? (
         <>
@@ -130,14 +152,15 @@ function AdjacentImagePreload({ assets, index }: {
   );
 }
 
-function CarouselAsset({ active, asset, item, title }: {
+function CarouselAsset({ active, asset, item, onAccessRefresh, title }: {
   active: boolean;
   asset: NonNullable<ContentItem["mediaAssets"]>[number];
   item: ContentItem;
+  onAccessRefresh: AccessRefresh;
   title: string;
 }) {
   if (asset.kind === "image" && asset.posterUrl) {
-    return <img alt={asset.altText ?? ""} className="h-full w-full object-contain" loading={active ? "eager" : "lazy"} src={asset.posterUrl} />;
+    return <AuthorizedImage active={active} asset={asset} onAccessRefresh={onAccessRefresh} />;
   }
 
   if (asset.kind === "video" && active) {
@@ -145,7 +168,15 @@ function CarouselAsset({ active, asset, item, title }: {
       ?? (item.mediaAssets?.filter((entry) => entry.kind === "video").length === 1
         ? item.playback
         : undefined);
-    return <ProviderPlayback playback={playback} posterUrl={asset.posterUrl ?? item.posterUrl} title={title} />;
+    return (
+      <ProviderPlayback
+        onAccessRefresh={() => onAccessRefresh("playback_lease")}
+        playback={playback}
+        posterUrl={asset.posterUrl ?? item.posterUrl}
+        resourceKey={`asset:${asset.id}`}
+        title={title}
+      />
+    );
   }
 
   if (asset.posterUrl) {
@@ -160,37 +191,132 @@ function CarouselAsset({ active, asset, item, title }: {
   return <ContentState title="Media unavailable" detail="This item is still being prepared or is no longer available." />;
 }
 
+type AccessRefreshOutcome = "refreshed" | "retrying" | "unavailable";
+type AccessRefresh = (
+  cause: "expiry" | "image_error" | "playback_lease"
+) => Promise<AccessRefreshOutcome>;
+
+function AuthorizedImage({ active, asset, onAccessRefresh }: {
+  active: boolean;
+  asset: NonNullable<ContentItem["mediaAssets"]>[number];
+  onAccessRefresh: AccessRefresh;
+}) {
+  const delivery = asset.imageDelivery;
+  const sourceUrl = delivery?.url ?? asset.posterUrl ?? undefined;
+  const failedUrl = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!active || !delivery?.expiresAt) return;
+    const delay = Math.max(0, Date.parse(delivery.expiresAt) - Date.now() - 10_000);
+    const timeout = window.setTimeout(() => { void onAccessRefresh("expiry"); }, delay);
+    return () => window.clearTimeout(timeout);
+  }, [active, delivery?.expiresAt, onAccessRefresh]);
+
+  return (
+    <img
+      alt={asset.altText ?? ""}
+      className="h-full w-full object-contain"
+      loading={active ? "eager" : "lazy"}
+      onError={() => {
+        if (!sourceUrl || failedUrl.current === sourceUrl) return;
+        failedUrl.current = sourceUrl;
+        void onAccessRefresh("image_error");
+      }}
+      src={sourceUrl}
+      srcSet={delivery?.variants
+        .map((variant) => `${variant.url} ${variant.widthPixels}w`)
+        .join(", ")}
+    />
+  );
+}
+
+function useRenewableContentItem(initialItem: ContentItem): {
+  item: ContentItem;
+  refreshAccess: AccessRefresh;
+  unavailable: boolean;
+} {
+  const sourceKey = contentAccessSourceKey(initialItem);
+  const [refreshed, setRefreshed] = useState<{ sourceKey: string; item: ContentItem } | null>(null);
+  const [unavailableFor, setUnavailableFor] = useState<string | null>(null);
+  const lastAttempt = useRef<{
+    sourceKey: string;
+    cause: "expiry" | "image_error" | "playback_lease";
+    at: number;
+  } | null>(null);
+  const latestAccessKey = useRef(sourceKey);
+  const refreshAccessRef = useRef<AccessRefresh>(async () => "retrying");
+  const retryScheduler = useRef<ReturnType<typeof createContentAccessRetryScheduler> | null>(null);
+  if (!retryScheduler.current) retryScheduler.current = createContentAccessRetryScheduler();
+
+  useEffect(() => {
+    latestAccessKey.current = sourceKey;
+    retryScheduler.current?.reset();
+    return () => retryScheduler.current?.reset();
+  }, [sourceKey]);
+
+  const refreshAccess = useCallback<AccessRefresh>(async (cause) => {
+    const now = Date.now();
+    const prior = lastAttempt.current;
+    if (prior?.sourceKey === sourceKey && prior.cause === cause && now - prior.at < 1_000) {
+      return "retrying";
+    }
+    lastAttempt.current = { sourceKey, cause, at: now };
+
+    try {
+      const requestKey = latestAccessKey.current;
+      const next = await coalesceContentAccessRefresh(
+        requestKey,
+        () => getContentForMutation(initialItem.id)
+      );
+      if (next.id !== initialItem.id) {
+        retryScheduler.current?.reset();
+        setUnavailableFor(sourceKey);
+        return "unavailable";
+      }
+      const nextAccessKey = contentAccessSourceKey(next);
+      if (nextAccessKey === requestKey) {
+        retryScheduler.current?.schedule(() => {
+          void refreshAccessRef.current(cause);
+        });
+        return "retrying";
+      }
+      latestAccessKey.current = nextAccessKey;
+      retryScheduler.current?.reset();
+      setRefreshed({ sourceKey, item: next });
+      setUnavailableFor((current) => current === sourceKey ? null : current);
+      return "refreshed";
+    } catch (error) {
+      const status = error instanceof ApiMutationError ? error.status : undefined;
+      if (isAuthoritativeContentAccessDenial(status)) {
+        retryScheduler.current?.reset();
+        setUnavailableFor(sourceKey);
+        return "unavailable";
+      }
+      retryScheduler.current?.schedule(() => {
+        void refreshAccessRef.current(cause);
+      });
+      return "retrying";
+    }
+  }, [initialItem.id, sourceKey]);
+  refreshAccessRef.current = refreshAccess;
+
+  return {
+    item: refreshed?.sourceKey === sourceKey ? refreshed.item : initialItem,
+    refreshAccess,
+    unavailable: unavailableFor === sourceKey
+  };
+}
+
 function PollRenderer({ contentId, initialPoll }: {
   contentId: string;
   initialPoll: NonNullable<ContentItem["poll"]>;
 }) {
-  const [poll, setPoll] = useState(initialPoll);
-  const [pendingOptionId, setPendingOptionId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const closed = poll.state !== "open" || (poll.closesAt ? Date.parse(poll.closesAt) <= Date.now() : false);
-
-  async function vote(optionId: string) {
-    if (pendingOptionId || closed || poll.viewerOptionId === optionId) return;
-    setPendingOptionId(optionId);
-    setError(null);
-    try {
-      const confirmed = await voteOnContentPoll(
-        contentId,
-        { optionId },
-        createMutationIdempotencyKey()
-      );
-      setPoll(confirmed);
-    } catch (caught) {
-      setError(caught instanceof ApiMutationError ? caught.message : "Your vote could not be saved.");
-    } finally {
-      setPendingOptionId(null);
-    }
-  }
+  const poll = initialPoll;
 
   return (
     <section className="grid max-h-full gap-4 overflow-auto p-5 text-left sm:p-7" aria-labelledby={`poll-${contentId}`}>
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-(--muted)">Poll</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-(--muted)">Archived poll</p>
         <h2 className="mt-2 text-xl font-semibold" id={`poll-${contentId}`}>{poll.question}</h2>
       </div>
       <div className="grid gap-2">
@@ -198,22 +324,20 @@ function PollRenderer({ contentId, initialPoll }: {
           const selected = poll.viewerOptionId === option.id;
           const share = poll.totalVoteCount > 0 ? Math.round((option.voteCount / poll.totalVoteCount) * 100) : 0;
           return (
-            <button
-              aria-pressed={selected}
-              className={`relative min-h-12 overflow-hidden rounded border px-4 py-3 text-left disabled:cursor-not-allowed ${selected ? "border-(--accent)" : "border-(--line)"}`}
-              disabled={Boolean(pendingOptionId) || closed}
+            <div
+              aria-current={selected ? "true" : undefined}
+              className={`relative min-h-12 overflow-hidden rounded border px-4 py-3 text-left ${selected ? "border-(--accent)" : "border-(--line)"}`}
               key={option.id}
-              onClick={() => void vote(option.id)}
-              type="button"
             >
               <span aria-hidden="true" className="absolute inset-y-0 left-0 bg-(--accent-soft)" style={{ width: `${share}%` }} />
               <span className="relative flex items-center justify-between gap-3"><span>{option.text}</span><span className="text-xs font-semibold">{share}%</span></span>
-            </button>
+            </div>
           );
         })}
       </div>
-      <p className="text-xs text-(--muted)" aria-live="polite">{closed ? "Voting closed" : `${poll.totalVoteCount} ${poll.totalVoteCount === 1 ? "vote" : "votes"}`}</p>
-      {error ? <p className="text-sm font-medium text-red-400" role="alert">{error}</p> : null}
+      <p className="text-xs text-(--muted)">
+        {poll.totalVoteCount} {poll.totalVoteCount === 1 ? "retained vote" : "retained votes"}. Voting is no longer available.
+      </p>
     </section>
   );
 }

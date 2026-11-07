@@ -1,0 +1,12 @@
+{
+  "engine": "PGlite PostgreSQL",
+  "scope": "Exact unmodified migration 0117 up/down on reduced base schema. Base eligibility fixture models already-eligible published content; it does not duplicate moderation/access implementation.",
+  "expiredMomentVisibilityBeforeRollback": [],
+  "expiredMomentVisibilityAfterRollback": [
+    {
+      "content_item_id": "00000000-0000-0000-0000-000000000002"
+    }
+  ],
+  "preservedMomentExpiryColumns": [],
+  "verdict": "Expired moment resurrects as published eligible content; expiry metadata is destroyed."
+}

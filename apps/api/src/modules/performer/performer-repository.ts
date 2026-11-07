@@ -32,6 +32,13 @@ export class PerformerRepositoryConfigurationError extends Error {
   }
 }
 
+export class PerformerIdempotencyConflictError extends Error {
+  constructor() {
+    super("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST");
+    this.name = "PerformerIdempotencyConflictError";
+  }
+}
+
 export function createPostgresPerformerRepository(database?: string | PostgresSql): PerformerRepository {
   if (!database) {
     const unavailable = async () => { throw new PerformerRepositoryConfigurationError(); };
@@ -79,15 +86,31 @@ export function createPostgresPerformerRepository(database?: string | PostgresSq
         if (!scope) return { rows: [], invitationCreated: false };
 
         await transaction`select pg_advisory_xact_lock(hashtextextended(${`${scope.owner_user_id}:${input.idempotencyKey}`}, 0))`;
-        const existingRows = await transaction<{ id: string }[]>`
-          select id from performer_consent_requests
-          where requested_by_user_id = ${scope.owner_user_id}
-            and idempotency_key = ${input.idempotencyKey}
+        const existingRows = await transaction<{
+          id: string;
+          content_item_id: string;
+          content_revision: number;
+          allowed_uses: PerformerAllowedUse[];
+          subject_kind: string;
+          display_label: string;
+          handle: string | null;
+        }[]>`
+          select pcr.id, pcr.content_item_id, pcr.content_revision, pcr.allowed_uses,
+            ps.subject_kind, ps.display_label, linked_profile.handle
+          from performer_consent_requests pcr
+          join performer_subjects ps on ps.id = pcr.performer_subject_id
+          left join profiles linked_profile on linked_profile.user_id = ps.linked_user_id
+          where pcr.requested_by_user_id = ${scope.owner_user_id}
+            and pcr.idempotency_key = ${input.idempotencyKey}
           limit 1
         `;
-        if (existingRows[0]) {
+        const existing = existingRows[0];
+        if (existing) {
+          if (!samePerformerCommand(existing, input, scope.content_revision)) {
+            throw new PerformerIdempotencyConflictError();
+          }
           return {
-            rows: await selectRequestById(transaction, existingRows[0].id),
+            rows: await selectRequestById(transaction, existing.id),
             invitationCreated: false
           };
         }
@@ -139,7 +162,19 @@ export function createPostgresPerformerRepository(database?: string | PostgresSq
           )
           select
             ${input.contentId}, ps.id, ${scope.owner_user_id}, ${input.idempotencyKey},
-            case when ps.verification_status = 'valid' then 'pending' else 'verification_required' end,
+            case when exists (
+              select 1
+              from private.current_verification_decision(
+                'performer', ps.id, 'performer_eligibility'
+              ) current_performer
+              where current_performer.status = 'valid'
+                and current_performer.result_over_threshold is true
+                and current_performer.threshold_age >= 18
+                and (
+                  current_performer.expires_at is null
+                  or current_performer.expires_at > now()
+                )
+            ) then 'pending' else 'verification_required' end,
             ${input.allowedUses}, ${policyVersion}, ${releaseVersion}, ${scope.content_revision},
             ${input.invitationTokenHash ?? null}, ${input.invitationExpiresAt ?? null}
           from performer_subjects ps
@@ -248,38 +283,34 @@ async function deriveReusablePerformerEvidence(
     insert into verification_records (
       subject_type, subject_id, purpose, status, provider, provider_reference,
       method, jurisdiction, threshold_age, result_over_threshold, assurance_level,
-      verified_at, expires_at, reusable, derived_from_record_id, metadata
+      verified_at, expires_at, reusable, derived_from_record_id, provider_event_at,
+      metadata
     )
     select
       'performer', ${performerSubjectId}, 'performer_eligibility', 'valid',
       source.provider, source.provider_reference, source.method, source.jurisdiction,
-      18, true, source.assurance_level, source.verified_at, source.expires_at,
-      source.reusable, source.id, jsonb_build_object('evidence_reuse', true)
-    from verification_records source
-    where source.subject_type = 'user'
-      and source.subject_id = ${linkedUserId}
-      and source.status = 'valid'
+      source.threshold_age, source.result_over_threshold, source.assurance_level,
+      source.verified_at, source.expires_at,
+      source.reusable, source.id, source.provider_event_at,
+      jsonb_build_object('source', 'performer_evidence_reuse', 'evidence_reuse', true)
+    from private.current_verification_decision(
+      'user', ${linkedUserId}, 'adult_publisher_eligibility'
+    ) source
+    where source.status = 'valid'
       and source.assurance_level in ('high', 'documentary')
-      and source.purpose in ('adult_publisher_eligibility', 'creator_kyc')
+      and source.threshold_age >= 18
       and source.result_over_threshold is true
       and (source.expires_at is null or source.expires_at > now())
-      and (
-        source.purpose = 'adult_publisher_eligibility'
-        or exists (
-          select 1 from verification_records age
-          where age.subject_type = 'user' and age.subject_id = ${linkedUserId}
-            and age.purpose = 'age_access' and age.status = 'valid'
-            and age.result_over_threshold is true
-            and (age.expires_at is null or age.expires_at > now())
-        )
-      )
-      and not exists (
-        select 1 from verification_records existing
-        where existing.subject_type = 'performer' and existing.subject_id = ${performerSubjectId}
-          and existing.purpose = 'performer_eligibility' and existing.status = 'valid'
+      and not coalesce((
+        select existing.status = 'valid'
+          and existing.threshold_age >= 18
+          and existing.result_over_threshold is true
           and (existing.expires_at is null or existing.expires_at > now())
-      )
-    order by (source.purpose = 'adult_publisher_eligibility') desc, source.verified_at desc
+        from private.current_verification_decision(
+          'performer', ${performerSubjectId}, 'performer_eligibility'
+        ) existing
+      ), false)
+    order by source.verified_at desc
     limit 1
   `;
 }
@@ -296,9 +327,27 @@ async function respond(transaction: PostgresTransaction, input: {
     verification_status: string;
     state: "pending" | "verification_required" | "accepted" | "rejected";
   }[]>`
-    select pcr.id, pcr.performer_subject_id, ps.verification_status, pcr.state
+    select
+      pcr.id,
+      pcr.performer_subject_id,
+      case
+        when current_performer.status = 'valid'
+          and current_performer.result_over_threshold is true
+          and current_performer.threshold_age >= 18
+          and (
+            current_performer.expires_at is null
+            or current_performer.expires_at > now()
+        ) then 'valid'
+        when current_performer.status = 'valid' then 'pending'
+        when current_performer.status = 'invalid' then 'blocked'
+        else coalesce(current_performer.status, 'pending')
+      end as verification_status,
+      pcr.state
     from performer_consent_requests pcr
     join performer_subjects ps on ps.id = pcr.performer_subject_id
+    left join lateral private.current_verification_decision(
+      'performer', ps.id, 'performer_eligibility'
+    ) current_performer on true
     left join users linked on linked.id = ps.linked_user_id
     join content_safety_declarations csd on csd.content_item_id = pcr.content_item_id
     where (${input.requestId}::uuid is null or pcr.id = ${input.requestId})
@@ -356,16 +405,61 @@ async function respond(transaction: PostgresTransaction, input: {
   return selectRequestById(transaction, request.id);
 }
 
+export function samePerformerCommand(
+  existing: {
+    content_item_id: string;
+    content_revision: number;
+    allowed_uses: PerformerAllowedUse[];
+    subject_kind: string;
+    display_label: string;
+    handle: string | null;
+  },
+  input: {
+    contentId: string;
+    performerHandle?: string | null;
+    externalLabel?: string | null;
+    allowedUses: PerformerAllowedUse[];
+  },
+  contentRevision: number
+): boolean {
+  if (existing.content_item_id !== input.contentId || existing.content_revision !== contentRevision) {
+    return false;
+  }
+  const existingUses = [...existing.allowed_uses].sort();
+  const requestedUses = [...input.allowedUses].sort();
+  if (JSON.stringify(existingUses) !== JSON.stringify(requestedUses)) return false;
+  if (input.performerHandle) {
+    return existing.subject_kind === "wevid_user" &&
+      existing.handle?.toLowerCase() === input.performerHandle.toLowerCase();
+  }
+  return existing.subject_kind === "external_invitee" && existing.display_label === input.externalLabel;
+}
+
 function requestSelect() {
   return `
     select pcr.id, pcr.content_item_id, pcr.content_revision, ci.caption, ci.media_type,
       ci.nsfw_label, ps.display_label, profile.handle, ps.linked_user_id, pcr.state,
-      ps.verification_status, pcr.allowed_uses, pcr.invitation_expires_at
+      case
+        when current_performer.status = 'valid'
+          and current_performer.result_over_threshold is true
+          and current_performer.threshold_age >= 18
+          and (
+            current_performer.expires_at is null
+            or current_performer.expires_at > now()
+          ) then 'valid'
+        when current_performer.status = 'valid' then 'pending'
+        when current_performer.status = 'invalid' then 'blocked'
+        else coalesce(current_performer.status, 'pending')
+      end as verification_status,
+      pcr.allowed_uses, pcr.invitation_expires_at
     from performer_consent_requests pcr
     join performer_subjects ps on ps.id = pcr.performer_subject_id
     join content_items ci on ci.id = pcr.content_item_id
     join users owner on owner.id = ci.creator_user_id
     left join profiles profile on profile.user_id = ps.linked_user_id
+    left join lateral private.current_verification_decision(
+      'performer', ps.id, 'performer_eligibility'
+    ) current_performer on true
   `;
 }
 

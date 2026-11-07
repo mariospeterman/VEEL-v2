@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type postgres from "postgres";
+import { bindCursorScope } from "../../shared/keyset-pagination.js";
 import type { AdminRepository } from "./types.js";
 import {
   PaymentRow,
   UnlockRow,
   ProviderEventRow,
   AuditEventRow,
+  decodeTimestampIdCursor,
+  encodeTimestampIdCursor,
   pageSize,
   page,
   toPaymentIntent,
@@ -19,6 +22,11 @@ export function createMoneyRepository(
 ): Pick<AdminRepository, "listPaymentIntents" | "listUnlocks" | "listProviderEvents" | "enqueueProviderEventReplay" | "listAuditEvents"> {
   return {
     async listPaymentIntents(input) {
+      const cursorScope = bindCursorScope("GET /v1/admin/payments/intents", {
+        query: input.query ?? null,
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<PaymentRow[]>`
         select
           pi.id,
@@ -38,7 +46,14 @@ export function createMoneyRepository(
         from payment_intents pi
         left join payment_settlement_attempts psa on psa.payment_intent_id = pi.id
         left join entitlements e on e.payment_intent_id = pi.id
-        where (${input.cursor ?? null}::timestamptz is null or pi.created_at < ${input.cursor ?? null}::timestamptz)
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or pi.created_at < ${cursor.timestamp}::timestamptz
+          or (
+            pi.created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or pi.id < ${cursor.id}::uuid)
+          )
+        )
           and (
             ${input.query ?? null}::text is null
             or pi.reference_address ilike '%' || ${input.query ?? ""} || '%'
@@ -46,29 +61,49 @@ export function createMoneyRepository(
             or pi.confirmed_signature ilike '%' || ${input.query ?? ""} || '%'
           )
         group by pi.id
-        order by pi.created_at desc
+        order by pi.created_at desc, pi.id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toPaymentIntent);
+      return page(rows, toPaymentIntent, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
     async listUnlocks(input) {
+      const cursorScope = bindCursorScope("GET /v1/admin/unlocks", {
+        query: input.query ?? null,
+        sort: "granted_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<UnlockRow[]>`
         select id, user_id, target_type, target_id, product_type, payment_intent_id, state, granted_at, ends_at as expires_at
         from entitlements
-        where (${input.cursor ?? null}::timestamptz is null or granted_at < ${input.cursor ?? null}::timestamptz)
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or granted_at < ${cursor.timestamp}::timestamptz
+          or (
+            granted_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
           and (
             ${input.query ?? null}::text is null
             or target_id::text = ${input.query ?? ""}
             or payment_intent_id::text = ${input.query ?? ""}
           )
-        order by granted_at desc
+        order by granted_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toUnlock);
+      return page(rows, toUnlock, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.granted_at, row.id)
+      );
     },
     async listProviderEvents(input) {
+      const cursorScope = bindCursorScope("GET /v1/admin/provider-events", {
+        sort: "received_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<ProviderEventRow[]>`
         select
           pe.id,
@@ -87,15 +122,24 @@ export function createMoneyRepository(
           select id, state, failure_code, created_at, processed_at
           from provider_event_replay_requests perr
           where perr.provider_event_id = pe.id
-          order by perr.created_at desc
+          order by perr.created_at desc, perr.id desc
           limit 1
         ) replay on true
-        where (${input.cursor ?? null}::timestamptz is null or pe.received_at < ${input.cursor ?? null}::timestamptz)
-        order by pe.received_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or pe.received_at < ${cursor.timestamp}::timestamptz
+          or (
+            pe.received_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or pe.id < ${cursor.id}::uuid)
+          )
+        )
+        order by pe.received_at desc, pe.id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toProviderEvent);
+      return page(rows, toProviderEvent, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.received_at, row.id)
+      );
     },
     async enqueueProviderEventReplay(input) {
       const replayRequestId = randomUUID();
@@ -162,15 +206,28 @@ export function createMoneyRepository(
       return rows[0]?.provider_event_exists ?? false;
     },
     async listAuditEvents(input) {
+      const cursorScope = bindCursorScope("GET /v1/admin/audit", {
+        sort: "created_at:desc,id:desc"
+      });
+      const cursor = decodeTimestampIdCursor(cursorScope, input.cursor);
       const rows = await sql<AuditEventRow[]>`
         select id, subject_type, action, created_at
         from audit_events
-        where (${input.cursor ?? null}::timestamptz is null or created_at < ${input.cursor ?? null}::timestamptz)
-        order by created_at desc
+        where (
+          ${cursor.timestamp}::timestamptz is null
+          or created_at < ${cursor.timestamp}::timestamptz
+          or (
+            created_at = ${cursor.timestamp}::timestamptz
+            and (${cursor.id}::uuid is null or id < ${cursor.id}::uuid)
+          )
+        )
+        order by created_at desc, id desc
         limit ${pageSize + 1}
       `;
 
-      return page(rows, toAuditEvent);
+      return page(rows, toAuditEvent, (row) =>
+        encodeTimestampIdCursor(cursorScope, row.created_at, row.id)
+      );
     },
   };
 }

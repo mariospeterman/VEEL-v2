@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { isScopedReviewRepairBranch } from "./production-status-branch-policy.mjs";
 
 const required = [
   "docs/v2-new-build/INDEX.md",
@@ -65,6 +66,10 @@ const implementationStatus = readFileSync(
 );
 const sliceWorkflow = readFileSync("docs/v2-new-build/slice-workflow.md", "utf8");
 const index = readFileSync("docs/v2-new-build/INDEX.md", "utf8");
+const recommendationDiscovery = readFileSync(
+  "docs/v2-new-build/recommendation-discovery.md",
+  "utf8",
+);
 const productionStatus = JSON.parse(
   readFileSync("docs/v2-new-build/production-status.json", "utf8"),
 );
@@ -84,6 +89,11 @@ const walkTestRequirements = [
   ["workflow walk test", sliceWorkflow, "### Five-Minute Walk Test"],
   ["workflow active mutex", sliceWorkflow, "wevid-active-slice"],
   ["workflow protected main", sliceWorkflow, "protected `main`"],
+  [
+    "recommendation safety authority",
+    recommendationDiscovery,
+    "must not depend on addictive dark patterns or frontend-only state",
+  ],
 ];
 
 for (const [label, source, expected] of walkTestRequirements) {
@@ -205,14 +215,10 @@ if (process.env.GITHUB_TOKEN && process.env.GITHUB_REPOSITORY) {
   }
   const activePullRequest = activePullRequests[0];
   const activeBranch = activePullRequest?.head?.ref;
-  const latestMergedConvergence = /^Convergence (\d{2})(?:[A-Z])?\b/.exec(
-    productionStatus.latestMergedSlice ?? "",
-  )?.[1];
-  const isScopedReviewRepair = latestMergedConvergence
-    ? new RegExp(
-        `^codex/converge-${latestMergedConvergence}-(?:[a-z0-9]+-)+repairs?$`,
-      ).test(activeBranch ?? "")
-    : false;
+  const isScopedReviewRepair = isScopedReviewRepairBranch({
+    activeBranch,
+    latestMergedSlice: productionStatus.latestMergedSlice,
+  });
   if (
     activePullRequest &&
     !isScopedReviewRepair &&
@@ -357,7 +363,13 @@ const walkDocs = (dir) => {
 };
 walkDocs("docs/v2-new-build");
 
-const activeDocs = docsFiles.filter((path) => !path.includes("/archive/"));
+// Hash-pinned audit inputs are immutable historical evidence, not current product
+// documentation. Their wording, status headers, and historical route examples are
+// validated by the audit-evidence importer rather than rewritten to satisfy active
+// documentation policy.
+const activeDocs = docsFiles.filter(
+  (path) => !path.includes("/archive/") && !path.includes("/audit-inputs/"),
+);
 const activeDocsText = activeDocs.map((path) => readFileSync(path, "utf8")).join("\n\n");
 
 const staleDocPatterns = [
@@ -414,20 +426,44 @@ const getSqlEnum = (name) => {
   if (!match) return [];
   return [...match[1].matchAll(/'([^']+)'/g)].map((item) => item[1]).sort();
 };
+const openapiSchemasMarker = "\n  schemas:\n";
+const openapiSchemasStart = openapi.indexOf(openapiSchemasMarker);
+if (openapiSchemasStart === -1) {
+  console.error("OpenAPI components.schemas section is missing.");
+  process.exit(1);
+}
+const openapiSchemas = openapi.slice(openapiSchemasStart + openapiSchemasMarker.length);
+const getOpenapiSchemaBlock = (schemaName) => {
+  const schemaMarker = `    ${schemaName}:`;
+  const schemaStart = openapiSchemas.indexOf(schemaMarker);
+  if (schemaStart === -1) {
+    console.error(`OpenAPI component schema ${schemaName} is missing.`);
+    process.exit(1);
+  }
+  const nextSchema = openapiSchemas.slice(schemaStart + 1).search(/\n    [A-Za-z0-9]+:\n/);
+  return nextSchema === -1
+    ? openapiSchemas.slice(schemaStart)
+    : openapiSchemas.slice(schemaStart, schemaStart + 1 + nextSchema);
+};
 const getOpenapiInlineEnum = (schemaName) => {
-  const schemaStart = openapi.indexOf(`    ${schemaName}:`);
-  if (schemaStart === -1) return [];
-  const nextSchema = openapi.slice(schemaStart + 1).search(/\n    [A-Za-z0-9]+:\n/);
-  const block = nextSchema === -1 ? openapi.slice(schemaStart) : openapi.slice(schemaStart, schemaStart + 1 + nextSchema);
+  const block = getOpenapiSchemaBlock(schemaName);
   const match = block.match(/enum:\s*\[([^\]]+)\]/);
-  if (!match) return [];
+  if (!match) {
+    console.error(`OpenAPI component schema ${schemaName} has no inline enum.`);
+    process.exit(1);
+  }
   return match[1].split(",").map((item) => item.trim()).sort();
 };
-const getOpenapiSchemaBlock = (schemaName) => {
-  const schemaStart = openapi.indexOf(`    ${schemaName}:`);
-  if (schemaStart === -1) return "";
-  const nextSchema = openapi.slice(schemaStart + 1).search(/\n    [A-Za-z0-9]+:\n/);
-  return nextSchema === -1 ? openapi.slice(schemaStart) : openapi.slice(schemaStart, schemaStart + 1 + nextSchema);
+const getOpenapiPropertyInlineEnum = (schemaName, propertyName) => {
+  const block = getOpenapiSchemaBlock(schemaName);
+  const match = block.match(
+    new RegExp(`^\\s{8}${propertyName}:\\s*\\{\\s*type:\\s*string,\\s*enum:\\s*\\[([^\\]]+)\\]\\s*\\}`, "m"),
+  );
+  if (!match) {
+    console.error(`OpenAPI component schema ${schemaName}.${propertyName} has no inline enum.`);
+    process.exit(1);
+  }
+  return match[1].split(",").map((item) => item.trim()).sort();
 };
 const assertEnumEqual = (label, left, right) => {
   if (left.join("|") !== right.join("|")) {
@@ -438,11 +474,10 @@ const assertEnumEqual = (label, left, right) => {
   }
 };
 assertEnumEqual("ProductType/payment_product_type", getOpenapiInlineEnum("ProductType"), getSqlEnum("payment_product_type"));
-const paymentStateMatch = getOpenapiSchemaBlock("PaymentIntent").match(/state:\s*\{\s*type:\s*string,\s*enum:\s*\[([^\]]+)\]\s*\}/);
-if (paymentStateMatch) {
-  const paymentState = paymentStateMatch[1].split(",").map((item) => item.trim()).sort();
-  assertEnumEqual("PaymentIntent.state/payment_state", paymentState, getSqlEnum("payment_state"));
-}
+const paymentState = getOpenapiPropertyInlineEnum("PaymentIntent", "state");
+const adminPaymentState = getOpenapiPropertyInlineEnum("AdminPaymentIntent", "state");
+assertEnumEqual("PaymentIntent.state/payment_state", paymentState, getSqlEnum("payment_state"));
+assertEnumEqual("AdminPaymentIntent.state/PaymentIntent.state", adminPaymentState, paymentState);
 
 const criticalMethodsMissingRequiredIdempotency = [];
 const pathBlocks = [...openapi.matchAll(/^  (\/v1\/[^\n:]+):\n([\s\S]*?)(?=^  \/|\ncomponents:)/gm)];

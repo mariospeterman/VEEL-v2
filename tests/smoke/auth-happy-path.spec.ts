@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { expect, test } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
+import type { CreatorDashboard, CreatorOnboarding } from "../../apps/web/src/api-client-types";
 
 const e2eToken = "veel-e2e-token";
 const e2eOrigin = new URL(process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000").origin;
@@ -56,14 +57,16 @@ test.beforeEach(async ({ context }) => {
 
 test("covers authenticated earnings setup, creation, and one-time checkout", async ({ page }) => {
   test.setTimeout(150_000);
+  await installDeterministicVideoMetadata(page);
 
   await gotoUntilVisible(page, "/app/home", () => page.getByRole("link", { name: "WeVid app home" }).first());
   await expect(page.getByRole("article", { name: "Post by Aria Moon" })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "For you" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Latest" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("link", { name: "Open post" })).toBeVisible();
 
   await page.goto("/app/studio");
   await expect(page.getByRole("heading", { name: "Studio", exact: true })).toBeVisible();
+  await expect(page.getByText("0.00000124 SOL", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your media" })).toBeVisible();
   await expect(page.getByText("Please confirm the music rights.")).toBeVisible();
   await expect(page.getByRole("region", { name: "Media provenance review" })).toBeVisible();
@@ -114,8 +117,8 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await page.waitForLoadState("networkidle");
   await expect(page.getByRole("heading", { name: "Create", exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Go live/ }).click();
-  await expect(page.getByRole("heading", { name: "Start with OBS" })).toBeVisible();
-  await page.getByRole("button", { name: /Photos or video/ }).click();
+  await expect(page.getByRole("heading", { name: "Go live", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Add photos or videos/i }).click();
   await expect(page.getByRole("heading", { name: "Add photos or videos" })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(true);
 
@@ -130,7 +133,7 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await page.getByLabel("Caption").fill("Behind the scenes from today's studio shoot.");
   await page.getByLabel(/every identifiable person is 18\+ and consented/).check();
   await page.reload();
-  await page.getByRole("button", { name: /Photos or video/ }).click();
+  await page.getByRole("button", { name: /Add photos or videos/i }).click();
   await page.locator('input[type="file"]').setInputFiles({
     name: "studio-session.mp4",
     mimeType: "video/mp4",
@@ -204,47 +207,22 @@ test("covers authenticated earnings setup, creation, and one-time checkout", asy
   await expect.poll(() => page.evaluate(() => document.cookie.includes("veel_e2e_access_token="))).toBe(false);
 });
 
-test("creates text and poll posts through the canonical composer", async ({ page }) => {
+test("limits fresh creation to photos, video, and live", async ({ page }) => {
   await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Create", exact: true }));
 
-  await expect(page.getByRole("button", { name: /Photos or video/ })).toHaveAttribute("aria-pressed", "false");
-  await page.getByRole("button", { name: /Write something/ }).click();
-  await expect(page.getByRole("button", { name: /Write something/ })).toHaveAttribute("aria-pressed", "true");
-  await page.getByLabel("Your post").fill("A text post owned by the canonical content API.");
-  await page.getByLabel("Who can see it after approval?").selectOption("followers");
-  await page.getByLabel(/I have the right to share this post/).check();
-  const textCreate = page.waitForRequest((request) => {
-    if (request.method() !== "POST" || new URL(request.url()).pathname !== "/v1/content") return false;
-    const body = request.postDataJSON();
-    return body?.mediaType === "text" && body?.bodyText === "A text post owned by the canonical content API.";
-  });
-  await page.getByRole("button", { name: "Submit for review" }).click();
-  await textCreate;
-  await expect(page.getByRole("heading", { name: "Submitted for review" })).toBeVisible();
-
-  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Create", exact: true }));
-  await page.getByRole("button", { name: /^Poll/ }).click();
-  await page.getByLabel("Question").fill("Which format should come next?");
-  await page.locator("#poll-option-0").fill("Photo");
-  await page.locator("#poll-option-1").fill("Carousel");
-  await page.getByRole("button", { name: "Add choice" }).click();
-  await page.locator("#poll-option-2").fill("Long-form video");
-  await page.getByLabel(/I have the right to share this post/).check();
-  const pollCreate = page.waitForRequest((request) => {
-    if (request.method() !== "POST" || new URL(request.url()).pathname !== "/v1/content") return false;
-    const body = request.postDataJSON();
-    return body?.mediaType === "poll" &&
-      body?.poll?.question === "Which format should come next?" &&
-      JSON.stringify(body?.poll?.options) === JSON.stringify(["Photo", "Carousel", "Long-form video"]);
-  });
-  await page.getByRole("button", { name: "Submit for review" }).click();
-  await pollCreate;
-  await expect(page.getByRole("heading", { name: "Submitted for review" })).toBeVisible();
+  const formatChoices = page.getByRole("group", { name: "What do you want to create?" });
+  await expect(formatChoices.getByRole("button")).toHaveCount(2);
+  await expect(formatChoices.getByRole("button", { name: /Add photos or videos/i }))
+    .toHaveAttribute("aria-pressed", "false");
+  await expect(formatChoices.getByRole("button", { name: /Go live/i }))
+    .toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: /Write something/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Poll/i })).toHaveCount(0);
 });
 
 test("builds an accessible private photo draft and explains its fail-closed review gate", async ({ page }) => {
   await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Create", exact: true }));
-  await page.getByRole("button", { name: /Photos or video/ }).click();
+  await page.getByRole("button", { name: /Add photos or videos/i }).click();
   await expect(page.getByRole("heading", { name: "Add photos or videos" })).toBeVisible();
 
   await page.locator('input[type="file"]').setInputFiles({
@@ -286,8 +264,9 @@ test("builds an accessible private photo draft and explains its fail-closed revi
 });
 
 test("creates one ordered mixed-media carousel without a second format chooser", async ({ page }) => {
+  await installDeterministicVideoMetadata(page);
   await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Create", exact: true }));
-  await page.getByRole("button", { name: /Photos or video/ }).click();
+  await page.getByRole("button", { name: /Add photos or videos/i }).click();
   await expect(page.getByRole("heading", { name: "Add photos or videos" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Photos One image/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Video Resumable/ })).toHaveCount(0);
@@ -324,25 +303,65 @@ test("creates one ordered mixed-media carousel without a second format chooser",
   await expect(page.getByRole("button", { name: "Review and submit" })).toBeEnabled();
 });
 
-test("renders canonical text and poll posts and accepts backend-confirmed votes", async ({ page }) => {
-  await page.goto(`/content/${textContentId}`);
+test("holds upload until delayed video metadata joins the actual composer state", async ({ page }) => {
+  await installControllableVideoMetadata(page);
+  await gotoUntilVisible(page, "/app/create", () => page.getByRole("heading", { name: "Create", exact: true }));
+  await page.getByRole("button", { name: /Add photos or videos/i }).click();
+
+  const fileInput = page.locator('input[type="file"]');
+  await fileInput.setInputFiles({
+    name: "race-photo.png",
+    mimeType: "image/png",
+    buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64")
+  });
+  await page.getByLabel("Description").fill("Existing photo before delayed metadata");
+  await page.getByLabel(/I have the right to share this media/).check();
+
+  const contentCreatesBeforeDelay = requests.filter((request) =>
+    request.method === "POST" && request.path === "/v1/content"
+  ).length;
+  await fileInput.setInputFiles({
+    name: "delayed-metadata.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from("delayed-video")
+  });
+
+  const preparing = page.getByRole("button", { name: "Preparing selected media…" });
+  await expect(preparing).toBeDisabled();
+  expect(requests.filter((request) => request.method === "POST" && request.path === "/v1/content"))
+    .toHaveLength(contentCreatesBeforeDelay);
+
+  await page.evaluate(() => {
+    (window as typeof window & { __releaseWevidVideoMetadata?: () => void })
+      .__releaseWevidVideoMetadata?.();
+  });
+  await expect(page.getByText("Video 2", { exact: true })).toBeVisible();
+  await expect(page.getByLabel(/I have the right to share this media/)).not.toBeChecked();
+  await page.getByLabel("Description").nth(1).fill("Video committed after metadata release");
+  await page.getByLabel(/I have the right to share this media/).check();
+  await page.getByRole("button", { name: "Upload media" }).click();
+
+  await expect(page.getByText("Stored privately", { exact: true })).toHaveCount(2, { timeout: 15_000 });
+});
+
+test("renders legacy text and poll posts as read-only archives", async ({ page }) => {
+  await page.goto(`/content/${textContentId}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByText("A structured text post with a real consumer renderer.")).toBeVisible();
 
-  await page.goto(`/content/${pollContentId}`);
+  await page.goto(`/content/${pollContentId}`, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "What should we publish next?" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Photo/ })).toHaveAttribute("aria-pressed", "false");
+  const archivedPoll = page.locator(`section[aria-labelledby="poll-${pollContentId}"]`);
+  await expect(archivedPoll.getByText("Archived poll", { exact: true })).toBeVisible();
+  await expect(archivedPoll.getByText("Photo", { exact: true })).toBeVisible();
+  await expect(archivedPoll.getByText("Carousel", { exact: true })).toBeVisible();
+  await expect(archivedPoll.getByRole("button")).toHaveCount(0);
+  await expect(archivedPoll.getByText("0 retained votes. Voting is no longer available.", { exact: true }))
+    .toBeVisible();
+  expect(requests.some((request) =>
+    request.method === "POST" && request.path === `/v1/content/${pollContentId}/poll-votes`
+  )).toBe(false);
 
-  const confirmedVote = page.waitForRequest((request) =>
-    request.method() === "POST" &&
-    new URL(request.url()).pathname === `/v1/content/${pollContentId}/poll-votes` &&
-    request.postDataJSON()?.optionId === pollOptionIds[1]
-  );
-  await page.getByRole("button", { name: /Carousel/ }).click();
-  await confirmedVote;
-  await expect(page.getByRole("button", { name: /Carousel/ })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByText("1 vote", { exact: true })).toBeVisible();
-
-  await page.goto("/profile/ariamoon");
+  await page.goto("/profile/ariamoon", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Aria Moon" })).toBeVisible();
   await expect(page.getByText("A structured text post with a real consumer renderer.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "What should we publish next?" })).toBeVisible();
@@ -431,6 +450,62 @@ async function gotoUntilVisible(page: Page, path: string, readyLocator: () => Lo
   }
 
   throw lastError;
+}
+
+async function installDeterministicVideoMetadata(page: Page) {
+  await page.addInitScript(() => {
+    const srcDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+    if (!srcDescriptor?.get || !srcDescriptor.set) return;
+    const getSrc = srcDescriptor.get;
+    const setSrc = srcDescriptor.set;
+
+    Object.defineProperty(HTMLMediaElement.prototype, "src", {
+      configurable: true,
+      enumerable: srcDescriptor.enumerable,
+      get(this: HTMLMediaElement) {
+        return getSrc.call(this);
+      },
+      set(this: HTMLMediaElement, value: string) {
+        setSrc.call(this, value);
+        Object.defineProperty(this, "duration", { configurable: true, value: 120 });
+        queueMicrotask(() => this.dispatchEvent(new Event("loadedmetadata")));
+      }
+    });
+  });
+}
+
+async function installControllableVideoMetadata(page: Page) {
+  await page.addInitScript(() => {
+    const srcDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "src");
+    if (!srcDescriptor?.get || !srcDescriptor.set) return;
+    const getSrc = srcDescriptor.get;
+    const setSrc = srcDescriptor.set;
+    let releaseHeldMetadata: (() => void) | null = null;
+
+    Object.defineProperty(HTMLMediaElement.prototype, "src", {
+      configurable: true,
+      enumerable: srcDescriptor.enumerable,
+      get(this: HTMLMediaElement) {
+        return getSrc.call(this);
+      },
+      set(this: HTMLMediaElement, value: string) {
+        setSrc.call(this, value);
+        Object.defineProperty(this, "duration", { configurable: true, value: 120 });
+        if (!releaseHeldMetadata && value.startsWith("blob:")) {
+          releaseHeldMetadata = () => this.dispatchEvent(new Event("loadedmetadata"));
+          return;
+        }
+        queueMicrotask(() => this.dispatchEvent(new Event("loadedmetadata")));
+      }
+    });
+
+    (window as typeof window & { __releaseWevidVideoMetadata?: () => void })
+      .__releaseWevidVideoMetadata = () => {
+        const release = releaseHeldMetadata;
+        releaseHeldMetadata = null;
+        release?.();
+      };
+  });
 }
 
 async function handleApiRequest(request: IncomingMessage, response: ServerResponse) {
@@ -694,9 +769,9 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
     sendJson(response, 200, {
       items: [contentItem({ accessState: "free" })],
       nextCursor: null,
-      mode: url.searchParams.get("mode") ?? "recommended",
+      mode: url.searchParams.get("mode") ?? "latest",
       surface: url.searchParams.get("surface") ?? "home",
-      rankingVersion: "deterministic_v1",
+      rankingVersion: "chronological_v1",
       generatedAt: "2026-08-15T12:00:00.000Z"
     });
     return;
@@ -714,7 +789,13 @@ async function handleApiRequest(request: IncomingMessage, response: ServerRespon
       hashtags: [{ slug: "studio", displayName: "Studio", state: "active" }],
       events: [],
       liveRooms: [liveRoom()],
-      nextCursor: null
+      nextCursors: {
+        content: null,
+        creators: null,
+        hashtags: null,
+        events: null,
+        liveRooms: null
+      }
     });
     return;
   }
@@ -949,7 +1030,10 @@ async function handleTusRequest(
 function setCorsHeaders(response: ServerResponse) {
   response.setHeader("Access-Control-Allow-Origin", e2eOrigin);
   response.setHeader("Access-Control-Allow-Credentials", "true");
-  response.setHeader("Access-Control-Allow-Headers", "authorization,content-type,idempotency-key,accept");
+  response.setHeader(
+    "Access-Control-Allow-Headers",
+    "authorization,content-type,idempotency-key,accept,x-wevid-expected-actor-id"
+  );
   response.setHeader("Access-Control-Allow-Methods", "DELETE,GET,POST,PATCH,OPTIONS");
 }
 
@@ -993,7 +1077,7 @@ function stringField(body: unknown, key: string) {
   return typeof value === "string" ? value : null;
 }
 
-function user() {
+function user(): CreatorDashboard["creator"] {
   return {
     id: "00000000-0000-4000-8000-000000000010",
     handle: "ariamoon",
@@ -1009,6 +1093,7 @@ function user() {
 function sessionState() {
   return {
     authenticated: true,
+    clientSessionScope: "s".repeat(43),
     appAccessState: { allowed: true, reason: "ready" },
     user: user()
   };
@@ -1065,7 +1150,7 @@ function paymentActivityItem() {
   };
 }
 
-function creatorDashboard() {
+function creatorDashboard(): CreatorDashboard {
   return {
     creator: user(),
     readiness: {
@@ -1081,10 +1166,13 @@ function creatorDashboard() {
       blockedReasons: []
     },
     earnings: {
-      currency: "SOL",
-      creatorEarningsMinor: 1240,
-      platformFeesMinor: 120,
-      referralCommissionsMinor: 35,
+      assets: [{
+        currency: "SOL",
+        creatorEarningsAtomic: "1240",
+        platformFeesAtomic: "120",
+        referralCommissionsAtomic: "35",
+        confirmedPaymentCount: 18
+      }],
       confirmedPaymentCount: 18
     },
     products: [
@@ -1092,8 +1180,11 @@ function creatorDashboard() {
         productType: "content_unlock",
         enabled: true,
         confirmedPaymentCount: 12,
-        amountMinor: 25,
-        currency: "SOL"
+        assets: [{
+          currency: "SOL",
+          amountAtomic: "25",
+          confirmedPaymentCount: 12
+        }]
       }
     ],
     recentActivity: []
@@ -1138,7 +1229,7 @@ function olderCreatorMediaItem() {
   };
 }
 
-function creatorOnboarding() {
+function creatorOnboarding(): CreatorOnboarding {
   return {
     state: "ready",
     canStartEarning: true,
@@ -1152,7 +1243,8 @@ function creatorOnboarding() {
         support: true,
         contentUnlocks: true,
         eventAccessAndLive: false,
-        paidMessages: true
+        paidMessages: true,
+        memberships: false
       }
     },
     steps: [
@@ -1379,6 +1471,15 @@ function paymentIntent() {
     platformFeeGrossMinor: 3_750_000_000,
     platformFeeAmountMinor: 3_750_000_000,
     referralAmountMinor: 0,
+    quote: {
+      minimumAmountMinor: 1_000_000,
+      platformFeeBps: 1_500,
+      referralShareOfPlatformFeeBps: 2_000,
+      quotedAt: "2026-06-12T10:30:00.000Z",
+      expiresAt: "2026-06-12T10:45:00.000Z",
+      policySource: "environment_default",
+      policyRevision: 1
+    },
     refundPolicy: {
       termsVersion: "veel-terms-v1",
       withdrawalWaiverVersion: "instant-digital-access-v1",

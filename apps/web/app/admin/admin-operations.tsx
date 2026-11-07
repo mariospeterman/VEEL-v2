@@ -52,9 +52,11 @@ export function AnalyticsOperations({
 
 export function PaymentPolicyOperations({
   canWrite,
+  nextPageHref,
   policies
 }: {
   canWrite: boolean;
+  nextPageHref: string | null;
   policies: ApiResult<AdminPage<AdminPaymentCommercialPolicy>>;
 }) {
   return (
@@ -87,6 +89,7 @@ export function PaymentPolicyOperations({
               {canWrite ? <button className={buttonClass} type="submit">Save policy</button> : null}
             </form>
           ))}
+          <NextPageLink href={nextPageHref} label="More payment policies" />
         </div>
       )}
     </OperationPanel>
@@ -95,10 +98,12 @@ export function PaymentPolicyOperations({
 
 export function FeatureFlagOperations({
   canWrite,
-  flags
+  flags,
+  nextPageHref
 }: {
   canWrite: boolean;
   flags: ApiResult<AdminPage<AdminFeatureFlag>>;
+  nextPageHref: string | null;
 }) {
   return (
     <OperationPanel title="Feature and safety policy">
@@ -125,10 +130,15 @@ export function FeatureFlagOperations({
               {canWrite ? <button className={buttonClass} type="submit">Save feature flag</button> : null}
             </form>
           ))}
+          <NextPageLink href={nextPageHref} label="More feature flags" />
         </div>
       )}
     </OperationPanel>
   );
+}
+
+function NextPageLink({ href, label }: { href: string | null; label: string }) {
+  return href ? <a className={buttonClass} href={href}>{label}</a> : null;
 }
 
 function OperationPanel({ children, title }: { children: import("react").ReactNode; title: string }) {

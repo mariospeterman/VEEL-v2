@@ -1,8 +1,9 @@
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { TextEncoder } from "node:util";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import sharp from "sharp";
+import { Connection, Keypair, Transaction } from "@solana/web3.js";
 import { describe, expect, it, vi } from "vitest";
 import { buildApi } from "../src/app";
 import type { MediaUploadProviderAdapter } from "../src/modules/content/types";
@@ -40,35 +41,45 @@ import {
   createPostgresSubscriptionCollectionRepository,
   processDueSubscriptionCollections
 } from "../../worker/src/subscription-collections";
+import {
+  assertIntegrationDatabaseIsAllowed,
+  integrationDatabaseUrl
+} from "./integration-database.js";
 
 const enableRealApiIntegration =
   process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS === "1" ||
   process.env.VEEL_ENABLE_REAL_API_INTEGRATION_TESTS === "true";
 const describeIntegration = enableRealApiIntegration ? describe : describe.skip;
-const buyerSupabaseUserId = "10000000-0000-4000-8000-000000000001";
-const creatorSupabaseUserId = "10000000-0000-4000-8000-000000000002";
-const authToken = "integration-buyer-token";
-const creatorAuthToken = "integration-creator-token";
+const buyerSupabaseUserId = randomUUID();
+const creatorSupabaseUserId = randomUUID();
+const authToken = `integration-buyer-${randomUUID()}`;
+const creatorAuthToken = `integration-creator-${randomUUID()}`;
 const sumsubWebhookSecret = "sumsub-integration-webhook-secret";
-const treasuryWallet = "1".repeat(32);
-const subscriptionCollectorWallet = "1".repeat(32);
-const subscriptionTokenMint = "3".repeat(32);
-const subscriptionAuthorityAddress = "4".repeat(32);
-const subscriptionDelegationAddress = "5".repeat(32);
-const subscriptionTokenAccount = "6".repeat(32);
-const subscriptionPlanPda = "7".repeat(32);
-const subscriptionMerchantWallet = "8".repeat(32);
+const treasuryWallet = randomBase58Address();
+const subscriptionCollectorWallet = randomBase58Address();
+const subscriptionTokenMint = randomBase58Address();
+const subscriptionAuthorityAddress = randomBase58Address();
+const subscriptionDelegationAddress = randomBase58Address();
+const subscriptionTokenAccount = randomBase58Address();
+const subscriptionPlanPda = randomBase58Address();
+const subscriptionMerchantWallet = randomBase58Address();
 const subscriptionProgramId = "De1egAFMkMWZSN5rYXRj9CAdheBamobVNubTsi9avR44";
-const creatorSettlementWallet = "2".repeat(32);
-const validSolanaSignature =
-  "5Pj5fCupXLUePYn18JkY8SrRaWFiUctuDTRwvUy2MLgVFG1FsCeezrWwZsmxkL5YJQFmQpAcY7rc5pN6vrXJt7Qp";
-const validEventAccessSolanaSignature = deterministicBase58Signature(41);
-const validPaidMessageSolanaSignature = deterministicBase58Signature(83);
-const validDeclinedPaidMessageSolanaSignature = deterministicBase58Signature(97);
-const validLivePassSolanaSignature = deterministicBase58Signature(127);
-const validRemediationSolanaSignature = deterministicBase58Signature(139);
-const invalidReservationSolanaSignature = deterministicBase58Signature(151);
-const validSubscriptionAuthorizationSignature = deterministicBase58Signature(149);
+const subscriptionPlanContract = {
+  priceMinor: 1500,
+  amountAtomic: 15000000,
+  creatorAmountAtomic: 12750000,
+  platformAmountAtomic: 2250000,
+  assetDecimals: 6,
+  periodDays: 30,
+  periodSeconds: 2592000,
+  termsVersion: "subscription-recurring-terms-v1",
+  withdrawalWaiverVersion: "subscription-initial-access-waiver-v1",
+  immediateAccessAcknowledged: true
+} as const;
+const creatorSettlementWallet = randomBase58Address();
+const walletKeypair = nacl.sign.keyPair();
+const walletAddress = bs58.encode(walletKeypair.publicKey);
+const validSubscriptionAuthorizationSignature = randomBase58Signature();
 
 describeIntegration("authenticated API happy path against Postgres", () => {
   it("links wallet, verifies age, creates content, unlocks content, buys Event Access, funds a structured creator request, buys paid live event access, and verifies subscriptions", async () => {
@@ -93,7 +104,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const seededInvalidAccessPassTypeId = randomUUID();
     const seededConversationId = randomUUID();
     const seededLiveRoomId = randomUUID();
-    const seededSubscriptionPlanId = `integration-platform-${shortRunId}`;
+    const seededSubscriptionPlanId = `integration-creator-${shortRunId}`;
     const seededProviderEventId = randomUUID();
     const seededProviderReplayRequestId = randomUUID();
     const seededOrganizationId = randomUUID();
@@ -103,6 +114,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     const ageProviderWaterfall = createIntegrationAgeWaterfall(providerReference);
     const walletAuthRepository = createPostgresWalletAuthRepository(sql);
     const settlementInputs: PaymentSettlementInput[] = [];
+    let invalidReservationSolanaSignature: string | null = null;
     const storedImageUploads: Array<{ providerAssetId: string; body: Buffer; checksumSha256: string }> = [];
     const deletedProviderAssets: Array<{ providerAssetId: string; assetKind: "image" | "video" }> = [];
     const mediaUploadProvider: MediaUploadProviderAdapter = {
@@ -142,6 +154,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     vi.stubEnv("DATABASE_URL", databaseUrl);
     vi.stubEnv("SUMSUB_WEBHOOK_SECRET", sumsubWebhookSecret);
     vi.stubEnv("PAYMENT_PLATFORM_TREASURY_WALLET", treasuryWallet);
+    vi.stubEnv("CONTENT_EXPORTS_ENABLED", "true");
     vi.stubEnv("SOLANA_SUBSCRIPTION_COLLECTOR_WALLET", subscriptionCollectorWallet);
     vi.stubEnv("SUBSCRIPTIONS_ENABLED", "true");
     vi.stubEnv("SUBSCRIPTIONS_PROVIDER", "official_solana_subscription_program");
@@ -150,6 +163,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
     vi.stubEnv("SUBSCRIPTIONS_DEFAULT_MINT", subscriptionTokenMint);
     vi.stubEnv("SUBSCRIPTIONS_COLLECTOR_WALLET", subscriptionCollectorWallet);
     vi.stubEnv("SUBSCRIPTIONS_MERCHANT_WALLET", subscriptionMerchantWallet);
+    const paymentLatestBlockhashSpy = vi.spyOn(Connection.prototype, "getLatestBlockhash")
+      .mockImplementation(async () => ({
+        blockhash: randomBase58Address(),
+        lastValidBlockHeight: 1_000_000
+      }));
 
     const subscriptionVerificationInputs: Parameters<
       SubscriptionAuthorizationVerifier["verifyAuthorization"]
@@ -235,6 +253,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       },
       postgresClient: sql
     });
+    const journeyLock = await sql.reserve();
+    await journeyLock`
+      select pg_advisory_lock(hashtextextended('wevid-integration:authenticated-happy-path', 0))
+    `;
 
     try {
       await app.ready();
@@ -252,6 +274,38 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         });
         expect(response.statusCode, response.body).toBe(200);
         return { idempotencyKey, response };
+      };
+      const createIntegrationPaymentSubmission = async (
+        paymentIntentId: string,
+        suffix: string
+      ) => {
+        const transactionRequestResponse = await app.inject({
+          method: "GET",
+          url: `/v1/payments/intents/${paymentIntentId}/transaction-request`,
+          headers: authenticatedHeaders(`transaction-request-${suffix}-${runId}`)
+        });
+        expect(transactionRequestResponse.statusCode, transactionRequestResponse.body).toBe(200);
+        const transactionRequest = transactionRequestResponse.json<{ checkoutUrl: string }>();
+        const checkoutUrl = new URL(transactionRequest.checkoutUrl);
+        const checkoutResponse = await app.inject({
+          method: "POST",
+          url: `${checkoutUrl.pathname}${checkoutUrl.search}`,
+          payload: { account: walletAddress }
+        });
+        expect(checkoutResponse.statusCode, checkoutResponse.body).toBe(200);
+        const unsignedTransaction = checkoutResponse.json<{ transaction: string }>();
+        const transaction = Transaction.from(Buffer.from(unsignedTransaction.transaction, "base64"));
+        const payer = Keypair.fromSecretKey(walletKeypair.secretKey);
+        expect(transaction.feePayer?.toBase58()).toBe(walletAddress);
+        transaction.sign(payer);
+        if (!transaction.signature) {
+          throw new Error("Expected the integration checkout transaction to be signed");
+        }
+
+        return {
+          signature: bs58.encode(transaction.signature),
+          signedTransactionBase64: transaction.serialize().toString("base64")
+        };
       };
       await cleanupRun(sql, {
         buyerHandle,
@@ -279,11 +333,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       `;
       await sql`
         insert into app_sessions (
-          id, user_id, wallet_id, token_hash, expires_at, authentication_method, authenticated_at
+          id, user_id, wallet_id, token_hash, expires_at, authentication_method, authenticated_at,
+          provider_session_id
         )
         values (
           ${randomUUID()}, ${buyerSupabaseUserId}, null, ${hashToken(authToken)},
-          now() + interval '30 minutes', 'supabase_recovery', now()
+          now() + interval '30 minutes', 'supabase_recovery', now(), ${randomUUID()}
         )
       `;
       await seedCreatorPaidContent(sql, {
@@ -314,8 +369,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         shortRunId,
         idempotencyKey: `live-room-${runId}`
       });
-      await seedPlatformSubscriptionPlan(sql, {
-        planId: seededSubscriptionPlanId
+      await seedCreatorSubscriptionPlan(sql, {
+        planId: seededSubscriptionPlanId,
+        creatorUserId: seededCreatorUserId
       });
 
       const unchangedPublishedSafetyUpdate = await app.inject({
@@ -358,8 +414,6 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }]
       });
 
-      const walletKeypair = nacl.sign.keyPair();
-      const walletAddress = bs58.encode(walletKeypair.publicKey);
       const challengeResponse = await app.inject({
         method: "POST",
         url: "/v1/wallets/link-challenges",
@@ -418,14 +472,32 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
 
       expect(ageSessionResponse.statusCode, ageSessionResponse.body).toBe(201);
-      expect(ageSessionResponse.json()).toMatchObject({
-        id: providerReference,
-        provider: "sumsub"
+      const ageSession = ageSessionResponse.json<{
+        id: string;
+        provider: string;
+        providerReference: string;
+        launchUrl: string;
+        launchState: string;
+        status: string;
+        resumable: boolean;
+      }>();
+      expect(ageSession).toMatchObject({
+        provider: "sumsub",
+        providerReference,
+        launchUrl: `https://age.example.test/sumsub/${providerReference}`,
+        launchState: "ready",
+        status: "pending",
+        resumable: true
       });
+      expect(ageSession.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
+      expect(ageSession.id).not.toBe(providerReference);
 
       const webhookPayload = JSON.stringify({
         type: "applicantReviewed",
-        applicantId: providerReference,
+        applicantId: `sumsub-applicant-${runId}`,
+        externalUserId: providerReference,
         correlationId: `sumsub-event-${runId}`,
         reviewResult: {
           reviewAnswer: "GREEN"
@@ -487,6 +559,17 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         payload: { consentVersion: "mutuals-consent-2026-06-04" }
       });
       expect(activateMutualsResponse.statusCode, activateMutualsResponse.body).toBe(200);
+
+      const mutualsFeedResponse = await app.inject({
+        method: "GET",
+        url: "/v1/mutuals/feed",
+        headers: authenticatedHeaders(`mutuals-feed-${runId}`)
+      });
+      expect(mutualsFeedResponse.statusCode, mutualsFeedResponse.body).toBe(200);
+      expect(mutualsFeedResponse.json().items).toContainEqual(expect.objectContaining({
+        contentId: seededFreeContentId,
+        mediaKind: "video"
+      }));
 
       const concurrentMutualsRequests = [
         { action: "yes", key: `mutuals-yes-${runId}` },
@@ -986,9 +1069,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(followingFeedResponse.json()).toMatchObject({
         mode: "following",
         surface: "home",
-        rankingVersion: "deterministic_v1"
+        rankingVersion: "chronological_v1"
       });
-      const staleFollowingPage = followingFeedResponse.json<{
+      const stableFollowingPage = followingFeedResponse.json<{
         items: Array<{
           id: string;
           creator: { id: string };
@@ -997,22 +1080,55 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }>;
         nextCursor: string | null;
       }>();
-      expect(staleFollowingPage.items.find((item) => item.id === seededContentId)).toMatchObject({
+      expect(stableFollowingPage.nextCursor).toEqual(expect.any(String));
+      const followingProjectionResponse = await app.inject({
+        method: "GET",
+        url: `/v1/content/feed?mode=following&surface=home&cursor=${encodeURIComponent(stableFollowingPage.nextCursor!)}`,
+        headers: authenticatedHeaders(`following-feed-projection-${runId}`)
+      });
+      expect(followingProjectionResponse.statusCode, followingProjectionResponse.body).toBe(200);
+      const followingProjectionPage = followingProjectionResponse.json<{
+        items: Array<{
+          id: string;
+          mediaAssets?: Array<{ id: string; position: number; posterUrl: string | null }>;
+        }>;
+      }>();
+      expect(followingProjectionPage.items.find((item) => item.id === seededContentId)).toMatchObject({
         mediaAssets: [{ id: seededMediaAssetId, position: 0, posterUrl: null }]
       });
-      expect(staleFollowingPage.nextCursor).toEqual(expect.any(String));
+      const revokedSnapshotContentId = feedFixtureIds.find(
+        (contentId) => !stableFollowingPage.items.some((item) => item.id === contentId)
+      );
+      expect(revokedSnapshotContentId).toEqual(expect.any(String));
       await sql`
         update content_engagement_counters
         set like_count = like_count + 1, updated_at = now()
         where content_item_id = ${feedFixtureIds[0]!}
       `;
-      const staleRankingCursorResponse = await app.inject({
+      await sql`
+        update content_items
+        set publish_state = 'unpublished', updated_at = now()
+        where id = ${revokedSnapshotContentId!}
+      `;
+      const stableRankingCursorResponse = await app.inject({
         method: "GET",
-        url: `/v1/content/feed?mode=following&surface=home&cursor=${encodeURIComponent(staleFollowingPage.nextCursor!)}`,
-        headers: authenticatedHeaders(`following-feed-stale-${runId}`)
+        url: `/v1/content/feed?mode=following&surface=home&cursor=${encodeURIComponent(stableFollowingPage.nextCursor!)}`,
+        headers: authenticatedHeaders(`following-feed-stable-${runId}`)
       });
-      expect(staleRankingCursorResponse.statusCode, staleRankingCursorResponse.body).toBe(409);
-      expect(staleRankingCursorResponse.json()).toMatchObject({ code: "feed_cursor_stale" });
+      expect(stableRankingCursorResponse.statusCode, stableRankingCursorResponse.body).toBe(200);
+      const stableFollowingNextPage = stableRankingCursorResponse.json<{
+        items: Array<{ id: string }>;
+      }>();
+      const stableFirstPageIds = new Set(stableFollowingPage.items.map((item) => item.id));
+      expect(stableFollowingNextPage.items.some((item) => stableFirstPageIds.has(item.id))).toBe(false);
+      expect(stableFollowingNextPage.items).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: revokedSnapshotContentId })])
+      );
+      await sql`
+        update content_items
+        set publish_state = 'published', updated_at = now()
+        where id = ${revokedSnapshotContentId!}
+      `;
 
       const refreshedFollowingFeedResponse = await app.inject({
         method: "GET",
@@ -1186,6 +1302,51 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(concurrentLikeResponses[0]?.json()).toMatchObject({ liked: true, likeCount: 1 });
       expect(concurrentLikeResponses[1]?.json()).toMatchObject({ liked: true, likeCount: 1 });
 
+      const unlikeResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/like`,
+        headers: authenticatedHeaders(`engagement-unlike-${runId}`)
+      });
+      expect(unlikeResponse.statusCode, unlikeResponse.body).toBe(200);
+      expect(unlikeResponse.json()).toMatchObject({ liked: false, likeCount: 0 });
+      const delayedLikeReplay = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/like`,
+        headers: authenticatedHeaders(likeIdempotencyKey)
+      });
+      expect(delayedLikeReplay.statusCode, delayedLikeReplay.body).toBe(200);
+      expect(delayedLikeReplay.json()).toMatchObject({ liked: false, likeCount: 0 });
+      const relikeResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/like`,
+        headers: authenticatedHeaders(`engagement-relike-${runId}`)
+      });
+      expect(relikeResponse.statusCode, relikeResponse.body).toBe(200);
+      expect(relikeResponse.json()).toMatchObject({ liked: true, likeCount: 1 });
+
+      const saveKey = `engagement-save-${runId}`;
+      const saveResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/save`,
+        headers: authenticatedHeaders(saveKey)
+      });
+      expect(saveResponse.statusCode, saveResponse.body).toBe(200);
+      expect(saveResponse.json()).toMatchObject({ saved: true });
+      const unsaveResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/save`,
+        headers: authenticatedHeaders(`engagement-unsave-${runId}`)
+      });
+      expect(unsaveResponse.statusCode, unsaveResponse.body).toBe(200);
+      expect(unsaveResponse.json()).toMatchObject({ saved: false });
+      const delayedSaveReplay = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/${seededFreeContentId}/save`,
+        headers: authenticatedHeaders(saveKey)
+      });
+      expect(delayedSaveReplay.statusCode, delayedSaveReplay.body).toBe(200);
+      expect(delayedSaveReplay.json()).toMatchObject({ saved: false });
+
       const conflictingLikeResponse = await app.inject({
         method: "POST",
         url: `/v1/engagement/${seededContentId}/like`,
@@ -1271,6 +1432,28 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(commentLikeResponses[0]?.json()).toMatchObject({ commentId: rootCommentId, liked: true, likeCount: 1 });
       expect(commentLikeResponses[1]?.json()).toEqual(commentLikeResponses[0]?.json());
 
+      const commentUnlikeResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/comments/${rootCommentId}/like`,
+        headers: authenticatedHeaders(`engagement-comment-unlike-${runId}`)
+      });
+      expect(commentUnlikeResponse.statusCode, commentUnlikeResponse.body).toBe(200);
+      expect(commentUnlikeResponse.json()).toMatchObject({ commentId: rootCommentId, liked: false, likeCount: 0 });
+      const delayedCommentLikeReplay = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/comments/${rootCommentId}/like`,
+        headers: authenticatedHeaders(commentLikeKey)
+      });
+      expect(delayedCommentLikeReplay.statusCode, delayedCommentLikeReplay.body).toBe(200);
+      expect(delayedCommentLikeReplay.json()).toMatchObject({ commentId: rootCommentId, liked: false, likeCount: 0 });
+      const commentRelikeResponse = await app.inject({
+        method: "POST",
+        url: `/v1/engagement/comments/${rootCommentId}/like`,
+        headers: authenticatedHeaders(`engagement-comment-relike-${runId}`)
+      });
+      expect(commentRelikeResponse.statusCode, commentRelikeResponse.body).toBe(200);
+      expect(commentRelikeResponse.json()).toMatchObject({ commentId: rootCommentId, liked: true, likeCount: 1 });
+
       const commentsResponse = await app.inject({
         method: "GET",
         url: `/v1/engagement/${seededFreeContentId}/comments`,
@@ -1340,6 +1523,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       ]);
       expect(dataRequestResponses.map((response) => response.statusCode)).toEqual([201, 201]);
       expect(dataRequestResponses[1]?.json()).toEqual(dataRequestResponses[0]?.json());
+      expect(dataRequestResponses[0]?.json()).toMatchObject({
+        type: "export",
+        contentExport: {
+          state: "queued",
+          canCancel: true,
+          canRetry: false,
+          canDownload: false
+        }
+      });
       const duplicateActiveDataRequest = await app.inject({
         method: "POST",
         url: "/v1/privacy/data-requests",
@@ -1604,316 +1796,130 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       const sfwContentId = createContentResponse.json().id as string;
 
-      const textDraftResponse = await app.inject({
-        method: "POST",
-        url: "/v1/content",
-        headers: authenticatedHeaders(`text-content-create-${runId}`),
-        payload: {
-          mediaType: "text",
-          visibility: "public",
-          nsfwLabel: "none",
-          representationMode: "self_only",
-          contentSafetyPolicyAccepted: true,
-          bodyText: `  Structured text ${runId}  `
-        }
-      });
-      expect(textDraftResponse.statusCode, textDraftResponse.body).toBe(201);
-      expect(textDraftResponse.json()).toMatchObject({
-        mediaType: "text",
-        bodyText: `Structured text ${runId}`
-      });
-
-      const pollClosesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-      const pollDraftResponse = await app.inject({
-        method: "POST",
-        url: "/v1/content",
-        headers: authenticatedHeaders(`poll-content-create-${runId}`),
-        payload: {
-          mediaType: "poll",
-          visibility: "public",
-          nsfwLabel: "none",
-          representationMode: "self_only",
-          contentSafetyPolicyAccepted: true,
-          poll: {
-            question: "  Which format next?  ",
-            options: ["  Photos  ", "Video", "Text"],
-            closesAt: pollClosesAt
-          }
-        }
-      });
-      expect(pollDraftResponse.statusCode, pollDraftResponse.body).toBe(201);
-      expect(pollDraftResponse.json()).toMatchObject({
-        mediaType: "poll",
-        poll: {
-          question: "Which format next?",
-          state: "open",
-          totalVoteCount: 0,
-          closesAt: pollClosesAt,
-          viewerOptionId: null,
-          options: [
-            expect.objectContaining({ position: 0, text: "Photos", voteCount: 0 }),
-            expect.objectContaining({ position: 1, text: "Video", voteCount: 0 }),
-            expect.objectContaining({ position: 2, text: "Text", voteCount: 0 })
-          ]
-        }
-      });
-
-      const textDetailResponse = await app.inject({
-        method: "GET",
-        url: `/v1/content/${textDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(`text-content-detail-${runId}`)
-      });
-      expect(textDetailResponse.statusCode, textDetailResponse.body).toBe(200);
-      expect(textDetailResponse.json()).toMatchObject({
-        id: textDraftResponse.json().id,
-        mediaType: "text",
-        bodyText: `Structured text ${runId}`,
-        compositionRevision: 1
-      });
-
-      const textAutosaveKey = `text-content-autosave-${runId}`;
-      const textAutosaveResponse = await app.inject({
-        method: "PATCH",
-        url: `/v1/content/${textDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(textAutosaveKey),
-        payload: {
-          bodyText: `  Revised structured text ${runId}  `,
-          expectedCompositionRevision: 1
-        }
-      });
-      expect(textAutosaveResponse.statusCode, textAutosaveResponse.body).toBe(200);
-      expect(textAutosaveResponse.json()).toMatchObject({
-        bodyText: `Revised structured text ${runId}`,
-        compositionRevision: 2
-      });
-
-      const textAutosaveReplay = await app.inject({
-        method: "PATCH",
-        url: `/v1/content/${textDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(textAutosaveKey),
-        payload: {
-          bodyText: `  Revised structured text ${runId}  `,
-          expectedCompositionRevision: 1
-        }
-      });
-      expect(textAutosaveReplay.statusCode, textAutosaveReplay.body).toBe(200);
-      expect(textAutosaveReplay.json()).toMatchObject({ compositionRevision: 2 });
-
-      const changedTextAutosaveReplay = await app.inject({
-        method: "PATCH",
-        url: `/v1/content/${textDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(textAutosaveKey),
-        payload: { bodyText: "Changed key reuse", expectedCompositionRevision: 2 }
-      });
-      expect(changedTextAutosaveReplay.statusCode, changedTextAutosaveReplay.body).toBe(409);
-
-      const staleTextAutosave = await app.inject({
-        method: "PATCH",
-        url: `/v1/content/${textDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(`text-content-stale-${runId}`),
-        payload: { bodyText: "Stale overwrite", expectedCompositionRevision: 1 }
-      });
-      expect(staleTextAutosave.statusCode, staleTextAutosave.body).toBe(409);
-
-      const pollDetailResponse = await app.inject({
-        method: "GET",
-        url: `/v1/content/${pollDraftResponse.json().id as string}`,
-        headers: authenticatedHeaders(`poll-content-detail-${runId}`)
-      });
-      expect(pollDetailResponse.statusCode, pollDetailResponse.body).toBe(200);
-      expect(pollDetailResponse.json()).toMatchObject({
-        id: pollDraftResponse.json().id,
-        mediaType: "poll",
-        poll: {
-          question: "Which format next?",
-          totalVoteCount: 0,
-          viewerOptionId: null,
-          options: [
-            expect.objectContaining({ position: 0, text: "Photos", voteCount: 0 }),
-            expect.objectContaining({ position: 1, text: "Video", voteCount: 0 }),
-            expect.objectContaining({ position: 2, text: "Text", voteCount: 0 })
-          ]
-        }
-      });
-
-      const pollContentId = pollDraftResponse.json().id as string;
-      const pollOptions = pollDraftResponse.json().poll.options as Array<{ id: string }>;
-      const firstPollOptionId = pollOptions[0]?.id;
-      const secondPollOptionId = pollOptions[1]?.id;
-      const thirdPollOptionId = pollOptions[2]?.id;
-      if (!firstPollOptionId || !secondPollOptionId || !thirdPollOptionId) {
-        throw new Error("Integration poll options were not created");
-      }
-      await sql`
-        update profiles
-        set visibility = 'public', updated_at = now()
-        where user_id = ${buyerSupabaseUserId}
-      `;
-      await sql`
-        update media_safety_cases
-        set
-          state = 'approved',
-          decision_source = 'staff',
-          reason_code = 'integration_fixture_approved',
-          provider_release_allowed = true,
-          decided_at = now(),
-          updated_at = now()
-        where content_item_id = ${pollContentId}
-      `;
-      const pollReleaseReadiness = await sql<{ ready: boolean }[]>`
-        select private.content_safety_release_ready(${pollContentId}) as ready
-      `;
-      expect(pollReleaseReadiness[0]?.ready).toBe(true);
-      await sql`
-        update content_items
-        set
-          state = 'ready',
-          moderation_state = 'approved',
-          publish_state = 'published',
-          published_at = now(),
-          updated_at = now()
-        where id = ${pollContentId}
-      `;
-
-      const publicPollProfile = await app.inject({
-        method: "GET",
-        url: `/v1/profiles/${buyerHandle}`
-      });
-      expect(publicPollProfile.statusCode, publicPollProfile.body).toBe(200);
-      expect(publicPollProfile.json().recentContent).toEqual(expect.arrayContaining([
-        expect.objectContaining({
-          id: pollContentId,
-          mediaType: "poll",
-          accessState: "free",
-          poll: expect.objectContaining({
-            question: "Which format next?",
-            options: expect.arrayContaining([
-              expect.objectContaining({ id: firstPollOptionId, text: "Photos", voteCount: 0 })
-            ])
-          })
-        })
-      ]));
-
-      const firstPollVoteKey = `poll-vote-first-${runId}`;
-      const firstPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(firstPollVoteKey),
-        payload: { optionId: firstPollOptionId }
-      });
-      expect(firstPollVote.statusCode, firstPollVote.body).toBe(200);
-      expect(firstPollVote.json()).toMatchObject({
-        totalVoteCount: 1,
-        viewerOptionId: firstPollOptionId,
-        options: expect.arrayContaining([
-          expect.objectContaining({ id: firstPollOptionId, voteCount: 1 })
-        ])
-      });
-
-      const replayedPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(firstPollVoteKey),
-        payload: { optionId: firstPollOptionId }
-      });
-      expect(replayedPollVote.statusCode, replayedPollVote.body).toBe(200);
-      expect(replayedPollVote.json()).toEqual(firstPollVote.json());
-
-      const conflictingPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(firstPollVoteKey),
-        payload: { optionId: secondPollOptionId }
-      });
-      expect(conflictingPollVote.statusCode, conflictingPollVote.body).toBe(409);
-
-      const changedPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(`poll-vote-change-${runId}`),
-        payload: { optionId: secondPollOptionId }
-      });
-      expect(changedPollVote.statusCode, changedPollVote.body).toBe(200);
-      expect(changedPollVote.json()).toMatchObject({
-        totalVoteCount: 1,
-        viewerOptionId: secondPollOptionId,
-        options: expect.arrayContaining([
-          expect.objectContaining({ id: firstPollOptionId, voteCount: 0 }),
-          expect.objectContaining({ id: secondPollOptionId, voteCount: 1 })
-        ])
-      });
-
-      const invalidPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(`poll-vote-invalid-${runId}`),
-        payload: { optionId: randomUUID() }
-      });
-      expect(invalidPollVote.statusCode, invalidPollVote.body).toBe(404);
-
-      await sql`update profiles set visibility = 'private', updated_at = now() where user_id = ${buyerSupabaseUserId}`;
-      const ineligiblePollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(`poll-vote-ineligible-${runId}`),
-        payload: { optionId: firstPollOptionId }
-      });
-      expect(ineligiblePollVote.statusCode, ineligiblePollVote.body).toBe(404);
-      await sql`update profiles set visibility = 'public', updated_at = now() where user_id = ${buyerSupabaseUserId}`;
-
-      await sql`update content_polls set state = 'closed', updated_at = now() where content_item_id = ${pollContentId}`;
-      const closedPollVote = await app.inject({
-        method: "POST",
-        url: `/v1/content/${pollContentId}/poll-votes`,
-        headers: authenticatedHeaders(`poll-vote-closed-${runId}`),
-        payload: { optionId: firstPollOptionId }
-      });
-      expect(closedPollVote.statusCode, closedPollVote.body).toBe(409);
-      await sql`update content_polls set state = 'open', updated_at = now() where content_item_id = ${pollContentId}`;
-
-      const concurrentPollVotes = await Promise.all([
+      const retiredCreateRequests = [
         app.inject({
           method: "POST",
-          url: `/v1/content/${pollContentId}/poll-votes`,
-          headers: authenticatedHeaders(`poll-vote-concurrent-a-${runId}`),
-          payload: { optionId: firstPollOptionId }
+          url: "/v1/content",
+          headers: authenticatedHeaders(`text-content-create-${runId}`),
+          payload: {
+            mediaType: "text",
+            visibility: "private",
+            nsfwLabel: "none",
+            representationMode: "self_only",
+            contentSafetyPolicyAccepted: true,
+            bodyText: `Structured text ${runId}`
+          }
         }),
         app.inject({
           method: "POST",
-          url: `/v1/content/${pollContentId}/poll-votes`,
-          headers: authenticatedHeaders(`poll-vote-concurrent-b-${runId}`),
-          payload: { optionId: thirdPollOptionId }
+          url: "/v1/content",
+          headers: authenticatedHeaders(`poll-content-create-${runId}`),
+          payload: {
+            mediaType: "poll",
+            visibility: "private",
+            nsfwLabel: "none",
+            representationMode: "self_only",
+            contentSafetyPolicyAccepted: true,
+            poll: { question: "Which format next?", options: ["Photos", "Video"] }
+          }
+        })
+      ];
+      for (const response of await Promise.all(retiredCreateRequests)) {
+        expect(response.statusCode, response.body).toBe(410);
+        expect(response.json()).toMatchObject({ code: "content_format_retired" });
+      }
+
+      const historicalTextId = randomUUID();
+      const historicalPollId = randomUUID();
+      const historicalPollOptionId = randomUUID();
+      await sql.begin(async (transaction) => {
+        // Historical fixtures simulate rows that predate the retirement
+        // trigger; normal post-migration inserts must fail closed.
+        await transaction`set local session_replication_role = replica`;
+        await transaction`
+          insert into content_items (
+            id, creator_user_id, media_type, state, visibility, nsfw_label,
+            moderation_state, publish_state, body_text
+          ) values
+            (${historicalTextId}, ${buyerSupabaseUserId}, 'text', 'draft', 'private', 'none',
+              'pending', 'draft', ${`Historical text ${runId}`}),
+            (${historicalPollId}, ${buyerSupabaseUserId}, 'poll', 'draft', 'private', 'none',
+              'pending', 'draft', null)
+        `;
+      });
+      await sql.begin(async (transaction) => {
+        await transaction`
+          insert into content_polls (content_item_id, question, state)
+          values (${historicalPollId}, 'Historical poll', 'closed')
+        `;
+        await transaction`
+          insert into content_poll_options (id, content_item_id, position, option_text)
+          values
+            (${historicalPollOptionId}, ${historicalPollId}, 0, 'Archived answer'),
+            (${randomUUID()}, ${historicalPollId}, 1, 'Other answer')
+        `;
+      });
+
+      const historicalTextDetail = await app.inject({
+        method: "GET",
+        url: `/v1/content/${historicalTextId}`,
+        headers: authenticatedHeaders(`historical-text-detail-${runId}`)
+      });
+      expect(historicalTextDetail.statusCode, historicalTextDetail.body).toBe(200);
+      expect(historicalTextDetail.json()).toMatchObject({
+        id: historicalTextId,
+        mediaType: "text",
+        bodyText: `Historical text ${runId}`
+      });
+
+      await expect(sql`
+        update content_items
+        set media_type = 'image'
+        where id = ${historicalTextId}
+      `).rejects.toMatchObject({ code: "23514" });
+      const retainedHistoricalFormat = await sql<{ media_type: string }[]>`
+        select media_type
+        from content_items
+        where id = ${historicalTextId}
+      `;
+      expect(retainedHistoricalFormat[0]?.media_type).toBe("text");
+
+      const historicalPollDetail = await app.inject({
+        method: "GET",
+        url: `/v1/content/${historicalPollId}`,
+        headers: authenticatedHeaders(`historical-poll-detail-${runId}`)
+      });
+      expect(historicalPollDetail.statusCode, historicalPollDetail.body).toBe(200);
+      expect(historicalPollDetail.json()).toMatchObject({
+        id: historicalPollId,
+        mediaType: "poll",
+        poll: {
+          question: "Historical poll",
+          state: "closed",
+          options: expect.arrayContaining([
+            expect.objectContaining({ id: historicalPollOptionId, text: "Archived answer" })
+          ])
+        }
+      });
+
+      const retiredWrites = await Promise.all([
+        app.inject({
+          method: "PATCH",
+          url: `/v1/content/${historicalTextId}`,
+          headers: authenticatedHeaders(`historical-text-edit-${runId}`),
+          payload: { caption: "No new edits" }
+        }),
+        app.inject({
+          method: "POST",
+          url: `/v1/content/${historicalPollId}/poll-votes`,
+          headers: authenticatedHeaders(`historical-poll-vote-${runId}`),
+          payload: { optionId: historicalPollOptionId }
         })
       ]);
-      expect(concurrentPollVotes.map((response) => response.statusCode)).toEqual([200, 200]);
-      const persistedPollVotes = await sql<{ total_votes: string; counted_votes: string }[]>`
-        select
-          (select count(*)::text from content_poll_votes where content_item_id = ${pollContentId}) as total_votes,
-          (select coalesce(sum(vote_count), 0)::text from content_poll_options where content_item_id = ${pollContentId}) as counted_votes
-      `;
-      expect(persistedPollVotes[0]).toEqual({ total_votes: "1", counted_votes: "1" });
-
-      const universalDraftRows = await sql<{
-        media_type: string;
-        body_text: string | null;
-        poll_option_count: number;
-      }[]>`
-        select
-          content.media_type,
-          content.body_text,
-          (
-            select count(*)::integer
-            from content_poll_options option
-            where option.content_item_id = content.id
-          ) as poll_option_count
-        from content_items content
-        where content.id in (${textDraftResponse.json().id as string}, ${pollDraftResponse.json().id as string})
-        order by content.media_type
-      `;
-      expect(universalDraftRows).toEqual([
-        { media_type: "poll", body_text: null, poll_option_count: 3 },
-        { media_type: "text", body_text: `Revised structured text ${runId}`, poll_option_count: 0 }
-      ]);
+      for (const response of retiredWrites) {
+        expect(response.statusCode, response.body).toBe(410);
+        expect(response.json()).toMatchObject({ code: "content_format_retired" });
+      }
 
       const imageDraftResponse = await app.inject({
         method: "POST",
@@ -2867,6 +2873,68 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         invalid_signal_count: "0"
       });
 
+      const [playbackQualification] = await sql<{
+        media_type: string;
+        state: string;
+        publish_state: string;
+        visibility: string;
+        moderation_state: string;
+        other_creator: boolean;
+        has_restrictive_rule: boolean;
+        has_active_entitlement: boolean;
+        has_release_asset: boolean;
+      }[]>`
+        select
+          content.media_type,
+          content.state,
+          content.publish_state,
+          content.visibility,
+          content.moderation_state,
+          content.creator_user_id <> viewer.id as other_creator,
+          exists (
+            select 1
+            from content_access_rules rule
+            where rule.content_item_id = content.id
+              and rule.state = 'active'
+              and (rule.starts_at is null or rule.starts_at <= now())
+              and (rule.ends_at is null or rule.ends_at > now())
+              and rule.access_type <> 'free'
+          ) as has_restrictive_rule,
+          exists (
+            select 1
+            from entitlements entitlement
+            where entitlement.user_id = viewer.id
+              and entitlement.target_type = 'content'
+              and entitlement.target_id = content.id
+              and entitlement.state = 'active'
+              and entitlement.starts_at <= now()
+              and (entitlement.ends_at is null or entitlement.ends_at > now())
+          ) as has_active_entitlement,
+          exists (
+            select 1
+            from media_assets asset
+            where asset.id = content.release_media_asset_id
+              and asset.content_item_id = content.id
+              and asset.retired_at is null
+              and asset.provider_state = 'ready'
+              and asset.duration_ms is not null
+          ) as has_release_asset
+        from content_items content
+        join users viewer on viewer.supabase_user_id = ${buyerSupabaseUserId}
+        where content.id = ${seededFreeContentId}
+      `;
+      expect(playbackQualification).toEqual({
+        media_type: "vod",
+        state: "ready",
+        publish_state: "published",
+        visibility: "public",
+        moderation_state: "approved",
+        other_creator: true,
+        has_restrictive_rule: false,
+        has_active_entitlement: false,
+        has_release_asset: true
+      });
+
       const playbackSessionResponse = await app.inject({
         method: "POST",
         url: "/v1/platform-usage/playback-sessions",
@@ -2882,8 +2950,10 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(playbackSessionResponse.json()).toMatchObject({
         state: "active",
         consumedSeconds: 0,
+        reservedSeconds: 900,
+        leaseExpiresAt: expect.any(String),
         usage: {
-          publicMediaSeconds: 0,
+          publicMediaSeconds: 900,
           limitReached: false
         }
       });
@@ -2902,7 +2972,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         state: "active",
         consumedSeconds: 1,
         usage: {
-          publicMediaSeconds: 1
+          publicMediaSeconds: 900
         }
       });
 
@@ -2916,7 +2986,31 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(replayedHeartbeatResponse.statusCode, replayedHeartbeatResponse.body).toBe(200);
       expect(replayedHeartbeatResponse.json()).toMatchObject({
         consumedSeconds: 1,
-        usage: { publicMediaSeconds: 1 }
+        usage: { publicMediaSeconds: 900 }
+      });
+
+      await sql`
+        update platform_playback_sessions
+        set consumed_seconds = allowance_reserved_seconds - 5,
+            last_heartbeat_at = now() - interval '1 minute'
+        where id = ${playbackSession.id}
+      `;
+      const finalAnalyticsHeartbeatResponse = await app.inject({
+        method: "POST",
+        url: `/v1/platform-usage/playback-sessions/${playbackSession.id}/heartbeats`,
+        headers: authenticatedHeaders(`playback-heartbeat-final-${runId}`),
+        payload: { sequence: 2, playedSeconds: 30 }
+      });
+
+      expect(
+        finalAnalyticsHeartbeatResponse.statusCode,
+        finalAnalyticsHeartbeatResponse.body
+      ).toBe(200);
+      expect(finalAnalyticsHeartbeatResponse.json()).toMatchObject({
+        state: "active",
+        consumedSeconds: 900,
+        reservedSeconds: 900,
+        usage: { publicMediaSeconds: 900 }
       });
 
       const persistedPlaybackRows = await sql<{
@@ -2946,9 +3040,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       `;
 
       expect(persistedPlaybackRows[0]).toEqual({
-        heartbeat_count: "1",
+        heartbeat_count: "2",
         session_count: "1",
-        usage_seconds: "1"
+        usage_seconds: "900"
       });
 
       const buyerRows = await sql<{ id: string }[]>`
@@ -3365,13 +3459,16 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       expect(crossActorConsentReplay.statusCode, crossActorConsentReplay.body).toBe(409);
 
+      const validSolanaSubmission = await createIntegrationPaymentSubmission(
+        unlock.paymentIntent.id,
+        "content-unlock"
+      );
+      const validSolanaSignature = validSolanaSubmission.signature;
       const submissionResponse = await app.inject({
         method: "POST",
         url: `/v1/payments/intents/${unlock.paymentIntent.id}/submissions`,
         headers: authenticatedHeaders(`payment-submission-${runId}`),
-        payload: {
-          signature: validSolanaSignature
-        }
+        payload: validSolanaSubmission
       });
 
       expect(submissionResponse.statusCode, submissionResponse.body).toBe(202);
@@ -3774,14 +3871,17 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
 
       await acceptImmediateCheckout(accessPassIntent.paymentIntent.id, "event-access");
+      const validEventAccessSolanaSubmission = await createIntegrationPaymentSubmission(
+        accessPassIntent.paymentIntent.id,
+        "event-access"
+      );
+      const validEventAccessSolanaSignature = validEventAccessSolanaSubmission.signature;
 
       const accessPassSubmissionResponse = await app.inject({
         method: "POST",
         url: `/v1/payments/intents/${accessPassIntent.paymentIntent.id}/submissions`,
         headers: authenticatedHeaders(`event-access-pass-submission-${runId}`),
-        payload: {
-          signature: validEventAccessSolanaSignature
-        }
+        payload: validEventAccessSolanaSubmission
       });
 
       expect(accessPassSubmissionResponse.statusCode, accessPassSubmissionResponse.body).toBe(202);
@@ -3975,16 +4075,106 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }
       });
       expect(creatorRequestResponse.statusCode, creatorRequestResponse.body).toBe(201);
-      const creatorRequest = creatorRequestResponse.json<{ id: string }>();
+      const creatorRequest = creatorRequestResponse.json<{ id: string; termsRevision: number }>();
+
+      const [creatorRequestConsentBoundary] = await sql<{
+        state: string;
+        terms_revision: number;
+        creator_is_authenticated_actor: boolean;
+        requester_is_buyer: boolean;
+        direct_request_state: string | null;
+      }[]>`
+        select
+          request.state,
+          request.terms_revision,
+          request.creator_user_id = creator.id as creator_is_authenticated_actor,
+          request.requester_user_id = buyer.id as requester_is_buyer,
+          direct_request.state as direct_request_state
+        from structured_creator_requests request
+        join users creator on creator.supabase_user_id = ${creatorSupabaseUserId}
+        join users buyer on buyer.supabase_user_id = ${buyerSupabaseUserId}
+        left join direct_message_requests direct_request
+          on direct_request.conversation_id = request.conversation_id
+        where request.id = ${creatorRequest.id}
+      `;
+      expect(creatorRequestConsentBoundary).toEqual({
+        state: "proposed",
+        terms_revision: creatorRequest.termsRevision,
+        creator_is_authenticated_actor: true,
+        requester_is_buyer: true,
+        direct_request_state: null
+      });
 
       const acceptCreatorRequestResponse = await app.inject({
         method: "PATCH",
         url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${creatorRequest.id}`,
         headers: creatorAuthenticatedHeaders(`creator-request-accept-${runId}`),
-        payload: { action: "accept", agreedAmountMinor: 10000000 }
+        payload: { action: "accept", expectedTermsRevision: creatorRequest.termsRevision }
       });
       expect(acceptCreatorRequestResponse.statusCode, acceptCreatorRequestResponse.body).toBe(200);
       expect(acceptCreatorRequestResponse.json()).toMatchObject({ id: creatorRequest.id, state: "accepted" });
+
+      const revisionRequestResponse = await app.inject({
+        method: "POST",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests`,
+        headers: authenticatedHeaders(`creator-request-revision-${runId}`),
+        payload: {
+          creatorUserId: seededCreatorUserId,
+          deliverable: `One revision-bound integration video ${shortRunId}`,
+          permittedCategory: "video",
+          proposedAmountMinor: 11000000,
+          currency: "SOL",
+          expectedDeliveryDays: 14,
+          clarificationRule: "One written clarification before acceptance.",
+          cancellationRule: "Cancellation before payment; remediation after verified settlement.",
+          expiresAt: new Date(Date.now() + 86_400_000).toISOString()
+        }
+      });
+      expect(revisionRequestResponse.statusCode, revisionRequestResponse.body).toBe(201);
+      const revisionRequest = revisionRequestResponse.json<{ id: string; termsRevision: number }>();
+      expect(revisionRequest.termsRevision).toBe(1);
+
+      const counterTermsResponse = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${revisionRequest.id}`,
+        headers: creatorAuthenticatedHeaders(`creator-request-revision-propose-${runId}`),
+        payload: {
+          action: "propose_terms",
+          expectedTermsRevision: revisionRequest.termsRevision,
+          agreedAmountMinor: 12000000,
+          expectedDeliveryDays: 10
+        }
+      });
+      expect(counterTermsResponse.statusCode, counterTermsResponse.body).toBe(200);
+      const counterTerms = counterTermsResponse.json<{ termsRevision: number }>();
+      expect(counterTermsResponse.json()).toMatchObject({
+        state: "terms_proposed",
+        agreedAmountMinor: 12000000,
+        expectedDeliveryDays: 10,
+        termsRevision: 2
+      });
+
+      const staleTermsAcceptance = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${revisionRequest.id}`,
+        headers: authenticatedHeaders(`creator-request-revision-stale-${runId}`),
+        payload: { action: "accept_terms", expectedTermsRevision: revisionRequest.termsRevision }
+      });
+      expect(staleTermsAcceptance.statusCode, staleTermsAcceptance.body).toBe(403);
+
+      const exactTermsAcceptance = await app.inject({
+        method: "PATCH",
+        url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${revisionRequest.id}`,
+        headers: authenticatedHeaders(`creator-request-revision-accept-${runId}`),
+        payload: { action: "accept_terms", expectedTermsRevision: counterTerms.termsRevision }
+      });
+      expect(exactTermsAcceptance.statusCode, exactTermsAcceptance.body).toBe(200);
+      expect(exactTermsAcceptance.json()).toMatchObject({
+        state: "accepted",
+        agreedAmountMinor: 12000000,
+        expectedDeliveryDays: 10,
+        termsRevision: 2
+      });
 
       const creatorRequestIntentResponse = await app.inject({
         method: "POST",
@@ -4002,11 +4192,16 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
 
       await acceptImmediateCheckout(creatorRequestIntent.id, "creator-request");
+      const validPaidMessageSolanaSubmission = await createIntegrationPaymentSubmission(
+        creatorRequestIntent.id,
+        "creator-request"
+      );
+      const validPaidMessageSolanaSignature = validPaidMessageSolanaSubmission.signature;
       const creatorRequestSubmissionResponse = await app.inject({
         method: "POST",
         url: `/v1/payments/intents/${creatorRequestIntent.id}/submissions`,
         headers: authenticatedHeaders(`creator-request-submission-${runId}`),
-        payload: { signature: validPaidMessageSolanaSignature }
+        payload: validPaidMessageSolanaSubmission
       });
       expect(creatorRequestSubmissionResponse.statusCode, creatorRequestSubmissionResponse.body).toBe(202);
 
@@ -4074,12 +4269,12 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }
       });
       expect(remediationRequestResponse.statusCode, remediationRequestResponse.body).toBe(201);
-      const remediationRequest = remediationRequestResponse.json<{ id: string }>();
+      const remediationRequest = remediationRequestResponse.json<{ id: string; termsRevision: number }>();
       const acceptRemediationRequestResponse = await app.inject({
         method: "PATCH",
         url: `/v1/messages/conversations/${seededConversationId}/creator-requests/${remediationRequest.id}`,
         headers: creatorAuthenticatedHeaders(`creator-request-remediation-accept-${runId}`),
-        payload: { action: "accept", agreedAmountMinor: 10000000 }
+        payload: { action: "accept", expectedTermsRevision: remediationRequest.termsRevision }
       });
       expect(acceptRemediationRequestResponse.statusCode, acceptRemediationRequestResponse.body).toBe(200);
       const creatorRequestRemediationIntentResponse = await app.inject({
@@ -4125,11 +4320,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       });
       expect(declineBeforeSettlementResponse.statusCode, declineBeforeSettlementResponse.body).toBe(200);
 
+      const validDeclinedPaidMessageSolanaSubmission = await createIntegrationPaymentSubmission(
+        creatorRequestRemediationIntent.id,
+        "creator-request-remediation"
+      );
       const creatorRequestRemediationSubmissionResponse = await app.inject({
         method: "POST",
         url: `/v1/payments/intents/${creatorRequestRemediationIntent.id}/submissions`,
         headers: authenticatedHeaders(`creator-request-remediation-submission-${runId}`),
-        payload: { signature: validDeclinedPaidMessageSolanaSignature }
+        payload: validDeclinedPaidMessageSolanaSubmission
       });
       expect(creatorRequestRemediationSubmissionResponse.statusCode, creatorRequestRemediationSubmissionResponse.body).toBe(202);
       const creatorRequestRemediationRows = await sql<{
@@ -4348,6 +4547,49 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         }
       });
 
+      const chatMembershipPlanId = `integration-chat-membership-${shortRunId}`;
+      const chatMembershipSubscriptionId = randomUUID();
+      await sql`
+        insert into subscription_plans (
+          id, scope, creator_user_id, label, amount_minor, currency, period_days,
+          billing_mode, provider_state, token_mint, token_program, provider,
+          program_id, amount_atomic, period_seconds, creator_amount_atomic,
+          platform_fee_amount_atomic, allocation_amount_atomic, state
+        ) values (
+          ${chatMembershipPlanId}, 'creator', ${seededCreatorUserId},
+          'Paid live chat membership regression', 100, 'USDC', 30,
+          'delegated_solana_subscription', 'disabled', ${subscriptionTokenMint},
+          'spl_token', 'official_solana_subscription_program', ${subscriptionProgramId},
+          100, 2592000, 100, 0, 0, 'disabled'
+        )
+      `;
+      await sql`
+        insert into subscriptions (
+          id, subscriber_user_id, scope, plan_id, creator_user_id, state,
+          renewal_mode, token_mint, amount_atomic, period_seconds,
+          current_period_starts_at, current_period_ends_at
+        ) values (
+          ${chatMembershipSubscriptionId}, ${buyerUserId!}, 'creator',
+          ${chatMembershipPlanId}, ${seededCreatorUserId}, 'active',
+          'delegated_solana_subscription', ${subscriptionTokenMint}, 100, 2592000,
+          now() - interval '1 day', now() + interval '29 days'
+        )
+      `;
+
+      const membershipWithoutEventAccessChat = await app.inject({
+        method: "POST",
+        url: `/v1/live/rooms/${seededLiveRoomId}/messages`,
+        headers: authenticatedHeaders(`live-chat-membership-without-pass-${runId}`),
+        payload: { body: "Membership must not bypass paid event access" }
+      });
+      expect(
+        membershipWithoutEventAccessChat.statusCode,
+        membershipWithoutEventAccessChat.body
+      ).toBe(403);
+
+      await sql`delete from subscriptions where id = ${chatMembershipSubscriptionId}`;
+      await sql`delete from subscription_plans where id = ${chatMembershipPlanId}`;
+
       const livePassIntentResponse = await app.inject({
         method: "POST",
         url: `/v1/live/rooms/${seededLiveRoomId}/event-access-intents`,
@@ -4367,14 +4609,17 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       }>();
 
       await acceptImmediateCheckout(livePassIntent.id, "live-pass");
+      const validLivePassSolanaSubmission = await createIntegrationPaymentSubmission(
+        livePassIntent.id,
+        "live-pass"
+      );
+      const validLivePassSolanaSignature = validLivePassSolanaSubmission.signature;
 
       const livePassSubmissionResponse = await app.inject({
         method: "POST",
         url: `/v1/payments/intents/${livePassIntent.id}/submissions`,
         headers: authenticatedHeaders(`live-pass-submission-${runId}`),
-        payload: {
-          signature: validLivePassSolanaSignature
-        }
+        payload: validLivePassSolanaSubmission
       });
 
       expect(livePassSubmissionResponse.statusCode, livePassSubmissionResponse.body).toBe(202);
@@ -4578,11 +4823,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         )
       `;
       await acceptImmediateCheckout(remediationIntent.paymentIntent.id, "event-access-remediation");
+      const validRemediationSolanaSubmission = await createIntegrationPaymentSubmission(
+        remediationIntent.paymentIntent.id,
+        "event-access-remediation"
+      );
       const remediationSubmissionResponse = await app.inject({
         method: "POST",
         url: `/v1/payments/intents/${remediationIntent.paymentIntent.id}/submissions`,
         headers: authenticatedHeaders(`event-access-remediation-submission-${runId}`),
-        payload: { signature: validRemediationSolanaSignature }
+        payload: validRemediationSolanaSubmission
       });
       expect(remediationSubmissionResponse.statusCode, remediationSubmissionResponse.body).toBe(202);
 
@@ -4636,6 +4885,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         invalidReservationIntent.paymentIntent.id,
         "event-access-invalid-reservation"
       );
+      const invalidReservationSolanaSubmission = await createIntegrationPaymentSubmission(
+        invalidReservationIntent.paymentIntent.id,
+        "event-access-invalid-reservation"
+      );
+      invalidReservationSolanaSignature = invalidReservationSolanaSubmission.signature;
       const reservationBeforeRows = await sql<{ reserved_until: Date }[]>`
         select reserved_until
         from event_access_purchase_requests
@@ -4645,7 +4899,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         method: "POST",
         url: `/v1/payments/intents/${invalidReservationIntent.paymentIntent.id}/submissions`,
         headers: authenticatedHeaders(`event-access-invalid-submission-${runId}`),
-        payload: { signature: invalidReservationSolanaSignature }
+        payload: invalidReservationSolanaSubmission
       });
       expect(invalidSubmissionResponse.statusCode, invalidSubmissionResponse.body).toBe(202);
       const reservationAfterRows = await sql<{ reserved_until: Date }[]>`
@@ -4694,26 +4948,25 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         replay_window_is_48_hours: true
       });
 
-      const subscriptionPlansResponse = await app.inject({
+      const creatorSubscriptionOfferResponse = await app.inject({
         method: "GET",
-        url: "/v1/subscriptions/plans",
-        headers: authenticatedHeaders(`subscription-plans-${runId}`)
+        url: "/v1/subscriptions/creator-offer",
+        headers: creatorAuthenticatedHeaders(`subscription-creator-offer-${runId}`)
       });
 
-      expect(subscriptionPlansResponse.statusCode, subscriptionPlansResponse.body).toBe(200);
-      expect(subscriptionPlansResponse.json()).toMatchObject({
-        items: expect.arrayContaining([
-          expect.objectContaining({
-            id: seededSubscriptionPlanId,
-            scope: "platform",
-            amountMinor: 19000000,
-            currency: "USDC",
-            periodDays: 30,
-            billingMode: "delegated_solana_subscription",
-            tokenMint: subscriptionTokenMint,
-            tokenProgram: "spl_token"
-          })
-        ])
+      expect(
+        creatorSubscriptionOfferResponse.statusCode,
+        creatorSubscriptionOfferResponse.body
+      ).toBe(200);
+      expect(creatorSubscriptionOfferResponse.json()).toMatchObject({
+        id: seededSubscriptionPlanId,
+        scope: "creator",
+        amountMinor: subscriptionPlanContract.priceMinor,
+        currency: "USDC",
+        periodDays: subscriptionPlanContract.periodDays,
+        billingMode: "delegated_solana_subscription",
+        tokenMint: subscriptionTokenMint,
+        tokenProgram: "spl_token"
       });
 
       const subscriptionIntentResponse = await app.inject({
@@ -4721,14 +4974,18 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         url: "/v1/subscriptions/intents",
         headers: authenticatedHeaders(`subscription-intent-${runId}`),
         payload: {
-          planId: seededSubscriptionPlanId
+          planId: seededSubscriptionPlanId,
+          creatorUserId: seededCreatorUserId,
+          termsVersion: subscriptionPlanContract.termsVersion,
+          withdrawalWaiverVersion: subscriptionPlanContract.withdrawalWaiverVersion,
+          immediateAccessAcknowledged: subscriptionPlanContract.immediateAccessAcknowledged
         }
       });
 
       expect(subscriptionIntentResponse.statusCode, subscriptionIntentResponse.body).toBe(201);
       expect(subscriptionIntentResponse.json()).toMatchObject({
         subscription: {
-          scope: "platform",
+          scope: "creator",
           planId: seededSubscriptionPlanId,
           state: "authorization_pending",
           renewalMode: "delegated_solana_subscription"
@@ -4772,7 +5029,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       expect(subscriptionAuthorizationResponse.statusCode, subscriptionAuthorizationResponse.body).toBe(202);
       expect(subscriptionAuthorizationResponse.json()).toMatchObject({
         id: subscriptionIntent.subscription.id,
-        scope: "platform",
+        scope: "creator",
         planId: seededSubscriptionPlanId,
         state: "renewal_pending",
         renewalMode: "delegated_solana_subscription",
@@ -4789,8 +5046,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           collectorAddress: subscriptionCollectorWallet,
           tokenMint: subscriptionTokenMint,
           tokenProgram: "spl_token",
-          amountMinor: 19000000,
-          periodDays: 30
+          amountMinor: subscriptionPlanContract.priceMinor,
+          periodDays: subscriptionPlanContract.periodDays
         })
       ]);
 
@@ -4804,11 +5061,19 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             async reconcile() {
               return { state: "not_found" };
             },
-            async collect(input) {
+            async collect(input, controls) {
               expect(input.subscriptionId).toBe(subscriptionIntent.subscription.id);
+              const collectionSignature = deterministicBase58Signature(170);
+              expect(await controls.authorize()).toBe(true);
+              expect(await controls.persist({
+                signature: collectionSignature,
+                transactionBase64: Buffer.from("integration-initial-collection").toString("base64"),
+                blockhash: randomBase58Address(),
+                lastValidBlockHeight: 1
+              })).toBe(true);
               return {
                 state: "confirmed",
-                collectionSignature: deterministicBase58Signature(170)
+                collectionSignature
               };
             }
           }
@@ -4818,7 +5083,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           leased: 1,
           confirmed: 1,
           failed: 0,
-          revoked: 0
+          revoked: 0,
+          reconciling: 0,
+          cancelled: 0
         });
       } finally {
         await initialCollectionRepository.close?.();
@@ -4915,12 +5182,15 @@ describeIntegration("authenticated API happy path against Postgres", () => {
             async reconcile() {
               return { state: "not_found" };
             },
-            async collect(input) {
+            async collect(input, controls) {
               expect(input).toEqual(
                 expect.objectContaining({
                   subscriptionId: subscriptionIntent.subscription.id,
                   planId: seededSubscriptionPlanId,
-                  amountMinor: 19000000n,
+                  amountMinor: BigInt(subscriptionPlanContract.priceMinor),
+                  amountAtomic: BigInt(subscriptionPlanContract.amountAtomic),
+                  creatorAmountAtomic: BigInt(subscriptionPlanContract.creatorAmountAtomic),
+                  platformAmountAtomic: BigInt(subscriptionPlanContract.platformAmountAtomic),
                   currency: "USDC",
                   authorityAddress: subscriptionAuthorityAddress,
                   delegationAddress: subscriptionDelegationAddress,
@@ -4931,9 +5201,17 @@ describeIntegration("authenticated API happy path against Postgres", () => {
                 })
               );
 
+              const collectionSignature = deterministicBase58Signature(171);
+              expect(await controls.authorize()).toBe(true);
+              expect(await controls.persist({
+                signature: collectionSignature,
+                transactionBase64: Buffer.from("integration-renewal-collection").toString("base64"),
+                blockhash: randomBase58Address(),
+                lastValidBlockHeight: 2
+              })).toBe(true);
               return {
                 state: "confirmed",
-                collectionSignature: deterministicBase58Signature(171)
+                collectionSignature
               };
             }
           }
@@ -4944,7 +5222,9 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           leased: 1,
           confirmed: 1,
           failed: 0,
-          revoked: 0
+          revoked: 0,
+          reconciling: 0,
+          cancelled: 0
         });
       } finally {
         await collectionRepository.close?.();
@@ -4992,6 +5272,141 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         confirmed_event_count: "2",
         active_subscription_count: "1"
       });
+
+      const recurringFinanceRows = await sql<{
+        accepted_price_minor: string;
+        amount_atomic: string;
+        creator_amount_atomic: string;
+        platform_fee_amount_atomic: string;
+        allocation_amount_atomic: string;
+        receipt_id: string;
+        receipt_gross_amount: string;
+        receipt_line_amount: string;
+        wallet_amount: string;
+        ledger_gross_amount: string;
+        ledger_platform_fee: string;
+        ledger_creator_net: string | null;
+        ledger_confirmation_version: string;
+        ledger_accepted_price_minor: string;
+        ledger_amount_atomic: string;
+        ledger_creator_amount_atomic: string;
+        ledger_platform_fee_amount_atomic: string;
+        outbox_price_minor: string;
+        outbox_amount_atomic: string;
+        receipt_count: string;
+        wallet_count: string;
+        ledger_count: string;
+        outbox_count: string;
+      }[]>`
+        select
+          collection.amount_minor::text as accepted_price_minor,
+          collection.amount_atomic::text as amount_atomic,
+          collection.creator_amount_atomic::text as creator_amount_atomic,
+          collection.platform_fee_amount_atomic::text as platform_fee_amount_atomic,
+          collection.allocation_amount_atomic::text as allocation_amount_atomic,
+          receipt.id::text as receipt_id,
+          receipt.gross_amount_minor::text as receipt_gross_amount,
+          line.amount_minor::text as receipt_line_amount,
+          wallet.amount_minor::text as wallet_amount,
+          ledger.gross_amount_minor::text as ledger_gross_amount,
+          ledger.platform_fee_minor::text as ledger_platform_fee,
+          ledger.creator_net_amount_minor::text as ledger_creator_net,
+          ledger.metadata ->> 'confirmationVersion' as ledger_confirmation_version,
+          ledger.metadata ->> 'acceptedPriceMinor' as ledger_accepted_price_minor,
+          ledger.metadata ->> 'amountAtomic' as ledger_amount_atomic,
+          ledger.metadata ->> 'creatorAmountAtomic' as ledger_creator_amount_atomic,
+          ledger.metadata ->> 'platformFeeAmountAtomic' as ledger_platform_fee_amount_atomic,
+          outbox.amount_minor::text as outbox_price_minor,
+          outbox.amount_atomic::text as outbox_amount_atomic,
+          (select count(*)::text from receipts item where item.subscription_collection_id = collection.id) as receipt_count,
+          (select count(*)::text from wallet_transaction_records item where item.subscription_collection_id = collection.id) as wallet_count,
+          (select count(*)::text from compliance_ledger_entries item where item.subscription_collection_id = collection.id) as ledger_count,
+          (select count(*)::text from subscription_finance_outbox_events item where item.subscription_collection_id = collection.id) as outbox_count
+        from subscription_collections collection
+        join receipts receipt on receipt.subscription_collection_id = collection.id
+        join receipt_lines line
+          on line.receipt_id = receipt.id
+         and line.line_type = 'purchase_total'
+        join wallet_transaction_records wallet
+          on wallet.subscription_collection_id = collection.id
+        join compliance_ledger_entries ledger
+          on ledger.subscription_collection_id = collection.id
+        join subscription_finance_outbox_events outbox
+          on outbox.subscription_collection_id = collection.id
+        where collection.subscription_id = ${subscriptionIntent.subscription.id}
+          and collection.collection_signature = ${deterministicBase58Signature(171)}
+      `;
+
+      expect(recurringFinanceRows).toEqual([{
+        accepted_price_minor: "1500",
+        amount_atomic: "15000000",
+        creator_amount_atomic: "12750000",
+        platform_fee_amount_atomic: "2250000",
+        allocation_amount_atomic: "0",
+        receipt_id: expect.any(String),
+        receipt_gross_amount: "15000000",
+        receipt_line_amount: "15000000",
+        wallet_amount: "15000000",
+        ledger_gross_amount: "15000000",
+        ledger_platform_fee: "2250000",
+        ledger_creator_net: "12750000",
+        ledger_confirmation_version: "subscription-collection-confirmation-v2",
+        ledger_accepted_price_minor: "1500",
+        ledger_amount_atomic: "15000000",
+        ledger_creator_amount_atomic: "12750000",
+        ledger_platform_fee_amount_atomic: "2250000",
+        outbox_price_minor: "1500",
+        outbox_amount_atomic: "15000000",
+        receipt_count: "1",
+        wallet_count: "1",
+        ledger_count: "1",
+        outbox_count: "1"
+      }]);
+
+      const recurringWalletActivityResponse = await app.inject({
+        method: "GET",
+        url: "/v1/activity/wallet-transactions",
+        headers: authenticatedHeaders(`subscription-wallet-activity-${runId}`)
+      });
+      expect(recurringWalletActivityResponse.statusCode, recurringWalletActivityResponse.body).toBe(200);
+      expect(recurringWalletActivityResponse.json<{ items: Array<{
+        amountMinor: number;
+        currency: string;
+        signature: string | null;
+      }> }>().items).toContainEqual(expect.objectContaining({
+        amountMinor: 15_000_000,
+        currency: "USDC",
+        signature: deterministicBase58Signature(171)
+      }));
+
+      const financeAdminRepository = createPostgresAdminRepository(sql);
+      const recurringReceipt = (await financeAdminRepository.listReceipts({})).items.find(
+        (item) => item.id === recurringFinanceRows[0]?.receipt_id
+      );
+      expect(recurringReceipt).toMatchObject({
+        grossAmountMinor: 15_000_000,
+        currency: "USDC",
+        productType: "membership"
+      });
+
+      const replayCollectionRepository = createPostgresSubscriptionCollectionRepository(databaseUrl);
+      try {
+        const collectAgain = vi.fn();
+        await expect(processDueSubscriptionCollections({
+          repository: replayCollectionRepository,
+          now: new Date(),
+          limit: 5,
+          provider: {
+            async reconcile() {
+              return { state: "not_found" };
+            },
+            collect: collectAgain
+          }
+        })).resolves.toMatchObject({ leased: 0, confirmed: 0 });
+        expect(collectAgain).not.toHaveBeenCalled();
+      } finally {
+        await replayCollectionRepository.close?.();
+      }
 
       await seedProviderReplayRequest(sql, {
         providerEventId: seededProviderEventId,
@@ -5162,24 +5577,38 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         following_count: "0"
       });
     } finally {
-      await cleanupRun(sql, {
-        buyerHandle,
-        creatorHandle,
-        buyerSupabaseUserId,
-        creatorSupabaseUserId,
-        providerReference,
-        seededContentId,
-        seededFreeContentId,
-        seededEventId,
-        seededConversationId,
-        seededLiveRoomId,
-        seededSubscriptionPlanId,
-        seededProviderEventId,
-        seededProviderReplayRequestId,
-        seededOrganizationId
-      });
-      await app.close();
-      vi.unstubAllEnvs();
+      try {
+        await cleanupRun(sql, {
+          buyerHandle,
+          creatorHandle,
+          buyerSupabaseUserId,
+          creatorSupabaseUserId,
+          providerReference,
+          seededContentId,
+          seededFreeContentId,
+          seededEventId,
+          seededConversationId,
+          seededLiveRoomId,
+          seededSubscriptionPlanId,
+          seededProviderEventId,
+          seededProviderReplayRequestId,
+          seededOrganizationId
+        });
+      } finally {
+        try {
+          await journeyLock`
+            select pg_advisory_unlock(hashtextextended('wevid-integration:authenticated-happy-path', 0))
+          `;
+        } finally {
+          journeyLock.release();
+          try {
+            await app.close();
+          } finally {
+            paymentLatestBlockhashSpy.mockRestore();
+            vi.unstubAllEnvs();
+          }
+        }
+      }
     }
   }, 180_000);
 
@@ -5213,11 +5642,11 @@ describeIntegration("authenticated API happy path against Postgres", () => {
       await sql`
         insert into app_sessions (
           id, user_id, wallet_id, provider_identity_id, token_hash, expires_at,
-          authentication_method, authenticated_at
+          authentication_method, authenticated_at, provider_session_id
         )
         values (
           ${sessionId}, ${userId}, null, ${providerIdentityId}, ${hashToken(sessionToken)},
-          now() + interval '10 minutes', 'supabase_recovery', now()
+          now() + interval '10 minutes', 'supabase_recovery', now(), ${randomUUID()}
         )
       `;
       await sql`
@@ -5234,6 +5663,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         repository.exchangeRecoveryIdentity({
           provider: "supabase",
           providerSubject,
+          providerSessionId: randomUUID(),
+          providerAuthenticatedAt: new Date(),
           linkIntentToken,
           sessionExpiresAt: new Date(Date.now() + 10 * 60 * 1000)
         })
@@ -5309,6 +5740,8 @@ describeIntegration("authenticated API happy path against Postgres", () => {
         repository.exchangeRecoveryIdentity({
           provider: "supabase",
           providerSubject: randomUUID(),
+          providerSessionId: randomUUID(),
+          providerAuthenticatedAt: new Date(),
           linkIntentToken,
           sessionExpiresAt: new Date(Date.now() + 10 * 60 * 1000)
         })
@@ -5451,7 +5884,7 @@ describeIntegration("authenticated API happy path against Postgres", () => {
           and subject_id = ${userId}
           and action = 'auth.sessions_revoked_all'
       `;
-      expect(audits[0]?.count).toBe("2");
+      expect(audits[0]?.count).toBe("3");
     } finally {
       if (userId) {
         await sql`delete from audit_events where actor_user_id = ${userId}`;
@@ -5481,39 +5914,10 @@ class IntegrationJourneyRateLimitStore {
   }
 }
 
-function integrationDatabaseUrl(): string {
-  const databaseUrl =
-    process.env.API_INTEGRATION_DATABASE_URL ??
-    process.env.TEST_DATABASE_URL ??
-    process.env.DATABASE_URL;
-
-  if (!databaseUrl) {
-    throw new Error(
-      "Set API_INTEGRATION_DATABASE_URL, TEST_DATABASE_URL, or DATABASE_URL for real API integration tests."
-    );
-  }
-
-  return databaseUrl;
-}
-
-function assertIntegrationDatabaseIsAllowed(databaseUrl: string): void {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("Refusing to run real API integration tests with NODE_ENV=production.");
-  }
-
-  const host = new URL(databaseUrl).hostname;
-  const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-
-  if (!isLocal && process.env.VEEL_ALLOW_REMOTE_API_INTEGRATION_TESTS !== "1") {
-    throw new Error(
-      "Refusing to run real API integration tests against a remote database unless VEEL_ALLOW_REMOTE_API_INTEGRATION_TESTS=1 is set."
-    );
-  }
-}
-
 function authenticatedHeaders(idempotencyKey?: string): Record<string, string> {
   return {
     authorization: `Bearer ${authToken}`,
+    "x-wevid-expected-actor-id": buyerSupabaseUserId,
     ...(idempotencyKey ? { "idempotency-key": idempotencyKey } : {})
   };
 }
@@ -5521,6 +5925,7 @@ function authenticatedHeaders(idempotencyKey?: string): Record<string, string> {
 function creatorAuthenticatedHeaders(idempotencyKey: string): Record<string, string> {
   return {
     authorization: `Bearer ${creatorAuthToken}`,
+    "x-wevid-expected-actor-id": creatorSupabaseUserId,
     "idempotency-key": idempotencyKey
   };
 }
@@ -5551,10 +5956,17 @@ const integrationAuthVerifier: ApplicationSessionVerifier = {
 
 function createIntegrationAgeWaterfall(providerReference: string): AgeProviderWaterfall {
   return {
-    async createSession() {
+    async createSession(input) {
+      await input.onProviderSelected?.({
+        provider: "sumsub",
+        method: "gov_id_selfie",
+        assuranceLevel: "documentary",
+        reusable: false
+      });
       return {
         provider: "sumsub",
         providerReference,
+        providerExternalUserId: providerReference,
         launchUrl: `https://age.example.test/sumsub/${providerReference}`,
         expiresAt: new Date(Date.now() + 15 * 60 * 1000),
         jurisdiction: "US",
@@ -5566,6 +5978,14 @@ function createIntegrationAgeWaterfall(providerReference: string): AgeProviderWa
 
 function sumsubDigest(rawPayload: string): string {
   return createHmac("sha256", sumsubWebhookSecret).update(rawPayload).digest("hex");
+}
+
+function randomBase58Address(): string {
+  return bs58.encode(randomBytes(32));
+}
+
+function randomBase58Signature(): string {
+  return bs58.encode(randomBytes(64));
 }
 
 function deterministicBase58Signature(seed: number): string {
@@ -5660,7 +6080,8 @@ async function seedCreatorPaidContent(
       support_enabled,
       content_unlocks_enabled,
       live_passes_enabled,
-      paid_messages_enabled
+      paid_messages_enabled,
+      subscriptions_enabled
     )
     values (
       ${input.creatorUserId},
@@ -5671,6 +6092,7 @@ async function seedCreatorPaidContent(
       ${recipientWalletId},
       'wevid-creator-earnings-v1',
       now(),
+      true,
       true,
       true,
       true,
@@ -5713,7 +6135,8 @@ async function seedCreatorPaidContent(
       poster_url,
       playback_url,
       provider_playable,
-      ready_at
+      ready_at,
+      duration_ms
     )
     values (
       ${input.mediaAssetId},
@@ -5724,7 +6147,8 @@ async function seedCreatorPaidContent(
       'https://media.example.test/integration-poster.jpg',
       ${`https://video.example.test/${input.mediaAssetId}/playlist.m3u8`},
       true,
-      now()
+      now(),
+      90000
     )
   `;
   await approveSeededContent(sql, {
@@ -5836,7 +6260,8 @@ async function seedCreatorFreeVideo(
       poster_url,
       playback_url,
       provider_playable,
-      ready_at
+      ready_at,
+      duration_ms
     )
     values (
       ${input.mediaAssetId},
@@ -5847,7 +6272,8 @@ async function seedCreatorFreeVideo(
       'https://media.example.test/integration-free-poster.jpg',
       ${`https://video.example.test/${input.mediaAssetId}/playlist.m3u8`},
       true,
-      now()
+      now(),
+      90000
     )
   `;
   await approveSeededContent(sql, {
@@ -6305,18 +6731,21 @@ async function seedCreatorLiveRoom(
   `;
 }
 
-async function seedPlatformSubscriptionPlan(
+async function seedCreatorSubscriptionPlan(
   sql: PostgresSql,
   input: {
     planId: string;
+    creatorUserId: string;
   }
 ): Promise<void> {
   await sql`
     insert into subscription_plans (
       id,
       scope,
+      creator_user_id,
       label,
       amount_minor,
+      asset_decimals,
       currency,
       period_days,
       billing_mode,
@@ -6330,16 +6759,20 @@ async function seedPlatformSubscriptionPlan(
       merchant_wallet,
       amount_atomic,
       period_seconds,
+      creator_amount_atomic,
       platform_fee_amount_atomic,
+      allocation_amount_atomic,
       state
     )
     values (
       ${input.planId},
-      'platform',
-      'Integration Platform',
-      19000000,
+      'creator',
+      ${input.creatorUserId},
+      'Integration Creator',
+      ${subscriptionPlanContract.priceMinor},
+      ${subscriptionPlanContract.assetDecimals},
       'USDC',
-      30,
+      ${subscriptionPlanContract.periodDays},
       'delegated_solana_subscription',
       'launch_approved',
       ${subscriptionTokenMint},
@@ -6348,10 +6781,12 @@ async function seedPlatformSubscriptionPlan(
       ${subscriptionProgramId},
       ${subscriptionPlanPda},
       ${input.planId},
-      ${subscriptionMerchantWallet},
-      19000000,
-      2592000,
-      19000000,
+      ${creatorSettlementWallet},
+      ${subscriptionPlanContract.amountAtomic},
+      ${subscriptionPlanContract.periodSeconds},
+      ${subscriptionPlanContract.creatorAmountAtomic},
+      ${subscriptionPlanContract.platformAmountAtomic},
+      0,
       'active'
     )
   `;
@@ -6677,9 +7112,77 @@ async function cleanupRun(
           where subscription_id in ${tx(subscriptionIds)}
         `;
         await tx`
+          delete from payment_confirmation_deliveries
+          where receipt_id in (
+            select receipt.id
+            from receipts receipt
+            join subscription_collections collection
+              on collection.id = receipt.subscription_collection_id
+            where collection.subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from vat_invoices
+          where receipt_id in (
+            select receipt.id
+            from receipts receipt
+            join subscription_collections collection
+              on collection.id = receipt.subscription_collection_id
+            where collection.subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from receipt_lines
+          where receipt_id in (
+            select receipt.id
+            from receipts receipt
+            join subscription_collections collection
+              on collection.id = receipt.subscription_collection_id
+            where collection.subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from compliance_ledger_entries
+          where subscription_collection_id in (
+            select id from subscription_collections
+            where subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from wallet_transaction_records
+          where subscription_collection_id in (
+            select id from subscription_collections
+            where subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from subscription_finance_outbox_events
+          where subscription_collection_id in (
+            select id from subscription_collections
+            where subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
+          delete from receipts
+          where subscription_collection_id in (
+            select id from subscription_collections
+            where subscription_id in ${tx(subscriptionIds)}
+          )
+        `;
+        await tx`
           delete from subscription_collections
           where subscription_id in ${tx(subscriptionIds)}
         `;
+        await tx`
+          delete from subscription_action_receipts
+          where subscription_id in ${tx(subscriptionIds)}
+        `;
+        await tx`set local session_replication_role = replica`;
+        await tx`
+          delete from subscription_billing_acceptances
+          where subscription_id in ${tx(subscriptionIds)}
+        `;
+        await tx`set local session_replication_role = origin`;
         await tx`
           delete from subscription_authorization_intents
           where subscription_id in ${tx(subscriptionIds)}
@@ -6939,6 +7442,7 @@ async function cleanupRun(
     await tx`
       delete from subscription_plans
       where id = ${input.seededSubscriptionPlanId}
+         ${userIds.length > 0 ? tx`or creator_user_id in ${tx(userIds)}` : tx``}
     `;
 
     if (eventIds.length > 0) {
@@ -7123,6 +7627,14 @@ async function cleanupRun(
       `;
     }
 
+    if (userIds.length > 0) {
+      await tx`
+        delete from performer_subjects
+        where owner_user_id in ${tx(userIds)}
+           or linked_user_id in ${tx(userIds)}
+      `;
+    }
+
     if (verificationSessionIds.length > 0 || verificationRecordIds.length > 0) {
       const verificationSubjectIds = [...verificationSessionIds, ...verificationRecordIds];
       await tx`
@@ -7137,8 +7649,19 @@ async function cleanupRun(
       `;
       if (verificationRecordIds.length > 0) {
         await tx`
-          delete from verification_records
-          where id in ${tx(verificationRecordIds)}
+          with recursive cleanup_records as (
+            select id
+            from verification_records
+            where id in ${tx(verificationRecordIds)}
+            union
+            select derived.id
+            from verification_records derived
+            join cleanup_records source
+              on source.id = derived.derived_from_record_id
+          )
+          delete from verification_records record
+          using cleanup_records cleanup
+          where record.id = cleanup.id
         `;
       }
       if (verificationSessionIds.length > 0) {
@@ -7167,13 +7690,6 @@ async function cleanupRun(
         and webhook_type = 'age-verification'
         and idempotency_key = ${`sumsub-event-${input.providerReference.replace("sumsub-", "")}`}
     `;
-    if (userIds.length > 0) {
-      await tx`
-        delete from performer_subjects
-        where owner_user_id in ${tx(userIds)}
-           or linked_user_id in ${tx(userIds)}
-      `;
-    }
     await tx`
       delete from profiles
       where handle in (${input.buyerHandle}, ${input.creatorHandle})
@@ -7181,6 +7697,15 @@ async function cleanupRun(
     `;
 
     if (userIds.length > 0) {
+      await tx`
+        update payment_intents
+        set commercial_policy_override_id = null
+        where commercial_policy_override_id in (
+          select id
+          from payment_commercial_policy_overrides
+          where updated_by_user_id in ${tx(userIds)}
+        )
+      `;
       await tx`
         delete from payment_commercial_policy_overrides
         where updated_by_user_id in ${tx(userIds)}
@@ -7194,6 +7719,29 @@ async function cleanupRun(
         where requester_user_id in ${tx(userIds)}
       `;
       await tx`
+        delete from content_export_download_grants
+        where requester_user_id in ${tx(userIds)}
+           or job_id in (
+             select id from content_export_jobs where requester_user_id in ${tx(userIds)}
+           )
+      `;
+      await tx`
+        delete from content_export_job_items
+        where job_id in (
+          select id from content_export_jobs where requester_user_id in ${tx(userIds)}
+        )
+      `;
+      await tx`
+        delete from content_export_job_contents
+        where job_id in (
+          select id from content_export_jobs where requester_user_id in ${tx(userIds)}
+        )
+      `;
+      await tx`
+        delete from content_export_jobs
+        where requester_user_id in ${tx(userIds)}
+      `;
+      await tx`
         delete from data_requests
         where requester_user_id in ${tx(userIds)}
       `;
@@ -7204,6 +7752,10 @@ async function cleanupRun(
       `;
       await tx`
         delete from engagement_action_receipts
+        where actor_user_id in ${tx(userIds)}
+      `;
+      await tx`
+        delete from mutation_command_receipts
         where actor_user_id in ${tx(userIds)}
       `;
       await tx`

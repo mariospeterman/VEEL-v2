@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { readIdempotentMutationRequest } from "../../shared/idempotency.js";
+import { contractRouteSchema } from "../../shared/openapi-route-schema.js";
 import { unauthorizedResponse, verifyRequestSession } from "../auth/http-auth.js";
 import type { AgeRepository } from "../age/types.js";
 import type { SessionRepository, ApplicationSessionVerifier } from "../session/types.js";
@@ -17,7 +18,7 @@ export async function registerRefundRoutes(
   app: FastifyInstance,
   options: RegisterRefundRoutesOptions
 ): Promise<void> {
-  app.get("/v1/refunds/requests", async (request, reply) => {
+  app.get("/v1/refunds/requests", { schema: contractRouteSchema("listRefundDisputeRequests") }, async (request, reply) => {
     const access = await verifyRefundAccess(request, options);
     if (!access.ok) {
       return reply.code(access.statusCode).send(access.body);
@@ -42,17 +43,13 @@ export async function registerRefundRoutes(
     }
   });
 
-  app.post("/v1/refunds/requests", async (request, reply) => {
+  app.post("/v1/refunds/requests", { schema: contractRouteSchema("createRefundDisputeRequest") }, async (request, reply) => {
     const access = await verifyRefundAccess(request, options);
     if (!access.ok) {
       return reply.code(access.statusCode).send(access.body);
     }
 
-    const body = request.body as Partial<CreateRefundDisputeRequest> | undefined;
-    const validationError = validateCreateRefundDisputeRequest(body);
-    if (validationError) {
-      return reply.code(400).send(validationResponse(validationError));
-    }
+    const body = request.body as CreateRefundDisputeRequest;
 
     const mutation = readIdempotentMutationRequest(request, body);
     if ("code" in mutation) {
@@ -64,7 +61,7 @@ export async function registerRefundRoutes(
         supabaseUserId: access.supabaseUserId,
         idempotencyKey: mutation.idempotencyKey,
         requestHash: mutation.requestHash,
-        body: body as CreateRefundDisputeRequest
+        body
       });
 
       if (!requestRecord) {
@@ -142,43 +139,5 @@ async function verifyRefundAccess(
   return {
     ok: true,
     supabaseUserId: verifiedSession.supabaseUserId
-  };
-}
-
-function validateCreateRefundDisputeRequest(
-  body: Partial<CreateRefundDisputeRequest> | undefined
-): string | null {
-  if (!body || typeof body !== "object") {
-    return "Request body is required";
-  }
-
-  if (typeof body.paymentIntentId !== "string" || body.paymentIntentId.length === 0) {
-    return "paymentIntentId is required";
-  }
-
-  if (body.kind !== "refund_request" && body.kind !== "dispute" && body.kind !== "access_issue") {
-    return "kind is invalid";
-  }
-
-  if (
-    body.requestedAction !== "review_only" &&
-    body.requestedAction !== "creator_refund" &&
-    body.requestedAction !== "revoke_access" &&
-    body.requestedAction !== "replacement_access"
-  ) {
-    return "requestedAction is invalid";
-  }
-
-  if (!body.reason || body.reason.trim().length < 10 || body.reason.length > 1000) {
-    return "reason must be 10-1000 characters";
-  }
-
-  return null;
-}
-
-function validationResponse(message: string) {
-  return {
-    code: "validation_failed",
-    message
   };
 }

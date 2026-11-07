@@ -1,0 +1,113 @@
+{
+  "repository": "mariospeterman/VEEL-v2",
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "path": "packages/contracts/openapi.yaml",
+  "absolutePath": "/workspace/scratch/0635fbdaf32f/wevid-audit/packages/contracts/openapi.yaml",
+  "fileBytes": 364473,
+  "fileLines": 7331,
+  "fileSha256": "04d50c69cf442e172cd1cd2b298d03ac5f96e05e1e5d9b81a3b258708ddddcf0",
+  "assignedRange": {
+    "startLine": 3701,
+    "endLine": 7331
+  },
+  "readLines": 3631,
+  "readBytes": 192623,
+  "ranges": [
+    {
+      "startLine": 3701,
+      "endLine": 3900,
+      "lineCount": 200,
+      "bytes": 30706,
+      "sha256": "4cb2831acc565ee131fbf45b9e9a0fc1c05b5f358e41b23db0863fad9c2b2566",
+      "fullRead": true,
+      "truncated": false
+    },
+    {
+      "startLine": 3901,
+      "endLine": 4300,
+      "lineCount": 400,
+      "bytes": 18988,
+      "sha256": "678f11509d5a09fc1aded645263ae5cc63ff932d11dc9a8831a5b0fc3dc696e7",
+      "fullRead": true,
+      "truncated": false
+    },
+    {
+      "startLine": 4301,
+      "endLine": 4700,
+      "lineCount": 400,
+      "bytes": 17258,
+      "sha256": "6b72f173d6dfd104a102d48221c410fc4ce17e33e78c63833bea0c3ec58f07b7",
+      "fullRead": true,
+      "truncated": false
+    },
+    {
+      "startLine": 4701,
+      "endLine": 5100,
+      "lineCount": 400,
+      "bytes": 19845,
+      "sha256": "683f95c78d4912885467968c0dfe2eaf3b3d937dbdc9883d8f79c028e034feef",
+      "fullRead": true,
+      "truncated": false
+    },
+    {
+      "startLine": 5101,
+      "endLine": 5500,
+      "lineCount": 400,
+      "bytes": 17715,
+      "sha256": "8eb69c1ad79aca725c2e18d334399995e471cd87927f70a8a0ff1fe8ef0b9038",
+      "fullRead": true,
+      "truncated": false
+    },
+    {
+      "startLine": 5501,
+      "endLine": 5900,
+      "lineCount": 400,
+      "bytes": 20212,
+      "sha256": "8ae269dda9a17906964b02edb0ca203e2ef1de0740e70d6d621f88019cd1ee53",
+      "fullRead": true,
+      "truncated": false
+    },
+    {
+      "startLine": 5901,
+      "endLine": 6300,
+      "lineCount": 400,
+      "bytes": 18031,
+      "sha256": "79009f0b09ab270b68285b4407317161adf61c10afadb238dc1de7b779474236",
+      "fullRead": true,
+      "truncated": false
+    },
+    {
+      "startLine": 6301,
+      "endLine": 6700,
+      "lineCount": 400,
+      "bytes": 16012,
+      "sha256": "df9a892228c7503d293b5a71a3fbacacef19aa0860a7fca0e9e2278db8bf9b38",
+      "fullRead": true,
+      "truncated": false
+    },
+    {
+      "startLine": 6701,
+      "endLine": 7100,
+      "lineCount": 400,
+      "bytes": 21884,
+      "sha256": "ec98bec432b733d35b8a6d02269413a54b9f851a8008b362a3971ae125706b1d",
+      "fullRead": true,
+      "truncated": false
+    },
+    {
+      "startLine": 7101,
+      "endLine": 7331,
+      "lineCount": 231,
+      "bytes": 11972,
+      "sha256": "d86270e70b438839aeb785ba327f825852da3b28f154c6a58f7d816eed42717c",
+      "fullRead": true,
+      "truncated": false
+    }
+  ],
+  "notes": [
+    "AGENTS.md read in full.",
+    "Initial combined read3701-4100truncated at orchestration output;3701-3900 and3901-4300 reread untruncated and authoritative for coverage.",
+    "All listed source ranges read semantically in full. Runtime crossreferences targeted; no fullread claim for crossreference files.",
+    "Generated TypeScript file excluded as parent validated deterministic byteidentity."
+  ]
+}

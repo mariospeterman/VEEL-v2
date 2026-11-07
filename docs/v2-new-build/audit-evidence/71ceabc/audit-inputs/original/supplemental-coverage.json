@@ -1,0 +1,107 @@
+{
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "reviewer": "auth_security_audit",
+  "as_of": "2026-11-04",
+  "method": "All requested test/script source read fully in bounded chunks; truncated MCP fixture range reread at lines1100-1240. Isolated actual proof-script execution without provider/network access.",
+  "full_text_review": [
+    {
+      "path": "apps/api/test/app-dependencies.test.ts",
+      "bytes": 1978,
+      "lines": 57,
+      "sha256": "16876f438be001726c39ae5b0fe74b655d222e426e1d084f291b388bb5f35a08"
+    },
+    {
+      "path": "apps/api/test/health.test.ts",
+      "bytes": 3073,
+      "lines": 105,
+      "sha256": "1449ad1341eb9358d207d1e7d291790e01689f7a81e6b8f68c174efb0d36faff"
+    },
+    {
+      "path": "apps/api/test/idempotency.test.ts",
+      "bytes": 2638,
+      "lines": 66,
+      "sha256": "36eebced0f0f17145dcad37a50be77e003ca77d3cb4a1c438e22607ac92b9221"
+    },
+    {
+      "path": "apps/api/test/mcp-tools.test.ts",
+      "bytes": 3540,
+      "lines": 99,
+      "sha256": "e9aa4f6f10a3f8e67c42fdfd690d49cf5e040b98cdeec63741a65e01ec3bba0a"
+    },
+    {
+      "path": "apps/api/test/mcp.test.ts",
+      "bytes": 63738,
+      "lines": 1701,
+      "sha256": "cbd477d78be8089352265aa7e112225de449bb721fb23bc8a1b90a2b1f9d9389"
+    },
+    {
+      "path": "apps/api/test/postgres.test.ts",
+      "bytes": 1313,
+      "lines": 34,
+      "sha256": "d5e483ee5dc868a846b0a32b154e714e1272a2ddeab112bb783fb2a3e7b8dcde"
+    },
+    {
+      "path": "apps/api/test/profile-dashboard-repository.test.ts",
+      "bytes": 1102,
+      "lines": 41,
+      "sha256": "7248a29054e145addb077eb61f45770569430c9416f74991ac69bcabe867b6c8"
+    },
+    {
+      "path": "apps/api/test/provider-event-replay-runtime.test.ts",
+      "bytes": 13697,
+      "lines": 361,
+      "sha256": "3d3a54a1f4e076273f9541fd6469e028e7ef3d26a53d18f2247bc58a2ca62bf2"
+    },
+    {
+      "path": "apps/api/test/telemetry-routes.test.ts",
+      "bytes": 1271,
+      "lines": 33,
+      "sha256": "091dbe39677c6bba25b2ceefd241e2b1cbfbcd72409a9331ebecb66e5b3e73a7"
+    },
+    {
+      "path": "apps/api/scripts/prove-enterprise-managed-creators.mjs",
+      "bytes": 3456,
+      "lines": 75,
+      "sha256": "1b2a0e64ae2b8504cb3f3249568c9a44636ae0d41c7ebbeaeb1a5738c4b5ccc9"
+    }
+  ],
+  "additional_full_text_review": [
+    {
+      "path": "apps/api/src/modules/telemetry/telemetry-routes.ts",
+      "bytes": 2087,
+      "lines": 61,
+      "sha256": "d25b1246d6001aa413783642ca7f726cd014de49c9860811d14b0840ff0231f0"
+    }
+  ],
+  "partial_cross_file_tracing": [
+    {
+      "path": "docs/v2-new-build/enterprise-managed-creators.md",
+      "lines_read": "44-80"
+    },
+    {
+      "path": "apps/api/src/modules/performer/performer-routes.ts",
+      "lines_read": "95-165"
+    },
+    {
+      "path": "apps/api/src/modules/verification/verification-webhook-adapter.ts",
+      "lines_read": "237-260"
+    },
+    {
+      "path": "apps/api/src/modules/verification/verification-repository.ts",
+      "lines_read": "339-405,468-512",
+      "note": "already full-read in auth-coverage.json"
+    }
+  ],
+  "assigned_file_count": 10,
+  "assigned_bytes": 95806,
+  "assigned_lines": 2572,
+  "runtime_probes": [
+    {
+      "artifact": "supplemental-enterprise-proof.json",
+      "command": "Isolated AsyncFunction executes exact proof script with synthetic non-network fetch and process env proxy",
+      "result": "PROVIDER_PROVEN despite nonexistent evidence IDs; each ID accessed only once by nonempty input check"
+    }
+  ],
+  "test_execution_note": "Did not rerun repository unit suite: root owns exact toolchain baseline. Isolated script source probe ran host Node24.22.1, not pinned Node22.",
+  "source_mutation": "None"
+}

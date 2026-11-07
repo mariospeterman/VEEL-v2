@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: documentation
-Last updated: 2026-08-15
-Source of truth: yes
+Last updated: 2026-11-04
+Source of truth: yes, only for visual tokens and implemented shared primitives
 
 Owns:
 - design system decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, the immutable migration chain for database shape, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -37,17 +37,19 @@ This document defines the locked v2 web design direction.
 Repeated controls should use:
 
 - `Button`, `ButtonLink`, and `buttonClassName`
-- `Card`, `PageHeader`, `EmptyState`, `StatusPill`, `Fact`, and `MetricCard`
-- `Sheet`
-- `Input`, `Textarea`, `Select`
-- `Checkbox`
-- `SegmentedControl` / `SegmentedButton`
+- `IconButton`, `Card`, `PageHeader`, `EmptyState`, `StatusPill`, `Fact`, and `MetricCard`
+- `Avatar`, `Field`, `Input`, `Textarea`, `Tabs`, and `MediaTile`
 
-Native controls are allowed when the browser behavior is the product behavior, currently file inputs and media-editor range sliders.
+Native controls remain valid where no shared primitive exists or browser behavior is the product
+behavior. Sheet, Select, Checkbox, segmented-control, and checkout primitives are proposals until
+they are exported from `packages/ui` and adopted by real consumers.
 
 Product CSS should own layout, media-stage composition, route-specific density, and specialized capture/playback affordances. It should not reintroduce generic button, sheet, segmented-control, or form control systems.
 
-`CheckoutSheet` is the single reusable one-time purchase presentation over the shared `Sheet`, button, form, status, and error primitives. Product-specific wrappers may supply safe display context for Support, unlock, creator media offers, accepted structured requests, Event Access, paid live, or a future physical Product Offer, but must not fork the wallet handoff or payment-state UI. The sheet keeps content context visible, presents one primary CTA, exact total/asset and plain-language terms, uses the already-mounted Privy/external-wallet boundary, and offers an accessible high-contrast QR plus ordinary `Open wallet` fallback. It never renders raw HTML from QR/provider output or exposes split internals, atomic units, references, capability tokens, provider endpoints, or shipping/private identity data.
+`PaymentHandoffPanel` is the implemented shared one-time purchase presentation. Product-specific
+wrappers may supply safe display context, but they must not fork wallet submission, backend
+verification, or payment-state behavior. A future `CheckoutSheet` may replace its presentation only
+after the primitive exists and current consumers migrate; it is not an implemented authority today.
 
 Rules:
 
@@ -67,9 +69,9 @@ Rules:
 
 ## Mockup-Derived Principles
 
-Reference mockups now live in the repo under
-`apps/web/public/mockup/`, with the local UI/UX contract at
-`apps/web/public/mockup/design.md`. The WEVID logo assets live at
+Reference mockups live in the repo under
+`apps/web/public/mockup/`; `apps/web/public/mockup/design.md` records historical visual notes and
+is not an implementation contract. The WEVID logo assets live at
 `apps/web/public/Logo-Dark.png` and
 `apps/web/public/Logo-Light.png`.
 
@@ -96,8 +98,8 @@ Useful principles to carry forward:
 - secondary tools, including Assistant, live in menus, Studio/Profile context,
   or admin surfaces; they are not primary mobile navigation items
 
-Do not introduce a second design system. Use `packages/ui` primitives for repeated controls and `apps/web/public/mockup/design.md`
-as the implementation contract, reuse the project-owned WEVID logo assets, and
+Do not introduce a second design system. Use implemented `packages/ui` primitives for repeated
+controls, use mockups only for visual composition reference, reuse the project-owned WEVID logo assets, and
 adapt each mockup to functional routes with real data, auth gates, loading
 states, error states, and server-owned access/payment/compliance truth.
 

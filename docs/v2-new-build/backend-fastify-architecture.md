@@ -2,14 +2,14 @@
 
 Status: accepted
 Scope: backend
-Last updated: 2026-06-12
+Last updated: 2026-11-05
 Source of truth: yes
 
 Owns:
 - backend fastify architecture decisions for its named domain
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, route-map.md, OpenAPI, immutable database migrations, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -111,8 +111,8 @@ flowchart LR
 ## Fastify Rules
 
 - Register plugins by domain.
-- Use JSON Schema or Zod as the single schema source.
-- Generate OpenAPI from route schemas.
+- Treat `packages/contracts/openapi.yaml` as the single HTTP schema source.
+- Generate TypeScript contract/types and runtime schema artifacts from OpenAPI; route-local Zod/JSON Schema may validate only where it is demonstrably derived or drift-checked against that contract.
 - Validate responses for externally consumed APIs where practical.
 - Use typed errors mapped to stable API error codes.
 - Never put business logic in route handlers.
@@ -141,17 +141,20 @@ For Bunny recovery, the worker reads the current provider playback projection an
 
 Solana payment replay binds its settlement write to the exact intent state and submitted signature observed during lookup. If concurrent evidence changes that boundary, replay never overwrites it: an unrelated signature is ignored, while still-relevant changed state is retried through a fresh lookup.
 
-Workers process:
+The executable scheduler currently starts and repeats these ten registered worker loops:
 
-- Helius/Solana webhook reconciliation
-- Bunny webhooks/status refresh
-- Livepeer webhooks/replay finalization
-- age/KYC webhooks
-- moderation scans
-- notification fanout
-- delayed entitlement expiry
-- stale upload cleanup
-- versioned Analytics Core projection recomputation and source-parity reconciliation
+- `analytics-projections`: versioned Analytics Core projection recomputation and source-parity reconciliation
+- `subscription-authorization-reconciliation`: exact accepted subscription-setup signatures whose finalized evidence is pending, not found, or temporarily unavailable
+- `subscription-collections`: eligible recurring subscription collection
+- `notification-deliveries`: notification delivery
+- `payment-confirmation-emails`: durable payment-confirmation email delivery
+- `provider-event-replays`: operator-requested replay through the canonical provider handlers
+- `scheduled-publications`: scheduled content publication
+- `live-safety`: provider health and suspension actions
+- `media-moderation`: media moderation jobs
+- `media-asset-cleanups`: retired media-asset provider cleanup
+
+Signed provider webhooks enter through the API. They may create or update durable work, but the worker does not expose a second webhook ingress or poll providers as an alternative source of truth. The recurring loop runs immediately at process startup and then every `WORKER_TICK_INTERVAL_MS` (60 seconds by default); `WORKER_BATCH_LIMIT` bounds each queue lease, task failures are isolated, and overlapping ticks are serialized.
 
 Analytics Core uses the existing worker process and Postgres queue authority. It leases a bounded
 UTC window, transactionally replaces typed daily projection rows from canonical facts, records
@@ -165,7 +168,7 @@ Direct Bunny and Livepeer reads use a Postgres `clock_timestamp()` cutoff captur
 
 Older deliveries are marked ignored instead of moving media state in either direction, closing a current live access window, or replacing the current live replay; deliveries whose side effects already committed return success without repeating handoff or audit effects, whether the retry comes from recovery or an original webhook request resuming after recovery. Helius/Solana preserves the originating provider alias, accepts submitted or confirmed matches only for the exact stored submission signature, prioritizes those signature-bound matches over unrelated pending references, re-runs exact backend settlement verification for unconfirmed work, and uses the existing transactional payment-submission authority. The queue keeps the internal provider-event row ID separate from the external provider delivery ID, uses token-guarded leases, bounded backoff and an attempt ceiling, and preserves the provider's normalized outcome instead of replacing it with a generic replay label. Exhausted work is visible as `dead_letter` with a redacted failure code and replay-request ID in admin operations; audited recovery requeues that exact job only after an operator supplies a reason.
 
-Use `pg-boss` as the launch default to keep infrastructure smaller and queue state close to Postgres. Move selected queues to BullMQ/Redis only after measured queue lag, throughput, or rate-limit requirements justify Redis.
+The existing domain-owned Postgres lease tables are the launch queue authority. They provide bounded selection, token-guarded leases, retry/dead-letter state, and audited recovery. A future queue consolidation may adopt a library only through a measured ADR and migration plan; it must replace, not duplicate, the applicable authority.
 
 ## Provider Adapter Pattern
 
@@ -188,7 +191,7 @@ Adapters expose internal DTOs. They do not leak raw provider payloads to fronten
 
 ## Security Baseline
 
-- JWT verification against Supabase project keys.
+- Ordinary API authorization verifies the opaque WeVid application session issued after wallet proof. Supabase JWT verification is limited to the explicit recovery exchange; a scoped Realtime JWT is transport authority only and is never accepted as an ordinary API session.
 - Service-role Supabase key only in backend.
 - Provider keys only in backend.
 - Webhook signature verification.

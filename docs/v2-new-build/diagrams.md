@@ -3,13 +3,13 @@
 Status: accepted
 Scope: full-platform diagrams
 Last updated: 2026-06-03
-Source of truth: yes for render-safe architecture diagrams
+Source of truth: no; render-safe views of authorities linked from `INDEX.md`
 
 Owns:
-- diagrams decisions for its named domain
+- presentation of render-safe orientation diagrams only
 
 Defers to:
-- INDEX.md, route-map.md, OpenAPI, schema blueprint, and ADRs where narrower
+- INDEX.md, `app-architecture.md`, route-map.md, OpenAPI, immutable migrations, and ADRs where narrower
 
 Does not own:
 - unrelated domains, implementation shortcuts, provider secrets, or hidden source-of-truth rules
@@ -20,7 +20,7 @@ Launch scope:
 Non-goals:
 - historical-context inference, duplicate systems, and unapproved provider/product expansion
 
-These diagrams use plain text so they render in Cursor, GitHub, terminals, and any Markdown preview without a Mermaid extension. Mermaid diagrams may still exist in detailed docs, but this file is the canonical render-safe diagram set.
+These diagrams use plain text so they render in Cursor, GitHub, terminals, and any Markdown preview without a Mermaid extension. They are orientation views; when a diagram conflicts with a linked contract, migration, ADR, or narrow domain document, the narrower authority wins.
 
 ## Full Platform
 

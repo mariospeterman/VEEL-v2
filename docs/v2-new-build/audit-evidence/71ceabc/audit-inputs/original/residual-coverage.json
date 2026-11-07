@@ -1,0 +1,207 @@
+{
+  "commit": "71ceabcfaa8a5258e1b935a391ff4e6e7330c682",
+  "assigned_residual_count": 22,
+  "assigned_pending": [],
+  "full_text_review": [
+    {
+      "path": "apps/api/src/app-dependencies.ts",
+      "bytes": 14698,
+      "sha256": "ddba78bfe1acf4e9b9308892b68101b258b13fc20cbc8fe1b68508c2e5a9ef8c",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/app-health.ts",
+      "bytes": 1982,
+      "sha256": "47c185d9f25f26c64c22781c75f8d26051331a57f8170eb22a99984cf63fa1ff",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/app-lifecycle.ts",
+      "bytes": 1338,
+      "sha256": "be438bbea2f5f6fce61ac7d35db90f0ab421cdeaddb8197237f65910c393f3ab",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/live-provider.ts",
+      "bytes": 152,
+      "sha256": "0d980b659b890de6bc6f30bf6855fa88b51cfb635583de3f9926ff23f9e5ef7c",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/media-upload-provider.ts",
+      "bytes": 241,
+      "sha256": "b7561455671d6ca6dc90dede96cf3d6d56b8c7a98ecb894cc6a6a2f228ba6cf4",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/activity/activity-access-pass-repository.ts",
+      "bytes": 1120,
+      "sha256": "ccb9596b786992965d9922cf998fe46f3b367605a5f1f8f3841a9f43f9236125",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/activity/activity-errors.ts",
+      "bytes": 188,
+      "sha256": "71403dfbbc326fd8d2a399891484a9526e45406299105c21774765ee3ce459e1",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/activity/activity-ledger-repository.ts",
+      "bytes": 5715,
+      "sha256": "907797af77e9f47317656529bd296c19c5687962d39506f6eb2edae91bc8ac49",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/activity/activity-repository-mappers.ts",
+      "bytes": 4302,
+      "sha256": "8f97c86c467ebff1170c14a001b14f8bc368c1681aecc72f5aadc2547e309b0d",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/activity/activity-repository.ts",
+      "bytes": 1611,
+      "sha256": "54ad2d7ecde0aeba77b470a6641ec36cecb79642e488c9c2b723a47e66dcb2a1",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/activity/activity-routes.ts",
+      "bytes": 5501,
+      "sha256": "b613a14bd8ebe64abe3d7fe59110d0b4d7423edc8c07bba49eefa8a17f3178d1",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/activity/activity-wallet-repository.ts",
+      "bytes": 1269,
+      "sha256": "08d26267068dc5153af3163ad5f7fa06982374b63058ce61ac0d823df7881bdd",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/activity/types.ts",
+      "bytes": 876,
+      "sha256": "ace8fecea033f815b6ce2a82c696e86aae2f8c750a981bbbdc566a2cc9dec072",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/refund/refund-repository.ts",
+      "bytes": 9324,
+      "sha256": "35efe4cc63daec31d08c7f29963d972684c41f753537831d47233967bcc0da6f",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/refund/refund-routes.ts",
+      "bytes": 5574,
+      "sha256": "c8edbd55d81fd4da36a2fe4702581d7d99ba58ec0697508a0ba7917e4ded045b",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/refund/types.ts",
+      "bytes": 832,
+      "sha256": "09ae6d793ed8eda8ee383347f3535adf72e9cf592768bed11a3a6e5dc076f6c4",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/telemetry/telemetry-routes.ts",
+      "bytes": 2087,
+      "sha256": "d25b1246d6001aa413783642ca7f726cd014de49c9860811d14b0840ff0231f0",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/plugins/env.ts",
+      "bytes": 288,
+      "sha256": "2e438f0435586a50b7fb7b65403eb06bec37038d9b1f8efca36b0b4208ea40fc",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/plugins/openapi.ts",
+      "bytes": 626,
+      "sha256": "4eb8f94225519af751ab750d52808f2691e6ba1f851eda96ad04c5e82d46604a",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/plugins/supabase-boundary.ts",
+      "bytes": 838,
+      "sha256": "1a8e810600f181c3f242f8ad14159a323e2369e89f25e2550b1377fd6c05fd14",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/provider-event-replay-runtime.ts",
+      "bytes": 11411,
+      "sha256": "138707dff6a8993c47da5878a412249823e21423d08e97df31c99cf2aaafd192",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/server.ts",
+      "bytes": 266,
+      "sha256": "29749e253e4296f5c235b4a0ce15f3f9748dacd7e38eda566b68501152153fc6",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "AGENTS.md",
+      "bytes": 5677,
+      "sha256": "dccd8378dc23ebe4c904ed52a656206e5b7a22e9eb9b5e5d44aacffbb3529e70",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/app.ts",
+      "bytes": 6804,
+      "sha256": "15c6e53af76df1cb9b6509298cabaad95804b56d36774041f24623867f687ecc",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/app-routes.ts",
+      "bytes": 7718,
+      "sha256": "5bbfc11ee2563a15d3cc0ff86d4d139d6aea494be7ad378239f3768a02101f94",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/session/supabase-auth.ts",
+      "bytes": 1841,
+      "sha256": "c69e36fb4dca54f16f698eb66239de7c0182ab4106af634d6d49a94a2fdecee2",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/session/types.ts",
+      "bytes": 1302,
+      "sha256": "0a5e46ab75c71393d8584695fbbbfc2eefd639121fc5437f93d4a55dfdcf5259",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/modules/auth/http-auth.ts",
+      "bytes": 1980,
+      "sha256": "e285bd79661a63c03b73e22baf0b1914c9991c8c0d5a6906b4cc61d47cf99c33",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "packages/database/migrations/0107_canonical_access_identity.sql",
+      "bytes": 1130,
+      "sha256": "bfd9fa83a7d656d88d230e82f0e1c1f12c117113f4ce92e9f2d836c08821366f",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "packages/database/migrations/0057_refund_request_idempotency.sql",
+      "bytes": 658,
+      "sha256": "13d649df68df080756bc5bd8a1bee8c55c039ed759aac08a0b8dba52fbc3cf03",
+      "review": "full_semantic_read"
+    },
+    {
+      "path": "apps/api/src/shared/postgres.ts",
+      "bytes": 1018,
+      "sha256": "14fac5963ec818637a71e63122fcfb7c5c0ccedcd9937f9b6f008c2a3a07d649",
+      "review": "full_semantic_read"
+    }
+  ],
+  "runtime_proofs": [
+    "residual-runtime-proof.json"
+  ],
+  "partial_additional_reads": [
+    "apps/api/src/modules/auth/wallet-auth-repository.ts lines600-645",
+    "apps/api/src/modules/verification/verification-provider-adapters.ts errorclassandrequestreferences",
+    "apps/api/src/modules/content/media-upload-adapter.ts errorclassreferences",
+    "apps/api/src/modules/live/livepeer-adapter.ts errorclassreferences"
+  ],
+  "notes": [
+    "No repository source edits.",
+    "All22 assigned residual files read fully; activitywallet repeated after combinedtooloutput truncated.",
+    "Related existing reviewed files listed separately for parent coverage merge."
+  ]
+}

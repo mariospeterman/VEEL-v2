@@ -29,6 +29,13 @@ const providerPreferences = new Set(["provider_first", "sumsub", "didit", "perso
 const verificationSources = new Set(["create", "earnings", "organization"]);
 const adultPublisherPolicyVersion = "adult-publisher-2026-08-v1";
 
+class VerificationProviderCreateClaimLostError extends Error {
+  constructor() {
+    super("VERIFICATION_PROVIDER_CREATE_CLAIM_LOST");
+    this.name = "VerificationProviderCreateClaimLostError";
+  }
+}
+
 export async function registerVerificationRoutes(
   app: FastifyInstance,
   options: RegisterVerificationRoutesOptions
@@ -149,6 +156,8 @@ export async function registerVerificationRoutes(
       });
     }
 
+    let reservedSessionId: string | null = null;
+    let providerRequestStarted = false;
     try {
       const organizationId = typeof body?.organizationId === "string" ? body.organizationId : null;
       if (purpose === "org_kyb") {
@@ -172,25 +181,73 @@ export async function registerVerificationRoutes(
       }
       const termsAcceptedAt = purpose === "adult_publisher_eligibility" ? new Date() : null;
       const policyVersion = purpose === "adult_publisher_eligibility" ? adultPublisherPolicyVersion : null;
+      const supportsDurableHandoff = Boolean(
+        options.verificationRepository.reservePendingSession &&
+        options.verificationRepository.selectPendingSessionProvider &&
+        options.verificationRepository.completePendingSession
+      );
+      const reservation = supportsDurableHandoff
+        ? await options.verificationRepository.reservePendingSession?.({
+            supabaseUserId: verifiedSession.supabaseUserId,
+            purpose: purpose as "adult_publisher_eligibility" | "creator_kyc" | "org_kyb",
+            organizationId,
+            idempotencyKey,
+            requestHash: createHash("sha256").update(JSON.stringify({
+              purpose,
+              providerPreference,
+              organizationId,
+              source,
+              policyVersion
+            })).digest("hex"),
+            policyVersion,
+            termsAcceptedAt
+          })
+        : null;
+      reservedSessionId = reservation?.id ?? null;
+      if (reservation?.requiresManualReview) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "The provider handoff needs support review before another verification session can start"
+        });
+      }
       const providerSession = await options.verificationProviderWaterfall.createSession({
         supabaseUserId: verifiedSession.supabaseUserId,
         purpose,
         providerPreference,
         organizationId,
         idempotencyKey,
+        subjectReference: reservation?.subjectReference ?? null,
         callbackUrl: verificationCallbackUrl(app.config.WEB_URL, purpose),
         webhookBaseUrl: `${app.config.API_URL}/v1/webhooks/verification`,
         policyVersion,
-        termsAcceptedAt
+        termsAcceptedAt,
+        ...(reservation
+          ? { onProviderSelected: async (selection) => {
+              const claimed = await options.verificationRepository.selectPendingSessionProvider!({
+                sessionId: reservation.id,
+                selection
+              });
+              if (claimed === false) throw new VerificationProviderCreateClaimLostError();
+              providerRequestStarted = true;
+            } }
+          : {})
       });
-      const sessionId = await options.verificationRepository.createPendingSession({
-        supabaseUserId: verifiedSession.supabaseUserId,
-        purpose: purpose as "adult_publisher_eligibility" | "creator_kyc" | "org_kyb",
-        organizationId,
-        providerSession,
-        policyVersion,
-        termsAcceptedAt
-      });
+      const sessionId = reservation
+        ? reservation.id
+        : await options.verificationRepository.createPendingSession({
+            supabaseUserId: verifiedSession.supabaseUserId,
+            purpose: purpose as "adult_publisher_eligibility" | "creator_kyc" | "org_kyb",
+            organizationId,
+            providerSession,
+            policyVersion,
+            termsAcceptedAt
+          });
+      if (reservation) {
+        await options.verificationRepository.completePendingSession?.({
+          sessionId: reservation.id,
+          providerSession
+        });
+      }
 
       if (isMockVerificationProviderReference(app.config, providerSession.providerReference)) {
         await options.verificationRepository.updateVerificationFromWebhook({
@@ -214,6 +271,33 @@ export async function registerVerificationRoutes(
         purpose
       });
     } catch (error) {
+      if (error instanceof VerificationProviderCreateClaimLostError) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: "This verification session provider request is already in progress"
+        });
+      }
+      const definitiveProviderRejection =
+        error instanceof VerificationProviderHttpError &&
+        [400, 401, 403].includes(error.status);
+      if (
+        reservedSessionId &&
+        (!providerRequestStarted || definitiveProviderRejection) &&
+        options.verificationRepository.failPendingSession
+      ) {
+        await options.verificationRepository.failPendingSession({
+          sessionId: reservedSessionId,
+          reason: error instanceof Error ? error.name : "provider_session_failed"
+        }).catch(() => undefined);
+      }
+      if (error instanceof Error && ["IDEMPOTENCY_KEY_REUSED", "VERIFICATION_SESSION_ALREADY_RESERVED"].includes(error.message)) {
+        return reply.code(409).send({
+          code: "conflict",
+          message: error.message === "IDEMPOTENCY_KEY_REUSED"
+            ? "Idempotency-Key was already used with different verification input"
+            : "This verification session request has already been reserved"
+        });
+      }
       if (
         error instanceof VerificationProviderUnavailableError ||
         error instanceof VerificationProviderHttpError

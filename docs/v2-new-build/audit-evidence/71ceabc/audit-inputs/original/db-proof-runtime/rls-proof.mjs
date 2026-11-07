@@ -1,0 +1,34 @@
+import { PGlite } from './node_modules/@electric-sql/pglite/dist/index.js';
+import fs from 'node:fs';
+const db = new PGlite();
+const base='/workspace/scratch/0635fbdaf32f/wevid-audit/';
+const migration=fs.readFileSync(base+'packages/database/migrations/0091_canonical_identity_session_security.sql','utf8');
+const staffFunction=migration.slice(migration.indexOf('create or replace function private.is_staff_member()'));
+const result = {runtime:'PostgreSQL WASM PGlite0.5.15; minimal schema; exact staff function and exact RLS policy/grant from repo'};
+await db.exec(`create role authenticated; create schema auth; create schema private;
+create function auth.uid() returns uuid language sql stable as $$select current_setting('request.jwt.claim.sub', true)::uuid$$;
+grant usage on schema auth,private,public to authenticated;
+create table public.users(id uuid primary key);
+create table public.user_provider_identities(provider text, provider_subject text, user_id uuid, status text);
+create table public.staff_memberships(user_id uuid, role text, state text);
+create table public.tax_profiles(id uuid, user_id uuid, sensitive_tax_data text);
+`+staffFunction+`
+alter table tax_profiles enable row level security;
+grant select on table tax_profiles to authenticated;
+create policy tax_profiles_staff_select on tax_profiles for select to authenticated using ((select private.is_staff_member()));
+insert into users values ('00000000-0000-4000-8000-000000000001'), ('00000000-0000-4000-8000-000000000002');
+insert into user_provider_identities values('supabase','00000000-0000-4000-8000-000000000011','00000000-0000-4000-8000-000000000001','active');
+insert into staff_memberships values('00000000-0000-4000-8000-000000000001','event_ops','active');
+insert into tax_profiles values ('00000000-0000-4000-8000-000000000099','00000000-0000-4000-8000-000000000002','unrelated-person-tax-record');
+set request.jwt.claim.sub='00000000-0000-4000-8000-000000000011';
+set role authenticated;`);
+result.eventOpsRead=await db.query('select * from tax_profiles');
+await db.exec('reset role; update staff_memberships set state=\'suspended\'; set role authenticated;');
+result.suspendedRead=await db.query('select * from tax_profiles');
+await db.exec('reset role; update staff_memberships set state=\'active\';');
+// Explicit direct-counters grant+RLS from0094 requires neither protected app access nor owner/visibility.
+await db.exec(`create table content_engagement_counters(content_item_id uuid, like_count bigint); alter table content_engagement_counters enable row level security; grant select on table content_engagement_counters to authenticated; create policy content_engagement_counters_select_authenticated on content_engagement_counters for select to authenticated using(true); insert into content_engagement_counters values('00000000-0000-4000-8000-000000000044',2); set request.jwt.claim.sub='00000000-0000-4000-8000-000000000077'; set role authenticated;`);
+result.unlinkedSubjectReadCounters=await db.query('select * from content_engagement_counters');
+fs.writeFileSync('/workspace/scratch/0635fbdaf32f/db-rls-proof.json',JSON.stringify(result,null,2));
+console.log(JSON.stringify(result,null,2));
+await db.close();
